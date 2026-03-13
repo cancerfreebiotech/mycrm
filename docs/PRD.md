@@ -234,6 +234,29 @@ npm install @supabase/ssr @supabase/supabase-js telegraf @google/generative-ai n
 npm install -D @types/nodemailer
 ```
 
+### 初始化 Git
+```bash
+git init
+git add .
+git commit -m "chore: initial commit"
+```
+
+### 建立 GitHub Repo 並推上去
+```bash
+# 先在 GitHub 手動建立一個名為 mycrm 的空白 repo（不要勾選任何初始檔案）
+# 然後執行：
+git remote add origin https://github.com/你的帳號/mycrm.git
+git branch -M main
+git push -u origin main
+```
+
+### 之後每次開發完
+```bash
+git add .
+git commit -m "feat: 功能描述"
+git push
+```
+
 ---
 
 ## 七、Supabase Storage 設定
