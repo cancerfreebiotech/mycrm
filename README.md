@@ -159,7 +159,7 @@ Also create a Supabase Storage bucket named `card-images` (public or private as 
 After deploying (or using a tunnel like [ngrok](https://ngrok.com) locally), register the webhook:
 
 ```bash
-curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https://your-domain.com/api/bot"
+curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https://mycrm-vert.vercel.app/api/bot"
 ```
 
 ### 5. Run Locally
@@ -178,6 +178,16 @@ Open [http://localhost:3000](http://localhost:3000) to see the dashboard.
 2. Import the project in [Vercel](https://vercel.com).
 3. Add all environment variables from `.env.local` in the Vercel project settings.
 4. Deploy, then register the Telegram webhook pointing to your Vercel URL.
+
+### Live URLs
+
+| Page | URL |
+|---|---|
+| Dashboard | https://mycrm-vert.vercel.app/ |
+| Contacts | https://mycrm-vert.vercel.app/contacts |
+| Whitelist Management | https://mycrm-vert.vercel.app/admin/users |
+| Email Templates | https://mycrm-vert.vercel.app/admin/templates |
+| Telegram Webhook | https://mycrm-vert.vercel.app/api/bot |
 
 ---
 
