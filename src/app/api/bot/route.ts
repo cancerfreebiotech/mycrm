@@ -73,10 +73,10 @@ async function getAuthorizedUser(telegramId: number) {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('users')
-    .select('id, gemini_model, provider_token')
+    .select('id, ai_model_id, provider_token')
     .eq('telegram_id', telegramId)
     .single()
-  return data as { id: string; gemini_model: string; provider_token: string | null } | null
+  return data as { id: string; ai_model_id: string | null; provider_token: string | null } | null
 }
 
 // ── Download photo from Telegram ──────────────────────────────────────────────
@@ -171,7 +171,7 @@ async function handleSearch(chatId: number, keyword: string) {
 async function handlePhoto(
   chatId: number,
   fromId: number,
-  user: { id: string; gemini_model: string; provider_token: string | null },
+  user: { id: string; ai_model_id: string | null; provider_token: string | null },
   photo: { file_id: string },
   session: { state: string; context: Record<string, unknown> } | null
 ) {
@@ -201,7 +201,7 @@ async function handlePhoto(
         .eq('id', contactId)
         .single()
 
-      const cardData = await analyzeBusinessCard(compressed, user.gemini_model)
+      const cardData = await analyzeBusinessCard(compressed, user.ai_model_id)
 
       const updates: Record<string, string> = { card_img_back_url: backUrl }
       if (existing) {
@@ -239,7 +239,7 @@ async function handlePhoto(
     const { data: publicUrlData } = supabase.storage.from('cards').getPublicUrl(storagePath)
     const cardImgUrl = publicUrlData.publicUrl
 
-    const cardData = await analyzeBusinessCard(compressed, user.gemini_model)
+    const cardData = await analyzeBusinessCard(compressed, user.ai_model_id)
 
     const { exact, similar } = await checkDuplicates(cardData.email, cardData.name)
     let dupWarning = ''
@@ -287,7 +287,7 @@ async function handlePhoto(
 async function handleText(
   chatId: number,
   fromId: number,
-  user: { id: string; gemini_model: string; provider_token: string | null },
+  user: { id: string; ai_model_id: string | null; provider_token: string | null },
   text: string,
   session: { state: string; context: Record<string, unknown> } | null
 ) {
@@ -354,7 +354,7 @@ async function handleText(
   if (session?.state === 'waiting_email_description') {
     await sendMessage(chatId, '⏳ AI 生成中，請稍候...')
     try {
-      const body = await generateEmailContent(text.trim(), undefined, user.gemini_model)
+      const body = await generateEmailContent(text.trim(), undefined, user.ai_model_id)
       const subject = `關於：${text.trim().slice(0, 40)}${text.trim().length > 40 ? '...' : ''}`
       const preview = body.replace(/<[^>]+>/g, '').slice(0, 200)
 
@@ -383,7 +383,7 @@ async function handleText(
     try {
       const templateContent = session.context.template_body as string
       const supplement = text.trim().toLowerCase() === 'skip' ? '' : text.trim()
-      const body = await generateEmailContent(supplement || '請依照範本生成', templateContent, user.gemini_model)
+      const body = await generateEmailContent(supplement || '請依照範本生成', templateContent, user.ai_model_id)
       const subject = session.context.template_subject as string || '（無主旨）'
       const preview = body.replace(/<[^>]+>/g, '').slice(0, 200)
 
