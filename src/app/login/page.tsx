@@ -19,7 +19,7 @@ function LoginContent() {
     await supabase.auth.signInWithOAuth({
       provider: 'azure',
       options: {
-        scopes: 'email profile',
+        scopes: 'email profile Mail.Send',
         redirectTo: `${window.location.origin}/api/auth/callback`,
       },
     })

@@ -2,13 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { createClient } from '@supabase/supabase-js'
+import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Search } from 'lucide-react'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 interface Contact {
   id: string
@@ -18,6 +13,7 @@ interface Contact {
   email: string | null
   phone: string | null
   created_at: string
+  users: { display_name: string | null } | null
 }
 
 export default function ContactsPage() {
@@ -27,11 +23,12 @@ export default function ContactsPage() {
 
   useEffect(() => {
     async function fetchContacts() {
+      const supabase = createBrowserSupabaseClient()
       const { data } = await supabase
         .from('contacts')
-        .select('id, name, company, job_title, email, phone, created_at')
+        .select('id, name, company, job_title, email, phone, created_at, users(display_name)')
         .order('created_at', { ascending: false })
-      setContacts(data ?? [])
+      setContacts((data as Contact[]) ?? [])
       setLoading(false)
     }
     fetchContacts()
@@ -68,7 +65,7 @@ export default function ContactsPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              {['姓名', '公司', '職稱', 'Email', '電話', '建立時間'].map((h) => (
+              {['姓名', '公司', '職稱', 'Email', '電話', '建立者', '建立時間'].map((h) => (
                 <th key={h} className="px-4 py-3 text-left font-medium text-gray-600">
                   {h}
                 </th>
@@ -78,22 +75,19 @@ export default function ContactsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
                   載入中...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
                   無符合結果
                 </td>
               </tr>
             ) : (
               filtered.map((c) => (
-                <tr
-                  key={c.id}
-                  className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer"
-                >
+                <tr key={c.id} className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer">
                   <td className="px-4 py-3">
                     <Link href={`/contacts/${c.id}`} className="text-blue-600 hover:underline font-medium">
                       {c.name || '—'}
@@ -103,6 +97,7 @@ export default function ContactsPage() {
                   <td className="px-4 py-3 text-gray-700">{c.job_title || '—'}</td>
                   <td className="px-4 py-3 text-gray-700">{c.email || '—'}</td>
                   <td className="px-4 py-3 text-gray-700">{c.phone || '—'}</td>
+                  <td className="px-4 py-3 text-gray-500">{c.users?.display_name || '—'}</td>
                   <td className="px-4 py-3 text-gray-500">
                     {new Date(c.created_at).toLocaleDateString('zh-TW')}
                   </td>

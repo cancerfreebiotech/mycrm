@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
+import { createServiceClient } from '@/lib/supabase'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -40,6 +41,17 @@ export async function GET(request: NextRequest) {
     await supabase.auth.signOut()
     return NextResponse.redirect(`${origin}/login?error=unauthorized_domain`)
   }
+
+  // Upsert user record
+  const serviceClient = createServiceClient()
+  await serviceClient.from('users').upsert(
+    {
+      email,
+      display_name: data.user.user_metadata?.full_name ?? data.user.user_metadata?.name ?? null,
+      last_login_at: new Date().toISOString(),
+    },
+    { onConflict: 'email' }
+  )
 
   return NextResponse.redirect(`${origin}/`)
 }

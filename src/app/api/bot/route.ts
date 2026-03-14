@@ -30,6 +30,16 @@ async function editMessageReplyMarkup(chatId: number, messageId: number) {
   })
 }
 
+async function getAuthorizedUser(telegramId: number) {
+  const supabase = createServiceClient()
+  const { data } = await supabase
+    .from('users')
+    .select('id')
+    .eq('telegram_id', telegramId)
+    .single()
+  return data
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
@@ -44,12 +54,18 @@ export async function POST(req: NextRequest) {
       }
 
       try {
+        const user = await getAuthorizedUser(from.id)
+        if (!user) {
+          await answerCallbackQuery(callbackQueryId, '⛔ 無使用權限')
+          return NextResponse.json({ ok: true })
+        }
+
         const jsonStr = Buffer.from(data.replace('save_', ''), 'base64').toString('utf-8')
         const contact = JSON.parse(jsonStr)
 
         const { data: inserted, error } = await supabase
           .from('contacts')
-          .insert({ ...contact, created_by: from.id })
+          .insert({ ...contact, created_by: user.id })
           .select('id')
           .single()
 
@@ -58,11 +74,11 @@ export async function POST(req: NextRequest) {
         await supabase.from('interaction_logs').insert({
           contact_id: inserted.id,
           content: '透過 Telegram Bot 新增名片',
-          created_by: from.id,
+          created_by: user.id,
         })
 
         await answerCallbackQuery(callbackQueryId, '✅ 已成功存檔！')
-        await editMessageReplyMarkup(from.id, message.message_id)
+        await editMessageReplyMarkup(message.chat.id, message.message_id)
         await sendMessage(from.id, '✅ 已成功存檔！')
       } catch {
         await answerCallbackQuery(callbackQueryId, '❌ 存檔失敗')
@@ -79,15 +95,10 @@ export async function POST(req: NextRequest) {
     const chatId: number = message.chat.id
     const fromId: number = message.from?.id
 
-    // 權限檢查
-    const { data: user } = await supabase
-      .from('authorized_users')
-      .select('id')
-      .eq('telegram_id', fromId)
-      .single()
-
+    // 權限檢查：查詢 users.telegram_id
+    const user = await getAuthorizedUser(fromId)
     if (!user) {
-      await sendMessage(chatId, '⛔ 你沒有使用權限')
+      await sendMessage(chatId, '⛔ 你沒有使用權限，請先在 myCRM 網站的個人設定綁定你的 Telegram ID')
       return NextResponse.json({ ok: true })
     }
 
@@ -109,7 +120,7 @@ export async function POST(req: NextRequest) {
         const compressed = await processCardImage(imgBuffer)
 
         // 上傳至 Supabase Storage
-        const storagePath = `cards/${fromId}_${Date.now()}.jpg`
+        const storagePath = `cards/${user.id}_${Date.now()}.jpg`
         const { error: uploadError } = await supabase.storage
           .from('cards')
           .upload(storagePath, compressed, { contentType: 'image/jpeg', upsert: false })
