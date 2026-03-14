@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## v0.6 — Bot 縮寫 + AI Endpoint 管理 + 說明書（待實作）
+
+### 變更項目
+- **Bot：指令縮寫**：`/h`、`/s`、`/e`、`/ab`、`/u`，/help 顯示完整指令與縮寫對照
+- **Bot：新增 `/user` / `/u` 指令**：列出所有組織成員的姓名、email、Telegram ID（所有人可用）
+- **AI Endpoint 管理**：新增 `ai_endpoints` 表，super_admin 可從 `/admin/models` 管理多個 AI 服務商（名稱、Base URL、API Key）
+- **AI Model 改為二層結構**：`ai_models` 表取代 `gemini_models`，model 屬於某個 endpoint
+- **`users` 表新增 `ai_model_id`**：指向 `ai_models.id`，取代原本的 `gemini_model` 文字欄位
+- **個人設定 model 選擇改為兩層**：先選 endpoint，再選 model
+- **`/admin/models` 頁面重構**：支援 endpoint CRUD + 每個 endpoint 底下的 model CRUD
+- **新增說明書頁面 `/docs`**：AI 根據 PRD 自動生成，分 User / Super Admin 兩個 section，含右側目錄導覽
+
+---
+
+
 ## v0.5 — Bot 強化 + 網頁功能擴充（已完成 2026-03-14）
 
 ### 變更項目

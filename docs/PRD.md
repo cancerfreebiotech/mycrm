@@ -688,3 +688,161 @@ curl -X POST "https://api.telegram.org/bot{TOKEN}/setWebhook" \
 - [x] **Task 19** `[修改]` — 更新使用者管理頁 `/admin/users`（管理 users 表、角色切換）
 - [x] **Task 20** `[修改]` — 更新郵件範本頁（AI 生成、多附件上傳 2MB 限制）
 - [x] **Task 21** `[新增]` — 新增個人設定頁 `/settings`（Telegram ID、model dropdown 從 DB 讀取、主題）
+
+---
+
+## 十三、v0.6 新增功能規格
+
+### 13.1 Bot 指令縮寫
+
+所有指令支援完整版與縮寫版，功能完全相同：
+
+| 完整指令 | 縮寫 | 說明 |
+|----------|------|------|
+| `/help` | `/h` | 顯示指令說明 |
+| `/search` | `/s` | 搜尋聯絡人 |
+| `/note` | `/note` | 新增會議筆記（無縮寫，避免誤觸） |
+| `/email` | `/e` | 發送郵件 |
+| `/add_back` | `/ab` | 補充名片反面 |
+| `/user` | `/u` | 列出組織成員 |
+
+`/help` 回覆內容需同時顯示完整指令和縮寫。
+
+---
+
+### 13.2 `/user` / `/u` 指令
+
+- 所有授權使用者均可使用
+- 列出所有 `users` 表中的成員資料
+- 每筆顯示：display_name、email、telegram_id（若已綁定）
+- 格式範例：
+  ```
+  👥 組織成員列表（共 5 人）
+
+  1. 王小明
+     📧 ming@cancerfree.io
+     📱 Telegram ID：123456789
+
+  2. 陳大華
+     📧 david@cancerfree.io
+     📱 Telegram ID：未設定
+  ```
+
+---
+
+### 13.3 AI Endpoint 管理（重構 `/admin/models`）
+
+原本的 `/admin/models` 頁面改為二層結構：**Endpoint → Model**
+
+#### 資料表新增
+
+**`ai_endpoints`**
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | 主鍵 |
+| name | text (NOT NULL) | 顯示名稱，如 `Google Gemini` |
+| base_url | text (NOT NULL) | API Base URL |
+| api_key | text (NOT NULL) | API Key（加密儲存） |
+| is_active | boolean (default true) | 是否啟用 |
+| created_at | timestamptz (default now()) | 建立時間 |
+
+**`ai_models`**（取代原 `gemini_models` 表）
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | 主鍵 |
+| endpoint_id | uuid (FK → ai_endpoints.id, ON DELETE CASCADE) | 所屬 endpoint |
+| model_id | text (NOT NULL) | 傳給 API 的字串，如 `gemini-1.5-flash` |
+| display_name | text (NOT NULL) | 顯示名稱 |
+| is_active | boolean (default true) | 是否顯示於使用者 dropdown |
+| created_at | timestamptz (default now()) | 建立時間 |
+
+> `users.gemini_model` 欄位改為 `users.ai_model_id`（FK → ai_models.id）
+
+#### `/admin/models` 頁面（僅 super_admin）
+
+**Endpoint 管理區塊**
+- 列出所有 endpoints（名稱、Base URL、is_active、model 數量）
+- 新增 endpoint：填名稱、Base URL、API Key
+- 切換 is_active、刪除 endpoint（連同底下 models 一起刪除）
+- API Key 顯示為遮蔽（`sk-****`），可點擊重新設定
+
+**Model 管理區塊**
+- 選擇一個 endpoint 後，顯示該 endpoint 底下的所有 models
+- 新增 model：填 model_id、display_name
+- 切換 is_active、刪除 model
+
+#### 個人設定頁 `/settings` 更新
+- Gemini model dropdown 改為兩層選擇：
+  1. 先選 Endpoint（從 `ai_endpoints` 撈 is_active=true）
+  2. 再選 Model（從 `ai_models` 撈對應 endpoint 且 is_active=true）
+- 儲存更新 `users.ai_model_id`
+
+#### Migration SQL 補充
+```sql
+-- AI Endpoint 表
+create table if not exists ai_endpoints (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  base_url text not null,
+  api_key text not null,
+  is_active boolean not null default true,
+  created_at timestamptz default now()
+);
+
+-- AI Model 表（取代 gemini_models）
+create table if not exists ai_models (
+  id uuid primary key default gen_random_uuid(),
+  endpoint_id uuid references ai_endpoints(id) on delete cascade,
+  model_id text not null,
+  display_name text not null,
+  is_active boolean not null default true,
+  created_at timestamptz default now()
+);
+
+-- 初始資料：Google Gemini endpoint
+insert into ai_endpoints (name, base_url, api_key) values
+  ('Google Gemini', 'https://generativelanguage.googleapis.com', 'placeholder')
+on conflict do nothing;
+
+-- users 表新增 ai_model_id 欄位
+alter table users add column if not exists ai_model_id uuid references ai_models(id);
+```
+
+---
+
+### 13.4 說明書頁面 `/docs`
+
+- 網頁內嵌，不需登入即可瀏覽（或登入後才能看，視安全需求）
+- 內容由 AI 根據 PRD 自動生成，在 build 時或首次載入時生成並 cache
+- 分兩個 Section：
+
+**Section 1：一般使用者**
+- 如何登入
+- 如何綁定 Telegram ID
+- Bot 所有指令說明（含縮寫）
+- 如何在網頁新增 / 搜尋 / 編輯聯絡人
+- 如何新增筆記與會議紀錄
+- 如何寄信
+- 如何使用 Tag 分類
+- 如何 export 聯絡人
+- 個人設定說明（主題、Gemini model）
+
+**Section 2：Super Admin**
+- 如何管理使用者角色
+- 如何管理 AI Endpoint 與 Model
+- 如何管理 Tag
+- 如何管理郵件範本
+
+- 頁面右側有目錄（anchor 導覽）
+- 支援深色 / 淺色主題
+
+---
+
+## 十四、v0.6 開發任務清單
+
+- [ ] **Task 22** `[修改]` — 執行新增 Migration SQL（ai_endpoints、ai_models 表，users 加 ai_model_id 欄位）
+- [ ] **Task 23** `[修改]` — 更新 Bot Webhook 加入指令縮寫（/h、/s、/e、/ab、/u）和 `/user` 指令
+- [ ] **Task 24** `[修改]` — 重構 `/admin/models` 為 Endpoint + Model 二層管理（新增 ai_endpoints、ai_models CRUD）
+- [ ] **Task 25** `[修改]` — 更新個人設定頁 `/settings`（model 選擇改為 endpoint → model 兩層 dropdown，儲存 ai_model_id）
+- [ ] **Task 26** `[修改]` — 更新 `src/lib/gemini.ts` 及相關呼叫（從 ai_endpoints 讀取 base_url 和 api_key，動態初始化 AI client）
+- [ ] **Task 27** `[新增]` — 新增說明書頁面 `/docs`（AI 根據 PRD 生成內容，分 User / Super Admin section，含目錄）
