@@ -31,7 +31,10 @@ const sections: Section[] = [
 
 export default function DocsPage() {
   const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
   const [activeId, setActiveId] = useState('user')
+
+  useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -62,7 +65,7 @@ export default function DocsPage() {
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
           className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
         >
-          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          {mounted && theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
         </button>
       </header>
 
@@ -92,7 +95,7 @@ export default function DocsPage() {
         {/* Content */}
         <article className="flex-1 min-w-0 prose prose-gray dark:prose-invert max-w-none
           prose-headings:scroll-mt-20 prose-h1:text-2xl prose-h2:text-lg prose-h3:text-base
-          prose-code:bg-gray-100 prose-code:dark:bg-gray-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:font-normal prose-code:before:content-none prose-code:after:content-none">
+          prose-code:bg-gray-100 dark:prose-code:bg-gray-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:font-normal prose-code:before:content-none prose-code:after:content-none">
 
           {/* ── 一般使用者 ── */}
           <h1 id="user">一般使用者</h1>

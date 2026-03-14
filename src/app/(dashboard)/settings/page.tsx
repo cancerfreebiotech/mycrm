@@ -26,6 +26,7 @@ const ROLE_LABEL: Record<string, string> = {
 export default function SettingsPage() {
   const supabase = createBrowserSupabaseClient()
   const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
 
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -42,6 +43,8 @@ export default function SettingsPage() {
   const [selectedModelId, setSelectedModelId] = useState<string>('')  // ai_models.id (UUID)
 
   const filteredModels = allModels.filter((m) => m.endpoint_id === selectedEndpointId)
+
+  useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
     async function load() {
@@ -227,25 +230,25 @@ export default function SettingsPage() {
               type="button"
               onClick={() => setTheme('light')}
               className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg border transition-colors ${
-                theme === 'light'
+                mounted && theme === 'light'
                   ? 'border-blue-500 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300'
                   : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
               }`}
             >
               <Sun size={15} /> 淺色
-              {theme === 'light' && <Check size={13} />}
+              {mounted && theme === 'light' && <Check size={13} />}
             </button>
             <button
               type="button"
               onClick={() => setTheme('dark')}
               className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg border transition-colors ${
-                theme === 'dark'
+                mounted && theme === 'dark'
                   ? 'border-blue-500 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300'
                   : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
               }`}
             >
               <Moon size={15} /> 深色
-              {theme === 'dark' && <Check size={13} />}
+              {mounted && theme === 'dark' && <Check size={13} />}
             </button>
           </div>
         </div>
