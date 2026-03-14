@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut, Settings } from 'lucide-react'
+import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut, Settings, Tag, StickyNote } from 'lucide-react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 
 interface UserProfile {
@@ -39,22 +39,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push('/login')
   }
 
-  const isAdmin = profile?.role === 'admin'
+  const isSuperAdmin = profile?.role === 'super_admin'
 
   const navItems = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/contacts', label: '聯絡人', icon: Users },
+    { href: '/admin/tags', label: 'Tag 管理', icon: Tag },
+    { href: '/unassigned-notes', label: '未歸類筆記', icon: StickyNote },
+    ...(isSuperAdmin ? [{ href: '/admin/users', label: '使用者管理', icon: ShieldCheck }] : []),
     { href: '/admin/templates', label: '郵件範本', icon: Mail },
     { href: '/settings', label: '個人設定', icon: Settings },
-    ...(isAdmin ? [{ href: '/admin/users', label: '使用者管理', icon: ShieldCheck }] : []),
   ]
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-950">
       {/* Sidebar */}
-      <aside className="w-56 bg-white border-r border-gray-200 flex flex-col">
-        <div className="h-14 flex items-center px-5 border-b border-gray-200">
-          <span className="text-lg font-bold text-gray-900">myCRM</span>
+      <aside className="w-56 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+        <div className="h-14 flex items-center px-5 border-b border-gray-200 dark:border-gray-700">
+          <span className="text-lg font-bold text-gray-900 dark:text-gray-100">myCRM</span>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
           {navItems.map(({ href, label, icon: Icon }) => {
@@ -65,8 +67,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 href={href}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                   active
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100'
                 }`}
               >
                 <Icon size={18} />
@@ -80,15 +82,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6">
-          <span className="text-sm font-semibold text-gray-700 tracking-wide">myCRM 管理系統</span>
+        <header className="h-14 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-6">
+          <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 tracking-wide">myCRM 管理系統</span>
           <div className="flex items-center gap-4">
             {profile?.display_name && (
-              <span className="text-sm text-gray-600">{profile.display_name}</span>
+              <span className="text-sm text-gray-600 dark:text-gray-400">{profile.display_name}</span>
             )}
             <button
               onClick={handleSignOut}
-              className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors"
+              className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-colors"
             >
               <LogOut size={16} />
               Sign out
