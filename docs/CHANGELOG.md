@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v0.6 — Bot 縮寫 + AI Endpoint 管理 + 說明書（待實作）
+## v0.6 — Bot 縮寫 + AI Endpoint 管理 + 說明書（已完成 2026-03-14）
 
 ### 變更項目
 - **Bot：指令縮寫**：`/h`、`/s`、`/e`、`/ab`、`/u`，/help 顯示完整指令與縮寫對照

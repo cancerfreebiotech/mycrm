@@ -26,11 +26,12 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   const isLoginPage = request.nextUrl.pathname === '/login'
+  const isDocsPage = request.nextUrl.pathname.startsWith('/docs')
   const isApiBot = request.nextUrl.pathname.startsWith('/api/bot')
   const isAuthCallback = request.nextUrl.pathname.startsWith('/api/auth')
 
-  // Allow bot webhook and auth callback without session
-  if (isApiBot || isAuthCallback) {
+  // Allow bot webhook, auth callback, and docs without session
+  if (isApiBot || isAuthCallback || isDocsPage) {
     return supabaseResponse
   }
 

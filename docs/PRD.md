@@ -845,4 +845,4 @@ alter table users add column if not exists ai_model_id uuid references ai_models
 - [x] **Task 24** `[修改]` — 重構 `/admin/models` 為 Endpoint + Model 二層管理（新增 ai_endpoints、ai_models CRUD）
 - [x] **Task 25** `[修改]` — 更新個人設定頁 `/settings`（model 選擇改為 endpoint → model 兩層 dropdown，儲存 ai_model_id）
 - [x] **Task 26** `[修改]` — 更新 `src/lib/gemini.ts` 及相關呼叫（從 ai_endpoints 讀取 base_url 和 api_key，動態初始化 AI client）
-- [ ] **Task 27** `[新增]` — 新增說明書頁面 `/docs`（AI 根據 PRD 生成內容，分 User / Super Admin section，含目錄）
+- [x] **Task 27** `[新增]` — 新增說明書頁面 `/docs`（AI 根據 PRD 生成內容，分 User / Super Admin section，含目錄）
