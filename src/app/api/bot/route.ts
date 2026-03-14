@@ -104,6 +104,7 @@ export async function POST(req: NextRequest) {
 
     // 照片處理
     if (message.photo) {
+      await sendMessage(chatId, '⏳ 處理中，請稍候...')
       try {
         const photo = message.photo[message.photo.length - 1]
 
@@ -149,8 +150,10 @@ export async function POST(req: NextRequest) {
             inline_keyboard: [[{ text: '✅ 確認存檔', callback_data: callbackData }]],
           },
         })
-      } catch {
-        await sendMessage(chatId, '❌ 處理失敗，請稍後再試')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error('[bot] photo processing error:', msg)
+        await sendMessage(chatId, `❌ 處理失敗：${msg}`)
       }
     }
 
