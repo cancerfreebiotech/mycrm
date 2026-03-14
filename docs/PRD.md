@@ -4,6 +4,47 @@
 
 ---
 
+## ⚠️ Claude Code 工作守則（請務必遵守）
+
+1. **每個 Task 開始前**，先列出你打算新增或修改的檔案清單，等待人類確認後才開始實作
+2. **Task 清單中未提及的現有檔案，不得主動修改**
+3. **每完成一個 Task**，告知完成內容，等待確認後再繼續下一個
+4. 如對需求有疑問，先提問，不要自行假設
+
+---
+
+## 現況說明（v0.1 已實作）
+
+此專案已有部分功能上線（v0.1），以下檔案已存在且運作中，**Task 清單中未提及者請勿重寫**：
+
+| 檔案 | 狀態 | 說明 |
+|------|------|------|
+| `src/app/api/bot/route.ts` | 已實作，需修改 | Bot webhook，目前查 authorized_users，需改查 users |
+| `src/app/api/auth/callback/route.ts` | 已實作，需修改 | Auth callback，需加 upsert users 邏輯 |
+| `src/app/login/page.tsx` | 已實作，需修改 | 登入頁，需加 Mail.Send scope |
+| `src/app/(dashboard)/layout.tsx` | 已實作，需修改 | Sidebar，需更新導覽項目與權限 |
+| `src/app/(dashboard)/page.tsx` | 已實作，需修改 | Dashboard 首頁，需加未歸類筆記區塊 |
+| `src/app/(dashboard)/contacts/page.tsx` | 已實作，需修改 | 聯絡人列表，需加 Tags、篩選、Export |
+| `src/app/(dashboard)/contacts/[id]/page.tsx` | 已實作，需修改 | 聯絡人詳情，需加編輯、Tags、反面照片、寄信 |
+| `src/app/(dashboard)/admin/users/page.tsx` | 已實作，需修改 | 使用者管理，需改為管理 users 表 |
+| `src/app/(dashboard)/admin/templates/page.tsx` | 已實作，需修改 | 郵件範本，需加真實附件上傳 |
+| `src/lib/supabase.ts` | 已實作，需修改 | Supabase client |
+| `src/lib/supabase-browser.ts` | 已實作，可能需修改 | Browser Supabase client |
+| `src/lib/gemini.ts` | 已實作，需修改 | Gemini OCR，需加 model 參數與多語言 |
+| `src/lib/imageProcessor.ts` | 已實作，需修改 | 圖片壓縮，需加新命名規則 |
+| `src/middleware.ts` | 已實作，需確認 | Route 保護 |
+
+**以下為全新新增，現在不存在：**
+- `src/lib/graph.ts`
+- `src/lib/duplicate.ts`
+- `src/app/api/ocr/route.ts`
+- `src/app/(dashboard)/contacts/new/page.tsx`
+- `src/app/(dashboard)/unassigned-notes/page.tsx`
+- `src/app/(dashboard)/admin/tags/page.tsx`
+- `src/app/(dashboard)/settings/page.tsx`
+
+---
+
 ## 一、專案概覽
 
 | 項目 | 內容 |
@@ -516,22 +557,22 @@ curl -X POST "https://api.telegram.org/bot{TOKEN}/setWebhook" \
 
 請先閱讀完整 PRD，理解整體架構後提出任務拆分計畫，確認後再依序實作：
 
-- [ ] **Task 1** — 資料庫 Migration SQL（第八節全部執行，含 pg_trgm 擴充）
-- [ ] **Task 2** — 安裝套件（next-themes、xlsx）；設定全域主題；更新全域 CSS 規範
-- [ ] **Task 3** — 更新 `src/lib/supabase.ts`、`src/lib/supabase-browser.ts`
-- [ ] **Task 4** — 更新 `src/lib/gemini.ts`（多語言 prompt、接受 model 參數、支援多張圖片）
-- [ ] **Task 5** — 新增 `src/lib/graph.ts`；新增 `src/lib/duplicate.ts`（重複偵測）
-- [ ] **Task 6** — 更新 `src/lib/imageProcessor.ts`（命名規則 yymmdd_hhmmss-流水號）
-- [ ] **Task 7** — 更新認證流程（login、auth callback upsert users、middleware）
-- [ ] **Task 8** — 更新 Bot Webhook（白名單查 users.telegram_id、個人 gemini_model、存檔/不存檔按鈕、重複偵測、會議筆記指令、/add_back、bot_sessions 狀態管理）
-- [ ] **Task 9** — 新增 OCR API Route `src/app/api/ocr/route.ts`
-- [ ] **Task 10** — 更新 Dashboard Layout（Sidebar 新增未歸類筆記、Tag 管理；super_admin 判斷）
-- [ ] **Task 11** — 更新 Dashboard 首頁（待處理未歸類筆記區塊）
-- [ ] **Task 12** — 更新聯絡人列表（Tags 欄、Tag 篩選、Export Excel/CSV）
-- [ ] **Task 13** — 新增聯絡人新增頁 `/contacts/new`（表單、照片上傳 + AI 辨識、重複偵測）
-- [ ] **Task 14** — 更新聯絡人詳情（編輯 Modal、正反面照片、Tags、互動紀錄 type badge、會議日期、寄信 Modal）
-- [ ] **Task 15** — 新增未歸類筆記頁 `/unassigned-notes`
-- [ ] **Task 16** — 新增 Tag 管理頁 `/admin/tags`
-- [ ] **Task 17** — 更新使用者管理頁 `/admin/users`（super_admin 角色切換）
-- [ ] **Task 18** — 更新郵件範本頁（多附件上傳，2MB 限制）
-- [ ] **Task 19** — 更新個人設定頁 `/settings`（Telegram ID、Gemini model、主題、顯示角色）
+- [ ] **Task 1** `[修改]` — 資料庫 Migration SQL（第八節全部執行，含 pg_trgm 擴充）
+- [ ] **Task 2** `[修改]` — 安裝套件（next-themes、xlsx）；設定全域主題；更新全域 CSS 規範
+- [ ] **Task 3** `[修改]` — 更新 `src/lib/supabase.ts`、`src/lib/supabase-browser.ts`
+- [ ] **Task 4** `[修改]` — 更新 `src/lib/gemini.ts`（多語言 prompt、接受 model 參數、支援多張圖片）
+- [ ] **Task 5** `[新增]` — 新增 `src/lib/graph.ts`；新增 `src/lib/duplicate.ts`（重複偵測）
+- [ ] **Task 6** `[修改]` — 更新 `src/lib/imageProcessor.ts`（命名規則 yymmdd_hhmmss-流水號）
+- [ ] **Task 7** `[修改]` — 更新認證流程（login 加 Mail.Send scope、auth callback upsert users、確認 middleware）
+- [ ] **Task 8** `[修改]` — 更新 Bot Webhook（白名單查 users.telegram_id、個人 gemini_model、存檔/不存檔按鈕、重複偵測、會議筆記指令、/add_back、bot_sessions 狀態管理）
+- [ ] **Task 9** `[新增]` — 新增 OCR API Route `src/app/api/ocr/route.ts`
+- [ ] **Task 10** `[修改]` — 更新 Dashboard Layout（Sidebar 新增未歸類筆記、Tag 管理；super_admin 判斷）
+- [ ] **Task 11** `[修改]` — 更新 Dashboard 首頁（待處理未歸類筆記區塊）
+- [ ] **Task 12** `[修改]` — 更新聯絡人列表（Tags 欄、Tag 篩選、Export Excel/CSV）
+- [ ] **Task 13** `[新增]` — 新增聯絡人新增頁 `/contacts/new`（表單、照片上傳 + AI 辨識、重複偵測）
+- [ ] **Task 14** `[修改]` — 更新聯絡人詳情（編輯 Modal、正反面照片、Tags、互動紀錄 type badge、會議日期、寄信 Modal）
+- [ ] **Task 15** `[新增]` — 新增未歸類筆記頁 `/unassigned-notes`
+- [ ] **Task 16** `[新增]` — 新增 Tag 管理頁 `/admin/tags`
+- [ ] **Task 17** `[修改]` — 更新使用者管理頁 `/admin/users`（改管理 users 表、super_admin 角色切換）
+- [ ] **Task 18** `[修改]` — 更新郵件範本頁（多附件上傳，2MB 限制，template_attachments 表）
+- [ ] **Task 19** `[新增]` — 新增個人設定頁 `/settings`（Telegram ID、Gemini model、主題、顯示角色）
