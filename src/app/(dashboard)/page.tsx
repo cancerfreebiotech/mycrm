@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Users, CalendarPlus, X, Search } from 'lucide-react'
+import { Users, CalendarPlus, X, Search, StickyNote, Tag } from 'lucide-react'
 
 interface UnassignedNote {
   id: string
@@ -11,6 +11,11 @@ interface UnassignedNote {
   type: string
   created_at: string
   creator: string | null
+}
+
+interface TagStat {
+  name: string
+  count: number
 }
 
 interface ContactOption {
@@ -23,6 +28,8 @@ interface ContactOption {
 export default function DashboardPage() {
   const [totalContacts, setTotalContacts] = useState<number>(0)
   const [monthlyContacts, setMonthlyContacts] = useState<number>(0)
+  const [unassignedCount, setUnassignedCount] = useState<number>(0)
+  const [tagStats, setTagStats] = useState<TagStat[]>([])
   const [notes, setNotes] = useState<UnassignedNote[]>([])
   const [assigningNote, setAssigningNote] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -34,6 +41,7 @@ export default function DashboardPage() {
   useEffect(() => {
     loadStats()
     loadUnassignedNotes()
+    loadTagStats()
   }, [])
 
   async function loadStats() {
@@ -50,6 +58,26 @@ export default function DashboardPage() {
       .select('*', { count: 'exact', head: true })
       .gte('created_at', startOfMonth.toISOString())
     setMonthlyContacts(monthly ?? 0)
+
+    const { count: unassigned } = await supabase
+      .from('interaction_logs')
+      .select('*', { count: 'exact', head: true })
+      .is('contact_id', null)
+    setUnassignedCount(unassigned ?? 0)
+  }
+
+  async function loadTagStats() {
+    const { data } = await supabase
+      .from('tags')
+      .select('name, contact_tags(count)')
+    if (!data) return
+    const stats = data
+      .map((t) => ({
+        name: t.name,
+        count: Array.isArray(t.contact_tags) ? t.contact_tags.length : 0,
+      }))
+      .sort((a, b) => b.count - a.count)
+    setTagStats(stats)
   }
 
   async function loadUnassignedNotes() {
@@ -115,22 +143,57 @@ export default function DashboardPage() {
       </div>
 
       {/* 統計卡片 */}
-      <div className="grid grid-cols-2 gap-4 max-w-lg">
+      <div className="grid grid-cols-3 gap-4 max-w-2xl">
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
-          <div className="flex items-center gap-3 mb-2">
-            <Users size={20} className="text-blue-500" />
+          <div className="flex items-center gap-2 mb-2">
+            <Users size={18} className="text-blue-500" />
             <span className="text-sm text-gray-500 dark:text-gray-400">聯絡人總數</span>
           </div>
           <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{totalContacts}</p>
         </div>
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
-          <div className="flex items-center gap-3 mb-2">
-            <CalendarPlus size={20} className="text-green-500" />
+          <div className="flex items-center gap-2 mb-2">
+            <CalendarPlus size={18} className="text-green-500" />
             <span className="text-sm text-gray-500 dark:text-gray-400">本月新增名片</span>
           </div>
           <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{monthlyContacts}</p>
         </div>
+        <Link href="/unassigned-notes" className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 hover:border-orange-300 dark:hover:border-orange-700 transition-colors">
+          <div className="flex items-center gap-2 mb-2">
+            <StickyNote size={18} className="text-orange-500" />
+            <span className="text-sm text-gray-500 dark:text-gray-400">未歸類筆記</span>
+          </div>
+          <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{unassignedCount}</p>
+        </Link>
       </div>
+
+      {/* Tag 分布 */}
+      {tagStats.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <Tag size={16} className="text-gray-400" />
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Tag 聯絡人分布</h2>
+          </div>
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 max-w-lg space-y-2">
+            {tagStats.map((t) => {
+              const max = tagStats[0]?.count || 1
+              const pct = Math.round((t.count / max) * 100)
+              return (
+                <div key={t.name} className="flex items-center gap-3">
+                  <span className="text-sm text-gray-600 dark:text-gray-400 w-28 shrink-0 truncate">{t.name}</span>
+                  <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-2">
+                    <div
+                      className="bg-blue-500 h-2 rounded-full transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300 w-6 text-right shrink-0">{t.count}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 待處理未歸類筆記 */}
       <div>
