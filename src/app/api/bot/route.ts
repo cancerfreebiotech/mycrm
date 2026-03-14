@@ -60,8 +60,16 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ ok: true })
         }
 
-        const jsonStr = Buffer.from(data.replace('save_', ''), 'base64').toString('utf-8')
-        const contact = JSON.parse(jsonStr)
+        const pendingId = data.replace('save_', '')
+        const { data: pending, error: pendingError } = await supabase
+          .from('pending_contacts')
+          .select('data')
+          .eq('id', pendingId)
+          .single()
+
+        if (pendingError || !pending) throw new Error('找不到暫存資料')
+
+        const contact = pending.data
 
         const { data: inserted, error } = await supabase
           .from('contacts')
@@ -76,6 +84,8 @@ export async function POST(req: NextRequest) {
           content: '透過 Telegram Bot 新增名片',
           created_by: user.id,
         })
+
+        await supabase.from('pending_contacts').delete().eq('id', pendingId)
 
         await answerCallbackQuery(callbackQueryId, '✅ 已成功存檔！')
         await editMessageReplyMarkup(message.chat.id, message.message_id)
@@ -134,7 +144,15 @@ export async function POST(req: NextRequest) {
         // OCR
         const cardData = await analyzeBusinessCard(compressed)
         const contactPayload = { ...cardData, card_img_url: cardImgUrl }
-        const callbackData = 'save_' + Buffer.from(JSON.stringify(contactPayload)).toString('base64')
+
+        const { data: pending, error: pendingError } = await supabase
+          .from('pending_contacts')
+          .insert({ data: contactPayload, created_by: user.id })
+          .select('id')
+          .single()
+
+        if (pendingError || !pending) throw new Error('暫存失敗')
+        const callbackData = 'save_' + pending.id
 
         const resultText =
           `📇 辨識結果：\n\n` +
