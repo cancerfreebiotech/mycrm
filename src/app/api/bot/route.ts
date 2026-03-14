@@ -107,12 +107,34 @@ async function handleHelp(chatId: number) {
   const text =
     `🤖 <b>myCRM Bot 指令列表</b>\n\n` +
     `📷 <b>傳送照片</b> — 掃描名片，AI 辨識後存入 CRM\n\n` +
-    `/search [關鍵字] — 搜尋聯絡人\n` +
+    `/search [關鍵字]　/s — 搜尋聯絡人\n` +
     `/note — 新增筆記\n` +
-    `/email — 發送郵件給聯絡人\n` +
-    `/add_back @姓名 — 補充名片反面\n` +
-    `/help — 顯示此說明`
+    `/email　/e — 發送郵件給聯絡人\n` +
+    `/add_back @姓名　/ab @姓名 — 補充名片反面\n` +
+    `/user　/u — 列出組織成員\n` +
+    `/help　/h — 顯示此說明`
   await sendMessage(chatId, text)
+}
+
+async function handleUser(chatId: number) {
+  const supabase = createServiceClient()
+  const { data } = await supabase
+    .from('users')
+    .select('display_name, email, telegram_id')
+    .order('created_at', { ascending: true })
+
+  if (!data || data.length === 0) {
+    await sendMessage(chatId, '目前沒有成員資料。')
+    return
+  }
+
+  const lines = data.map((u, i) => {
+    const name = u.display_name || u.email
+    const tg = u.telegram_id ? `📱 Telegram ID：${u.telegram_id}` : `📱 Telegram ID：未設定`
+    return `${i + 1}. <b>${name}</b>\n   📧 ${u.email}\n   ${tg}`
+  })
+
+  await sendMessage(chatId, `👥 <b>組織成員列表（共 ${data.length} 人）</b>\n\n` + lines.join('\n\n'))
 }
 
 // ── Handle /search ────────────────────────────────────────────────────────────
@@ -271,21 +293,29 @@ async function handleText(
 ) {
   const supabase = createServiceClient()
 
-  // ── /help ──────────────────────────────────────────────────────────────────
-  if (text.trim() === '/help') {
+  const cmd = text.trim()
+
+  // ── /help /h ───────────────────────────────────────────────────────────────
+  if (cmd === '/help' || cmd === '/h') {
     await handleHelp(chatId)
     return
   }
 
-  // ── /search ────────────────────────────────────────────────────────────────
-  const searchMatch = text.trim().match(/^\/search\s+(.+)/)
+  // ── /user /u ───────────────────────────────────────────────────────────────
+  if (cmd === '/user' || cmd === '/u') {
+    await handleUser(chatId)
+    return
+  }
+
+  // ── /search /s ─────────────────────────────────────────────────────────────
+  const searchMatch = cmd.match(/^\/(?:search|s)\s+(.+)/)
   if (searchMatch) {
     await handleSearch(chatId, searchMatch[1].trim())
     return
   }
 
-  // ── /email ─────────────────────────────────────────────────────────────────
-  if (text.trim() === '/email') {
+  // ── /email /e ──────────────────────────────────────────────────────────────
+  if (cmd === '/email' || cmd === '/e') {
     await setSession(fromId, 'waiting_contact_for_email', {})
     await sendMessage(chatId, '請輸入聯絡人姓名或公司關鍵字：')
     return
@@ -411,14 +441,14 @@ async function handleText(
   }
 
   // ── /note command ──────────────────────────────────────────────────────────
-  if (text.trim() === '/note') {
+  if (cmd === '/note') {
     await setSession(fromId, 'waiting_for_note_contact', {})
     await sendMessage(chatId, '請輸入聯絡人姓名或 Email：')
     return
   }
 
-  // ── /add_back @name command ────────────────────────────────────────────────
-  const addBackMatch = text.trim().match(/^\/add_back\s+@(.+)/)
+  // ── /add_back /ab @name command ───────────────────────────────────────────
+  const addBackMatch = cmd.match(/^\/(?:add_back|ab)\s+@(.+)/)
   if (addBackMatch) {
     const query = addBackMatch[1].trim()
     const contacts = await searchContacts(query)
@@ -435,8 +465,8 @@ async function handleText(
   }
 
   // ── @ quick format: @name\ncontent ────────────────────────────────────────
-  if (text.startsWith('@')) {
-    const lines = text.split('\n')
+  if (cmd.startsWith('@')) {
+    const lines = cmd.split('\n')
     const query = lines[0].slice(1).trim()
     const content = lines.slice(1).join('\n').trim()
     const contacts = await searchContacts(query)
@@ -483,7 +513,7 @@ async function handleText(
   }
 
   // Default
-  await sendMessage(chatId, '請傳送名片照片，或輸入 /help 查看可用指令。')
+  await sendMessage(chatId, '請傳送名片照片，或輸入 /help（/h）查看可用指令。')
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
