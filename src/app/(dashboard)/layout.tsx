@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut } from 'lucide-react'
-import { createBrowserSupabaseClient } from '@/lib/supabase'
+import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
