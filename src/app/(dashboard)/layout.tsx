@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut, Settings, Tag, StickyNote, Search, BookOpen } from 'lucide-react'
+import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon } from 'lucide-react'
+import { useTheme } from 'next-themes'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 
 interface UserProfile {
@@ -15,6 +16,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname()
   const router = useRouter()
   const [profile, setProfile] = useState<UserProfile | null>(null)
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
     async function loadProfile() {
@@ -103,6 +108,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex items-center gap-4">
             {profile?.display_name && (
               <span className="text-sm text-gray-600 dark:text-gray-400">{profile.display_name}</span>
+            )}
+            {mounted && (
+              <button
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                title={theme === 'dark' ? '切換淺色' : '切換深色'}
+              >
+                {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+              </button>
             )}
             <button
               onClick={handleSignOut}
