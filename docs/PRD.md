@@ -23,11 +23,11 @@
 | `src/app/api/auth/callback/route.ts` | 已實作，需修改 | Auth callback，需加 upsert users 邏輯 |
 | `src/app/login/page.tsx` | 已實作，需修改 | 登入頁，需加 Mail.Send scope |
 | `src/app/(dashboard)/layout.tsx` | 已實作，需修改 | Sidebar，需更新導覽項目與權限 |
-| `src/app/(dashboard)/page.tsx` | 已實作，需修改 | Dashboard 首頁，需加未歸類筆記區塊 |
+| `src/app/(dashboard)/page.tsx` | 已實作，需修改 | Dashboard 首頁，需加統計與未歸類筆記區塊 |
 | `src/app/(dashboard)/contacts/page.tsx` | 已實作，需修改 | 聯絡人列表，需加 Tags、篩選、Export |
 | `src/app/(dashboard)/contacts/[id]/page.tsx` | 已實作，需修改 | 聯絡人詳情，需加編輯、Tags、反面照片、寄信 |
 | `src/app/(dashboard)/admin/users/page.tsx` | 已實作，需修改 | 使用者管理，需改為管理 users 表 |
-| `src/app/(dashboard)/admin/templates/page.tsx` | 已實作，需修改 | 郵件範本，需加真實附件上傳 |
+| `src/app/(dashboard)/admin/templates/page.tsx` | 已實作，需修改 | 郵件範本，需加真實附件上傳、AI 生成 |
 | `src/lib/supabase.ts` | 已實作，需修改 | Supabase client |
 | `src/lib/supabase-browser.ts` | 已實作，可能需修改 | Browser Supabase client |
 | `src/lib/gemini.ts` | 已實作，需修改 | Gemini OCR，需加 model 參數與多語言 |
@@ -38,9 +38,12 @@
 - `src/lib/graph.ts`
 - `src/lib/duplicate.ts`
 - `src/app/api/ocr/route.ts`
+- `src/app/api/ai-email/route.ts`
 - `src/app/(dashboard)/contacts/new/page.tsx`
 - `src/app/(dashboard)/unassigned-notes/page.tsx`
+- `src/app/(dashboard)/notes/page.tsx`
 - `src/app/(dashboard)/admin/tags/page.tsx`
+- `src/app/(dashboard)/admin/models/page.tsx`
 - `src/app/(dashboard)/settings/page.tsx`
 
 ---
@@ -60,6 +63,7 @@
 
 ### Frontend / Backend
 - **Framework**：Next.js 14，使用 App Router、TypeScript、ESLint、Tailwind CSS、`src/` 目錄結構
+- **RWD**：所有頁面必須 mobile friendly，使用 Tailwind responsive prefix（sm / md / lg）
 - **UI 元件**：Tailwind CSS（優先），可選用 shadcn/ui
 
 ### 核心套件
@@ -74,40 +78,32 @@ xlsx
 ```
 
 ### 服務整合
-- **Supabase**：PostgreSQL 資料庫 + Storage（名片圖片）+ Auth（Microsoft AAD OAuth）
+- **Supabase**：PostgreSQL 資料庫 + Storage + Auth（Microsoft AAD OAuth）
 - **Telegram Bot API**：原生 fetch 實作 Webhook（不使用 Telegraf）
-- **Google Gemini**：名片圖片 OCR 辨識，支援中英日文名片，model 可由使用者個人設定切換
+- **Google Gemini**：名片 OCR、Email AI 生成，model 從 `gemini_models` 表動態讀取
 - **Microsoft Graph API**：以使用者身份寄送郵件（`Mail.Send` permission）
 
 ---
 
 ## 三、使用者與身份系統
 
-### 設計原則
-
-系統以 **Microsoft AAD 帳號為唯一身份**，Telegram 為附加綁定。廢除獨立的 `authorized_users` 白名單表，改由 `users` 表統一管理。
-
 ### 登入流程
-
 1. 使用者點擊「Sign in with Microsoft」
 2. Supabase Auth 處理 OAuth，限制僅 `@cancerfree.io` 帳號可通過
-3. 登入成功後，在 `auth callback` 自動於 `users` 表建立或更新記錄（upsert by email）
-4. 之後每次登入更新 `last_login_at`
+3. 登入成功後 upsert `users` 表（by email），更新 `display_name`、`last_login_at`
 
-### Telegram 綁定流程
-
-1. 使用者登入 Web 後，前往「個人設定」頁面
-2. 輸入自己的 Telegram 數字 ID（說明：在 Telegram 傳訊給 @userinfobot 可取得）
-3. 儲存後即自動成為 Bot 授權使用者，無需另外管理白名單
+### Telegram 綁定
+1. 登入後前往個人設定，輸入 Telegram 數字 ID（傳訊給 @userinfobot 可取得）
+2. 儲存後自動成為 Bot 授權使用者
 
 ### 角色
 
 | 角色 | 說明 |
 |------|------|
-| `member` | 預設角色，所有 `@cancerfree.io` 登入者自動取得 |
-| `super_admin` | 可管理所有使用者角色，系統可有多位 super_admin |
+| `member` | 預設，所有 `@cancerfree.io` 登入者自動取得 |
+| `super_admin` | 可管理使用者角色、Gemini model 清單，系統可有多位 |
 
-> 第一位登入者需由開發者在 Supabase 資料庫手動將 `role` 設為 `super_admin`。之後 super_admin 可從 Web 介面指派其他人為 super_admin。
+> 第一位使用者需由開發者在 Supabase 手動設為 `super_admin`。
 
 ---
 
@@ -121,10 +117,21 @@ xlsx
 | display_name | text | 顯示名稱 |
 | telegram_id | bigint (UNIQUE, nullable) | Telegram 數字 ID |
 | role | text (default 'member') | `member` 或 `super_admin` |
-| gemini_model | text (default 'gemini-1.5-flash') | 個人偏好 Gemini model |
+| gemini_model | text (default 'gemini-1.5-flash') | 個人偏好 model_id，對應 gemini_models.model_id |
 | theme | text (default 'light') | `light` 或 `dark` |
 | last_login_at | timestamptz | 最後登入時間 |
 | created_at | timestamptz (default now()) | 建立時間 |
+
+### `gemini_models`
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | 主鍵 |
+| model_id | text (UNIQUE, NOT NULL) | 傳給 API 的字串，如 `gemini-1.5-flash` |
+| display_name | text | 顯示名稱，如 `Gemini 1.5 Flash` |
+| is_active | boolean (default true) | 是否顯示於個人設定的 dropdown |
+| created_at | timestamptz (default now()) | 建立時間 |
+
+> 初始資料：gemini-1.5-flash、gemini-1.5-pro、gemini-2.0-flash、gemini-2.5-pro
 
 ### `contacts`
 | 欄位 | 型別 | 說明 |
@@ -140,8 +147,6 @@ xlsx
 | created_by | uuid (FK → users.id) | 建立者 |
 | created_at | timestamptz (default now()) | 建立時間 |
 
-> 所有組織成員共享所有聯絡人，無個人私有名片。
-
 ### `tags`
 | 欄位 | 型別 | 說明 |
 |------|------|------|
@@ -149,7 +154,7 @@ xlsx
 | name | text (UNIQUE, NOT NULL) | Tag 名稱 |
 | created_at | timestamptz (default now()) | 建立時間 |
 
-### `contact_tags`（junction table）
+### `contact_tags`（junction）
 | 欄位 | 型別 | 說明 |
 |------|------|------|
 | contact_id | uuid (FK → contacts.id, ON DELETE CASCADE) | 聯絡人 |
@@ -160,10 +165,12 @@ xlsx
 | 欄位 | 型別 | 說明 |
 |------|------|------|
 | id | uuid (PK) | 主鍵 |
-| contact_id | uuid (FK → contacts.id, ON DELETE CASCADE, **nullable**) | 關聯聯絡人，null 代表未歸類 |
+| contact_id | uuid (FK → contacts.id, ON DELETE CASCADE, **nullable**) | 聯絡人，null 代表未歸類 |
 | type | text (default 'note') | `note` / `meeting` / `email` |
-| content | text | 互動內容 |
-| meeting_date | date (nullable) | 會議日期（type=meeting 時使用） |
+| content | text | 互動內容（email 類型存完整信件內容） |
+| meeting_date | date (nullable) | 會議日期（type=meeting） |
+| email_subject | text (nullable) | 郵件主旨（type=email） |
+| email_attachments | text[] (nullable) | 附件檔名清單（type=email，只存檔名不存檔案） |
 | created_by | uuid (FK → users.id, nullable) | 紀錄者 |
 | created_at | timestamptz (default now()) | 建立時間 |
 
@@ -186,6 +193,15 @@ xlsx
 | file_size | int | 檔案大小（bytes） |
 | created_at | timestamptz (default now()) | 建立時間 |
 
+### `bot_sessions`
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | 主鍵 |
+| telegram_id | bigint (UNIQUE, NOT NULL) | Telegram 使用者 ID |
+| state | text | 目前對話狀態 |
+| context | jsonb | 暫存資料（選到的聯絡人、draft 等） |
+| updated_at | timestamptz | 最後更新時間 |
+
 ---
 
 ## 五、環境變數
@@ -202,11 +218,12 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 
-# Microsoft Graph API 寄信使用 Supabase session 的 provider_token，不需額外設定
+# Microsoft Graph（寄信用 Supabase session provider_token，不需額外設定）
 # 僅需確認 Azure AD App Registration 已開啟 Mail.Send permission
 
-# Vercel
-NEXTAUTH_URL=
+# 版本資訊（Vercel build 時自動注入）
+NEXT_PUBLIC_APP_VERSION=0.2.0
+NEXT_PUBLIC_DEPLOY_TIME=
 ```
 
 ---
@@ -216,131 +233,181 @@ NEXTAUTH_URL=
 ### 6.1 基礎工具庫
 
 #### `src/lib/supabase.ts`
-- 提供 `createClient()` 供 Server Component 使用
-- 提供 `createServiceClient()` 使用 service role key
+- `createClient()` — Server Component 用
+- `createServiceClient()` — API route 用（service role）
 
 #### `src/lib/supabase-browser.ts`
-- 提供 `createBrowserSupabaseClient()` 供 Client Component 使用
+- `createBrowserSupabaseClient()` — Client Component 用
 
 #### `src/lib/gemini.ts`
-- 匯出 `analyzeBusinessCard(imageBuffer: Buffer, model: string): Promise<CardData>`
-- 支援傳入多張圖片（正反面）：`analyzeBusinessCard(buffers: Buffer[], model: string)`
-- **多語言支援**：System Prompt 指定「名片可能為中文、英文或日文，請辨識後以原文回傳各欄位」
-- System Prompt：`你是一個專業名片辨識助手。名片可能為中文、英文或日文，請辨識後以原文回傳。從圖中提取：姓名、公司、職稱、Email、電話，回傳純 JSON，不要有任何其他文字。格式：{"name":"","company":"","job_title":"","email":"","phone":""}`
-- 支援的 model 清單：`gemini-1.5-flash`、`gemini-1.5-pro`、`gemini-2.0-flash`、`gemini-2.5-pro`
+- `analyzeBusinessCard(buffers: Buffer[], model: string): Promise<CardData>`
+  - 支援多張圖片（正反面）
+  - 多語言 System Prompt：`你是一個專業名片辨識助手。名片可能為中文、英文或日文，請辨識後以原文回傳。從圖中提取：姓名、公司、職稱、Email、電話，回傳純 JSON，不要有任何其他文字。格式：{"name":"","company":"","job_title":"","email":"","phone":""}`
+- `generateEmailContent(description: string, template?: string, model: string): Promise<string>`
+  - 根據使用者描述（和可選的 template 內容）生成完整郵件內文
+  - 回傳 HTML 字串
 
 #### `src/lib/imageProcessor.ts`
-- 函式：`processCardImage(inputBuffer: Buffer): Promise<Buffer>`
+- `processCardImage(inputBuffer: Buffer): Promise<Buffer>`
 - 長邊壓縮至最大 1024px，JPEG 品質 85
-- **圖片命名規則**：`yymmdd_hhmmss-{流水號}.jpg`
-  - 流水號每天從 001 開始，3 位數補零
-  - 從 Supabase 查詢當天已存檔數量 +1 計算
+- **命名規則**：`yymmdd_hhmmss-{流水號}.jpg`，流水號每天從 001 重置，3 位數補零
 
 #### `src/lib/graph.ts`
-- 匯出 `sendMail({ accessToken, to, subject, body, attachments? })`
+- `sendMail({ accessToken, to, subject, body, attachmentNames? }): Promise<void>`
 - 使用 `https://graph.microsoft.com/v1.0/me/sendMail`
+- accessToken 從 Supabase session `provider_token` 取得
 
-#### `src/lib/duplicate.ts`（新增）
-- 匯出 `checkDuplicates(email: string, name: string): Promise<DuplicateResult>`
-- 完全重複：查詢 email 完全相符的聯絡人
-- 疑似重複：查詢姓名相似度（使用 PostgreSQL `similarity()` 函式，threshold 0.6）
-- 回傳 `{ exact: Contact | null, similar: Contact[] }`
+#### `src/lib/duplicate.ts`
+- `checkDuplicates(email: string, name: string): Promise<{ exact: Contact | null, similar: Contact[] }>`
+- 完全重複：email 完全相符
+- 疑似重複：姓名 similarity() >= 0.6（需 pg_trgm）
 
 ---
 
 ### 6.2 主題系統
-
-- 使用 `next-themes` 管理全域主題
-- 主題儲存於 `users.theme`，登入後載入套用
-- **全域 CSS 規範**：
-  - 所有 `input`、`textarea`、`select` 文字色：`text-gray-900 dark:text-gray-100`
-  - Placeholder：`placeholder-gray-400 dark:placeholder-gray-500`
-  - 禁止使用 `text-white` 或過淺灰色作為輸入文字色
+- `next-themes` 管理全域主題，儲存於 `users.theme`
+- **全域 CSS 規範**（所有頁面強制執行）：
+  - input / textarea / select 文字色：`text-gray-900 dark:text-gray-100`
+  - placeholder：`placeholder-gray-400 dark:placeholder-gray-500`
+  - 禁止 `text-white` 或過淺灰色作為輸入文字色
 
 ---
 
 ### 6.3 認證流程
-
-#### `src/app/login/page.tsx`
-- 「Sign in with Microsoft」按鈕
-- provider：`azure`，額外 scope：`Mail.Send`
-
-#### `src/app/api/auth/callback/route.ts`
-- Upsert `users` 表（by email），更新 `display_name`、`last_login_at`
-- 導向 `/`
-
-#### `src/middleware.ts`
-- 保護所有 `/(dashboard)` 路由
+- login 頁：`signInWithOAuth`，provider `azure`，額外 scope `Mail.Send`
+- auth callback：upsert `users` by email，更新 `display_name`、`last_login_at`
+- middleware：保護所有 `/(dashboard)` 路由
 
 ---
 
-### 6.4 Telegram Bot Webhook
+### 6.4 Telegram Bot
 
 #### 路徑：`src/app/api/bot/route.ts`
 
-**支援的互動類型：**
+所有指令統一操作模式：**輸入關鍵字 → Bot 列出選項（附數字） → 回覆數字選擇 → 繼續流程**
 
-**A. 照片（名片掃描）**
+---
+
+**`/help`**
+
+回覆所有可用指令說明：
+```
+🤖 myCRM Bot 指令列表
+
+📷 傳送照片 — 掃描名片，AI 辨識後存入 CRM
+
+/search [關鍵字] — 搜尋聯絡人
+/note — 新增會議筆記
+/email — 發送郵件給聯絡人
+/add_back @姓名 — 補充名片反面
+/help — 顯示此說明
+```
+
+---
+
+**`/search [關鍵字]`**
+
+1. 模糊搜尋姓名或公司
+2. 找到結果：每筆顯示姓名、公司、職稱、Email、電話，並傳送名片照片（有反面則傳兩張）
+3. 每筆附快速按鈕：`[✉️ 發信]` `[📝 筆記]`
+4. 找不到：「找不到符合的聯絡人」
+
+---
+
+**照片（名片掃描）**
+
 1. 權限檢查：查 `users.telegram_id`，不存在回覆「⛔ 你沒有使用權限，請先在 myCRM 網站的個人設定綁定你的 Telegram ID」
-2. 下載照片 → `processCardImage()` 壓縮 → 上傳 Storage（命名規則 `yymmdd_hhmmss-流水號.jpg`）
-3. 以使用者的 `gemini_model` 呼叫 `analyzeBusinessCard()`
-4. **重複檢查**：呼叫 `checkDuplicates()`，若有結果在回覆中附加警告：
-   - 完全重複：「⚠️ 此 email 已有聯絡人：{name}（{company}），是否仍要新增？」
-   - 疑似重複：「🔍 系統有相似聯絡人：{name}（{company}），請確認是否為同一人」
-5. 回覆辨識結果，附上兩個按鈕：
-   ```
-   [✅ 確認存檔]  [❌ 不存檔]
-   ```
-6. Callback Query：
-   - `save_xxx`：存入 contacts，寫入 interaction_log（type=note，content=「透過 Telegram Bot 新增名片」）
-   - `cancel_xxx`：回覆「已取消，名片未存檔」，移除按鈕
+2. 下載 → `processCardImage()` 壓縮 → 上傳 Storage
+3. 以使用者 `gemini_model` 呼叫 `analyzeBusinessCard()`
+4. 重複檢查（`checkDuplicates()`）：
+   - 完全重複：「⚠️ 此 email 已有聯絡人：{name}（{company}）」
+   - 疑似重複：「🔍 系統有相似聯絡人：{name}（{company}）」
+5. 回覆辨識結果 + `[✅ 確認存檔]` `[❌ 不存檔]`
+6. Callback：
+   - `save_xxx`：存 contacts + interaction_log（type=note）
+   - `cancel_xxx`：「已取消，名片未存檔」，移除按鈕
 
-**B. 文字訊息（會議筆記）**
+---
 
-支援兩種格式：
+**`/note`**
 
-*格式 1：指令式*
+1. Bot 問：「請輸入聯絡人姓名或公司關鍵字：」
+2. 使用者輸入 → 模糊搜尋：
+   - 找到唯一：直接進入步驟 3
+   - 找到多筆：列出選項，回覆數字選擇
+   - 找不到：「找不到此聯絡人，筆記將存為未歸類，可至網頁手動歸類」→ 存 interaction_log（contact_id=null, type=meeting）
+3. Bot 問：「請輸入筆記內容（會議日期可在第一行輸入 DATE:YYYY-MM-DD）：」
+4. 存入 interaction_log（type=meeting）
+
+快速格式（不用 /note 指令）：
 ```
-/note
+@關鍵字
+筆記內容
 ```
-Bot 回問：「請輸入聯絡人姓名或 Email：」
-使用者回覆後，Bot 搜尋聯絡人：
-- 找到唯一：回問「請輸入筆記內容：」，收到後存入 interaction_log（type=meeting）
-- 找到多筆：列出選項讓使用者選擇
-- 找不到：回覆「找不到此聯絡人，筆記將存為未歸類，可至網頁手動歸類」，存入 interaction_log（contact_id=null，type=meeting）
 
-*格式 2：快速格式*
-```
-@姓名或email
-筆記內容（可多行）
-```
-第一行 `@` 開頭視為聯絡人識別，其餘為筆記內容。搜尋邏輯同上。
+---
 
-**C. `/add_back @姓名` 指令（補充名片反面）**
-- 解析姓名，搜尋聯絡人
-- 找到後回覆「請傳送名片反面照片」
-- 下一張照片：壓縮上傳，更新 `contacts.card_img_back_url`，以 Gemini 辨識補充缺少的欄位
-- 回覆「✅ 已更新名片反面資訊」
+**`/email`**
 
-**D. 多步驟對話狀態管理**
-- 使用 Supabase 或記憶體暫存使用者的對話狀態（waiting_for_note_contact / waiting_for_note_content / waiting_for_back_card）
-- 建議用 Supabase 的 `bot_sessions` 表儲存：`{ telegram_id, state, context, updated_at }`
+1. Bot 問：「請輸入聯絡人姓名或公司關鍵字：」
+2. 模糊搜尋 → 列出選項 → 選人
+3. Bot 問：「請選擇發信方式：\n1. 使用 Email Template\n2. 直接描述，AI 幫你生成」
+4a. **選 Template**：列出所有 email_templates，選擇後 Bot 問「有要補充的內容嗎？（直接傳送請回覆 skip）」，有補充則 AI 合併 template + 補充生成最終內容
+4b. **AI 生成**：Bot 問「請描述這封信的目的：」，AI 根據描述生成完整郵件
+5. Bot 回覆預覽（主旨 + 內文摘要前 200 字）+ `[✅ 確認發送]` `[❌ 取消]`
+6. 確認後：
+   - 呼叫 `graph.ts` 的 `sendMail()` 從使用者 Microsoft 信箱發出
+   - 寫入 interaction_log（type=email，email_subject=主旨，content=完整內文，email_attachments=附件檔名[]）
+   - Bot 回覆「✅ 郵件已發送！」
+
+---
+
+**`/add_back @姓名`**
+
+1. 搜尋聯絡人（模糊搜尋）→ 找到後回覆「請傳送名片反面照片」
+2. 下一張照片：壓縮上傳，更新 `contacts.card_img_back_url`，Gemini 辨識補充缺少欄位
+3. 回覆「✅ 已更新名片反面資訊」
+
+---
+
+**多步驟對話狀態管理**
+
+使用 `bot_sessions` 表儲存狀態：
+
+| state | 說明 |
+|-------|------|
+| `waiting_contact_for_note` | 等待輸入筆記的聯絡人關鍵字 |
+| `waiting_content_for_note` | 等待輸入筆記內容 |
+| `waiting_contact_for_email` | 等待輸入發信聯絡人關鍵字 |
+| `waiting_email_method` | 等待選擇 template 或 AI 生成 |
+| `waiting_template_choice` | 等待選擇 template |
+| `waiting_email_supplement` | 等待補充內容或 skip |
+| `waiting_email_description` | 等待 AI 生成描述 |
+| `waiting_back_card` | 等待傳送名片反面 |
 
 ---
 
 ### 6.5 Web 管理介面
 
-#### 共用 Layout
-- Sidebar：Dashboard、聯絡人、Tag 管理、未歸類筆記、使用者管理（僅 super_admin）、郵件範本、個人設定
-- Header：myCRM、登入使用者名稱、Sign out
+#### RWD 規範
+- 所有頁面支援 mobile（375px+）、tablet（768px+）、desktop（1280px+）
+- Sidebar 在 mobile 收合為 hamburger menu
+- 表格在 mobile 改為 card 列表顯示
+
+#### 版本資訊（全域 Footer）
+- 所有頁面左下角固定顯示：`v{NEXT_PUBLIC_APP_VERSION} · 部署於 {NEXT_PUBLIC_DEPLOY_TIME}`
+- Vercel 在 build 時自動注入 `NEXT_PUBLIC_DEPLOY_TIME`（格式：`YYYY-MM-DD HH:mm`）
 
 ---
 
 #### 頁面 1：Dashboard `/`
-- 歡迎訊息
-- 統計卡片：聯絡人總數、本月新增名片數
-- **「待處理」區塊**：顯示最新 5 筆未歸類筆記（contact_id=null），每筆有「指定聯絡人」快速按鈕，點擊後跳出搜尋 modal 指定歸類
-- 「查看全部未歸類筆記」連結 → `/unassigned-notes`
+- 統計卡片：
+  1. 聯絡人總數
+  2. 本月新增名片數
+  3. 未歸類筆記數（點擊導向 `/unassigned-notes`）
+- **Tag 聯絡人分布**：列出每個 tag 及其聯絡人數量（長條圖或列表）
+- **「待處理」區塊**：最新 5 筆未歸類筆記，每筆有「指定聯絡人」按鈕（搜尋 modal）
+- 「查看全部」連結 → `/unassigned-notes`
 
 ---
 
@@ -348,88 +415,107 @@ Bot 回問：「請輸入聯絡人姓名或 Email：」
 - 表格欄位：姓名、公司、職稱、Email、電話、Tags、建立者、建立時間
 - 關鍵字搜尋（姓名或公司）
 - Tag 多選篩選 dropdown
-- **Export 按鈕**：匯出「目前篩選結果」為 Excel（.xlsx）或 CSV，使用 `xlsx` 套件
-  - 匯出欄位：姓名、公司、職稱、Email、電話、Tags、建立者、建立時間
-- **「新增聯絡人」按鈕**：開啟新增頁面
+- **Export 按鈕**：匯出目前篩選結果為 Excel（.xlsx）或 CSV
+  - 欄位：姓名、公司、職稱、Email、電話、Tags、建立者、建立時間
+- **「新增聯絡人」按鈕**
 
 ---
 
 #### 頁面 3：新增聯絡人 `/contacts/new`
-- 表單欄位：姓名、公司、職稱、Email、電話、Tags
-- **照片上傳區**：
-  - 可上傳正面名片照片
-  - 上傳後自動呼叫 `/api/ocr`（Server Action），以當前使用者的 `gemini_model` 辨識
-  - 辨識結果自動填入表單，使用者可修改
-  - **重複檢查**：填入 email 或姓名後，即時提示重複或相似聯絡人
+- 表單：姓名、公司、職稱、Email、電話、Tags
+- 照片上傳（正面）→ 自動呼叫 `/api/ocr` AI 辨識 → 填入表單（可修改）
+- 即時重複偵測（填 email 或姓名後提示）
 - 儲存後導向 `/contacts/[id]`
 
 ---
 
 #### 頁面 4：聯絡人詳情 `/contacts/[id]`
-- 顯示聯絡人完整資料 + 建立者
-- 正面名片縮圖（可放大）；若有反面則並排顯示
-- **編輯按鈕**：開啟編輯 Modal，可修改所有欄位、上傳新照片（含 AI 重新辨識）
-- **Tags 區塊**：顯示已套用 tags，可新增/移除
-- **互動紀錄時間軸**：依 `created_at` 降序，顯示 type badge（筆記/會議/郵件）、內容、紀錄者、時間；meeting 類型額外顯示會議日期
-- 「新增互動紀錄」：可選 type（筆記 / 會議），會議類型可填日期
-- 「寄信」按鈕 → Modal（收件人預帶 email、可選 template、寄出後自動新增 email log）
+- 完整資料 + 建立者
+- 正面 / 反面名片縮圖（可點擊放大）
+- **編輯按鈕**：Modal，可修改所有欄位 + 上傳新照片（AI 重新辨識）
+- **Tags 區塊**：顯示、新增、移除
+- **互動紀錄時間軸**：type badge（筆記 / 會議 / 郵件）、內容、紀錄者、時間
+  - type=meeting：顯示會議日期
+  - type=email：顯示主旨，點擊展開完整內文，顯示附件檔名清單
+- 「新增互動紀錄」：選 type（筆記 / 會議），會議可填日期
+- 「寄信」按鈕 → Modal（收件人預帶 email、選 template 或描述、AI 生成、確認發送、自動寫 log）
 - 返回按鈕
 
 ---
 
-#### 頁面 5：未歸類筆記 `/unassigned-notes`
-- 列出所有 contact_id=null 的 interaction_logs
-- 每筆顯示：內容、類型、建立者、建立時間
-- 每筆有「指定聯絡人」按鈕：搜尋聯絡人後更新 `contact_id`
-- 每筆有「刪除」按鈕
+#### 頁面 5：筆記搜尋 `/notes`
+- 搜尋所有 interaction_logs（含已歸類與未歸類）
+- 篩選條件：關鍵字（content / email_subject）、日期範圍（created_at）、type（全部 / 筆記 / 會議 / 郵件）
+- 每筆顯示：type badge、內容摘要、聯絡人姓名（未歸類顯示「未歸類」）、建立者、時間
+- 點擊已歸類筆記 → 導向 `/contacts/[id]`
 
 ---
 
-#### 頁面 6：Tag 管理 `/admin/tags`
+#### 頁面 6：未歸類筆記 `/unassigned-notes`
+- 列出所有 contact_id=null 的 interaction_logs
+- 每筆：內容、類型、建立者、時間
+- 每筆有「指定聯絡人」（搜尋 modal 更新 contact_id）和「刪除」按鈕
+
+---
+
+#### 頁面 7：Tag 管理 `/admin/tags`
 - 列出所有 tags（name、使用中聯絡人數、建立時間）
 - 新增、編輯名稱、刪除（確認後關聯自動移除）
-- 所有成員可存取
 
 ---
 
-#### 頁面 7：使用者管理 `/admin/users`（僅 super_admin）
+#### 頁面 8：Gemini Model 管理 `/admin/models`（僅 super_admin）
+- 列出所有 `gemini_models`（display_name、model_id、is_active、建立時間）
+- 新增 model（填 model_id 和 display_name）
+- 切換 is_active（停用後不出現在個人設定 dropdown）
+- 刪除 model
+- 非 super_admin 導向 `/`
+
+---
+
+#### 頁面 9：使用者管理 `/admin/users`（僅 super_admin）
 - 列出所有 users（display_name、email、telegram_id 綁定狀態、role、last_login_at）
 - 修改 role（member ↔ super_admin）
 - 非 super_admin 導向 `/`
 
 ---
 
-#### 頁面 8：郵件範本 `/admin/templates`
+#### 頁面 10：郵件範本 `/admin/templates`
 - 列出所有 email_templates
 - 新增、編輯（title、subject、body_content HTML）、刪除
-- 附件管理：上傳至 `template-attachments` bucket，單檔限 2MB，顯示已上傳檔案列表可個別刪除
-- 所有成員可存取
+- **AI 生成按鈕**：輸入描述 → 呼叫 `/api/ai-email` → 生成內容填入編輯框（可再修改）
+- 附件管理：上傳至 `template-attachments` bucket，單檔限 2MB，顯示列表可刪除
 
 ---
 
-#### 頁面 9：個人設定 `/settings`
+#### 頁面 11：個人設定 `/settings`
 - 顯示 email、display_name、role
-- Telegram ID 輸入框（說明：傳訊給 @userinfobot 取得數字 ID）
-- Gemini model dropdown（gemini-1.5-flash / gemini-1.5-pro / gemini-2.0-flash / gemini-2.5-pro）
+- Telegram ID 輸入框（說明：傳訊給 @userinfobot）
+- Gemini model dropdown（從 `gemini_models` 表撈 is_active=true 的項目）
 - 主題切換（Light / Dark）
 - 儲存更新 users 表
 
 ---
 
-### 6.6 OCR API Route
+### 6.6 API Routes
 
 #### `src/app/api/ocr/route.ts`（新增）
-- POST，接收圖片 base64 + model 參數
-- 呼叫 `analyzeBusinessCard()`，回傳辨識結果
-- 供網頁新增/編輯聯絡人時使用
+- POST：接收圖片 base64 陣列 + model
+- 呼叫 `analyzeBusinessCard()`，回傳 CardData
+
+#### `src/app/api/ai-email/route.ts`（新增）
+- POST：接收 `{ description, templateContent?, model }`
+- 呼叫 `generateEmailContent()`，回傳生成的 HTML 內文
 
 ---
 
 ## 七、UI / 表單全域規範
 
-- 所有 `input`、`textarea`、`select` 文字色：`text-gray-900 dark:text-gray-100`
-- Placeholder：`placeholder-gray-400 dark:placeholder-gray-500`
-- 禁止使用 `text-white` 或淺灰色作為輸入文字色
+- input / textarea / select 文字色：`text-gray-900 dark:text-gray-100`
+- placeholder：`placeholder-gray-400 dark:placeholder-gray-500`
+- 禁止 `text-white` 或淺灰色作輸入文字色
+- 所有頁面支援 RWD（mobile 375px+）
+- 頁面左下角固定 footer：版本號 + 部署時間
 
 ---
 
@@ -451,6 +537,23 @@ create table if not exists users (
   last_login_at timestamptz,
   created_at timestamptz default now()
 );
+
+-- Gemini model 清單（super_admin 管理）
+create table if not exists gemini_models (
+  id uuid primary key default gen_random_uuid(),
+  model_id text unique not null,
+  display_name text not null,
+  is_active boolean not null default true,
+  created_at timestamptz default now()
+);
+
+-- 初始 model 資料
+insert into gemini_models (model_id, display_name) values
+  ('gemini-1.5-flash', 'Gemini 1.5 Flash'),
+  ('gemini-1.5-pro', 'Gemini 1.5 Pro'),
+  ('gemini-2.0-flash', 'Gemini 2.0 Flash'),
+  ('gemini-2.5-pro', 'Gemini 2.5 Pro')
+on conflict (model_id) do nothing;
 
 -- 聯絡人表
 create table if not exists contacts (
@@ -480,13 +583,15 @@ create table if not exists contact_tags (
   primary key (contact_id, tag_id)
 );
 
--- 互動紀錄（contact_id nullable 支援未歸類）
+-- 互動紀錄
 create table if not exists interaction_logs (
   id uuid primary key default gen_random_uuid(),
   contact_id uuid references contacts(id) on delete cascade,
   type text not null default 'note',
   content text,
   meeting_date date,
+  email_subject text,
+  email_attachments text[],
   created_by uuid references users(id),
   created_at timestamptz default now()
 );
@@ -519,7 +624,7 @@ create table if not exists bot_sessions (
   updated_at timestamptz default now()
 );
 
--- 啟用 pg_trgm 擴充（疑似重複偵測用）
+-- 啟用 pg_trgm（疑似重複偵測）
 create extension if not exists pg_trgm;
 ```
 
@@ -542,7 +647,7 @@ create extension if not exists pg_trgm;
 
 ---
 
-## 十一、部署設定
+## 十一、Vercel 部署設定
 
 ```bash
 # 設定 Telegram Webhook
@@ -551,28 +656,35 @@ curl -X POST "https://api.telegram.org/bot{TOKEN}/setWebhook" \
   -d '{"url": "https://{your-domain}/api/bot"}'
 ```
 
+**Vercel 環境變數（需手動設定）：**
+- 所有 `.env` 變數
+- `NEXT_PUBLIC_APP_VERSION`：目前版本號，如 `0.2.0`
+- `NEXT_PUBLIC_DEPLOY_TIME`：在 Vercel Build Command 前加 `NEXT_PUBLIC_DEPLOY_TIME=$(date '+%Y-%m-%d %H:%M') &&` 自動注入
+
 ---
 
 ## 十二、開發任務清單（供 Claude Code 使用）
 
-請先閱讀完整 PRD，理解整體架構後提出任務拆分計畫，確認後再依序實作：
+請先閱讀完整 PRD，每個 Task 開始前列出要動的檔案，確認後再實作：
 
-- [ ] **Task 1** `[修改]` — 資料庫 Migration SQL（第八節全部執行，含 pg_trgm 擴充）
-- [ ] **Task 2** `[修改]` — 安裝套件（next-themes、xlsx）；設定全域主題；更新全域 CSS 規範
+- [ ] **Task 1** `[修改]` — 資料庫 Migration SQL（含 gemini_models 表與初始資料、pg_trgm）
+- [ ] **Task 2** `[修改]` — 安裝套件（next-themes、xlsx）；設定全域主題；更新全域 CSS；新增版本 footer 元件
 - [ ] **Task 3** `[修改]` — 更新 `src/lib/supabase.ts`、`src/lib/supabase-browser.ts`
-- [ ] **Task 4** `[修改]` — 更新 `src/lib/gemini.ts`（多語言 prompt、接受 model 參數、支援多張圖片）
-- [ ] **Task 5** `[新增]` — 新增 `src/lib/graph.ts`；新增 `src/lib/duplicate.ts`（重複偵測）
-- [ ] **Task 6** `[修改]` — 更新 `src/lib/imageProcessor.ts`（命名規則 yymmdd_hhmmss-流水號）
-- [ ] **Task 7** `[修改]` — 更新認證流程（login 加 Mail.Send scope、auth callback upsert users、確認 middleware）
-- [ ] **Task 8** `[修改]` — 更新 Bot Webhook（白名單查 users.telegram_id、個人 gemini_model、存檔/不存檔按鈕、重複偵測、會議筆記指令、/add_back、bot_sessions 狀態管理）
-- [ ] **Task 9** `[新增]` — 新增 OCR API Route `src/app/api/ocr/route.ts`
-- [ ] **Task 10** `[修改]` — 更新 Dashboard Layout（Sidebar 新增未歸類筆記、Tag 管理；super_admin 判斷）
-- [ ] **Task 11** `[修改]` — 更新 Dashboard 首頁（待處理未歸類筆記區塊）
-- [ ] **Task 12** `[修改]` — 更新聯絡人列表（Tags 欄、Tag 篩選、Export Excel/CSV）
-- [ ] **Task 13** `[新增]` — 新增聯絡人新增頁 `/contacts/new`（表單、照片上傳 + AI 辨識、重複偵測）
-- [ ] **Task 14** `[修改]` — 更新聯絡人詳情（編輯 Modal、正反面照片、Tags、互動紀錄 type badge、會議日期、寄信 Modal）
-- [ ] **Task 15** `[新增]` — 新增未歸類筆記頁 `/unassigned-notes`
-- [ ] **Task 16** `[新增]` — 新增 Tag 管理頁 `/admin/tags`
-- [ ] **Task 17** `[修改]` — 更新使用者管理頁 `/admin/users`（改管理 users 表、super_admin 角色切換）
-- [ ] **Task 18** `[修改]` — 更新郵件範本頁（多附件上傳，2MB 限制，template_attachments 表）
-- [ ] **Task 19** `[新增]` — 新增個人設定頁 `/settings`（Telegram ID、Gemini model、主題、顯示角色）
+- [ ] **Task 4** `[修改]` — 更新 `src/lib/gemini.ts`（多語言、model 參數、多張圖片、新增 generateEmailContent）
+- [ ] **Task 5** `[新增]` — 新增 `src/lib/graph.ts`；新增 `src/lib/duplicate.ts`
+- [ ] **Task 6** `[修改]` — 更新 `src/lib/imageProcessor.ts`（命名規則）
+- [ ] **Task 7** `[修改]` — 更新認證流程（login Mail.Send scope、auth callback upsert users、middleware）
+- [ ] **Task 8** `[修改]` — 更新 Bot Webhook（全部指令：/help、/search、/note、/email、/add_back、名片掃描、bot_sessions 狀態管理）
+- [ ] **Task 9** `[新增]` — 新增 `/api/ocr` 和 `/api/ai-email` route
+- [ ] **Task 10** `[修改]` — 更新 Dashboard Layout（RWD sidebar、新 Sidebar 項目、super_admin 判斷）
+- [ ] **Task 11** `[修改]` — 更新 Dashboard 首頁（統計卡片、Tag 分布、待處理區塊）
+- [ ] **Task 12** `[修改]` — 更新聯絡人列表（Tags 欄、Tag 篩選、Export、RWD）
+- [ ] **Task 13** `[新增]` — 新增聯絡人新增頁 `/contacts/new`（表單、OCR、重複偵測）
+- [ ] **Task 14** `[修改]` — 更新聯絡人詳情（編輯 Modal、正反面、Tags、互動紀錄 type badge、email log 展開、寄信 Modal）
+- [ ] **Task 15** `[新增]` — 新增筆記搜尋頁 `/notes`（關鍵字、日期、type 篩選）
+- [ ] **Task 16** `[新增]` — 新增未歸類筆記頁 `/unassigned-notes`
+- [ ] **Task 17** `[新增]` — 新增 Tag 管理頁 `/admin/tags`
+- [ ] **Task 18** `[新增]` — 新增 Gemini Model 管理頁 `/admin/models`（僅 super_admin）
+- [ ] **Task 19** `[修改]` — 更新使用者管理頁 `/admin/users`（管理 users 表、角色切換）
+- [ ] **Task 20** `[修改]` — 更新郵件範本頁（AI 生成、多附件上傳 2MB 限制）
+- [ ] **Task 21** `[新增]` — 新增個人設定頁 `/settings`（Telegram ID、model dropdown 從 DB 讀取、主題）
