@@ -242,7 +242,7 @@ async function handleText(
     const contactId = session.context.contact_id as string | null
     await supabase.from('interaction_logs').insert({
       contact_id: contactId ?? null,
-      type: 'meeting',
+      type: 'note',
       content: text.trim(),
       created_by: user.id,
     })
@@ -319,7 +319,7 @@ async function handleText(
 
     await supabase.from('interaction_logs').insert({
       contact_id: contactId,
-      type: 'meeting',
+      type: 'note',
       content,
       created_by: user.id,
     })
