@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
-import { analyzeBusinessCard } from '@/lib/gemini'
+import { analyzeBusinessCard, generateEmailContent } from '@/lib/gemini'
 import { processCardImage, generateCardFilename } from '@/lib/imageProcessor'
 import { checkDuplicates } from '@/lib/duplicate'
+import { sendMail } from '@/lib/graph'
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`
@@ -13,7 +14,15 @@ async function sendMessage(chatId: number, text: string, extra?: object) {
   await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text, ...extra }),
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', ...extra }),
+  })
+}
+
+async function sendPhoto(chatId: number, photoUrl: string, caption?: string) {
+  await fetch(`${TELEGRAM_API}/sendPhoto`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption }),
   })
 }
 
@@ -64,10 +73,10 @@ async function getAuthorizedUser(telegramId: number) {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('users')
-    .select('id, gemini_model')
+    .select('id, gemini_model, provider_token')
     .eq('telegram_id', telegramId)
     .single()
-  return data as { id: string; gemini_model: string } | null
+  return data as { id: string; gemini_model: string; provider_token: string | null } | null
 }
 
 // ── Download photo from Telegram ──────────────────────────────────────────────
@@ -86,10 +95,53 @@ async function searchContacts(query: string) {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('contacts')
-    .select('id, name, company, email')
-    .or(`name.ilike.%${query}%,email.ilike.%${query}%`)
+    .select('id, name, company, job_title, email, phone, card_img_url, card_img_back_url')
+    .or(`name.ilike.%${query}%,company.ilike.%${query}%,email.ilike.%${query}%`)
     .limit(5)
   return data ?? []
+}
+
+// ── Handle /help ──────────────────────────────────────────────────────────────
+
+async function handleHelp(chatId: number) {
+  const text =
+    `🤖 <b>myCRM Bot 指令列表</b>\n\n` +
+    `📷 <b>傳送照片</b> — 掃描名片，AI 辨識後存入 CRM\n\n` +
+    `/search [關鍵字] — 搜尋聯絡人\n` +
+    `/note — 新增筆記\n` +
+    `/email — 發送郵件給聯絡人\n` +
+    `/add_back @姓名 — 補充名片反面\n` +
+    `/help — 顯示此說明`
+  await sendMessage(chatId, text)
+}
+
+// ── Handle /search ────────────────────────────────────────────────────────────
+
+async function handleSearch(chatId: number, keyword: string) {
+  const contacts = await searchContacts(keyword)
+  if (contacts.length === 0) {
+    await sendMessage(chatId, `找不到符合「${keyword}」的聯絡人`)
+    return
+  }
+
+  for (const c of contacts) {
+    const info =
+      `👤 <b>${c.name || '—'}</b>\n` +
+      `🏢 ${c.company || '—'}\n` +
+      `💼 ${c.job_title || '—'}\n` +
+      `📧 ${c.email || '—'}\n` +
+      `📞 ${c.phone || '—'}`
+
+    const buttons = [[
+      { text: '✉️ 發信', callback_data: `email_contact_${c.id}` },
+      { text: '📝 筆記', callback_data: `note_contact_${c.id}` },
+    ]]
+
+    await sendMessage(chatId, info, { reply_markup: { inline_keyboard: buttons } })
+
+    if (c.card_img_url) await sendPhoto(chatId, c.card_img_url)
+    if (c.card_img_back_url) await sendPhoto(chatId, c.card_img_back_url)
+  }
 }
 
 // ── Handle photo (new card or back card) ──────────────────────────────────────
@@ -97,7 +149,7 @@ async function searchContacts(query: string) {
 async function handlePhoto(
   chatId: number,
   fromId: number,
-  user: { id: string; gemini_model: string },
+  user: { id: string; gemini_model: string; provider_token: string | null },
   photo: { file_id: string },
   session: { state: string; context: Record<string, unknown> } | null
 ) {
@@ -121,7 +173,6 @@ async function handlePhoto(
       const { data: publicUrlData } = supabase.storage.from('cards').getPublicUrl(storagePath)
       const backUrl = publicUrlData.publicUrl
 
-      // Re-OCR to fill missing fields
       const { data: existing } = await supabase
         .from('contacts')
         .select('name, company, job_title, email, phone')
@@ -168,7 +219,6 @@ async function handlePhoto(
 
     const cardData = await analyzeBusinessCard(compressed, user.gemini_model)
 
-    // Duplicate check
     const { exact, similar } = await checkDuplicates(cardData.email, cardData.name)
     let dupWarning = ''
     if (exact) {
@@ -215,13 +265,118 @@ async function handlePhoto(
 async function handleText(
   chatId: number,
   fromId: number,
-  user: { id: string; gemini_model: string },
+  user: { id: string; gemini_model: string; provider_token: string | null },
   text: string,
   session: { state: string; context: Record<string, unknown> } | null
 ) {
   const supabase = createServiceClient()
 
-  // --- Session: waiting for note contact ---
+  // ── /help ──────────────────────────────────────────────────────────────────
+  if (text.trim() === '/help') {
+    await handleHelp(chatId)
+    return
+  }
+
+  // ── /search ────────────────────────────────────────────────────────────────
+  const searchMatch = text.trim().match(/^\/search\s+(.+)/)
+  if (searchMatch) {
+    await handleSearch(chatId, searchMatch[1].trim())
+    return
+  }
+
+  // ── /email ─────────────────────────────────────────────────────────────────
+  if (text.trim() === '/email') {
+    await setSession(fromId, 'waiting_contact_for_email', {})
+    await sendMessage(chatId, '請輸入聯絡人姓名或公司關鍵字：')
+    return
+  }
+
+  // ── Session: waiting_contact_for_email ────────────────────────────────────
+  if (session?.state === 'waiting_contact_for_email') {
+    const contacts = await searchContacts(text.trim())
+    if (contacts.length === 0) {
+      await sendMessage(chatId, '找不到符合的聯絡人，請再試一次：')
+    } else if (contacts.length === 1) {
+      await setSession(fromId, 'waiting_email_method', {
+        contact_id: contacts[0].id,
+        contact_name: contacts[0].name,
+        contact_email: contacts[0].email,
+      })
+      await sendMessage(chatId,
+        `收件人：<b>${contacts[0].name}</b>（${contacts[0].email || '無 email'}）\n\n` +
+        `請選擇發信方式：\n1. 使用 Email Template\n2. 直接描述，AI 幫你生成`,
+        { reply_markup: { inline_keyboard: [[
+          { text: '1️⃣ 使用 Template', callback_data: 'email_method_1' },
+          { text: '2️⃣ AI 生成', callback_data: 'email_method_2' },
+        ]] } }
+      )
+    } else {
+      const buttons = contacts.map((c) => [{
+        text: `${c.name}（${c.company ?? ''}）`,
+        callback_data: `select_email_contact_${c.id}`,
+      }])
+      await sendMessage(chatId, '找到多筆聯絡人，請選擇：', { reply_markup: { inline_keyboard: buttons } })
+    }
+    return
+  }
+
+  // ── Session: waiting_email_description ───────────────────────────────────
+  if (session?.state === 'waiting_email_description') {
+    await sendMessage(chatId, '⏳ AI 生成中，請稍候...')
+    try {
+      const body = await generateEmailContent(text.trim(), undefined, user.gemini_model)
+      const subject = `關於：${text.trim().slice(0, 40)}${text.trim().length > 40 ? '...' : ''}`
+      const preview = body.replace(/<[^>]+>/g, '').slice(0, 200)
+
+      await setSession(fromId, 'waiting_email_confirm', {
+        ...session.context,
+        subject,
+        body_html: body,
+      })
+      await sendMessage(chatId,
+        `📧 郵件預覽\n\n主旨：${subject}\n\n${preview}${preview.length >= 200 ? '...' : ''}`,
+        { reply_markup: { inline_keyboard: [[
+          { text: '✅ 確認發送', callback_data: 'confirm_email' },
+          { text: '❌ 取消', callback_data: 'cancel_email' },
+        ]] } }
+      )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      await sendMessage(chatId, `❌ AI 生成失敗：${msg}`)
+    }
+    return
+  }
+
+  // ── Session: waiting_email_supplement ─────────────────────────────────────
+  if (session?.state === 'waiting_email_supplement') {
+    await sendMessage(chatId, '⏳ AI 生成中，請稍候...')
+    try {
+      const templateContent = session.context.template_body as string
+      const supplement = text.trim().toLowerCase() === 'skip' ? '' : text.trim()
+      const body = await generateEmailContent(supplement || '請依照範本生成', templateContent, user.gemini_model)
+      const subject = session.context.template_subject as string || '（無主旨）'
+      const preview = body.replace(/<[^>]+>/g, '').slice(0, 200)
+
+      await setSession(fromId, 'waiting_email_confirm', {
+        ...session.context,
+        subject,
+        body_html: body,
+      })
+      await sendMessage(chatId,
+        `📧 郵件預覽\n\n主旨：${subject}\n\n${preview}${preview.length >= 200 ? '...' : ''}`,
+        { reply_markup: { inline_keyboard: [[
+          { text: '✅ 確認發送', callback_data: 'confirm_email' },
+          { text: '❌ 取消', callback_data: 'cancel_email' },
+        ]] } }
+      )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      await sendMessage(chatId, `❌ AI 生成失敗：${msg}`)
+    }
+    return
+  }
+
+  // ── Session: waiting_for_note_contact ─────────────────────────────────────
   if (session?.state === 'waiting_for_note_contact') {
     const contacts = await searchContacts(text.trim())
     if (contacts.length === 0) {
@@ -237,7 +392,7 @@ async function handleText(
     return
   }
 
-  // --- Session: waiting for note content ---
+  // ── Session: waiting_for_note_content ─────────────────────────────────────
   if (session?.state === 'waiting_for_note_content') {
     const contactId = session.context.contact_id as string | null
     await supabase.from('interaction_logs').insert({
@@ -255,14 +410,14 @@ async function handleText(
     return
   }
 
-  // --- /note command ---
+  // ── /note command ──────────────────────────────────────────────────────────
   if (text.trim() === '/note') {
     await setSession(fromId, 'waiting_for_note_contact', {})
     await sendMessage(chatId, '請輸入聯絡人姓名或 Email：')
     return
   }
 
-  // --- /add_back @name command ---
+  // ── /add_back @name command ────────────────────────────────────────────────
   const addBackMatch = text.trim().match(/^\/add_back\s+@(.+)/)
   if (addBackMatch) {
     const query = addBackMatch[1].trim()
@@ -279,7 +434,7 @@ async function handleText(
     return
   }
 
-  // --- @ quick format: @name\ncontent ---
+  // ── @ quick format: @name\ncontent ────────────────────────────────────────
   if (text.startsWith('@')) {
     const lines = text.split('\n')
     const query = lines[0].slice(1).trim()
@@ -287,7 +442,6 @@ async function handleText(
     const contacts = await searchContacts(query)
 
     if (!content) {
-      // No content yet, ask for it after contact selection
       if (contacts.length === 0) {
         await setSession(fromId, 'waiting_for_note_content', { contact_id: null })
         await sendMessage(chatId, '找不到此聯絡人，筆記將存為未歸類。\n\n請輸入筆記內容：')
@@ -301,7 +455,6 @@ async function handleText(
       return
     }
 
-    // Content provided inline
     let contactId: string | null = null
     let contactName: string | undefined
     if (contacts.length === 1) {
@@ -310,7 +463,6 @@ async function handleText(
     } else if (contacts.length === 0) {
       contactId = null
     } else {
-      // Multiple matches — ask to select, save content in session
       await setSession(fromId, 'waiting_for_note_content_after_select', { content })
       const buttons = contacts.map((c) => [{ text: `${c.name}（${c.company ?? ''}）`, callback_data: `select_contact_${c.id}` }])
       await sendMessage(chatId, '找到多筆聯絡人，請選擇：', { reply_markup: { inline_keyboard: buttons } })
@@ -331,7 +483,7 @@ async function handleText(
   }
 
   // Default
-  await sendMessage(chatId, '請傳送名片照片，或使用 /note 記錄會議筆記。')
+  await sendMessage(chatId, '請傳送名片照片，或輸入 /help 查看可用指令。')
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -352,7 +504,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ ok: true })
         }
 
-        // Save card
+        // ── Save card ─────────────────────────────────────────────────────────
         if (data?.startsWith('save_')) {
           const pendingId = data.replace('save_', '')
           const { data: pending, error: pendingError } = await supabase
@@ -383,7 +535,7 @@ export async function POST(req: NextRequest) {
           await sendMessage(from.id, '✅ 已成功存檔！')
         }
 
-        // Cancel card
+        // ── Cancel card ───────────────────────────────────────────────────────
         else if (data?.startsWith('cancel_')) {
           const pendingId = data.replace('cancel_', '')
           await supabase.from('pending_contacts').delete().eq('id', pendingId)
@@ -392,7 +544,7 @@ export async function POST(req: NextRequest) {
           await sendMessage(from.id, '已取消，名片未存檔。')
         }
 
-        // Select contact for note
+        // ── Select contact for note ───────────────────────────────────────────
         else if (data?.startsWith('select_contact_')) {
           const contactId = data.replace('select_contact_', '')
           const { data: contact } = await supabase
@@ -403,12 +555,11 @@ export async function POST(req: NextRequest) {
 
           const session = await getSession(from.id)
 
-          // If content is already ready (from @ format)
           if (session?.state === 'waiting_for_note_content_after_select') {
             const content = session.context.content as string
             await supabase.from('interaction_logs').insert({
               contact_id: contactId,
-              type: 'meeting',
+              type: 'note',
               content,
               created_by: user.id,
             })
@@ -424,7 +575,7 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Select contact for back card
+        // ── Select contact for back card ──────────────────────────────────────
         else if (data?.startsWith('select_back_')) {
           const contactId = data.replace('select_back_', '')
           const { data: contact } = await supabase
@@ -436,6 +587,188 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await sendMessage(from.id, `找到：${contact?.name}\n\n請傳送名片反面照片`)
+        }
+
+        // ── /search: quick email from contact ────────────────────────────────
+        else if (data?.startsWith('email_contact_')) {
+          const contactId = data.replace('email_contact_', '')
+          const { data: contact } = await supabase
+            .from('contacts')
+            .select('id, name, email')
+            .eq('id', contactId)
+            .single()
+          await setSession(from.id, 'waiting_email_method', {
+            contact_id: contactId,
+            contact_name: contact?.name,
+            contact_email: contact?.email,
+          })
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id,
+            `收件人：<b>${contact?.name}</b>（${contact?.email || '無 email'}）\n\n` +
+            `請選擇發信方式：`,
+            { reply_markup: { inline_keyboard: [[
+              { text: '1️⃣ 使用 Template', callback_data: 'email_method_1' },
+              { text: '2️⃣ AI 生成', callback_data: 'email_method_2' },
+            ]] } }
+          )
+        }
+
+        // ── /search: quick note from contact ─────────────────────────────────
+        else if (data?.startsWith('note_contact_')) {
+          const contactId = data.replace('note_contact_', '')
+          const { data: contact } = await supabase
+            .from('contacts')
+            .select('id, name')
+            .eq('id', contactId)
+            .single()
+          await setSession(from.id, 'waiting_for_note_content', { contact_id: contactId, contact_name: contact?.name })
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, `聯絡人：${contact?.name}\n\n請輸入筆記內容：`)
+        }
+
+        // ── /email: select contact from list ─────────────────────────────────
+        else if (data?.startsWith('select_email_contact_')) {
+          const contactId = data.replace('select_email_contact_', '')
+          const { data: contact } = await supabase
+            .from('contacts')
+            .select('id, name, email')
+            .eq('id', contactId)
+            .single()
+          await setSession(from.id, 'waiting_email_method', {
+            contact_id: contactId,
+            contact_name: contact?.name,
+            contact_email: contact?.email,
+          })
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id,
+            `收件人：<b>${contact?.name}</b>（${contact?.email || '無 email'}）\n\n` +
+            `請選擇發信方式：`,
+            { reply_markup: { inline_keyboard: [[
+              { text: '1️⃣ 使用 Template', callback_data: 'email_method_1' },
+              { text: '2️⃣ AI 生成', callback_data: 'email_method_2' },
+            ]] } }
+          )
+        }
+
+        // ── /email: method choice 1 (template) ───────────────────────────────
+        else if (data === 'email_method_1') {
+          const session = await getSession(from.id)
+          const { data: templates } = await supabase
+            .from('email_templates')
+            .select('id, title, subject')
+            .order('created_at', { ascending: false })
+            .limit(10)
+
+          if (!templates || templates.length === 0) {
+            await answerCallbackQuery(callbackQueryId, '目前無可用範本')
+            await sendMessage(from.id, '目前沒有郵件範本，請先至網頁新增。')
+            return NextResponse.json({ ok: true })
+          }
+
+          const buttons = templates.map((t) => [{
+            text: t.title,
+            callback_data: `select_email_tpl_${t.id}`,
+          }])
+          await setSession(from.id, 'waiting_template_choice', session?.context ?? {})
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, '請選擇郵件範本：', { reply_markup: { inline_keyboard: buttons } })
+        }
+
+        // ── /email: method choice 2 (AI generate) ────────────────────────────
+        else if (data === 'email_method_2') {
+          const session = await getSession(from.id)
+          await setSession(from.id, 'waiting_email_description', session?.context ?? {})
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, '請描述這封信的目的：')
+        }
+
+        // ── /email: select template ───────────────────────────────────────────
+        else if (data?.startsWith('select_email_tpl_')) {
+          const templateId = data.replace('select_email_tpl_', '')
+          const { data: tpl } = await supabase
+            .from('email_templates')
+            .select('id, title, subject, body_content')
+            .eq('id', templateId)
+            .single()
+
+          const session = await getSession(from.id)
+          await setSession(from.id, 'waiting_email_supplement', {
+            ...session?.context,
+            template_id: templateId,
+            template_subject: tpl?.subject ?? '',
+            template_body: tpl?.body_content ?? '',
+          })
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id,
+            `已選擇範本：<b>${tpl?.title}</b>\n\n` +
+            `有要補充的內容嗎？（直接傳送請回覆 <code>skip</code>）`
+          )
+        }
+
+        // ── /email: confirm send ──────────────────────────────────────────────
+        else if (data === 'confirm_email') {
+          const session = await getSession(from.id)
+          if (!session?.context) throw new Error('找不到郵件資料')
+
+          const contactEmail = session.context.contact_email as string
+          const contactId = session.context.contact_id as string
+          const subject = session.context.subject as string
+          const bodyHtml = session.context.body_html as string
+
+          if (!contactEmail) {
+            await answerCallbackQuery(callbackQueryId, '此聯絡人無 email')
+            await sendMessage(from.id, '❌ 此聯絡人沒有 email，無法發送。')
+            await clearSession(from.id)
+            return NextResponse.json({ ok: true })
+          }
+
+          if (!user.provider_token) {
+            await answerCallbackQuery(callbackQueryId)
+            await editMessageReplyMarkup(message.chat.id, message.message_id)
+            await sendMessage(from.id,
+              '⚠️ 無法取得 Microsoft 存取憑證。\n\n請至 myCRM 網頁重新登入後，再使用 Bot 發信功能。'
+            )
+            await clearSession(from.id)
+            return NextResponse.json({ ok: true })
+          }
+
+          await sendMessage(from.id, '⏳ 發送中...')
+          try {
+            await sendMail({
+              accessToken: user.provider_token,
+              to: contactEmail,
+              subject,
+              body: bodyHtml,
+            })
+            await supabase.from('interaction_logs').insert({
+              contact_id: contactId,
+              type: 'email',
+              content: bodyHtml,
+              email_subject: subject,
+              created_by: user.id,
+            })
+            await clearSession(from.id)
+            await answerCallbackQuery(callbackQueryId, '✅ 已發送！')
+            await editMessageReplyMarkup(message.chat.id, message.message_id)
+            await sendMessage(from.id, `✅ 郵件已發送！\n主旨：${subject}`)
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            throw new Error(`發送失敗：${msg}`)
+          }
+        }
+
+        // ── /email: cancel ────────────────────────────────────────────────────
+        else if (data === 'cancel_email') {
+          await clearSession(from.id)
+          await answerCallbackQuery(callbackQueryId, '已取消')
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, '已取消發信。')
         }
 
       } catch (err) {

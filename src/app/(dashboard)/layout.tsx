@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut, Settings, Tag, StickyNote } from 'lucide-react'
+import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut, Settings, Tag, StickyNote, Search } from 'lucide-react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 
 interface UserProfile {
@@ -44,9 +44,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const navItems = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/contacts', label: '聯絡人', icon: Users },
+    { href: '/notes', label: '筆記搜尋', icon: Search },
     { href: '/admin/tags', label: 'Tag 管理', icon: Tag },
     { href: '/unassigned-notes', label: '未歸類筆記', icon: StickyNote },
-    ...(isSuperAdmin ? [{ href: '/admin/users', label: '使用者管理', icon: ShieldCheck }] : []),
+    ...(isSuperAdmin ? [
+      { href: '/admin/models', label: '模型管理', icon: ShieldCheck },
+      { href: '/admin/users', label: '使用者管理', icon: ShieldCheck },
+    ] : []),
     { href: '/admin/templates', label: '郵件範本', icon: Mail },
     { href: '/settings', label: '個人設定', icon: Settings },
   ]

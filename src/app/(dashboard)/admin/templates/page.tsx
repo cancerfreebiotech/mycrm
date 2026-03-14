@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Pencil, Trash2, Plus, X, Upload, Paperclip, Loader2 } from 'lucide-react'
+import { Pencil, Trash2, Plus, X, Upload, Paperclip, Loader2, Sparkles } from 'lucide-react'
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
 
@@ -38,6 +38,9 @@ export default function AdminTemplatesPage() {
   const [saving, setSaving] = useState(false)
   const [fileError, setFileError] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [aiDescription, setAiDescription] = useState('')
+  const [aiGenerating, setAiGenerating] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
 
   useEffect(() => { fetchTemplates() }, [])
 
@@ -107,6 +110,30 @@ export default function AdminTemplatesPage() {
       setUploading(false)
     }
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  async function handleAiGenerate() {
+    if (!aiDescription.trim()) return
+    setAiError(null)
+    setAiGenerating(true)
+    try {
+      const res = await fetch('/api/ai-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: aiDescription,
+          templateContent: form.body_content || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? '生成失敗')
+      setForm((f) => ({ ...f, body_content: json.html }))
+      setAiDescription('')
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setAiGenerating(false)
+    }
   }
 
   async function removeAttachment(att: Attachment) {
@@ -233,6 +260,34 @@ export default function AdminTemplatesPage() {
                 <input type="text" value={form.subject} onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
                   className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
+              {/* AI Generate */}
+              <div className="rounded-lg border border-dashed border-purple-300 dark:border-purple-700 bg-purple-50 dark:bg-purple-950/30 p-3 space-y-2">
+                <label className="block text-xs font-medium text-purple-700 dark:text-purple-400 flex items-center gap-1">
+                  <Sparkles size={13} /> AI 生成內文
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={aiDescription}
+                    onChange={(e) => setAiDescription(e.target.value)}
+                    placeholder="描述這封信的目的，AI 幫你生成..."
+                    className="flex-1 text-sm px-3 py-2 border border-purple-200 dark:border-purple-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleAiGenerate() }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAiGenerate}
+                    disabled={aiGenerating || !aiDescription.trim()}
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-40 shrink-0"
+                  >
+                    {aiGenerating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                    {aiGenerating ? '生成中...' : '生成'}
+                  </button>
+                </div>
+                {aiError && <p className="text-xs text-red-500 dark:text-red-400">{aiError}</p>}
+                <p className="text-xs text-purple-500 dark:text-purple-400">若已有內文，AI 將合併現有內容與描述一起生成。</p>
+              </div>
+
               <div>
                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">郵件內文（支援 HTML）</label>
                 <textarea rows={8} value={form.body_content} onChange={(e) => setForm((f) => ({ ...f, body_content: e.target.value }))}

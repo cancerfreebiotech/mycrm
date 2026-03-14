@@ -681,10 +681,10 @@ curl -X POST "https://api.telegram.org/bot{TOKEN}/setWebhook" \
 - [x] **Task 12** `[修改]` — 更新聯絡人列表（Tags 欄、Tag 篩選、Export、RWD）
 - [x] **Task 13** `[新增]` — 新增聯絡人新增頁 `/contacts/new`（表單、OCR、重複偵測）
 - [x] **Task 14** `[修改]` — 更新聯絡人詳情（編輯 Modal、正反面、Tags、互動紀錄 type badge、email log 展開、寄信 Modal）
-- [ ] **Task 15** `[新增]` — 新增筆記搜尋頁 `/notes`（關鍵字、日期、type 篩選）
+- [x] **Task 15** `[新增]` — 新增筆記搜尋頁 `/notes`（關鍵字、日期、type 篩選）
 - [x] **Task 16** `[新增]` — 新增未歸類筆記頁 `/unassigned-notes`
 - [x] **Task 17** `[新增]` — 新增 Tag 管理頁 `/admin/tags`
-- [ ] **Task 18** `[新增]` — 新增 Gemini Model 管理頁 `/admin/models`（僅 super_admin）
+- [x] **Task 18** `[新增]` — 新增 Gemini Model 管理頁 `/admin/models`（僅 super_admin）
 - [x] **Task 19** `[修改]` — 更新使用者管理頁 `/admin/users`（管理 users 表、角色切換）
 - [x] **Task 20** `[修改]` — 更新郵件範本頁（AI 生成、多附件上傳 2MB 限制）
 - [x] **Task 21** `[新增]` — 新增個人設定頁 `/settings`（Telegram ID、model dropdown 從 DB 讀取、主題）

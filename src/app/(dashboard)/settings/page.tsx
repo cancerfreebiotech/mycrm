@@ -5,13 +5,6 @@ import { useTheme } from 'next-themes'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Sun, Moon, Check } from 'lucide-react'
 
-const GEMINI_MODELS = [
-  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash（推薦）' },
-  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-  { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
-  { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
-]
-
 const ROLE_LABEL: Record<string, string> = {
   super_admin: 'Super Admin',
   member: 'Member',
@@ -26,6 +19,7 @@ export default function SettingsPage() {
   const [role, setRole] = useState('')
   const [telegramId, setTelegramId] = useState('')
   const [geminiModel, setGeminiModel] = useState('gemini-2.5-flash')
+  const [geminiModels, setGeminiModels] = useState<{ model_id: string; display_name: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -37,11 +31,18 @@ export default function SettingsPage() {
       if (!user?.email) return
       setEmail(user.email)
 
-      const { data } = await supabase
-        .from('users')
-        .select('display_name, role, telegram_id, gemini_model, theme')
-        .eq('email', user.email)
-        .single()
+      const [{ data }, { data: models }] = await Promise.all([
+        supabase
+          .from('users')
+          .select('display_name, role, telegram_id, gemini_model, theme')
+          .eq('email', user.email)
+          .single(),
+        supabase
+          .from('gemini_models')
+          .select('model_id, display_name')
+          .eq('is_active', true)
+          .order('created_at', { ascending: true }),
+      ])
 
       if (data) {
         setDisplayName(data.display_name ?? '')
@@ -50,6 +51,7 @@ export default function SettingsPage() {
         setGeminiModel(data.gemini_model ?? 'gemini-2.5-flash')
         if (data.theme) setTheme(data.theme)
       }
+      setGeminiModels(models ?? [])
       setLoading(false)
     }
     load()
@@ -137,8 +139,8 @@ export default function SettingsPage() {
             onChange={(e) => setGeminiModel(e.target.value)}
             className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            {GEMINI_MODELS.map((m) => (
-              <option key={m.value} value={m.value}>{m.label}</option>
+            {geminiModels.map((m) => (
+              <option key={m.model_id} value={m.model_id}>{m.display_name}</option>
             ))}
           </select>
           <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">

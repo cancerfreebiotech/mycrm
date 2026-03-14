@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
       email,
       display_name: data.user.user_metadata?.full_name ?? data.user.user_metadata?.name ?? null,
       last_login_at: new Date().toISOString(),
+      provider_token: data.session?.provider_token ?? null,
     },
     { onConflict: 'email' }
   )
