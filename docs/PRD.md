@@ -9,7 +9,7 @@
 | 項目 | 內容 |
 |------|------|
 | 專案名稱 | myCRM |
-| 核心功能 | 透過 Telegram Bot 拍攝名片，自動 OCR 辨識後存入 CRM，並提供 Web 管理介面 |
+| 核心功能 | 透過 Telegram Bot 拍攝名片，自動 OCR 辨識後存入組織共享 CRM，並提供 Web 管理介面 |
 | 技術棧 | Next.js 14 (App Router, TypeScript) + Supabase + Telegram Bot + Gemini 1.5 Flash |
 | 部署平台 | Vercel (前端 + API) + Supabase (DB + Storage) |
 
@@ -25,32 +25,62 @@
 ```
 @supabase/ssr
 @supabase/supabase-js
-telegraf
 @google/generative-ai
-nodemailer
 sharp
 lucide-react
 ```
 
 ### 服務整合
-- **Supabase**：PostgreSQL 資料庫 + Storage（名片圖片）
-- **Telegram Bot API**：透過 Telegraf 實作 Webhook
+- **Supabase**：PostgreSQL 資料庫 + Storage（名片圖片）+ Auth（Microsoft AAD OAuth）
+- **Telegram Bot API**：原生 fetch 實作 Webhook（不使用 Telegraf）
 - **Google Gemini 1.5 Flash**：名片圖片 OCR 辨識
-- **Nodemailer**：發送郵件（預留功能）
+- **Microsoft Graph API**：以使用者身份寄送郵件（`Mail.Send` permission）
 
 ---
 
-## 三、資料庫結構
+## 三、使用者與身份系統
+
+### 設計原則
+
+系統以 **Microsoft AAD 帳號為唯一身份**，Telegram 為附加綁定。廢除獨立的 `authorized_users` 白名單表，改由 `users` 表統一管理。
+
+### 登入流程
+
+1. 使用者點擊「Sign in with Microsoft」
+2. Supabase Auth 處理 OAuth，限制僅 `@cancerfree.io` 帳號可通過
+3. 登入成功後，在 `auth callback` 自動於 `users` 表建立或更新記錄（upsert by email）
+4. 之後每次登入更新 `last_login_at`
+
+### Telegram 綁定流程
+
+1. 使用者登入 Web 後，前往「個人設定」頁面
+2. 輸入自己的 Telegram 數字 ID（說明：在 Telegram 傳訊給 @userinfobot 可取得）
+3. 儲存後即自動成為 Bot 授權使用者，無需另外管理白名單
+
+### 角色
+
+| 角色 | 說明 |
+|------|------|
+| `member` | 預設角色，所有 `@cancerfree.io` 登入者自動取得 |
+| `admin` | 可管理所有使用者角色、查看操作紀錄 |
+
+> 第一位登入者需由開發者在 Supabase 資料庫手動將 `role` 設為 `admin`。之後 Admin 可從 Web 介面管理其他人的角色。
+
+---
+
+## 四、資料庫結構
 
 > 使用 Supabase PostgreSQL，以下為各資料表規格。
 
-### `authorized_users`
+### `users`
 | 欄位 | 型別 | 說明 |
 |------|------|------|
 | id | uuid (PK, default gen_random_uuid()) | 主鍵 |
-| telegram_id | bigint (UNIQUE, NOT NULL) | Telegram 使用者 ID |
-| name | text | 顯示名稱 |
-| is_admin | boolean (default false) | 是否為管理員 |
+| email | text (UNIQUE, NOT NULL) | Microsoft 帳號（`@cancerfree.io`） |
+| display_name | text | 顯示名稱（從 AAD 取得） |
+| telegram_id | bigint (UNIQUE, nullable) | Telegram 數字 ID，使用者自行設定 |
+| role | text (default 'member') | 角色：`member` 或 `admin` |
+| last_login_at | timestamptz | 最後登入時間 |
 | created_at | timestamptz (default now()) | 建立時間 |
 
 ### `contacts`
@@ -63,16 +93,18 @@ lucide-react
 | email | text | 電子郵件 |
 | phone | text | 電話 |
 | card_img_url | text | 名片圖片 URL（Supabase Storage） |
-| created_by | bigint | 建立者 telegram_id |
+| created_by | uuid (FK → users.id) | 建立者（哪位組織成員掃描） |
 | created_at | timestamptz (default now()) | 建立時間 |
+
+> **所有組織成員共享所有聯絡人**，無個人私有名片。
 
 ### `interaction_logs`
 | 欄位 | 型別 | 說明 |
 |------|------|------|
 | id | uuid (PK) | 主鍵 |
-| contact_id | uuid (FK → contacts.id) | 關聯聯絡人 |
+| contact_id | uuid (FK → contacts.id, ON DELETE CASCADE) | 關聯聯絡人 |
 | content | text | 互動內容紀錄 |
-| created_by | bigint | 紀錄者 telegram_id |
+| created_by | uuid (FK → users.id, nullable) | 紀錄者（nullable 保留系統自動紀錄） |
 | created_at | timestamptz (default now()) | 建立時間 |
 
 ### `email_templates`
@@ -85,11 +117,11 @@ lucide-react
 | attachment_urls | text[] | 預設附件 URL 陣列 |
 | created_at | timestamptz (default now()) | 建立時間 |
 
+> Email Template 為組織共享，所有成員均可使用與編輯。
+
 ---
 
-## 四、環境變數
-
-建立 `.env.local`，包含以下變數：
+## 五、環境變數
 
 ```env
 # Telegram
@@ -103,176 +135,234 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 
-# Vercel (部署後設定)
+# Microsoft Graph API 寄信使用 Supabase session 的 provider_token，不需額外設定
+# 僅需確認 Azure AD App Registration 已開啟 Mail.Send permission
+
+# Vercel
 NEXTAUTH_URL=
 ```
 
 ---
 
-## 五、功能規格
+## 六、功能規格
 
-### 5.1 基礎工具庫
+### 6.1 基礎工具庫
 
 #### `src/lib/supabase.ts`
-- 初始化並匯出 Supabase client（使用 `@supabase/ssr`）
-- 提供 `createClient()` 供 Server Component 使用
+- 提供 `createClient()` 供 Server Component 使用（使用 `@supabase/ssr`，帶 cookie）
 - 提供 `createServiceClient()` 使用 service role key（供 API route 使用）
 
+#### `src/lib/supabase-browser.ts`
+- 提供 `createBrowserSupabaseClient()` 供 Client Component 使用
+
 #### `src/lib/gemini.ts`
-- 初始化 Google Generative AI 客戶端
-- 設定使用 `gemini-1.5-flash` 模型
-- 匯出 `analyzeBusinessCard(imageBuffer: Buffer): Promise<CardData>` 函式
+- 初始化 Google Generative AI，使用 `gemini-1.5-flash` 模型
+- 匯出 `analyzeBusinessCard(imageBuffer: Buffer): Promise<CardData>`
 - System Prompt：`你是一個專業名片辨識助手，請從圖中提取：姓名、公司、職稱、Email、電話，並回傳純 JSON 格式，不要有任何其他文字。格式：{"name":"","company":"","job_title":"","email":"","phone":""}`
 
 #### `src/lib/imageProcessor.ts`
-- 使用 `sharp` 實作圖片壓縮
-- 函式簽名：`processCardImage(inputBuffer: Buffer): Promise<Buffer>`
-- 邏輯：將圖片長邊壓縮至最大 1024px（等比例縮放），輸出為 JPEG 格式，品質 85
+- 使用 `sharp`，函式：`processCardImage(inputBuffer: Buffer): Promise<Buffer>`
+- 長邊壓縮至最大 1024px，JPEG 品質 85
+
+#### `src/lib/graph.ts`（新增）
+- 封裝 Microsoft Graph API 呼叫
+- 匯出 `sendMail({ accessToken, to, subject, body, attachments? })` 函式
+- 使用 `https://graph.microsoft.com/v1.0/me/sendMail` endpoint
+- accessToken 從 Supabase session 的 `provider_token` 取得
 
 ---
 
-### 5.2 Telegram Bot Webhook
+### 6.2 認證流程
+
+#### `src/app/login/page.tsx`
+- 顯示「Sign in with Microsoft」按鈕
+- 呼叫 Supabase Auth `signInWithOAuth`，provider 為 `azure`
+- 請求額外 scope：`Mail.Send`（用於後續寄信）
+
+#### `src/app/api/auth/callback/route.ts`
+- 處理 OAuth callback，交換 code 取得 session
+- Upsert `users` 表：以 email 為 key，更新 `display_name`、`last_login_at`
+- 導向至 `/`（Dashboard）
+
+#### `src/middleware.ts`
+- 保護所有 `/(dashboard)` 路由，未登入導向 `/login`
+
+---
+
+### 6.3 Telegram Bot Webhook
 
 #### 路徑：`src/app/api/bot/route.ts`
 
 **POST 處理流程：**
 
-1. **驗證 Telegram Secret Token**（選用，建議加上 `X-Telegram-Bot-Api-Secret-Token` header 驗證）
-2. **權限檢查**：從 `message.from.id` 查詢 `authorized_users` 表，若不存在則回覆「⛔ 你沒有使用權限」並終止
-3. **照片處理流程（收到 `message.photo` 時）**：
-   - 取得最高解析度的 photo（`photo[photo.length - 1]`）
-   - 呼叫 Telegram API 取得 `file_path`
-   - 從 `https://api.telegram.org/file/bot{TOKEN}/{file_path}` 下載圖片至記憶體 Buffer
+1. **權限檢查**：從 `message.from.id` 查詢 `users.telegram_id`，若不存在則回覆「⛔ 你沒有使用權限，請先在 myCRM 網站的個人設定綁定你的 Telegram ID」並終止
+2. **照片處理流程（收到 `message.photo` 時）**：
+   - 取得最高解析度的 photo
+   - 呼叫 Telegram API 取得 `file_path`，下載圖片至記憶體 Buffer
    - 呼叫 `processCardImage()` 壓縮圖片
-   - 將壓縮後圖片上傳至 Supabase Storage，路徑：`cards/{telegram_id}_{timestamp}.jpg`
-   - 將壓縮後圖片 Buffer 傳給 `analyzeBusinessCard()` 取得辨識結果
-   - Bot 回覆辨識結果訊息，格式如下：
+   - 上傳至 Supabase Storage，路徑：`cards/{user_id}_{timestamp}.jpg`
+   - 呼叫 `analyzeBusinessCard()` 取得辨識結果
+   - 回覆辨識結果，格式：
      ```
      📇 辨識結果：
-     
+
      👤 姓名：{name}
      🏢 公司：{company}
      💼 職稱：{job_title}
      📧 Email：{email}
      📞 電話：{phone}
-     
+
      請確認是否存檔？
      ```
-   - 附上 Inline Keyboard Button：`[✅ 確認存檔]`，callback_data 格式：`save_{contactJSON_base64}`
-
-4. **Callback Query 處理（收到 `callback_query` 且 data 以 `save_` 開頭時）**：
+   - 附上 Inline Keyboard：`[✅ 確認存檔]`，callback_data：`save_{contactJSON_base64}`
+3. **Callback Query 處理（data 以 `save_` 開頭）**：
    - 解析 base64 取得聯絡人資料
-   - 寫入 `contacts` 表，`created_by` 為 `from.id`
-   - 同時寫入一筆 `interaction_logs`，content 為「透過 Telegram Bot 新增名片」
-   - 回覆：「✅ 已成功存檔！」
-   - 更新原訊息移除 Inline Button
-
-5. **錯誤處理**：所有流程加上 try/catch，錯誤時回覆「❌ 處理失敗，請稍後再試」
+   - 查詢 `users.id`（by telegram_id）
+   - 寫入 `contacts` 表，`created_by` 為 `users.id`
+   - 寫入 `interaction_logs`，content 為「透過 Telegram Bot 新增名片」，`created_by` 為 `users.id`
+   - 回覆「✅ 已成功存檔！」，移除 Inline Button
+4. **錯誤處理**：所有流程 try/catch，錯誤回覆「❌ 處理失敗，請稍後再試」
 
 ---
 
-### 5.3 Web 管理介面
-
-> 使用 Tailwind CSS 美化，風格簡潔專業。所有頁面需要基本的登入保護（可先用 Supabase Auth 或簡單的 middleware 判斷）。
+### 6.4 Web 管理介面
 
 #### 共用 Layout：`src/app/(dashboard)/layout.tsx`
-- 左側 Sidebar 導覽：Dashboard、聯絡人、白名單管理、郵件範本
-- 頂部 Header：顯示系統名稱 myCRM
+- 左側 Sidebar 導覽：Dashboard、聯絡人、使用者管理、郵件範本、個人設定
+- 頂部 Header：顯示 myCRM、目前登入使用者名稱、Sign out 按鈕
+- 使用者管理項目僅 `role = admin` 可見
 
 ---
 
-#### 頁面 1：聯絡人列表 `/contacts`
+#### 頁面 1：Dashboard `/`
+- 歡迎訊息，顯示登入使用者姓名
+- 統計卡片：聯絡人總數、本月新增名片數
 
-- 以表格列出所有 `contacts`，欄位：姓名、公司、職稱、Email、電話、建立時間
-- 支援關鍵字搜尋（名字或公司）
-- 每列可點擊進入詳情頁 `/contacts/[id]`
+---
+
+#### 頁面 2：聯絡人列表 `/contacts`
+- 表格列出所有 `contacts`，欄位：姓名、公司、職稱、Email、電話、建立者（`users.display_name`）、建立時間
+- 支援關鍵字搜尋（姓名或公司）
+- 每列點擊進入 `/contacts/[id]`
 - 右上角顯示聯絡人總數
 
 ---
 
-#### 頁面 2：聯絡人詳情 `/contacts/[id]`
-
-- 顯示聯絡人基本資料（姓名、公司、職稱、Email、電話）
-- 若有 `card_img_url`，顯示名片縮圖（點擊可放大）
-- 互動紀錄時間軸：依 `created_at` 降序排列，顯示每筆 `interaction_logs` 的內容與時間
-- 提供「新增互動紀錄」的文字輸入框，送出後即時更新時間軸
-- 返回按鈕回到聯絡人列表
-
----
-
-#### 頁面 3：白名單管理 `/admin/users`
-
-- 列出所有 `authorized_users`（telegram_id、名稱、是否管理員、建立時間）
-- 新增授權使用者：輸入 Telegram ID 與名稱，勾選是否為管理員，送出後新增至資料表
-- 刪除：每列有刪除按鈕，確認後從資料表移除
-- 僅 `is_admin = true` 的使用者可存取此頁面
+#### 頁面 3：聯絡人詳情 `/contacts/[id]`
+- 顯示聯絡人完整資料，並顯示「由誰建立」
+- 顯示名片縮圖（可點擊放大）
+- 互動紀錄時間軸：顯示 `content`、紀錄者姓名（`users.display_name`）、時間
+- 「新增互動紀錄」輸入框，送出後即時更新（`created_by` 為當前登入者）
+- 「寄信」按鈕，開啟 Modal：
+  - 收件人預帶聯絡人 email
+  - 可選擇套用 email template，或自行填寫主旨與內文
+  - 送出後呼叫 `graph.ts` 的 `sendMail()`
+  - 寄出後自動新增互動紀錄：「寄送郵件：{subject}」
+- 返回按鈕
 
 ---
 
-#### 頁面 4：郵件範本 `/admin/templates`
-
-- 列出所有 `email_templates`（標題、主旨、建立時間）
-- 點擊「編輯」開啟編輯介面：
-  - 輸入範本名稱、郵件主旨
-  - 多行文字框編輯郵件內文（支援 HTML）
-  - 附件 URL 清單（可新增/刪除）
-- 儲存後更新 `email_templates` 表
-- 支援新增與刪除範本
+#### 頁面 4：使用者管理 `/admin/users`（僅 admin 可見）
+- 列出所有 `users`（display_name、email、telegram_id 是否已綁定、role、last_login_at）
+- 可修改每位使用者的 `role`（member ↔ admin）
+- 不提供手動新增（使用者需自行用 Microsoft 登入）
+- 非 admin 使用者導向 `/`
 
 ---
 
-## 六、專案初始化指令
+#### 頁面 5：郵件範本 `/admin/templates`
+- 列出所有 `email_templates`
+- 新增、編輯（title、subject、body_content HTML、attachment_urls）、刪除
+- 所有組織成員均可存取與編輯
 
-```bash
-# 1. 建立 Next.js 專案
-npx create-next-app@latest . --typescript --eslint --tailwind --src-dir --app --no-import-alias
+---
 
-# 2. 安裝核心套件
-npm install @supabase/ssr @supabase/supabase-js telegraf @google/generative-ai nodemailer sharp lucide-react
+#### 頁面 6：個人設定 `/settings`
+- 顯示目前登入帳號（email、display_name）
+- 輸入框設定 `telegram_id`
+- 說明文字：「請在 Telegram 傳訊給 @userinfobot，它會回傳你的數字 ID」
+- 儲存後更新 `users.telegram_id`
 
-# 3. 安裝型別定義
-npm install -D @types/nodemailer
-```
+---
 
-### 初始化 Git
-```bash
-git init
-git add .
-git commit -m "chore: initial commit"
-```
+## 七、資料庫 Migration SQL
 
-### 建立 GitHub Repo 並推上去
-```bash
-# 先在 GitHub 手動建立一個名為 mycrm 的空白 repo（不要勾選任何初始檔案）
-# 然後執行：
-git remote add origin https://github.com/你的帳號/mycrm.git
-git branch -M main
-git push -u origin main
-```
+```sql
+-- 廢除舊的 authorized_users 表（若存在）
+drop table if exists authorized_users;
 
-### 之後每次開發完
-```bash
-git add .
-git commit -m "feat: 功能描述"
-git push
+-- 使用者表
+create table if not exists users (
+  id uuid primary key default gen_random_uuid(),
+  email text unique not null,
+  display_name text,
+  telegram_id bigint unique,
+  role text not null default 'member',
+  last_login_at timestamptz,
+  created_at timestamptz default now()
+);
+
+-- 聯絡人表
+create table if not exists contacts (
+  id uuid primary key default gen_random_uuid(),
+  name text,
+  company text,
+  job_title text,
+  email text,
+  phone text,
+  card_img_url text,
+  created_by uuid references users(id),
+  created_at timestamptz default now()
+);
+
+-- 互動紀錄表
+create table if not exists interaction_logs (
+  id uuid primary key default gen_random_uuid(),
+  contact_id uuid references contacts(id) on delete cascade,
+  content text,
+  created_by uuid references users(id),
+  created_at timestamptz default now()
+);
+
+-- 郵件範本表
+create table if not exists email_templates (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  subject text,
+  body_content text,
+  attachment_urls text[],
+  created_at timestamptz default now()
+);
 ```
 
 ---
 
-## 七、Supabase Storage 設定
+## 八、Supabase Storage 設定
 
-- 建立 bucket：`cards`
-- 設定為 **public** bucket（方便直接用 URL 顯示名片圖片）
+- Bucket 名稱：`cards`
+- 設定為 **public** bucket
 - RLS Policy：service role 可讀寫，public 可讀取
 
 ---
 
-## 八、部署設定
+## 九、Azure AD 設定
+
+### App Registration 需要的 API Permissions
+- `openid`、`profile`、`email`（預設）
+- `Mail.Send`（Delegated）— 用於代表使用者寄信
+
+### Supabase Auth Azure Provider 設定
+- Redirect URI：`https://<supabase-project>.supabase.co/auth/v1/callback`
+- 填入 Client ID、Client Secret、Tenant URL
+- Additional Scopes：`Mail.Send`
+
+---
+
+## 十、部署設定
 
 ### Vercel
-- 連結 GitHub repo
-- 設定所有環境變數（見第四節）
-- Telegram Webhook URL 設定為：`https://{your-domain}/api/bot`
+- 連結 GitHub repo，設定所有環境變數
+- Telegram Webhook：`https://{your-domain}/api/bot`
 
 ### 設定 Telegram Webhook
 ```bash
@@ -283,53 +373,18 @@ curl -X POST "https://api.telegram.org/bot{TOKEN}/setWebhook" \
 
 ---
 
-## 九、CLAUDE.md 內容（請在專案根目錄建立此檔案）
+## 十一、開發任務清單（供 Claude Code 使用）
 
-```markdown
-# myCRM 專案說明
+請先閱讀完整 PRD，理解整體架構後提出任務拆分計畫，確認後再依序實作：
 
-## 專案目標
-透過 Telegram Bot 拍名片 → AI 辨識 → 存入 CRM，並提供 Web 管理介面。
-
-## 技術棧
-- Next.js 14 (App Router, TypeScript, Tailwind)
-- Supabase (PostgreSQL + Storage)
-- Telegraf (Telegram Bot)
-- Google Gemini 1.5 Flash (OCR)
-- Sharp (圖片處理)
-- 部署：Vercel
-
-## 重要路徑
-- Bot Webhook: src/app/api/bot/route.ts
-- Supabase 工具: src/lib/supabase.ts
-- Gemini 工具: src/lib/gemini.ts
-- 圖片處理: src/lib/imageProcessor.ts
-- Web 頁面: src/app/(dashboard)/
-
-## 開發規範
-- 所有 API route 使用 service role client
-- 前端 Component 使用 anon client
-- 圖片一律壓縮後再存 Storage
-- 錯誤處理：API 一律回傳 { error: string } 格式
-
-## 環境變數
-見 .env.local.example
-```
-
----
-
-## 十、開發任務清單（供 Claude Code 使用）
-
-請依序完成以下任務，每個任務完成後確認再進行下一個：
-
-- [ ] **Task 1**：專案初始化（create-next-app + 安裝套件）
-- [ ] **Task 2**：建立資料庫 Migration SQL 並在 Supabase 執行
-- [ ] **Task 3**：建立 `src/lib/supabase.ts`、`src/lib/gemini.ts`、`src/lib/imageProcessor.ts`
-- [ ] **Task 4**：建立 `.env.local.example` 與 `CLAUDE.md`
-- [ ] **Task 5**：實作 `src/app/api/bot/route.ts`（Telegram Webhook 完整邏輯）
-- [ ] **Task 6**：建立 Dashboard Layout 與 Sidebar
-- [ ] **Task 7**：實作 `/contacts` 聯絡人列表頁
-- [ ] **Task 8**：實作 `/contacts/[id]` 聯絡人詳情頁
-- [ ] **Task 9**：實作 `/admin/users` 白名單管理頁
-- [ ] **Task 10**：實作 `/admin/templates` 郵件範本頁
-- [ ] **Task 11**：設定 Vercel 部署與 Telegram Webhook URL
+- [ ] **Task 1**：執行資料庫 Migration SQL（第七節），建立新表結構
+- [ ] **Task 2**：更新 `src/lib/supabase.ts`、`src/lib/supabase-browser.ts`
+- [ ] **Task 3**：新增 `src/lib/graph.ts`（Microsoft Graph 寄信封裝）
+- [ ] **Task 4**：更新認證流程（login 頁加 Mail.Send scope、auth callback upsert users 表、middleware）
+- [ ] **Task 5**：更新 Bot Webhook（白名單改查 `users.telegram_id`，`created_by` 改存 `users.id`）
+- [ ] **Task 6**：更新 Dashboard Layout（Sidebar 加「個人設定」，使用者管理僅 admin 可見）
+- [ ] **Task 7**：更新聯絡人列表（新增「建立者」欄位顯示 display_name）
+- [ ] **Task 8**：更新聯絡人詳情（互動紀錄顯示建立者姓名、新增寄信 Modal）
+- [ ] **Task 9**：新增個人設定頁 `/settings`（Telegram ID 綁定）
+- [ ] **Task 10**：更新使用者管理頁 `/admin/users`（改為管理 `users` 表、角色切換）
+- [ ] **Task 11**：確認郵件範本頁欄位對應新 schema
