@@ -5,6 +5,19 @@ import { useTheme } from 'next-themes'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Sun, Moon, Check } from 'lucide-react'
 
+interface AiEndpoint {
+  id: string
+  name: string
+  is_active: boolean
+}
+
+interface AiModel {
+  id: string
+  endpoint_id: string
+  model_id: string
+  display_name: string
+}
+
 const ROLE_LABEL: Record<string, string> = {
   super_admin: 'Super Admin',
   member: 'Member',
@@ -18,12 +31,17 @@ export default function SettingsPage() {
   const [displayName, setDisplayName] = useState('')
   const [role, setRole] = useState('')
   const [telegramId, setTelegramId] = useState('')
-  const [geminiModel, setGeminiModel] = useState('gemini-2.5-flash')
-  const [geminiModels, setGeminiModels] = useState<{ model_id: string; display_name: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const [endpoints, setEndpoints] = useState<AiEndpoint[]>([])
+  const [allModels, setAllModels] = useState<AiModel[]>([])
+  const [selectedEndpointId, setSelectedEndpointId] = useState<string>('')
+  const [selectedModelId, setSelectedModelId] = useState<string>('')  // ai_models.id (UUID)
+
+  const filteredModels = allModels.filter((m) => m.endpoint_id === selectedEndpointId)
 
   useEffect(() => {
     async function load() {
@@ -31,31 +49,58 @@ export default function SettingsPage() {
       if (!user?.email) return
       setEmail(user.email)
 
-      const [{ data }, { data: models }] = await Promise.all([
+      const [{ data: userData }, { data: eps }, { data: mds }] = await Promise.all([
         supabase
           .from('users')
-          .select('display_name, role, telegram_id, gemini_model, theme')
+          .select('display_name, role, telegram_id, ai_model_id, theme')
           .eq('email', user.email)
           .single(),
         supabase
-          .from('gemini_models')
-          .select('model_id, display_name')
+          .from('ai_endpoints')
+          .select('id, name, is_active')
+          .eq('is_active', true)
+          .order('created_at', { ascending: true }),
+        supabase
+          .from('ai_models')
+          .select('id, endpoint_id, model_id, display_name')
           .eq('is_active', true)
           .order('created_at', { ascending: true }),
       ])
 
-      if (data) {
-        setDisplayName(data.display_name ?? '')
-        setRole(data.role ?? 'member')
-        setTelegramId(data.telegram_id ? String(data.telegram_id) : '')
-        setGeminiModel(data.gemini_model ?? 'gemini-2.5-flash')
-        if (data.theme) setTheme(data.theme)
+      const epList = eps ?? []
+      const mdList = mds ?? []
+      setEndpoints(epList)
+      setAllModels(mdList)
+
+      if (userData) {
+        setDisplayName(userData.display_name ?? '')
+        setRole(userData.role ?? 'member')
+        setTelegramId(userData.telegram_id ? String(userData.telegram_id) : '')
+        if (userData.theme) setTheme(userData.theme)
+
+        // Restore selected endpoint/model from saved ai_model_id
+        if (userData.ai_model_id) {
+          const savedModel = mdList.find((m) => m.id === userData.ai_model_id)
+          if (savedModel) {
+            setSelectedEndpointId(savedModel.endpoint_id)
+            setSelectedModelId(savedModel.id)
+          }
+        } else if (epList.length > 0) {
+          setSelectedEndpointId(epList[0].id)
+        }
       }
-      setGeminiModels(models ?? [])
+
       setLoading(false)
     }
     load()
   }, [])
+
+  // When endpoint changes, reset model selection to first available
+  function handleEndpointChange(epId: string) {
+    setSelectedEndpointId(epId)
+    const first = allModels.find((m) => m.endpoint_id === epId)
+    setSelectedModelId(first?.id ?? '')
+  }
 
   async function handleSave() {
     setError(null); setSaved(false)
@@ -68,7 +113,11 @@ export default function SettingsPage() {
     setSaving(true)
     const { error: err } = await supabase
       .from('users')
-      .update({ telegram_id: parsed, gemini_model: geminiModel, theme: theme ?? 'light' })
+      .update({
+        telegram_id: parsed,
+        ai_model_id: selectedModelId || null,
+        theme: theme ?? 'light',
+      })
       .eq('email', email)
 
     setSaving(false)
@@ -122,27 +171,47 @@ export default function SettingsPage() {
             value={telegramId}
             onChange={(e) => setTelegramId(e.target.value)}
             placeholder="例：123456789"
-            className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
             在 Telegram 傳訊給 <span className="font-medium text-gray-600 dark:text-gray-400">@userinfobot</span> 取得數字 ID，綁定後即可使用 Bot 掃描名片。
           </p>
         </div>
 
-        {/* Gemini Model */}
+        {/* AI Model (two-layer) */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Gemini OCR 模型
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            AI OCR 模型
           </label>
-          <select
-            value={geminiModel}
-            onChange={(e) => setGeminiModel(e.target.value)}
-            className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {geminiModels.map((m) => (
-              <option key={m.model_id} value={m.model_id}>{m.display_name}</option>
-            ))}
-          </select>
+          <div className="space-y-2">
+            <div>
+              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Endpoint</label>
+              <select
+                value={selectedEndpointId}
+                onChange={(e) => handleEndpointChange(e.target.value)}
+                className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {endpoints.length === 0 && <option value="">（尚無可用 Endpoint）</option>}
+                {endpoints.map((ep) => (
+                  <option key={ep.id} value={ep.id}>{ep.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Model</label>
+              <select
+                value={selectedModelId}
+                onChange={(e) => setSelectedModelId(e.target.value)}
+                disabled={filteredModels.length === 0}
+                className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                {filteredModels.length === 0 && <option value="">（此 Endpoint 尚無 Model）</option>}
+                {filteredModels.map((m) => (
+                  <option key={m.id} value={m.id}>{m.display_name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
           <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
             此設定會影響 Bot 及網頁名片辨識所使用的 AI 模型。
           </p>
