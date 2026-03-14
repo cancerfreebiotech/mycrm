@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { Users, LayoutDashboard, ShieldCheck, Mail } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut } from 'lucide-react'
+import { createBrowserSupabaseClient } from '@/lib/supabase'
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -13,6 +14,13 @@ const navItems = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
+
+  async function handleSignOut() {
+    const supabase = createBrowserSupabaseClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -46,8 +54,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="h-14 bg-white border-b border-gray-200 flex items-center px-6">
+        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6">
           <span className="text-sm font-semibold text-gray-700 tracking-wide">myCRM 管理系統</span>
+          <button
+            onClick={handleSignOut}
+            className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors"
+          >
+            <LogOut size={16} />
+            Sign out
+          </button>
         </header>
 
         {/* Content */}

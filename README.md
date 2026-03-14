@@ -11,6 +11,7 @@ A lightweight CRM system that lets you scan business cards via Telegram, extract
 - **Telegram Bot** — Send a business card photo to the bot; it compresses the image, runs OCR, and shows you the extracted data with a confirm button.
 - **AI OCR** — Uses Google Gemini 1.5 Flash to extract name, company, job title, email, and phone number from the card image.
 - **Contact Management** — Web dashboard to search, view, and manage all saved contacts with full detail pages and interaction logs.
+- **Microsoft SSO** — Web dashboard is protected by Microsoft (Azure AD) OAuth. Only `@cancerfree.io` accounts can sign in.
 - **Whitelist Access Control** — Only authorized Telegram users can use the bot. Manage the whitelist from the admin panel.
 - **Email Templates** — Create and store reusable email templates for outreach.
 - **Image Optimization** — All card images are compressed (max 1024px, JPEG 85%) before being stored in Supabase Storage.
@@ -77,6 +78,7 @@ src/
 - A [Supabase](https://supabase.com) project
 - A Telegram Bot token from [@BotFather](https://t.me/BotFather)
 - A [Google AI Studio](https://aistudio.google.com) API key (Gemini)
+- A Microsoft Azure AD App Registration (for authentication)
 
 ### 1. Clone & Install
 
@@ -110,7 +112,22 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 NEXTAUTH_URL=https://your-domain.com
 ```
 
-### 3. Set Up the Database
+### 3. Set Up Microsoft Authentication
+
+This app uses Microsoft (Azure AD) OAuth via Supabase, restricted to `@cancerfree.io` accounts only.
+
+**Azure AD setup:**
+1. Go to [portal.azure.com](https://portal.azure.com) → **Microsoft Entra ID** → **App registrations** → **New registration**
+2. Set Redirect URI (Web): `https://<your-supabase-project>.supabase.co/auth/v1/callback`
+3. Note down: **Application (client) ID** and **Directory (tenant) ID**
+4. Go to **Certificates & secrets** → **New client secret** → copy the **Value**
+
+**Supabase setup:**
+1. Go to **Authentication** → **Providers** → **Azure**
+2. Fill in: Client ID, Client Secret, and Tenant URL (`https://login.microsoftonline.com/<tenant-id>`)
+3. Save
+
+### 4. Set Up the Database
 
 Run the following SQL in your Supabase SQL editor:
 
@@ -154,7 +171,7 @@ create table email_templates (
 
 Also create a Supabase Storage bucket named `card-images` (public or private as needed).
 
-### 4. Register the Telegram Webhook
+### 5. Register the Telegram Webhook
 
 After deploying (or using a tunnel like [ngrok](https://ngrok.com) locally), register the webhook:
 
@@ -162,7 +179,7 @@ After deploying (or using a tunnel like [ngrok](https://ngrok.com) locally), reg
 curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https://mycrm-vert.vercel.app/api/bot"
 ```
 
-### 5. Run Locally
+### 6. Run Locally
 
 ```bash
 npm run dev
