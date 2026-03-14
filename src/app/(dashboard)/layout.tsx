@@ -62,7 +62,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="h-14 flex items-center px-5 border-b border-gray-200 dark:border-gray-700">
           <span className="text-lg font-bold text-gray-900 dark:text-gray-100">myCRM</span>
         </div>
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {navItems.map(({ href, label, icon: Icon }) => {
             const active = href === '/' ? pathname === '/' : pathname.startsWith(href)
             return (
@@ -81,6 +81,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             )
           })}
         </nav>
+        {/* Version footer */}
+        <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800">
+          <p className="text-xs text-gray-400 dark:text-gray-500">
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? '0.5.0'}
+          </p>
+          {process.env.NEXT_PUBLIC_DEPLOY_TIME && (
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              部署於 {process.env.NEXT_PUBLIC_DEPLOY_TIME}
+            </p>
+          )}
+        </div>
       </aside>
 
       {/* Main */}
