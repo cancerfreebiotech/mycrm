@@ -1,36 +1,195 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# myCRM — Telegram Business Card Scanner CRM
+
+A lightweight CRM system that lets you scan business cards via Telegram, extract contact info with AI, and manage everything through a web dashboard.
+
+**Flow:** Snap a card photo in Telegram → Gemini AI reads it → One tap to save → View contacts on the web.
+
+---
+
+## Features
+
+- **Telegram Bot** — Send a business card photo to the bot; it compresses the image, runs OCR, and shows you the extracted data with a confirm button.
+- **AI OCR** — Uses Google Gemini 1.5 Flash to extract name, company, job title, email, and phone number from the card image.
+- **Contact Management** — Web dashboard to search, view, and manage all saved contacts with full detail pages and interaction logs.
+- **Whitelist Access Control** — Only authorized Telegram users can use the bot. Manage the whitelist from the admin panel.
+- **Email Templates** — Create and store reusable email templates for outreach.
+- **Image Optimization** — All card images are compressed (max 1024px, JPEG 85%) before being stored in Supabase Storage.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 16 (App Router, TypeScript) |
+| Styling | Tailwind CSS v4 |
+| Database & Storage | Supabase (PostgreSQL + Storage) |
+| Telegram Bot | Telegraf |
+| AI / OCR | Google Gemini 1.5 Flash |
+| Image Processing | Sharp |
+| Deployment | Vercel |
+
+---
+
+## Database Schema
+
+```sql
+-- Authorized Telegram users (whitelist)
+authorized_users (id, telegram_id, name, is_admin, created_at)
+
+-- Business card contacts
+contacts (id, telegram_user_id, name, company, job_title, email, phone, card_image_url, created_at)
+
+-- Interaction history per contact
+interaction_logs (id, contact_id, content, created_at)
+
+-- Reusable email templates
+email_templates (id, name, subject, body, attachment_urls, created_at)
+```
+
+---
+
+## Project Structure
+
+```
+src/
+├── app/
+│   ├── api/bot/route.ts        # Telegram webhook handler
+│   └── (dashboard)/
+│       ├── page.tsx            # Dashboard home
+│       ├── contacts/           # Contact list + detail pages
+│       └── admin/
+│           ├── users/          # Whitelist management
+│           └── templates/      # Email templates
+└── lib/
+    ├── supabase.ts             # Supabase client (server + service role)
+    ├── gemini.ts               # Gemini OCR integration
+    └── imageProcessor.ts       # Image compression with Sharp
+```
+
+---
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- A [Supabase](https://supabase.com) project
+- A Telegram Bot token from [@BotFather](https://t.me/BotFather)
+- A [Google AI Studio](https://aistudio.google.com) API key (Gemini)
+
+### 1. Clone & Install
+
+```bash
+git clone https://github.com/cancerfreebiotech/mycrm.git
+cd mycrm
+npm install
+```
+
+### 2. Configure Environment Variables
+
+```bash
+cp .env.local.example .env.local
+```
+
+Fill in `.env.local`:
+
+```env
+# Telegram
+TELEGRAM_BOT_TOKEN=your_bot_token
+
+# Google Gemini
+GEMINI_API_KEY=your_gemini_api_key
+
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+
+# Your deployment URL (for webhook registration)
+NEXTAUTH_URL=https://your-domain.com
+```
+
+### 3. Set Up the Database
+
+Run the following SQL in your Supabase SQL editor:
+
+```sql
+create table authorized_users (
+  id uuid primary key default gen_random_uuid(),
+  telegram_id bigint unique not null,
+  name text,
+  is_admin boolean default false,
+  created_at timestamptz default now()
+);
+
+create table contacts (
+  id uuid primary key default gen_random_uuid(),
+  telegram_user_id bigint,
+  name text,
+  company text,
+  job_title text,
+  email text,
+  phone text,
+  card_image_url text,
+  created_at timestamptz default now()
+);
+
+create table interaction_logs (
+  id uuid primary key default gen_random_uuid(),
+  contact_id uuid references contacts(id) on delete cascade,
+  content text,
+  created_at timestamptz default now()
+);
+
+create table email_templates (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  subject text,
+  body text,
+  attachment_urls text[],
+  created_at timestamptz default now()
+);
+```
+
+Also create a Supabase Storage bucket named `card-images` (public or private as needed).
+
+### 4. Register the Telegram Webhook
+
+After deploying (or using a tunnel like [ngrok](https://ngrok.com) locally), register the webhook:
+
+```bash
+curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https://your-domain.com/api/bot"
+```
+
+### 5. Run Locally
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to see the dashboard.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Deployment (Vercel)
 
-## Learn More
+1. Push the repo to GitHub.
+2. Import the project in [Vercel](https://vercel.com).
+3. Add all environment variables from `.env.local` in the Vercel project settings.
+4. Deploy, then register the Telegram webhook pointing to your Vercel URL.
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Bot Usage
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Add your Telegram ID to the `authorized_users` table (you can do this from the admin panel once you're set up, or via Supabase directly for the first admin).
+2. Send a photo of a business card to the bot.
+3. The bot replies with the extracted contact info and a **Save Contact** button.
+4. Tap the button to save. The contact now appears in the web dashboard.
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT
