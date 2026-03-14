@@ -84,7 +84,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Version footer */}
         <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800">
           <p className="text-xs text-gray-400 dark:text-gray-500">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? '0.5.0'}
+            v{process.env.NEXT_PUBLIC_APP_VERSION}
           </p>
           {process.env.NEXT_PUBLIC_DEPLOY_TIME && (
             <p className="text-xs text-gray-400 dark:text-gray-500">
