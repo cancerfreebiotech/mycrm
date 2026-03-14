@@ -557,22 +557,22 @@ curl -X POST "https://api.telegram.org/bot{TOKEN}/setWebhook" \
 
 請先閱讀完整 PRD，理解整體架構後提出任務拆分計畫，確認後再依序實作：
 
-- [ ] **Task 1** `[修改]` — 資料庫 Migration SQL（第八節全部執行，含 pg_trgm 擴充）
-- [ ] **Task 2** `[修改]` — 安裝套件（next-themes、xlsx）；設定全域主題；更新全域 CSS 規範
-- [ ] **Task 3** `[修改]` — 更新 `src/lib/supabase.ts`、`src/lib/supabase-browser.ts`
-- [ ] **Task 4** `[修改]` — 更新 `src/lib/gemini.ts`（多語言 prompt、接受 model 參數、支援多張圖片）
-- [ ] **Task 5** `[新增]` — 新增 `src/lib/graph.ts`；新增 `src/lib/duplicate.ts`（重複偵測）
-- [ ] **Task 6** `[修改]` — 更新 `src/lib/imageProcessor.ts`（命名規則 yymmdd_hhmmss-流水號）
-- [ ] **Task 7** `[修改]` — 更新認證流程（login 加 Mail.Send scope、auth callback upsert users、確認 middleware）
-- [ ] **Task 8** `[修改]` — 更新 Bot Webhook（白名單查 users.telegram_id、個人 gemini_model、存檔/不存檔按鈕、重複偵測、會議筆記指令、/add_back、bot_sessions 狀態管理）
-- [ ] **Task 9** `[新增]` — 新增 OCR API Route `src/app/api/ocr/route.ts`
-- [ ] **Task 10** `[修改]` — 更新 Dashboard Layout（Sidebar 新增未歸類筆記、Tag 管理；super_admin 判斷）
-- [ ] **Task 11** `[修改]` — 更新 Dashboard 首頁（待處理未歸類筆記區塊）
-- [ ] **Task 12** `[修改]` — 更新聯絡人列表（Tags 欄、Tag 篩選、Export Excel/CSV）
-- [ ] **Task 13** `[新增]` — 新增聯絡人新增頁 `/contacts/new`（表單、照片上傳 + AI 辨識、重複偵測）
-- [ ] **Task 14** `[修改]` — 更新聯絡人詳情（編輯 Modal、正反面照片、Tags、互動紀錄 type badge、會議日期、寄信 Modal）
-- [ ] **Task 15** `[新增]` — 新增未歸類筆記頁 `/unassigned-notes`
-- [ ] **Task 16** `[新增]` — 新增 Tag 管理頁 `/admin/tags`
-- [ ] **Task 17** `[修改]` — 更新使用者管理頁 `/admin/users`（改管理 users 表、super_admin 角色切換）
-- [ ] **Task 18** `[修改]` — 更新郵件範本頁（多附件上傳，2MB 限制，template_attachments 表）
-- [ ] **Task 19** `[新增]` — 新增個人設定頁 `/settings`（Telegram ID、Gemini model、主題、顯示角色）
+- [x] **Task 1** `[修改]` — 資料庫 Migration SQL（第八節全部執行，含 pg_trgm 擴充）
+- [x] **Task 2** `[修改]` — 安裝套件（next-themes、xlsx）；設定全域主題；更新全域 CSS 規範
+- [x] **Task 3** `[修改]` — 更新 `src/lib/supabase.ts`、`src/lib/supabase-browser.ts`
+- [x] **Task 4** `[修改]` — 更新 `src/lib/gemini.ts`（多語言 prompt、接受 model 參數、支援多張圖片）
+- [x] **Task 5** `[新增]` — 新增 `src/lib/graph.ts`；新增 `src/lib/duplicate.ts`（重複偵測）
+- [x] **Task 6** `[修改]` — 更新 `src/lib/imageProcessor.ts`（命名規則 yymmdd_hhmmss-流水號）
+- [x] **Task 7** `[修改]` — 更新認證流程（login 加 Mail.Send scope、auth callback upsert users、確認 middleware）
+- [x] **Task 8** `[修改]` — 更新 Bot Webhook（白名單查 users.telegram_id、個人 gemini_model、存檔/不存檔按鈕、重複偵測、會議筆記指令、/add_back、bot_sessions 狀態管理）
+- [x] **Task 9** `[新增]` — 新增 OCR API Route `src/app/api/ocr/route.ts`
+- [x] **Task 10** `[修改]` — 更新 Dashboard Layout（Sidebar 新增未歸類筆記、Tag 管理；super_admin 判斷）
+- [x] **Task 11** `[修改]` — 更新 Dashboard 首頁（待處理未歸類筆記區塊）
+- [x] **Task 12** `[修改]` — 更新聯絡人列表（Tags 欄、Tag 篩選、Export Excel/CSV）
+- [x] **Task 13** `[新增]` — 新增聯絡人新增頁 `/contacts/new`（表單、照片上傳 + AI 辨識、重複偵測）
+- [x] **Task 14** `[修改]` — 更新聯絡人詳情（編輯 Modal、正反面照片、Tags、互動紀錄 type badge、會議日期、寄信 Modal）
+- [x] **Task 15** `[新增]` — 新增未歸類筆記頁 `/unassigned-notes`
+- [x] **Task 16** `[新增]` — 新增 Tag 管理頁 `/admin/tags`
+- [x] **Task 17** `[修改]` — 更新使用者管理頁 `/admin/users`（改管理 users 表、super_admin 角色切換）
+- [x] **Task 18** `[修改]` — 更新郵件範本頁（多附件上傳，2MB 限制，template_attachments 表）
+- [x] **Task 19** `[新增]` — 新增個人設定頁 `/settings`（Telegram ID、Gemini model、主題、顯示角色）
