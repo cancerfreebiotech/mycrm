@@ -48,10 +48,10 @@ async function getSession(telegramId: number) {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('bot_sessions')
-    .select('state, context')
+    .select('state, context, last_contact_id')
     .eq('telegram_id', telegramId)
     .maybeSingle()
-  return data as { state: string; context: Record<string, unknown> } | null
+  return data as { state: string; context: Record<string, unknown>; last_contact_id: string | null } | null
 }
 
 async function setSession(telegramId: number, state: string, context: Record<string, unknown>) {
@@ -63,8 +63,20 @@ async function setSession(telegramId: number, state: string, context: Record<str
 }
 
 async function clearSession(telegramId: number) {
+  // Upsert with null state/context to preserve last_contact_id
   const supabase = createServiceClient()
-  await supabase.from('bot_sessions').delete().eq('telegram_id', telegramId)
+  await supabase.from('bot_sessions').upsert(
+    { telegram_id: telegramId, state: null, context: null, updated_at: new Date().toISOString() },
+    { onConflict: 'telegram_id' }
+  )
+}
+
+async function updateLastContact(telegramId: number, contactId: string) {
+  const supabase = createServiceClient()
+  await supabase.from('bot_sessions').upsert(
+    { telegram_id: telegramId, last_contact_id: contactId, updated_at: new Date().toISOString() },
+    { onConflict: 'telegram_id' }
+  )
 }
 
 // ── Auth helper ───────────────────────────────────────────────────────────────
@@ -223,7 +235,16 @@ async function handlePhoto(
     return
   }
 
-  // New card scan
+  // New card scan — check pending limit
+  const { count: pendingCount } = await supabase
+    .from('pending_contacts')
+    .select('*', { count: 'exact', head: true })
+    .eq('created_by', user.id)
+  if ((pendingCount ?? 0) >= 5) {
+    await sendMessage(chatId, `⚠️ 你目前有 ${pendingCount} 張名片待確認，請先處理後再傳新的`)
+    return
+  }
+
   await sendMessage(chatId, '⏳ 處理中，請稍候...')
   try {
     const imgBuffer = await downloadTelegramPhoto(photo.file_id)
@@ -316,6 +337,21 @@ async function handleText(
 
   // ── /email /e ──────────────────────────────────────────────────────────────
   if (cmd === '/email' || cmd === '/e') {
+    const lastContactId = session?.last_contact_id
+    if (lastContactId) {
+      const { data: lastContact } = await supabase
+        .from('contacts').select('id, name, company, email').eq('id', lastContactId).single()
+      if (lastContact) {
+        await sendMessage(chatId,
+          `要針對上一位聯絡人嗎？\n👤 ${lastContact.name}（${lastContact.company ?? ''}）`,
+          { reply_markup: { inline_keyboard: [[
+            { text: '✅ 是，就是他', callback_data: `use_last_email_${lastContactId}` },
+            { text: '🔍 搜尋其他人', callback_data: 'search_other_email' },
+          ]] } }
+        )
+        return
+      }
+    }
     await setSession(fromId, 'waiting_contact_for_email', {})
     await sendMessage(chatId, '請輸入聯絡人姓名或公司關鍵字：')
     return
@@ -442,6 +478,21 @@ async function handleText(
 
   // ── /note command ──────────────────────────────────────────────────────────
   if (cmd === '/note') {
+    const lastContactId = session?.last_contact_id
+    if (lastContactId) {
+      const { data: lastContact } = await supabase
+        .from('contacts').select('id, name, company').eq('id', lastContactId).single()
+      if (lastContact) {
+        await sendMessage(chatId,
+          `要針對上一位聯絡人嗎？\n👤 ${lastContact.name}（${lastContact.company ?? ''}）`,
+          { reply_markup: { inline_keyboard: [[
+            { text: '✅ 是，就是他', callback_data: `use_last_note_${lastContactId}` },
+            { text: '🔍 搜尋其他人', callback_data: 'search_other_note' },
+          ]] } }
+        )
+        return
+      }
+    }
     await setSession(fromId, 'waiting_for_note_contact', {})
     await sendMessage(chatId, '請輸入聯絡人姓名或 Email：')
     return
@@ -560,6 +611,7 @@ export async function POST(req: NextRequest) {
             created_by: user.id,
           })
           await supabase.from('pending_contacts').delete().eq('id', pendingId)
+          await updateLastContact(from.id, inserted.id)
           await answerCallbackQuery(callbackQueryId, '✅ 已成功存檔！')
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await sendMessage(from.id, '✅ 已成功存檔！')
@@ -799,6 +851,54 @@ export async function POST(req: NextRequest) {
             const msg = err instanceof Error ? err.message : String(err)
             throw new Error(`發送失敗：${msg}`)
           }
+        }
+
+        // ── /note: use last contact ───────────────────────────────────────────
+        else if (data?.startsWith('use_last_note_')) {
+          const contactId = data.replace('use_last_note_', '')
+          const { data: contact } = await supabase
+            .from('contacts').select('id, name').eq('id', contactId).single()
+          await setSession(from.id, 'waiting_for_note_content', { contact_id: contactId, contact_name: contact?.name })
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, `聯絡人：${contact?.name}\n\n請輸入筆記內容：`)
+        }
+
+        // ── /note: search other contact ───────────────────────────────────────
+        else if (data === 'search_other_note') {
+          await setSession(from.id, 'waiting_for_note_contact', {})
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, '請輸入聯絡人姓名或 Email：')
+        }
+
+        // ── /email: use last contact ──────────────────────────────────────────
+        else if (data?.startsWith('use_last_email_')) {
+          const contactId = data.replace('use_last_email_', '')
+          const { data: contact } = await supabase
+            .from('contacts').select('id, name, email').eq('id', contactId).single()
+          await setSession(from.id, 'waiting_email_method', {
+            contact_id: contactId,
+            contact_name: contact?.name,
+            contact_email: contact?.email,
+          })
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id,
+            `收件人：<b>${contact?.name}</b>（${contact?.email || '無 email'}）\n\n請選擇發信方式：`,
+            { reply_markup: { inline_keyboard: [[
+              { text: '1️⃣ 使用 Template', callback_data: 'email_method_1' },
+              { text: '2️⃣ AI 生成', callback_data: 'email_method_2' },
+            ]] } }
+          )
+        }
+
+        // ── /email: search other contact ──────────────────────────────────────
+        else if (data === 'search_other_email') {
+          await setSession(from.id, 'waiting_contact_for_email', {})
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, '請輸入聯絡人姓名或公司關鍵字：')
         }
 
         // ── /email: cancel ────────────────────────────────────────────────────
