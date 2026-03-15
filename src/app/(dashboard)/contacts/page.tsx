@@ -23,6 +23,8 @@ interface Contact {
   contact_tags: { tags: Tag }[]
 }
 
+const PAGE_SIZE = 20
+
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
@@ -30,6 +32,7 @@ export default function ContactsPage() {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     fetchAll()
@@ -53,6 +56,7 @@ export default function ContactsPage() {
     setSelectedTags((prev) =>
       prev.includes(tagId) ? prev.filter((t) => t !== tagId) : [...prev, tagId]
     )
+    setPage(1)
   }
 
   const filtered = contacts.filter((c) => {
@@ -65,6 +69,9 @@ export default function ContactsPage() {
       selectedTags.every((tid) => c.contact_tags.some((ct) => ct.tags?.id === tid))
     return matchQuery && matchTags
   })
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   function exportData(format: 'xlsx' | 'csv') {
     const rows = filtered.map((c) => ({
@@ -89,6 +96,7 @@ export default function ContactsPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">聯絡人</h1>
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500 dark:text-gray-400">共 {filtered.length} 筆</span>
+          <span className="text-sm text-gray-400 dark:text-gray-500">第 {page}/{totalPages} 頁</span>
           <button
             onClick={() => exportData('xlsx')}
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
@@ -124,7 +132,7 @@ export default function ContactsPage() {
             type="text"
             placeholder="搜尋姓名或公司..."
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => { setQuery(e.target.value); setPage(1) }}
             className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -195,7 +203,7 @@ export default function ContactsPage() {
                 <td colSpan={8} className="px-4 py-8 text-center text-gray-400">無符合結果</td>
               </tr>
             ) : (
-              filtered.map((c) => (
+              paginated.map((c) => (
                 <tr key={c.id} className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
                   <td className="px-4 py-3">
                     <Link href={`/contacts/${c.id}`} className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
@@ -225,6 +233,64 @@ export default function ContactsPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-1 mt-4">
+          <button
+            onClick={() => setPage(1)}
+            disabled={page === 1}
+            className="px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
+          >
+            «
+          </button>
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
+          >
+            ‹
+          </button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1)
+            .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+            .reduce<(number | '…')[]>((acc, p, idx, arr) => {
+              if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('…')
+              acc.push(p)
+              return acc
+            }, [])
+            .map((p, i) =>
+              p === '…' ? (
+                <span key={`ellipsis-${i}`} className="px-2 py-1 text-sm text-gray-400">…</span>
+              ) : (
+                <button
+                  key={p}
+                  onClick={() => setPage(p as number)}
+                  className={`px-3 py-1 text-sm rounded border transition-colors ${
+                    page === p
+                      ? 'bg-blue-600 border-blue-600 text-white'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  {p}
+                </button>
+              )
+            )}
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className="px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
+          >
+            ›
+          </button>
+          <button
+            onClick={() => setPage(totalPages)}
+            disabled={page === totalPages}
+            className="px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
+          >
+            »
+          </button>
+        </div>
+      )}
     </div>
   )
 }
