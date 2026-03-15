@@ -310,7 +310,7 @@ async function handleText(
   fromId: number,
   user: { id: string; ai_model_id: string | null; provider_token: string | null },
   text: string,
-  session: { state: string; context: Record<string, unknown> } | null
+  session: { state: string; context: Record<string, unknown>; last_contact_id: string | null } | null
 ) {
   const supabase = createServiceClient()
 

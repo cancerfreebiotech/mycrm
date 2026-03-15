@@ -8,7 +8,16 @@ import { Upload, Loader2, AlertTriangle, X } from 'lucide-react'
 interface Tag { id: string; name: string }
 interface DupContact { id: string; name: string; company: string | null }
 
-const EMPTY_FORM = { name: '', company: '', job_title: '', email: '', phone: '' }
+const EMPTY_FORM = {
+  name: '', name_en: '', name_local: '',
+  company: '', company_en: '', company_local: '',
+  job_title: '',
+  email: '', second_email: '',
+  phone: '', second_phone: '',
+  address: '', website: '',
+  linkedin_url: '', facebook_url: '',
+  notes: '',
+}
 
 export default function NewContactPage() {
   const router = useRouter()
@@ -24,7 +33,7 @@ export default function NewContactPage() {
   const [saving, setSaving] = useState(false)
   const [dupExact, setDupExact] = useState<DupContact | null>(null)
   const [dupSimilar, setDupSimilar] = useState<DupContact[]>([])
-  const [geminiModel, setGeminiModel] = useState('gemini-2.5-flash')
+  const [aiModelId, setAiModelId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -33,10 +42,10 @@ export default function NewContactPage() {
       if (!user) return
       const [{ data: tags }, { data: profile }] = await Promise.all([
         supabase.from('tags').select('id, name').order('name'),
-        supabase.from('users').select('gemini_model').eq('email', user.email!).single(),
+        supabase.from('users').select('ai_model_id').eq('email', user.email!).single(),
       ])
       setAllTags(tags ?? [])
-      if (profile?.gemini_model) setGeminiModel(profile.gemini_model)
+      if (profile?.ai_model_id) setAiModelId(profile.ai_model_id)
     }
     init()
   }, [])
@@ -45,25 +54,17 @@ export default function NewContactPage() {
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
-  // Duplicate check on email/name blur
   async function checkDup() {
     if (!form.email && !form.name) return
-    const res = await fetch('/api/ocr', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ check_dup: true, email: form.email, name: form.name }),
-    })
-    // Use supabase directly for dup check
-    const sb = supabase
     let exact: DupContact | null = null
     if (form.email) {
-      const { data } = await sb.from('contacts').select('id, name, company').eq('email', form.email).maybeSingle()
+      const { data } = await supabase.from('contacts').select('id, name, company').eq('email', form.email).maybeSingle()
       exact = data ?? null
     }
     setDupExact(exact)
 
     if (form.name) {
-      const { data } = await sb.rpc('find_similar_contacts', { input_name: form.name, threshold: 0.6 })
+      const { data } = await supabase.rpc('find_similar_contacts', { input_name: form.name, threshold: 0.6 })
       setDupSimilar((data ?? []).filter((c: DupContact) => c.id !== exact?.id).slice(0, 3))
     } else {
       setDupSimilar([])
@@ -79,22 +80,32 @@ export default function NewContactPage() {
       setImagePreview(dataUrl)
       const base64 = dataUrl.split(',')[1]
       setImageBase64(base64)
-      // Auto OCR
       setOcring(true)
       try {
         const res = await fetch('/api/ocr', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: base64, model: geminiModel }),
+          body: JSON.stringify({ image: base64, model: aiModelId }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error)
         setForm((prev) => ({
+          ...prev,
           name: data.name || prev.name,
+          name_en: data.name_en || prev.name_en,
+          name_local: data.name_local || prev.name_local,
           company: data.company || prev.company,
+          company_en: data.company_en || prev.company_en,
+          company_local: data.company_local || prev.company_local,
           job_title: data.job_title || prev.job_title,
           email: data.email || prev.email,
+          second_email: data.second_email || prev.second_email,
           phone: data.phone || prev.phone,
+          second_phone: data.second_phone || prev.second_phone,
+          address: data.address || prev.address,
+          website: data.website || prev.website,
+          linkedin_url: data.linkedin_url || prev.linkedin_url,
+          facebook_url: data.facebook_url || prev.facebook_url,
         }))
       } catch (err) {
         setError(err instanceof Error ? err.message : '辨識失敗')
@@ -120,23 +131,27 @@ export default function NewContactPage() {
       if (imageBase64) {
         const buf = Uint8Array.from(atob(imageBase64), (c) => c.charCodeAt(0))
         const filename = `web_${Date.now()}.jpg`
+        const storagePath = `cards/${filename}`
         const { error: uploadErr } = await supabase.storage
           .from('cards')
-          .upload(`cards/${filename}`, buf, { contentType: 'image/jpeg' })
+          .upload(storagePath, buf, { contentType: 'image/jpeg' })
         if (!uploadErr) {
-          const { data: urlData } = supabase.storage.from('cards').getPublicUrl(`cards/${filename}`)
+          const { data: urlData } = supabase.storage.from('cards').getPublicUrl(storagePath)
           card_img_url = urlData.publicUrl
         }
       }
 
+      const payload = Object.fromEntries(
+        Object.entries(form).map(([k, v]) => [k, v.trim() || null])
+      )
+
       const { data: inserted, error: insertErr } = await supabase
         .from('contacts')
-        .insert({ ...form, card_img_url, created_by: profile.id })
+        .insert({ ...payload, card_img_url, created_by: profile.id })
         .select('id')
         .single()
       if (insertErr || !inserted) throw insertErr
 
-      // Save tags
       if (selectedTags.length > 0) {
         await supabase.from('contact_tags').insert(
           selectedTags.map((tag_id) => ({ contact_id: inserted.id, tag_id }))
@@ -154,6 +169,24 @@ export default function NewContactPage() {
     setSelectedTags((prev) => prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id])
   }
 
+  const inputClass = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
+  const labelClass = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1'
+
+  function Field({ label, field, type }: { label: string; field: keyof typeof EMPTY_FORM; type?: string }) {
+    return (
+      <div>
+        <label className={labelClass}>{label}</label>
+        <input
+          type={type ?? 'text'}
+          value={form[field]}
+          onChange={(e) => set(field, e.target.value)}
+          onBlur={['email', 'name'].includes(field) ? checkDup : undefined}
+          className={inputClass}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-2xl">
       <div className="flex items-center gap-3 mb-6">
@@ -163,7 +196,7 @@ export default function NewContactPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">新增聯絡人</h1>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-5">
         {/* Photo upload */}
         <div
           onClick={() => fileInputRef.current?.click()}
@@ -185,9 +218,7 @@ export default function NewContactPage() {
               <p className="text-sm">點擊上傳名片照片（自動 AI 辨識）</p>
             </div>
           )}
-          {imagePreview && !ocring && (
-            <p className="text-xs text-gray-400 mt-2">點擊重新上傳</p>
-          )}
+          {imagePreview && !ocring && <p className="text-xs text-gray-400 mt-2">點擊重新上傳</p>}
         </div>
 
         {/* Duplicate warning */}
@@ -208,49 +239,79 @@ export default function NewContactPage() {
           </div>
         )}
 
-        {/* Form fields */}
-        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
-          {[
-            { label: '姓名', field: 'name' as const },
-            { label: '公司', field: 'company' as const },
-            { label: '職稱', field: 'job_title' as const },
-            { label: 'Email', field: 'email' as const, type: 'email' },
-            { label: '電話', field: 'phone' as const, type: 'tel' },
-          ].map(({ label, field, type }) => (
-            <div key={field}>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>
-              <input
-                type={type ?? 'text'}
-                value={form[field]}
-                onChange={(e) => set(field, e.target.value)}
-                onBlur={checkDup}
-                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          ))}
-
-          {/* Tags */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Tags</label>
-            <div className="flex flex-wrap gap-2">
-              {allTags.map((tag) => (
-                <button
-                  key={tag.id}
-                  type="button"
-                  onClick={() => toggleTag(tag.id)}
-                  className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-                    selectedTags.includes(tag.id)
-                      ? 'bg-blue-500 border-blue-500 text-white'
-                      : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-blue-300'
-                  }`}
-                >
-                  {tag.name}
-                </button>
-              ))}
-              {allTags.length === 0 && <p className="text-xs text-gray-400">尚無 Tags，請先至 Tag 管理新增</p>}
-            </div>
+        {/* Basic info */}
+        <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">基本資訊</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Field label="姓名（主要）" field="name" />
+            <Field label="英文姓名" field="name_en" />
+            <Field label="當地語言姓名" field="name_local" />
           </div>
-        </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Field label="公司（主要）" field="company" />
+            <Field label="英文公司名" field="company_en" />
+            <Field label="當地語言公司名" field="company_local" />
+          </div>
+          <Field label="職稱" field="job_title" />
+        </section>
+
+        {/* Contact info */}
+        <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">聯絡方式</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="Email" field="email" type="email" />
+            <Field label="第二 Email" field="second_email" type="email" />
+            <Field label="電話" field="phone" type="tel" />
+            <Field label="第二電話" field="second_phone" type="tel" />
+          </div>
+          <Field label="地址" field="address" />
+          <Field label="網站" field="website" type="url" />
+        </section>
+
+        {/* Social */}
+        <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">社群連結</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="LinkedIn" field="linkedin_url" type="url" />
+            <Field label="Facebook" field="facebook_url" type="url" />
+          </div>
+        </section>
+
+        {/* Notes */}
+        <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">備註</h2>
+          <div>
+            <label className={labelClass}>備註</label>
+            <textarea
+              value={form.notes}
+              onChange={(e) => set('notes', e.target.value)}
+              rows={3}
+              className={inputClass + ' resize-none'}
+            />
+          </div>
+        </section>
+
+        {/* Tags */}
+        <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Tags</h2>
+          <div className="flex flex-wrap gap-2">
+            {allTags.map((tag) => (
+              <button
+                key={tag.id}
+                type="button"
+                onClick={() => toggleTag(tag.id)}
+                className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                  selectedTags.includes(tag.id)
+                    ? 'bg-blue-500 border-blue-500 text-white'
+                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-blue-300'
+                }`}
+              >
+                {tag.name}
+              </button>
+            ))}
+            {allTags.length === 0 && <p className="text-xs text-gray-400">尚無 Tags，請先至 Tag 管理新增</p>}
+          </div>
+        </section>
 
         {error && (
           <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg px-4 py-3">
