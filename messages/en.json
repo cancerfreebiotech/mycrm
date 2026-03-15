@@ -216,6 +216,7 @@
     "subtitle": "Use your Microsoft account",
     "button": "Sign in with Microsoft",
     "hint": "@cancerfree.io accounts only",
+    "docs": "Docs",
     "errors": {
       "unauthorized_domain": "Access restricted to @cancerfree.io accounts only.",
       "auth_failed": "Authentication failed. Please try again.",

@@ -216,6 +216,7 @@
     "subtitle": "Microsoftアカウントでサインイン",
     "button": "Microsoftでサインイン",
     "hint": "@cancerfree.io アカウントのみ",
+    "docs": "ドキュメント",
     "errors": {
       "unauthorized_domain": "アクセス制限：@cancerfree.io アカウントのみ",
       "auth_failed": "認証に失敗しました。再試行してください。",

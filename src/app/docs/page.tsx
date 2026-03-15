@@ -61,12 +61,14 @@ export default function DocsPage() {
           <span className="text-gray-300 dark:text-gray-600">|</span>
           <span className="text-base font-bold text-gray-900 dark:text-gray-100">myCRM 使用說明</span>
         </div>
-        <button
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-        >
-          {mounted && theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-        </button>
+        {mounted && (
+          <button
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+          >
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+        )}
       </header>
 
       <div className="max-w-6xl mx-auto flex gap-8 px-6 py-10">
