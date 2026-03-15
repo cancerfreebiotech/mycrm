@@ -73,35 +73,36 @@
 </style>
 
 <script>
-  // Apply saved theme immediately to avoid flash
-  if (localStorage.getItem('docs-theme') === 'dark') {
-    document.addEventListener('DOMContentLoaded', function() {
-      document.body.classList.add('dark-mode');
-    });
-  }
-
-  // Create toggle button after page loads
-  document.addEventListener('DOMContentLoaded', function() {
+  (function () {
     var isDark = localStorage.getItem('docs-theme') === 'dark';
 
-    var btn = document.createElement('button');
-    btn.id = 'docs-theme-btn';
-    btn.title = '切換深色/淺色模式';
-    btn.setAttribute('aria-label', 'Toggle dark mode');
-    btn.textContent = isDark ? '☀️' : '🌙';
-    document.body.appendChild(btn);
-
-    btn.addEventListener('click', function() {
-      isDark = !isDark;
-      if (isDark) {
+    function applyTheme(dark) {
+      if (dark) {
         document.body.classList.add('dark-mode');
-        btn.textContent = '☀️';
-        localStorage.setItem('docs-theme', 'dark');
       } else {
         document.body.classList.remove('dark-mode');
-        btn.textContent = '🌙';
-        localStorage.setItem('docs-theme', 'light');
       }
-    });
-  });
+    }
+
+    function initBtn() {
+      var btn = document.getElementById('docs-theme-btn');
+      if (!btn) return;
+      btn.textContent = isDark ? '☀️' : '🌙';
+      applyTheme(isDark);
+      btn.addEventListener('click', function () {
+        isDark = !isDark;
+        applyTheme(isDark);
+        btn.textContent = isDark ? '☀️' : '🌙';
+        localStorage.setItem('docs-theme', isDark ? 'dark' : 'light');
+      });
+    }
+
+    // footer_custom.html renders the button at end of body,
+    // so use DOMContentLoaded to ensure it exists
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initBtn);
+    } else {
+      initBtn();
+    }
+  })();
 </script>
