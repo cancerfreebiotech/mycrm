@@ -948,7 +948,9 @@ SELECT cron.schedule(
 
 **`bot_sessions` 新增欄位**：`last_contact_id uuid references contacts(id)`
 
-每次成功存檔聯絡人（Bot 確認存檔）後，更新 `bot_sessions.last_contact_id`。
+- `bot_sessions` 以 `telegram_id` 為 unique key，**每個使用者各自獨立一筆**，`last_contact_id` 完全 per-user，不同使用者之間互不影響
+- 只有**這個使用者自己**按下「✅ 確認存檔」時，才更新自己的 `last_contact_id`
+- 其他使用者的存檔操作不影響此欄位
 
 **流程變更**：
 
