@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## v0.9 — 報表功能（待實作）
+
+### 變更項目
+- **新增報表管理頁 `/admin/reports`**（僅 super_admin）
+- **立即產生**：自由選取時間範圍，網頁呈現表格，可下載 Excel
+- **定時寄送**：pg_cron + Supabase Edge Function + Gmail API（OAuth）
+- **報表內容**：新增名片（Sheet 1）+ 互動紀錄（Sheet 2）
+- **Gmail OAuth 一次性設定**：super admin 在頁面授權，token 存 Supabase Vault
+- **排程規則**：可新增多條，支援每週/每月/自訂 cron，自由設定時間範圍與收件人
+- **新增資料表**：`report_schedules`、`gmail_oauth`
+- **新增環境變數**：`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`、`GMAIL_OAUTH_REDIRECT_URI`
+
+---
+
+
 ## v0.8 — 多語言支援 i18n（待實作）
 
 ### 變更項目

@@ -1260,3 +1260,175 @@ alter table users add column if not exists locale text not null default 'zh-TW';
 - [ ] **Task 41** `[修改]` — 更新 Dashboard Layout（Header 加語言切換 dropdown）
 - [ ] **Task 42** `[修改]` — 將所有頁面的 hardcode 文字替換為 i18n key（使用現有三份語言檔）
 - [ ] **Task 43** `[修改]` — 更新個人設定頁（語言選擇 dropdown）；DB Migration 加 `users.locale`
+
+---
+
+## 二十、v0.9 — 報表功能
+
+### 20.1 架構概覽
+
+```
+Super Admin 設定規則
+  → 儲存至 report_schedules 表
+  → pg_cron 依 cron_expression 定時觸發
+  → 呼叫 Supabase Edge Function: generate-report
+  → Edge Function 查詢資料 + 產生 Excel + Gmail API 寄出
+```
+
+立即產生（點按鈕）→ 呼叫 Next.js API route → 網頁直接呈現表格
+
+---
+
+### 20.2 資料表
+
+#### `report_schedules`
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | 主鍵 |
+| name | text (NOT NULL) | 規則名稱，如「每週業務報表」 |
+| frequency | text (NOT NULL) | `weekly` / `monthly` / `custom` |
+| cron_expression | text (NOT NULL) | cron 字串，如 `0 9 * * 1`（每週一早上9點） |
+| date_from_offset | int | 報表起始日回溯天數（相對於觸發時間） |
+| date_to_offset | int (default 0) | 報表結束日回溯天數（0 = 今天） |
+| recipients | uuid[] (NOT NULL) | 收件人 users.id 陣列 |
+| is_active | boolean (default true) | 是否啟用 |
+| created_by | uuid (FK → users.id) | 建立者 |
+| created_at | timestamptz (default now()) | 建立時間 |
+
+#### `gmail_oauth`（系統唯一一筆）
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | 主鍵 |
+| access_token | text | 加密儲存（Supabase Vault） |
+| refresh_token | text | 加密儲存（Supabase Vault） |
+| expires_at | timestamptz | access token 過期時間 |
+| gmail_address | text | 寄件 Gmail 地址 |
+| updated_at | timestamptz | 最後更新時間 |
+
+---
+
+### 20.3 報表內容
+
+時間範圍內的兩個區塊：
+
+**區塊 1：新增名片**
+- 欄位：姓名、公司、職稱、Email、電話、新增者、新增時間
+- 依新增時間降序排列
+
+**區塊 2：互動紀錄**
+- 欄位：類型（筆記/會議/郵件）、內容摘要（前100字）、聯絡人姓名、紀錄者、時間
+- 依時間降序排列
+
+---
+
+### 20.4 立即產生（網頁呈現）
+
+- 使用者自由選取開始日期和結束日期
+- 點「產生報表」後呼叫 `/api/reports/preview`
+- 在網頁以表格呈現兩個區塊
+- 頁面頂部顯示摘要：「共 X 筆新增名片、Y 筆互動紀錄（{開始日期} ~ {結束日期}）」
+- 提供「下載 Excel」按鈕，可將目前報表匯出
+
+---
+
+### 20.5 定時寄送（Excel email）
+
+**觸發流程**
+1. pg_cron 依 `cron_expression` 觸發
+2. 呼叫 Supabase Edge Function `generate-report`，傳入 `schedule_id`
+3. Edge Function：
+   - 查詢 `report_schedules` 取得規則
+   - 計算時間範圍（`now() - date_from_offset days` 到 `now() - date_to_offset days`）
+   - 查詢資料庫產生報表資料
+   - 用 `xlsx` 產生 Excel（兩個 sheet：新增名片、互動紀錄）
+   - 從 Supabase Vault 取得 Gmail OAuth token（若過期自動 refresh）
+   - 用 Gmail API 寄出，收件人為 `recipients` 陣列對應的 email
+   - 主旨：`[myCRM] {規則名稱} {開始日期}~{結束日期}`
+
+**Excel 格式**
+- Sheet 1「新增名片」：姓名、公司、職稱、Email、電話、新增者、新增時間
+- Sheet 2「互動紀錄」：類型、內容、聯絡人、紀錄者、時間
+
+---
+
+### 20.6 Gmail OAuth 設定（Super Admin 一次性設定）
+
+入口：`/admin/reports` 頁面頂部「Gmail 連結狀態」區塊
+
+**未連結狀態**
+- 顯示「尚未連結 Gmail 帳號」
+- 「連結 Gmail」按鈕 → 走 Google OAuth flow（scope：`gmail.send`）
+- 授權完成後 access token 和 refresh token 存入 Supabase Vault
+
+**已連結狀態**
+- 顯示已連結的 Gmail 地址
+- 「重新連結」按鈕（更換帳號或 token 失效時使用）
+
+**環境變數（新增）**
+```env
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GMAIL_OAUTH_REDIRECT_URI=https://{your-domain}/api/auth/gmail-callback
+```
+
+---
+
+### 20.7 `/admin/reports` 頁面（僅 super_admin）
+
+**頂部：Gmail 連結狀態區塊**
+
+**中間：立即產生區塊**
+- 開始日期、結束日期選擇器
+- 「產生報表」按鈕
+- 報表呈現區（表格）
+- 「下載 Excel」按鈕
+
+**下方：排程規則列表**
+- 每條規則顯示：名稱、頻率、時間範圍設定、收件人、啟用狀態
+- 「新增規則」按鈕
+- 新增/編輯規則 Modal：
+  - 規則名稱
+  - 頻率選擇：每週（選星期幾 + 時間）、每月（選幾號 + 時間）、自訂（輸入 cron 表達式）
+  - 時間範圍：開始回溯天數、結束回溯天數（例如：30天前到今天 = `date_from_offset=30, date_to_offset=0`）
+  - 收件人：從 users 多選（顯示 display_name + email）
+  - 啟用/停用
+
+---
+
+### 20.8 Migration SQL
+
+```sql
+-- 報表排程規則
+create table if not exists report_schedules (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  frequency text not null default 'weekly',
+  cron_expression text not null,
+  date_from_offset int not null default 7,
+  date_to_offset int not null default 0,
+  recipients uuid[] not null default '{}',
+  is_active boolean not null default true,
+  created_by uuid references users(id),
+  created_at timestamptz default now()
+);
+
+-- Gmail OAuth（系統唯一）
+create table if not exists gmail_oauth (
+  id uuid primary key default gen_random_uuid(),
+  gmail_address text,
+  expires_at timestamptz,
+  updated_at timestamptz default now()
+);
+-- access_token 和 refresh_token 存入 Supabase Vault，不存在資料表
+```
+
+---
+
+## 二十一、v0.9 開發任務清單
+
+- [ ] **Task 44** `[修改]` — 執行 Migration SQL（report_schedules、gmail_oauth 表）
+- [ ] **Task 45** `[新增]` — Gmail OAuth 設定流程（`/api/auth/gmail` 和 `/api/auth/gmail-callback` routes，token 存 Supabase Vault）
+- [ ] **Task 46** `[新增]` — `/api/reports/preview` route（查詢資料，回傳報表 JSON）
+- [ ] **Task 47** `[新增]` — Supabase Edge Function `generate-report`（查詢資料 + 產生 Excel + Gmail API 寄出）
+- [ ] **Task 48** `[修改]` — 設定 pg_cron，依 `report_schedules` 動態新增/刪除 cron job（觸發 Edge Function）
+- [ ] **Task 49** `[新增]` — 新增報表管理頁 `/admin/reports`（Gmail 狀態、立即產生、排程規則 CRUD）
