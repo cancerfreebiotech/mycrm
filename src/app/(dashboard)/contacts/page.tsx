@@ -102,6 +102,12 @@ export default function ContactsPage() {
             <Download size={14} /> CSV
           </button>
           <Link
+            href="/contacts/batch-upload"
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+          >
+            <Plus size={14} /> 批次上傳
+          </Link>
+          <Link
             href="/contacts/new"
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
