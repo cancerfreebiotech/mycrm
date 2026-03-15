@@ -1435,7 +1435,7 @@ create table if not exists gmail_oauth (
 
 ---
 
-## 二十二、v0.10 — 任務管理 + Teams 整合
+## 二十二、v1.0 — 任務管理 + Teams 整合
 
 ### 22.1 資料表
 
@@ -1622,7 +1622,7 @@ create table if not exists user_assistants (
 
 ---
 
-## 二十三、v0.10 開發任務清單
+## 二十三、v1.0 開發任務清單
 
 - [ ] **Task 50** `[修改]` — 執行 Migration SQL（tasks、task_assignees、user_assistants）
 - [ ] **Task 51** `[修改]` — 更新 Bot Webhook（`/work`、`/w`、`/tasks`、`/t` 指令，AI 解析人名和時間）

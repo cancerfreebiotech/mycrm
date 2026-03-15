@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v0.10 — 任務管理 + Teams 整合（待實作）
+## v1.0 — 任務管理 + Teams 整合（待實作）
 
 ### 變更項目
 - **Bot 新指令 `/work` / `/w`**：AI 解析自然語言，指派任務給多人或提醒自己，同時發 Telegram + Teams 通知
