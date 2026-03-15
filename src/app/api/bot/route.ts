@@ -252,7 +252,7 @@ async function handlePhoto(
     const contactPayload = { ...cardData, card_img_url: cardImgUrl }
     const { data: pending, error: pendingError } = await supabase
       .from('pending_contacts')
-      .insert({ data: contactPayload, created_by: user.id })
+      .insert({ data: contactPayload, created_by: user.id, storage_path: storagePath })
       .select('id')
       .single()
     if (pendingError || !pending) throw new Error('暫存失敗')
@@ -568,6 +568,14 @@ export async function POST(req: NextRequest) {
         // ── Cancel card ───────────────────────────────────────────────────────
         else if (data?.startsWith('cancel_')) {
           const pendingId = data.replace('cancel_', '')
+          const { data: pending } = await supabase
+            .from('pending_contacts')
+            .select('storage_path')
+            .eq('id', pendingId)
+            .single()
+          if (pending?.storage_path) {
+            await supabase.storage.from('cards').remove([pending.storage_path])
+          }
           await supabase.from('pending_contacts').delete().eq('id', pendingId)
           await answerCallbackQuery(callbackQueryId, '已取消')
           await editMessageReplyMarkup(message.chat.id, message.message_id)
