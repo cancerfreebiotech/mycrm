@@ -17,8 +17,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const body = await req.json()
-  const { error } = await service.from('report_schedules').update(body).eq('id', id)
+  const raw = await req.json()
+
+  // Allowlist updatable fields — prevent mass-assignment
+  const update: Record<string, unknown> = {}
+  if (raw.recipients !== undefined) update.recipients = raw.recipients
+  if (raw.cron_expr !== undefined) update.cron_expr = String(raw.cron_expr)
+  if (raw.is_active !== undefined) update.is_active = Boolean(raw.is_active)
+
+  const { error } = await service.from('report_schedules').update(update).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }

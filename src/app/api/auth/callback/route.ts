@@ -3,7 +3,7 @@ import { createServiceClient } from '@/lib/supabase'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const ALLOWED_DOMAIN = 'cancerfree.io'
+const ALLOWED_DOMAIN = process.env.ALLOWED_EMAIL_DOMAIN ?? 'cancerfree.io'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -49,7 +49,6 @@ export async function GET(request: NextRequest) {
       email,
       display_name: data.user.user_metadata?.full_name ?? data.user.user_metadata?.name ?? null,
       last_login_at: new Date().toISOString(),
-      provider_token: data.session?.provider_token ?? null,
     },
     { onConflict: 'email' }
   )

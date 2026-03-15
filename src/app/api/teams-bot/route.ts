@@ -9,13 +9,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 
-// Simple JWT verification stub — in production use botframework-connector's JwtTokenValidation
 async function verifyTeamsRequest(req: NextRequest): Promise<boolean> {
+  const appId = process.env.TEAMS_BOT_APP_ID
   const authHeader = req.headers.get('authorization') ?? ''
   if (!authHeader.startsWith('Bearer ')) return false
-  // TODO: Full JWT validation against Bot Framework JWKS
-  // For now accept any Bearer token (secure only in production with proper validation)
-  return true
+  // Verify the token audience matches our Bot App ID
+  // Full JWT JWKS validation via botframework-connector is recommended for production
+  // but requires the npm package; for now we verify the token is non-empty and
+  // the App ID env var is set (unauthenticated requests without a real token are blocked)
+  if (!appId) return false
+  const token = authHeader.slice(7)
+  if (!token || token.split('.').length !== 3) return false
+  // Decode payload (no signature check — add botframework-connector for full validation)
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString())
+    return payload.aud === appId || payload.appid === appId
+  } catch {
+    return false
+  }
 }
 
 export async function POST(req: NextRequest) {

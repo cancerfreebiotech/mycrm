@@ -30,15 +30,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const hasAccess = task.created_by === user.email! || !!assignee || !!asAssistant
   if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const body = await req.json()
+  const raw = await req.json()
 
-  // If marking done, record completed_by
-  if (body.status === 'done' && !body.completed_by) {
-    body.completed_by = user.email!
-    body.completed_at = new Date().toISOString()
+  // Allowlist updatable fields — prevent mass-assignment
+  const update: Record<string, unknown> = {}
+  if (raw.title !== undefined) update.title = String(raw.title)
+  if (raw.description !== undefined) update.description = raw.description ? String(raw.description) : null
+  if (raw.due_at !== undefined) update.due_at = raw.due_at ? String(raw.due_at) : null
+  if (raw.status !== undefined && ['pending', 'done', 'postponed', 'cancelled'].includes(raw.status)) {
+    update.status = raw.status
   }
 
-  const { error } = await service.from('tasks').update(body).eq('id', id)
+  // If marking done, record completed_by
+  if (update.status === 'done') {
+    update.completed_by = user.email!
+    update.completed_at = new Date().toISOString()
+  }
+
+  const { error } = await service.from('tasks').update(update).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }

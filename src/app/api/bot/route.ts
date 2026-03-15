@@ -744,6 +744,15 @@ async function handleText(
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  // Validate Telegram webhook secret token
+  const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET
+  if (webhookSecret) {
+    const incoming = req.headers.get('x-telegram-bot-api-secret-token') ?? ''
+    if (incoming !== webhookSecret) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+
   try {
     const body = await req.json()
     const supabase = createServiceClient()

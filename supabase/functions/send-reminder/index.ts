@@ -31,7 +31,20 @@ async function sendTelegram(chatId: number, text: string) {
   })
 }
 
-serve(async () => {
+serve(async (req) => {
+  // Verify caller — accept only requests with the anon key or a dedicated cron secret
+  const expectedKey = Deno.env.get('CRON_SECRET') ?? Deno.env.get('SUPABASE_ANON_KEY')
+  if (expectedKey) {
+    const auth = req.headers.get('authorization') ?? ''
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+    if (token !== expectedKey) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+  }
+
   try {
     const now = new Date().toISOString()
 
