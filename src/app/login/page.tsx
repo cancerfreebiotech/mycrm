@@ -26,7 +26,15 @@ function LoginContent() {
   const localeRef = useRef<HTMLDivElement>(null)
   const docsUrl = process.env.NEXT_PUBLIC_DOCS_URL ?? '/docs'
 
-  useEffect(() => { setMounted(true) }, [])
+  useEffect(() => {
+    setMounted(true)
+    // Read current locale from cookie
+    const cookie = document.cookie.split('; ').find(r => r.startsWith('MYCRM_LOCALE='))
+    const cookieLocale = cookie?.split('=')[1]
+    if (cookieLocale && (SUPPORTED_LOCALES as readonly string[]).includes(cookieLocale)) {
+      setCurrentLocale(cookieLocale as Locale)
+    }
+  }, [])
 
   // Close locale menu on outside click
   useEffect(() => {
