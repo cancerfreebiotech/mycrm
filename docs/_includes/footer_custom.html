@@ -1,1 +1,26 @@
 <button id="docs-theme-btn" title="切換深色/淺色模式" aria-label="Toggle dark mode">🌙</button>
+
+<script>
+  (function () {
+    var btn = document.getElementById('docs-theme-btn');
+    var isDark = localStorage.getItem('docs-theme') === 'dark';
+
+    if (isDark) {
+      document.body.classList.add('dark-mode');
+      btn.textContent = '☀️';
+    }
+
+    btn.addEventListener('click', function () {
+      isDark = !isDark;
+      if (isDark) {
+        document.body.classList.add('dark-mode');
+        btn.textContent = '☀️';
+        localStorage.setItem('docs-theme', 'dark');
+      } else {
+        document.body.classList.remove('dark-mode');
+        btn.textContent = '🌙';
+        localStorage.setItem('docs-theme', 'light');
+      }
+    });
+  })();
+</script>

@@ -71,38 +71,3 @@
     border-color: #30363d;
   }
 </style>
-
-<script>
-  (function () {
-    var isDark = localStorage.getItem('docs-theme') === 'dark';
-
-    function applyTheme(dark) {
-      if (dark) {
-        document.body.classList.add('dark-mode');
-      } else {
-        document.body.classList.remove('dark-mode');
-      }
-    }
-
-    function initBtn() {
-      var btn = document.getElementById('docs-theme-btn');
-      if (!btn) return;
-      btn.textContent = isDark ? '☀️' : '🌙';
-      applyTheme(isDark);
-      btn.addEventListener('click', function () {
-        isDark = !isDark;
-        applyTheme(isDark);
-        btn.textContent = isDark ? '☀️' : '🌙';
-        localStorage.setItem('docs-theme', isDark ? 'dark' : 'light');
-      });
-    }
-
-    // footer_custom.html renders the button at end of body,
-    // so use DOMContentLoaded to ensure it exists
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initBtn);
-    } else {
-      initBtn();
-    }
-  })();
-</script>
