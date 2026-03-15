@@ -3,10 +3,20 @@ import { createServiceClient } from '@/lib/supabase'
 
 export interface CardData {
   name: string
+  name_en: string
+  name_local: string
   company: string
+  company_en: string
+  company_local: string
   job_title: string
   email: string
+  second_email: string
   phone: string
+  second_phone: string
+  address: string
+  website: string
+  linkedin_url: string
+  facebook_url: string
 }
 
 interface ModelConfig {
@@ -14,8 +24,9 @@ interface ModelConfig {
   apiKey: string
 }
 
-const SYSTEM_PROMPT =
-  '你是一個專業名片辨識助手。名片可能為中文、英文或日文，請辨識後以原文回傳。從圖中提取：姓名、公司、職稱、Email、電話，回傳純 JSON，不要有任何其他文字。格式：{"name":"","company":"","job_title":"","email":"","phone":""}'
+const SYSTEM_PROMPT = `你是一個專業名片辨識助手。名片可能為中文、英文或日文，請辨識後以原文回傳各欄位。
+從圖中提取以下資訊，回傳純 JSON，不要有任何其他文字：
+{"name":"","name_en":"","name_local":"","company":"","company_en":"","company_local":"","job_title":"","email":"","second_email":"","phone":"","second_phone":"","address":"","website":"","linkedin_url":"","facebook_url":""}`
 
 // Resolve ai_model_id (UUID) → { modelId, apiKey }
 // Falls back to env GEMINI_API_KEY + default model string if aiModelId is a plain model string or null
