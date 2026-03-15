@@ -166,10 +166,13 @@ async function handleSearch(chatId: number, keyword: string) {
       `📧 ${c.email || '—'}\n` +
       `📞 ${c.phone || '—'}`
 
-    const buttons = [[
-      { text: '✉️ 發信', callback_data: `email_contact_${c.id}` },
-      { text: '📝 筆記', callback_data: `note_contact_${c.id}` },
-    ]]
+    const buttons = [
+      [
+        { text: '✉️ 發信', callback_data: `email_contact_${c.id}` },
+        { text: '📝 筆記', callback_data: `note_contact_${c.id}` },
+        { text: '📋 互動紀錄', callback_data: `log_contact_${c.id}_0` },
+      ],
+    ]
 
     await sendMessage(chatId, info, { reply_markup: { inline_keyboard: buttons } })
 
@@ -850,6 +853,47 @@ export async function POST(req: NextRequest) {
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)
             throw new Error(`發送失敗：${msg}`)
+          }
+        }
+
+        // ── /search: load interaction logs (on demand) ───────────────────────
+        else if (data?.startsWith('log_contact_')) {
+          // format: log_contact_{contactId}_{offset}
+          const parts = data.split('_')
+          const offset = parseInt(parts[parts.length - 1], 10) || 0
+          const contactId = parts.slice(2, parts.length - 1).join('_')
+
+          const { data: contact } = await supabase
+            .from('contacts').select('name').eq('id', contactId).single()
+          const { data: logs } = await supabase
+            .from('interaction_logs')
+            .select('type, content, created_at')
+            .eq('contact_id', contactId)
+            .order('created_at', { ascending: false })
+            .range(offset, offset + 4)
+
+          await answerCallbackQuery(callbackQueryId)
+
+          if (!logs || logs.length === 0) {
+            await sendMessage(from.id, `📋 ${contact?.name ?? ''} 無互動紀錄`)
+          } else {
+            const TYPE_LABEL: Record<string, string> = { note: '筆記', meeting: '會議', email: '郵件', system: '系統' }
+            const lines = logs.map((l) => {
+              const label = TYPE_LABEL[l.type] ?? l.type
+              const date = new Date(l.created_at).toLocaleDateString('zh-TW')
+              const preview = (l.content ?? '').replace(/<[^>]+>/g, '').slice(0, 80)
+              return `[${label}] ${date}\n${preview}`
+            }).join('\n\n')
+
+            const hasMore = logs.length === 5
+            const buttons = hasMore
+              ? [[{ text: '載入更多', callback_data: `log_contact_${contactId}_${offset + 5}` }]]
+              : []
+
+            await sendMessage(from.id,
+              `📋 <b>${contact?.name ?? ''} 互動紀錄</b>（第 ${offset + 1}–${offset + logs.length} 筆）\n\n${lines}`,
+              buttons.length > 0 ? { reply_markup: { inline_keyboard: buttons } } : {}
+            )
           }
         }
 
