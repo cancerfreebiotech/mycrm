@@ -25,25 +25,33 @@ const TYPE_LABEL: Record<string, { label: string; color: string; icon: React.Ele
   email:   { label: '郵件',   color: 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300', icon: Mail },
 }
 
+const PAGE_SIZE = 20
+
 export default function NotesPage() {
   const supabase = createBrowserSupabaseClient()
 
   const [logs, setLogs] = useState<NoteRow[]>([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [keyword, setKeyword] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [typeFilter, setTypeFilter] = useState<LogType>('all')
+  const [page, setPage] = useState(1)
 
-  useEffect(() => { fetchLogs() }, [keyword, dateFrom, dateTo, typeFilter])
+  useEffect(() => { setPage(1) }, [keyword, dateFrom, dateTo, typeFilter])
+  useEffect(() => { fetchLogs() }, [keyword, dateFrom, dateTo, typeFilter, page])
 
   async function fetchLogs() {
     setLoading(true)
+    const from = (page - 1) * PAGE_SIZE
+    const to = from + PAGE_SIZE - 1
+
     let query = supabase
       .from('interaction_logs')
-      .select('id, type, content, email_subject, meeting_date, created_at, contact_id, contacts(name), users(display_name, email)')
+      .select('id, type, content, email_subject, meeting_date, created_at, contact_id, contacts(name), users(display_name, email)', { count: 'exact' })
       .order('created_at', { ascending: false })
-      .limit(100)
+      .range(from, to)
 
     if (typeFilter !== 'all') query = query.eq('type', typeFilter)
     if (dateFrom) query = query.gte('created_at', dateFrom)
@@ -52,8 +60,9 @@ export default function NotesPage() {
       query = query.or(`content.ilike.%${keyword}%,email_subject.ilike.%${keyword}%`)
     }
 
-    const { data } = await query
+    const { data, count } = await query
     setLogs((data ?? []) as NoteRow[])
+    setTotal(count ?? 0)
     setLoading(false)
   }
 
@@ -126,6 +135,14 @@ export default function NotesPage() {
         </div>
       </div>
 
+      {/* Results header */}
+      {!loading && (
+        <div className="flex items-center justify-between mb-2 text-sm text-gray-500 dark:text-gray-400">
+          <span>共 {total} 筆</span>
+          {total > PAGE_SIZE && <span>第 {page}/{Math.ceil(total / PAGE_SIZE)} 頁</span>}
+        </div>
+      )}
+
       {/* Results */}
       <div className="space-y-2">
         {loading ? (
@@ -186,6 +203,37 @@ export default function NotesPage() {
           })
         )}
       </div>
+
+      {/* Pagination */}
+      {Math.ceil(total / PAGE_SIZE) > 1 && (
+        <div className="flex items-center justify-center gap-1 mt-4">
+          <button onClick={() => setPage(1)} disabled={page === 1}
+            className="px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40">«</button>
+          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
+            className="px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40">‹</button>
+          {Array.from({ length: Math.ceil(total / PAGE_SIZE) }, (_, i) => i + 1)
+            .filter((p) => p === 1 || p === Math.ceil(total / PAGE_SIZE) || Math.abs(p - page) <= 2)
+            .reduce<(number | '…')[]>((acc, p, idx, arr) => {
+              if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('…')
+              acc.push(p)
+              return acc
+            }, [])
+            .map((p, i) =>
+              p === '…' ? (
+                <span key={`e-${i}`} className="px-2 py-1 text-sm text-gray-400">…</span>
+              ) : (
+                <button key={p} onClick={() => setPage(p as number)}
+                  className={`px-3 py-1 text-sm rounded border transition-colors ${page === p ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
+                  {p}
+                </button>
+              )
+            )}
+          <button onClick={() => setPage((p) => Math.min(Math.ceil(total / PAGE_SIZE), p + 1))} disabled={page === Math.ceil(total / PAGE_SIZE)}
+            className="px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40">›</button>
+          <button onClick={() => setPage(Math.ceil(total / PAGE_SIZE))} disabled={page === Math.ceil(total / PAGE_SIZE)}
+            className="px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40">»</button>
+        </div>
+      )}
     </div>
   )
 }
