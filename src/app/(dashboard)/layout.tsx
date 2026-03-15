@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon, Globe, BarChart2, ClipboardList } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useTranslations } from 'next-intl'
@@ -86,7 +86,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const isSuperAdmin = profile?.role === 'super_admin'
 
-  const navItems = [
+  const docsUrl = process.env.NEXT_PUBLIC_DOCS_URL ?? '/docs'
+  const navItems: { href: string; label: string; icon: React.ElementType; external?: boolean }[] = [
     { href: '/', label: t('dashboard'), icon: LayoutDashboard },
     { href: '/contacts', label: t('contacts'), icon: Users },
     { href: '/notes', label: t('notes'), icon: Search },
@@ -100,7 +101,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     ] : []),
     { href: '/admin/templates', label: t('emailTemplates'), icon: Mail },
     { href: '/settings', label: t('settings'), icon: Settings },
-    { href: '/docs', label: t('docs'), icon: BookOpen },
+    { href: docsUrl, label: t('docs'), icon: BookOpen, external: docsUrl.startsWith('http') },
   ]
 
   return (
@@ -111,18 +112,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <span className="text-lg font-bold text-gray-900 dark:text-gray-100">myCRM</span>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {navItems.map(({ href, label, icon: Icon }) => {
-            const active = href === '/' ? pathname === '/' : pathname.startsWith(href)
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  active
-                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100'
-                }`}
-              >
+          {navItems.map(({ href, label, icon: Icon, external }) => {
+            const active = !external && (href === '/' ? pathname === '/' : pathname.startsWith(href))
+            const cls = `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              active
+                ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100'
+            }`
+            return external ? (
+              <a key={href} href={href} target="_blank" rel="noopener noreferrer" className={cls}>
+                <Icon size={18} />
+                {label}
+              </a>
+            ) : (
+              <Link key={href} href={href} className={cls}>
                 <Icon size={18} />
                 {label}
               </Link>
