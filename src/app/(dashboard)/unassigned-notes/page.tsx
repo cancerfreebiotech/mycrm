@@ -27,25 +27,33 @@ const TYPE_COLOR: Record<string, string> = {
   email: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400',
 }
 
+const PAGE_SIZE = 20
+
 export default function UnassignedNotesPage() {
   const supabase = createBrowserSupabaseClient()
   const [notes, setNotes] = useState<Note[]>([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
   const [assigningNote, setAssigningNote] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<ContactOption[]>([])
   const [searching, setSearching] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  useEffect(() => { loadNotes() }, [])
+  useEffect(() => { loadNotes() }, [page])
 
   async function loadNotes() {
     setLoading(true)
-    const { data } = await supabase
+    const from = (page - 1) * PAGE_SIZE
+    const to = from + PAGE_SIZE - 1
+
+    const { data, count } = await supabase
       .from('interaction_logs')
-      .select('id, content, type, meeting_date, created_at, created_by')
+      .select('id, content, type, meeting_date, created_at, created_by', { count: 'exact' })
       .is('contact_id', null)
       .order('created_at', { ascending: false })
+      .range(from, to)
 
     if (!data) { setLoading(false); return }
 
@@ -64,6 +72,7 @@ export default function UnassignedNotesPage() {
       created_at: n.created_at,
       creator: n.created_by ? (userMap[n.created_by] ?? null) : null,
     })))
+    setTotal(count ?? 0)
     setLoading(false)
   }
 
@@ -83,14 +92,17 @@ export default function UnassignedNotesPage() {
   async function assignContact(noteId: string, contactId: string) {
     await supabase.from('interaction_logs').update({ contact_id: contactId }).eq('id', noteId)
     setAssigningNote(null); setSearchQuery(''); setSearchResults([])
-    loadNotes()
+    // If last item on page, go back one page
+    if (notes.length === 1 && page > 1) setPage((p) => p - 1)
+    else loadNotes()
   }
 
   async function deleteNote(noteId: string) {
     setDeletingId(noteId)
     await supabase.from('interaction_logs').delete().eq('id', noteId)
-    setNotes((prev) => prev.filter((n) => n.id !== noteId))
     setDeletingId(null)
+    if (notes.length === 1 && page > 1) setPage((p) => p - 1)
+    else loadNotes()
   }
 
   return (
@@ -100,12 +112,12 @@ export default function UnassignedNotesPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">未歸類筆記</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">尚未指定聯絡人的互動紀錄</p>
         </div>
-        <span className="text-sm text-gray-500 dark:text-gray-400">共 {notes.length} 筆</span>
+        <span className="text-sm text-gray-500 dark:text-gray-400">共 {total} 筆</span>
       </div>
 
       {loading ? (
         <p className="text-sm text-gray-400">載入中...</p>
-      ) : notes.length === 0 ? (
+      ) : total === 0 ? (
         <div className="text-center py-16 text-gray-400 dark:text-gray-500">
           <p className="text-lg mb-1">🎉 沒有未歸類筆記</p>
           <p className="text-sm">所有筆記都已歸類到聯絡人</p>
@@ -148,6 +160,37 @@ export default function UnassignedNotesPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {Math.ceil(total / PAGE_SIZE) > 1 && (
+        <div className="flex items-center justify-center gap-1 mt-4">
+          <button onClick={() => setPage(1)} disabled={page === 1}
+            className="px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40">«</button>
+          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
+            className="px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40">‹</button>
+          {Array.from({ length: Math.ceil(total / PAGE_SIZE) }, (_, i) => i + 1)
+            .filter((p) => p === 1 || p === Math.ceil(total / PAGE_SIZE) || Math.abs(p - page) <= 2)
+            .reduce<(number | '…')[]>((acc, p, idx, arr) => {
+              if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('…')
+              acc.push(p)
+              return acc
+            }, [])
+            .map((p, i) =>
+              p === '…' ? (
+                <span key={`e-${i}`} className="px-2 py-1 text-sm text-gray-400">…</span>
+              ) : (
+                <button key={p} onClick={() => setPage(p as number)}
+                  className={`px-3 py-1 text-sm rounded border transition-colors ${page === p ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
+                  {p}
+                </button>
+              )
+            )}
+          <button onClick={() => setPage((p) => Math.min(Math.ceil(total / PAGE_SIZE), p + 1))} disabled={page === Math.ceil(total / PAGE_SIZE)}
+            className="px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40">›</button>
+          <button onClick={() => setPage(Math.ceil(total / PAGE_SIZE))} disabled={page === Math.ceil(total / PAGE_SIZE)}
+            className="px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40">»</button>
         </div>
       )}
 
