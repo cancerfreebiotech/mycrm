@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { sendMail } from '@/lib/graph'
@@ -73,6 +73,10 @@ export default function ContactDetailPage() {
   const [contactCards, setContactCards] = useState<ContactCard[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [logs, setLogs] = useState<Log[]>([])
+  const [hasMoreLogs, setHasMoreLogs] = useState(false)
+  const [loadingMoreLogs, setLoadingMoreLogs] = useState(false)
+  const logsOffsetRef = useRef(0)
+  const sentinelRef = useRef<HTMLDivElement>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [aiModelId, setAiModelId] = useState<string | null>(null)
   const [lightbox, setLightbox] = useState<string | null>(null)
@@ -105,6 +109,8 @@ export default function ContactDetailPage() {
   const [mailSending, setMailSending] = useState(false)
   const [mailError, setMailError] = useState<string | null>(null)
 
+  const LOG_PAGE = 20
+
   useEffect(() => { load() }, [id])
 
   async function load() {
@@ -115,15 +121,47 @@ export default function ContactDetailPage() {
     }
     const [{ data: c }, { data: l }, { data: tags }, { data: cards }] = await Promise.all([
       supabase.from('contacts').select('*, users(display_name), contact_tags(tags(id, name))').eq('id', id).single(),
-      supabase.from('interaction_logs').select('id, content, type, meeting_date, created_at, users(display_name)').eq('contact_id', id).order('created_at', { ascending: false }),
+      supabase.from('interaction_logs').select('id, content, type, meeting_date, created_at, users(display_name)').eq('contact_id', id).order('created_at', { ascending: false }).range(0, LOG_PAGE - 1),
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('contact_cards').select('id, url, label, created_at').eq('contact_id', id).order('created_at', { ascending: true }),
     ])
     setContact(c as unknown as Contact)
-    setLogs((l as unknown as Log[]) ?? [])
+    const initialLogs = (l as unknown as Log[]) ?? []
+    setLogs(initialLogs)
+    logsOffsetRef.current = initialLogs.length
+    setHasMoreLogs(initialLogs.length === LOG_PAGE)
     setAllTags(tags ?? [])
     setContactCards(cards ?? [])
   }
+
+  const loadMoreLogs = useCallback(async () => {
+    if (loadingMoreLogs || !hasMoreLogs) return
+    setLoadingMoreLogs(true)
+    const from = logsOffsetRef.current
+    const { data } = await supabase
+      .from('interaction_logs')
+      .select('id, content, type, meeting_date, created_at, users(display_name)')
+      .eq('contact_id', id)
+      .order('created_at', { ascending: false })
+      .range(from, from + LOG_PAGE - 1)
+    const more = (data as unknown as Log[]) ?? []
+    setLogs((prev) => [...prev, ...more])
+    logsOffsetRef.current = from + more.length
+    setHasMoreLogs(more.length === LOG_PAGE)
+    setLoadingMoreLogs(false)
+  }, [loadingMoreLogs, hasMoreLogs, id])
+
+  // IntersectionObserver for infinite scroll sentinel
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) loadMoreLogs() },
+      { threshold: 0.1 }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [loadMoreLogs])
 
   // ── Edit ────────────────────────────────────────────────────────────────────
 
@@ -245,7 +283,10 @@ export default function ContactDetailPage() {
     const { data } = await supabase.from('interaction_logs')
       .insert({ contact_id: id, content: logContent.trim(), type: logType, meeting_date: logType === 'meeting' && logDate ? logDate : null, created_by: currentUserId })
       .select('id, content, type, meeting_date, created_at, users(display_name)').single()
-    if (data) setLogs((prev) => [data as unknown as Log, ...prev])
+    if (data) {
+      setLogs((prev) => [data as unknown as Log, ...prev])
+      logsOffsetRef.current += 1
+    }
     setLogContent(''); setLogDate(''); setAddingLog(false)
   }
 
@@ -471,6 +512,16 @@ export default function ContactDetailPage() {
               </li>
             ))}
           </ol>
+        )}
+        {/* Infinite scroll sentinel */}
+        {hasMoreLogs && (
+          <div ref={sentinelRef} className="pt-4 text-center">
+            {loadingMoreLogs && (
+              <span className="inline-flex items-center gap-1 text-xs text-gray-400">
+                <Loader2 size={12} className="animate-spin" /> 載入更多...
+              </span>
+            )}
+          </div>
         )}
       </div>
 
