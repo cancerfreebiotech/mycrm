@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## v0.8 — 多語言支援 i18n（待實作）
+
+### 變更項目
+- **新增 `next-intl` 套件**：支援繁體中文、English、日本語
+- **語言檔**：`src/messages/zh-TW.json`、`en.json`、`ja.json`，涵蓋所有 UI 文字
+- **語言切換 UI**：Header 右上角加 `[🌐]` dropdown
+- **語言偏好儲存**：`users.locale` 欄位 + localStorage
+- **預設語言**：瀏覽器自動偵測，fallback 繁體中文
+- **所有頁面 hardcode 文字替換為 i18n key**
+
+---
+
+
 ## v0.7.1 — Bot 搜尋強化 + 網頁分頁（待實作）
 
 ### 變更項目

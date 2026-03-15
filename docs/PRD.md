@@ -1201,3 +1201,62 @@ alter table bot_sessions add column if not exists last_contact_id uuid reference
 - [ ] **Task 37** `[修改]` — 更新筆記搜尋 `/notes`（分頁，每頁 20 筆）
 - [ ] **Task 38** `[修改]` — 更新未歸類筆記 `/unassigned-notes`（分頁，每頁 20 筆）
 - [ ] **Task 39** `[修改]` — 更新聯絡人詳情互動紀錄（無限捲動，每次 20 筆）
+
+---
+
+## 十九、v0.8 — 多語言支援（i18n）
+
+### 19.1 技術方案
+
+- 套件：`next-intl`
+- 語言檔位置：`src/messages/`
+- 支援語言：
+  - `zh-TW`：繁體中文（預設）
+  - `en`：English
+  - `ja`：日本語
+
+### 19.2 語言檔結構
+
+```
+src/messages/
+  zh-TW.json
+  en.json
+  ja.json
+```
+
+所有 UI 文字必須透過語言檔 key 取得，禁止在元件內 hardcode 中文、英文或日文字串。
+
+### 19.3 語言偏好
+
+儲存位置（兩處都存，優先順序由高到低）：
+1. `users.locale` 欄位（登入後從 DB 載入）
+2. `localStorage`（未登入時記住選擇）
+3. 瀏覽器語言自動偵測
+4. 預設：`zh-TW`
+
+`users` 表新增欄位：
+```sql
+alter table users add column if not exists locale text not null default 'zh-TW';
+```
+
+### 19.4 語言切換 UI
+
+位置：Dashboard Header 右上角，月亮 / 太陽圖示旁邊
+
+```
+[🌐 ZH]  [🌙]  王小明  登出
+```
+
+點擊展開 dropdown，選項：
+- 繁體中文
+- English
+- 日本語
+
+切換後即時更新畫面，並儲存至 `users.locale`。
+
+### 19.5 開發任務
+
+- [ ] **Task 40** `[新增]` — 安裝 `next-intl`，設定 i18n routing，建立語言檔載入機制
+- [ ] **Task 41** `[修改]` — 更新 Dashboard Layout（Header 加語言切換 dropdown）
+- [ ] **Task 42** `[修改]` — 將所有頁面的 hardcode 文字替換為 i18n key（使用現有三份語言檔）
+- [ ] **Task 43** `[修改]` — 更新個人設定頁（語言選擇 dropdown）；DB Migration 加 `users.locale`
