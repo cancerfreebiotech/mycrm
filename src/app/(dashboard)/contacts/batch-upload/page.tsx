@@ -94,8 +94,8 @@ export default function BatchUploadPage() {
       setRows((prev) => prev.map((r, i) => i === rowIdx ? { ...r, status: 'processing' } : r))
 
       try {
-        // Convert file to base64
-        const base64 = await fileToBase64(rows[rowIdx].file)
+        // Compress image before upload (max 1024px, JPEG 85%)
+        const base64 = await compressImage(rows[rowIdx].file)
 
         // Upload image to storage
         const filename = `cards/batch_${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`
@@ -403,14 +403,32 @@ export default function BatchUploadPage() {
   )
 }
 
-function fileToBase64(file: File): Promise<string> {
+// Compress image client-side (matches server-side processCardImage: 1024px, JPEG 85%)
+function compressImage(file: File, maxSide = 1024, quality = 0.85): Promise<string> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string
-      resolve(dataUrl.split(',')[1])
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      let { width, height } = img
+      if (width > maxSide || height > maxSide) {
+        if (width >= height) {
+          height = Math.round((height * maxSide) / width)
+          width = maxSide
+        } else {
+          width = Math.round((width * maxSide) / height)
+          height = maxSide
+        }
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { reject(new Error('Canvas not supported')); return }
+      ctx.drawImage(img, 0, 0, width, height)
+      resolve(canvas.toDataURL('image/jpeg', quality).split(',')[1])
     }
-    reader.onerror = reject
-    reader.readAsDataURL(file)
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image load failed')) }
+    img.src = url
   })
 }
