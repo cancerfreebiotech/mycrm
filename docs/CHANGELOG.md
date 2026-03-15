@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## v0.7 — 聯絡人擴充 + 批次上傳 + 合併（待實作）
+
+### 變更項目
+- **Bot：連續傳圖保護**：同一使用者超過 5 張待確認時，拒絕新照片並提示先處理
+- **Bot：`/note`、`/email` 預設上一個聯絡人**：不帶關鍵字時提示「要針對上一位 XXX 嗎？」，`bot_sessions` 新增 `last_contact_id`
+- **`contacts` 新增 9 個欄位**：`name_en`、`name_local`、`company_en`、`company_local`、`address`、`website`、`notes`、`second_email`、`second_phone`
+- **新增 `contact_cards` 子表**：一個聯絡人可掛多張名片（正反面 + label），`contacts` 移除 `card_img_url`、`card_img_back_url`
+- **名片與主資料脫鉤**：聯絡人主表欄位由使用者手動維護，名片只作附件參考
+- **Gemini OCR Prompt 更新**：辨識所有新欄位，直接填入對應欄位
+- **批次圖檔上傳 `/contacts/batch-upload`**：最多 50 張，並行（同時 5 張）+ 進度條 + 批次預覽表格 + 批次內部重複偵測 + 一鍵存檔
+- **聯絡人合併功能**：整筆選擇保留，來源的 contact_cards、interaction_logs、contact_tags 全部合併，記錄合併者，新增 type=`system` 的系統日誌
+- **`interaction_logs.type` 新增 `system`**：系統自動紀錄，顯示系統圖示而非建立者
+
+---
+
+
 ## v0.6.1 — 主題修正 + 孤兒圖片清理（已完成 2026-03-15）
 
 ### 變更項目

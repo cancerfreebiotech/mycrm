@@ -930,3 +930,193 @@ SELECT cron.schedule(
 - [x] **Task 31** `[修正]` — `body font-family` 改用 Geist CSS variable；修正 docs prose dark class 順序
 - [x] **Task 32** `[新增]` — `pending_contacts` 加 `storage_path` 欄位，取消時即時刪除 Storage 圖檔（A1）
 - [x] **Task 33** `[新增]` — 啟用 pg_cron，建立每日孤兒圖清理排程（C）
+
+---
+
+## 十五、v0.7 新增功能規格
+
+### 15.1 Bot：連續傳圖保護
+
+- 每次成功上傳名片（壓縮並送出辨識）後，記錄到 `pending_contacts` 表（已存在）
+- Bot 收到新照片前，先查詢該使用者的 pending 數量
+- 若已有 **5 筆或以上**待確認，回覆：「⚠️ 你目前有 5 張名片待確認，請先處理後再傳新的」，不繼續處理
+- 第 1–4 張正常處理
+
+---
+
+### 15.2 Bot：`/note`、`/email` 預設上一個聯絡人
+
+**`bot_sessions` 新增欄位**：`last_contact_id uuid references contacts(id)`
+
+每次成功存檔聯絡人（Bot 確認存檔）後，更新 `bot_sessions.last_contact_id`。
+
+**流程變更**：
+
+`/note` 或 `/email` 不帶關鍵字時：
+1. 查詢 `bot_sessions.last_contact_id`
+2. 若有上一個聯絡人，回覆：
+   ```
+   要針對上一位聯絡人嗎？
+   👤 王小明（ABC 公司）
+   ```
+   附按鈕：`[✅ 是，就是他]` `[🔍 搜尋其他人]`
+3. 若沒有上一個聯絡人，直接問「請輸入聯絡人姓名或公司關鍵字：」
+
+---
+
+### 15.3 聯絡人欄位擴充
+
+#### `contacts` 表新增欄位
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| name_en | text (nullable) | 英文名 |
+| name_local | text (nullable) | 本地語言名（如日文） |
+| company_en | text (nullable) | 公司英文名 |
+| company_local | text (nullable) | 公司本地語言名 |
+| address | text (nullable) | 地址 |
+| website | text (nullable) | 官網 |
+| notes | text (nullable) | 備註（自由填寫） |
+| second_email | text (nullable) | 第二 Email |
+| second_phone | text (nullable) | 第二電話 |
+
+#### `contacts` 表移除欄位
+- `card_img_url` — 移至 `contact_cards` 子表
+- `card_img_back_url` — 移至 `contact_cards` 子表
+
+#### 新增 `contact_cards` 子表
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | 主鍵 |
+| contact_id | uuid (FK → contacts.id, ON DELETE CASCADE) | 所屬聯絡人 |
+| card_img_url | text | 正面名片圖片 URL |
+| card_img_back_url | text (nullable) | 反面名片圖片 URL |
+| label | text (nullable) | 標籤，如「現職」、「前職 ABC」 |
+| created_at | timestamptz (default now()) | 建立時間 |
+
+> 聯絡人主表欄位（公司、職稱等）與名片脫鉤，使用者手動維護「目前的」資料。名片只作為附件參考。
+
+#### Gemini OCR Prompt 更新
+
+System Prompt 更新為辨識所有新欄位，回傳 JSON：
+```
+你是一個專業名片辨識助手。名片可能為中文、英文或日文，請辨識後以原文回傳各欄位。
+從圖中提取以下資訊，回傳純 JSON，不要有任何其他文字：
+{
+  "name": "",           // 主要姓名
+  "name_en": "",        // 英文名（若有）
+  "name_local": "",     // 本地語言名，如日文（若有）
+  "company": "",        // 主要公司名
+  "company_en": "",     // 公司英文名（若有）
+  "company_local": "",  // 公司本地語言名（若有）
+  "job_title": "",      // 職稱
+  "email": "",          // 主要 Email
+  "second_email": "",   // 第二 Email（若有）
+  "phone": "",          // 主要電話
+  "second_phone": "",   // 第二電話（若有）
+  "address": "",        // 地址（若有）
+  "website": ""         // 官網（若有）
+}
+```
+
+---
+
+### 15.4 批次圖檔上傳（網頁端）
+
+#### 入口
+- 聯絡人列表頁 `/contacts` 新增「批次上傳」按鈕
+- 開啟批次上傳頁面 `/contacts/batch-upload`
+
+#### 上傳流程
+1. 使用者選擇最多 50 張圖片（支援拖拉放）
+2. 前端顯示所有縮圖預覽
+3. 點「開始辨識」後：
+   - 並行處理，同時最多 5 張，其他排隊
+   - 頁面顯示整體進度條（第 x / 50 張）
+   - 每張完成後即時更新狀態（✅ 完成 / ⚠️ 低信心度 / ❌ 失敗）
+4. 全部完成後進入「批次預覽確認」
+
+#### 批次預覽確認表格
+- 每行一張名片，欄位：縮圖、姓名、公司、職稱、Email、電話、狀態
+- 低信心度（OCR 結果有空白關鍵欄位）標黃色警示
+- 重複偵測：
+  - 與資料庫比對（email 完全相符 / 姓名相似度 >= 0.6）
+  - 批次內部互相比對（同一批次內有相似的）
+  - 重複者標橘色，顯示「⚠️ 疑似與第 X 筆重複」或「⚠️ 資料庫已有相似聯絡人」
+- 每行可點擊展開編輯所有欄位
+- 勾選框：預設全選，可取消勾選不想存的
+- 底部按鈕：「存檔勾選的（X 筆）」一鍵存入 `contacts`
+
+#### 信心度判斷規則
+- 以下欄位若全部為空：`name`、`email`、`phone` → 標為低信心度
+
+---
+
+### 15.5 聯絡人合併
+
+#### 入口
+- 聯絡人詳情頁 `/contacts/[id]` 新增「合併聯絡人」按鈕（所有人可用）
+
+#### 合併流程
+1. 點擊後開啟搜尋 Modal，搜尋要被合併的聯絡人（來源）
+2. 顯示確認畫面：
+   - 左欄：當前聯絡人（保留）的主要資料
+   - 右欄：來源聯絡人的主要資料
+   - 說明：「將保留左側聯絡人的所有欄位資料，來源的名片、互動紀錄、Tag 將全部合併過來」
+3. 使用者確認後執行合併：
+   - `contact_cards`：來源的全部移到保留的聯絡人
+   - `interaction_logs`：來源的全部移到保留的聯絡人
+   - `contact_tags`：合併（去重複）
+   - 自動新增一筆 `interaction_log`：
+     - type = `system`
+     - content = `合併聯絡人：{來源姓名}（{來源公司}）`
+     - `created_by` = 執行合併的使用者 id
+   - 刪除來源聯絡人
+
+#### `interaction_logs.type` 新增值
+- `system`：系統自動產生的紀錄（合併、名片新增等），不顯示建立者，改顯示系統圖示
+
+#### Migration SQL 補充
+```sql
+-- contacts 新增欄位
+alter table contacts add column if not exists name_en text;
+alter table contacts add column if not exists name_local text;
+alter table contacts add column if not exists company_en text;
+alter table contacts add column if not exists company_local text;
+alter table contacts add column if not exists address text;
+alter table contacts add column if not exists website text;
+alter table contacts add column if not exists notes text;
+alter table contacts add column if not exists second_email text;
+alter table contacts add column if not exists second_phone text;
+
+-- contact_cards 子表
+create table if not exists contact_cards (
+  id uuid primary key default gen_random_uuid(),
+  contact_id uuid references contacts(id) on delete cascade,
+  card_img_url text,
+  card_img_back_url text,
+  label text,
+  created_at timestamptz default now()
+);
+
+-- 遷移現有名片資料到 contact_cards
+insert into contact_cards (contact_id, card_img_url, card_img_back_url, label)
+select id, card_img_url, card_img_back_url, '名片'
+from contacts
+where card_img_url is not null
+on conflict do nothing;
+
+-- bot_sessions 新增 last_contact_id
+alter table bot_sessions add column if not exists last_contact_id uuid references contacts(id);
+```
+
+---
+
+## 十六、v0.7 開發任務清單
+
+- [ ] **Task 28** `[修改]` — 執行 Migration SQL（contacts 新增欄位、contact_cards 表、bot_sessions.last_contact_id、遷移現有名片資料）
+- [ ] **Task 29** `[修改]` — 更新 `src/lib/gemini.ts`（OCR prompt 更新，辨識所有新欄位）
+- [ ] **Task 30** `[修改]` — 更新 Bot Webhook（連續傳圖保護、/note /email 預設上一個聯絡人、更新 last_contact_id）
+- [ ] **Task 31** `[修改]` — 更新聯絡人新增頁 `/contacts/new`（新欄位表單、contact_cards 子表）
+- [ ] **Task 32** `[修改]` — 更新聯絡人詳情頁（新欄位顯示、contact_cards 管理、合併功能）
+- [ ] **Task 33** `[新增]` — 新增批次上傳頁 `/contacts/batch-upload`（上傳、進度、預覽表格、重複偵測、一鍵存檔）
+- [ ] **Task 34** `[修改]` — 更新聯絡人列表頁（新增「批次上傳」按鈕）
