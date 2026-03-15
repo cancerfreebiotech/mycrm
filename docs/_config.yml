@@ -1,0 +1,20 @@
+title: myCRM 說明書
+description: CancerFree Biotech 內部 CRM 系統使用說明
+theme: just-the-docs
+
+url: https://cancerfreebiotech.github.io
+baseurl: /mycrm
+
+# 搜尋功能
+search_enabled: true
+
+# 顏色
+color_scheme: light
+
+# 頁尾
+footer_content: "© CancerFree Biotech"
+
+# 不顯示的檔案
+exclude:
+  - SUMMARY.md
+  - PRD.md

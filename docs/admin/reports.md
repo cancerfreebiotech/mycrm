@@ -1,3 +1,9 @@
+---
+title: 報表管理
+parent: 管理員
+nav_order: 4
+---
+
 # 報表管理（管理員）
 
 路徑：`/admin/reports`（僅 super_admin 可見）

@@ -1,3 +1,9 @@
+---
+title: 指令列表
+parent: Bot 使用說明
+nav_order: 2
+---
+
 # Bot 指令列表
 
 | 指令 | 縮寫 | 說明 |

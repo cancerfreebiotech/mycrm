@@ -1,3 +1,9 @@
+---
+title: 使用者管理
+parent: 管理員
+nav_order: 1
+---
+
 # 使用者管理
 
 路徑：`/admin/users`（僅 super_admin 可見）

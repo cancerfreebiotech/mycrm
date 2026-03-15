@@ -1,3 +1,9 @@
+---
+title: 標籤管理
+parent: 管理員
+nav_order: 2
+---
+
 # 標籤管理
 
 路徑：`/admin/tags`（僅 super_admin 可見）

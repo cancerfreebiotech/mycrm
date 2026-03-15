@@ -1,3 +1,9 @@
+---
+title: AI 模型管理
+parent: 管理員
+nav_order: 3
+---
+
 # AI 模型管理
 
 路徑：`/admin/models`（僅 super_admin 可見）

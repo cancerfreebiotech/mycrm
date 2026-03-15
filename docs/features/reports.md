@@ -1,3 +1,9 @@
+---
+title: 報表
+parent: 功能說明
+nav_order: 5
+---
+
 # 報表
 
 路徑：`/admin/reports`（僅 super_admin 可見）

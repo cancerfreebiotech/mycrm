@@ -1,3 +1,9 @@
+---
+title: Teams Bot 總覽
+parent: Bot 使用說明
+nav_order: 4
+---
+
 # Teams Bot 總覽
 
 myCRM Teams Bot 提供任務通知功能，當有任務指派給你時，會在 Microsoft Teams 個人聊天中收到 **Adaptive Card** 通知。

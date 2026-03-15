@@ -1,3 +1,9 @@
+---
+title: Telegram Bot 設定
+parent: Bot 使用說明
+nav_order: 3
+---
+
 # Telegram Bot 設定教學
 
 ## 步驟 1：建立 Bot

@@ -1,3 +1,8 @@
+---
+title: 首頁
+nav_order: 1
+---
+
 # myCRM 說明書
 
 myCRM 是 CancerFree Biotech 內部使用的聯絡人關係管理系統，核心功能是透過 **Telegram Bot 拍名片 → AI 辨識 → 自動存入資料庫**，並搭配 Web 管理介面進行聯絡人維護、任務指派、報表匯出等作業。

@@ -1,3 +1,9 @@
+---
+title: 個人設定
+parent: 功能說明
+nav_order: 6
+---
+
 # 個人設定
 
 路徑：`/settings`

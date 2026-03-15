@@ -1,3 +1,9 @@
+---
+title: 聯絡人管理
+parent: 功能說明
+nav_order: 2
+---
+
 # 聯絡人管理
 
 路徑：`/contacts`

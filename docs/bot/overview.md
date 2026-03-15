@@ -1,3 +1,9 @@
+---
+title: Telegram Bot 總覽
+parent: Bot 使用說明
+nav_order: 1
+---
+
 # Telegram Bot 總覽
 
 myCRM Telegram Bot 是系統的主要資料輸入管道，支援：
