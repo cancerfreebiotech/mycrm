@@ -846,3 +846,87 @@ alter table users add column if not exists ai_model_id uuid references ai_models
 - [x] **Task 25** `[修改]` — 更新個人設定頁 `/settings`（model 選擇改為 endpoint → model 兩層 dropdown，儲存 ai_model_id）
 - [x] **Task 26** `[修改]` — 更新 `src/lib/gemini.ts` 及相關呼叫（從 ai_endpoints 讀取 base_url 和 api_key，動態初始化 AI client）
 - [x] **Task 27** `[新增]` — 新增說明書頁面 `/docs`（AI 根據 PRD 生成內容，分 User / Super Admin section，含目錄）
+
+---
+
+## 十五、v0.6.1 修正項目
+
+### 15.1 主題系統修正
+
+#### 根本問題
+Tailwind v4 的 `dark:` utilities 預設使用 `@media (prefers-color-scheme: dark)`（OS 層級），而非 `next-themes` 加到 `<html>` 的 `.dark` class，導致 toggle 完全無效。
+
+#### 修正內容
+
+**`src/app/globals.css`**
+- 加入 `@variant dark (&:where(.dark, .dark *));` 讓 Tailwind v4 改用 class-based dark mode
+- `body font-family` 改用 `var(--font-geist-sans)` 取代硬碼 Arial
+
+**`src/app/(dashboard)/layout.tsx`**
+- Header 右上角加入 Sun / Moon toggle button（`useTheme`）
+- 加入 `mounted` state 防止 hydration flash
+
+**`src/app/(dashboard)/settings/page.tsx`**
+- 加入 `mounted` state，主題按鈕 active 判斷加 `mounted &&` guard
+
+**`src/app/docs/page.tsx`**
+- 加入 `mounted` state，toggle icon 加 guard
+- 修正 `prose-code:dark:bg-gray-800` → `dark:prose-code:bg-gray-800`
+
+---
+
+### 15.2 Bot 孤兒圖片清理
+
+#### 問題
+使用者點「❌ 不存檔」時，`pending_contacts` DB 記錄被刪除，但 Supabase Storage 中已上傳的名片圖片仍然保留，造成孤兒圖檔累積。
+
+#### 解決方案（A1 + C）
+
+**A1 — 取消時即時刪除**
+- `pending_contacts` 新增 `storage_path TEXT` 欄位
+- `handlePhoto()` 上傳圖片後同步寫入 `storage_path`
+- cancel callback 先查 `storage_path`，呼叫 `supabase.storage.from('cards').remove([path])` 刪圖，再刪 DB 記錄
+
+**C — 每日定時清理（防禦補強）**
+- 啟用 `pg_cron` extension
+- cron job `cleanup-orphan-cards` 每天 03:00 UTC 執行
+- 刪除 `storage.objects` 中 bucket=cards、超過 24 小時、且不在 `contacts.card_img_url`、`contacts.card_img_back_url`、`pending_contacts.storage_path` 中的圖檔
+
+#### DB Migration
+```sql
+-- A1
+ALTER TABLE pending_contacts ADD COLUMN storage_path TEXT;
+
+-- C
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+
+SELECT cron.schedule(
+  'cleanup-orphan-cards',
+  '0 3 * * *',
+  $$
+  DELETE FROM storage.objects
+  WHERE bucket_id = 'cards'
+    AND created_at < NOW() - INTERVAL '24 hours'
+    AND name NOT IN (
+      SELECT substring(card_img_url from '.*/public/cards/(.+)$')
+      FROM contacts WHERE card_img_url IS NOT NULL
+      UNION
+      SELECT substring(card_img_back_url from '.*/public/cards/(.+)$')
+      FROM contacts WHERE card_img_back_url IS NOT NULL
+      UNION
+      SELECT storage_path FROM pending_contacts WHERE storage_path IS NOT NULL
+    );
+  $$
+);
+```
+
+---
+
+## 十六、v0.6.1 開發任務清單
+
+- [x] **Task 28** `[修正]` — 加入 `@variant dark` 解決 Tailwind v4 class-based dark mode 無效問題
+- [x] **Task 29** `[新增]` — Dashboard Header 加入 Sun/Moon 主題切換按鈕
+- [x] **Task 30** `[修正]` — Settings / Docs 頁面加入 `mounted` guard 修正 hydration flash
+- [x] **Task 31** `[修正]` — `body font-family` 改用 Geist CSS variable；修正 docs prose dark class 順序
+- [x] **Task 32** `[新增]` — `pending_contacts` 加 `storage_path` 欄位，取消時即時刪除 Storage 圖檔（A1）
+- [x] **Task 33** `[新增]` — 啟用 pg_cron，建立每日孤兒圖清理排程（C）

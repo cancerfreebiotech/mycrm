@@ -2,19 +2,22 @@
 
 A lightweight CRM system that lets you scan business cards via Telegram, extract contact info with AI, and manage everything through a web dashboard.
 
-**Flow:** Snap a card photo in Telegram → Gemini AI reads it → One tap to save → View contacts on the web.
+**Flow:** Snap a card photo in Telegram → AI reads it → One tap to save → View contacts on the web.
+
+> Current version: **v0.6.1**
 
 ---
 
 ## Features
 
 - **Telegram Bot** — Send a business card photo to the bot; it compresses the image, runs OCR, and shows you the extracted data with a confirm button.
-- **AI OCR** — Uses Google Gemini 1.5 Flash to extract name, company, job title, email, and phone number from the card image.
-- **Contact Management** — Web dashboard to search, view, and manage all saved contacts with full detail pages and interaction logs.
+- **AI OCR** — Pluggable AI backend (configurable via admin panel); defaults to Google Gemini. Extracts name, company, job title, email, and phone from card images.
+- **Contact Management** — Web dashboard to search, view, edit, tag, and export contacts with full detail pages and interaction logs.
 - **Microsoft SSO** — Web dashboard is protected by Microsoft (Azure AD) OAuth. Only `@cancerfree.io` accounts can sign in.
-- **Whitelist Access Control** — Only authorized Telegram users can use the bot. Manage the whitelist from the admin panel.
-- **Email Templates** — Create and store reusable email templates for outreach.
-- **Image Optimization** — All card images are compressed (max 1024px, JPEG 85%) before being stored in Supabase Storage.
+- **Role-based Access** — `member` and `super_admin` roles. Admins manage users, AI endpoints/models, and tags from the admin panel.
+- **Email Templates** — Create reusable templates with AI-generation support; send directly from the web or via Bot.
+- **Image Optimization** — All card images are compressed (max 1024px, JPEG 85%) before storage. Cancelled scans immediately delete the uploaded image; a daily pg_cron job cleans any orphaned files.
+- **Light / Dark Theme** — Toggle in the header; preference saved per user in the database.
 
 ---
 
