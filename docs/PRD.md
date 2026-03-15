@@ -1432,3 +1432,202 @@ create table if not exists gmail_oauth (
 - [ ] **Task 47** `[新增]` — Supabase Edge Function `generate-report`（查詢資料 + 產生 Excel + Gmail API 寄出）
 - [ ] **Task 48** `[修改]` — 設定 pg_cron，依 `report_schedules` 動態新增/刪除 cron job（觸發 Edge Function）
 - [ ] **Task 49** `[新增]` — 新增報表管理頁 `/admin/reports`（Gmail 狀態、立即產生、排程規則 CRUD）
+
+---
+
+## 二十二、v0.10 — 任務管理 + Teams 整合
+
+### 22.1 資料表
+
+#### `tasks`
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | 主鍵 |
+| title | text (NOT NULL) | 任務標題 |
+| description | text (nullable) | 任務說明 |
+| assigned_by | uuid (FK → users.id) | 指派人 |
+| remind_at | timestamptz (nullable) | 提醒時間 |
+| created_at | timestamptz (default now()) | 建立時間 |
+
+#### `task_assignees`
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | 主鍵 |
+| task_id | uuid (FK → tasks.id, ON DELETE CASCADE) | 所屬任務 |
+| user_id | uuid (FK → users.id) | 被指派人 |
+| status | text (default 'pending') | `pending` / `done` / `cancelled` |
+| completed_at | timestamptz (nullable) | 完成時間 |
+| completed_by | uuid (FK → users.id, nullable) | 標記完成的人（本人或助理） |
+
+#### `user_assistants`（助理關係）
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| manager_id | uuid (FK → users.id, ON DELETE CASCADE) | 主管 |
+| assistant_id | uuid (FK → users.id, ON DELETE CASCADE) | 助理 |
+| PRIMARY KEY (manager_id, assistant_id) | | 複合主鍵 |
+
+> 一個主管可有多位助理，一個助理可協助多位主管。
+
+---
+
+### 22.2 Bot 指令
+
+#### `/work` / `/w`（建立任務）
+
+**指派給別人：**
+```
+/w 請 Luna 做 XXX
+/w 請 Luna 和 David 準備下週的簡報
+```
+流程：
+1. AI 解析訊息，識別人名（查詢 `users.display_name` 模糊比對）
+2. 若有多個人名：各自建立 `task_assignees` 記錄
+3. 找不到對應使用者：Bot 回問「找不到 Luna，請確認姓名」
+4. 確認後：
+   - 建立 `tasks` 記錄
+   - 同時發 Telegram 通知給被指派人：「{指派人} 指派了一個任務給你：XXX」
+   - 同時發 Teams 訊息給被指派人（Adaptive Card）
+5. Bot 回覆：「✅ 已通知 Luna（Telegram + Teams）」
+
+**提醒自己：**
+```
+/w 下週提醒我做 XXX
+/w 明天早上九點提醒我回覆報價
+/w 三天後提醒我跟進王小明
+```
+流程：
+1. AI 解析時間（呼叫 Gemini 解析自然語言時間）
+2. 若時間模糊（如「下週」），預設下週一 09:00，Bot 回覆「已設定提醒：下週一 2026-03-23 09:00，是否確認？」附 `[✅ 確認]` `[✏️ 修改時間]`
+3. 確認後建立 `tasks`，`assigned_by` = 自己，`task_assignees.user_id` = 自己
+
+#### `/tasks` / `/t`（查看我的任務）
+
+回傳待處理任務列表：
+```
+📋 你的待處理任務（3 筆）
+
+1. 做 XXX（自己設定，2026-03-20 09:00）
+2. 回覆報價（Luna 指派，無截止時間）
+3. 準備簡報（David 指派，2026-03-22）
+
+回覆數字選擇操作
+```
+選擇後附按鈕：`[✅ 標記完成]` `[⏰ 延後1小時]` `[❌ 取消]`
+
+---
+
+### 22.3 提醒觸發機制
+
+- pg_cron 每分鐘掃描 `tasks` 中 `remind_at <= now()` 且 `status = pending` 的記錄
+- 呼叫 Supabase Edge Function `send-reminder`
+- Edge Function 同時：
+  - 發 Telegram Bot 訊息給每位 `task_assignees` 的 Telegram（若已綁定）
+  - 發 Teams Adaptive Card 給每位被指派人（用 Graph API）
+- Telegram 訊息附按鈕：`[✅ 完成]` `[⏰ 延後1小時]` `[❌ 取消]`
+- Teams Adaptive Card 附按鈕：`[✅ 完成]` `[⏰ 延後1小時]`
+- 按鈕觸發後更新 `task_assignees.status`，並通知指派人
+
+---
+
+### 22.4 Teams Bot 設定
+
+- 在 Azure AD 註冊 Bot Channel Registration
+- Bot endpoint：`https://{your-domain}/api/teams/callback`
+- 申請 Graph API permissions：
+  - `Chat.ReadWrite`（Delegated）— 發私訊
+  - `ChannelMessage.Send`（Delegated）— 發頻道訊息
+- Teams Adaptive Card 按鈕回調 URL：`https://{your-domain}/api/teams/actions`
+
+**新增環境變數：**
+```env
+TEAMS_BOT_APP_ID=
+TEAMS_BOT_APP_SECRET=
+TEAMS_TENANT_ID=
+```
+
+---
+
+### 22.5 網頁任務管理頁 `/tasks`
+
+#### 三個 Tab
+
+**Tab 1：我的提醒**
+- 列出 `assigned_by = 我` 且 `task_assignees.user_id = 我` 的任務（提醒自己）
+- 欄位：任務內容、提醒時間、狀態
+- 可標記完成、取消、編輯提醒時間
+
+**Tab 2：我指派的**
+- 列出 `assigned_by = 我` 且有其他人被指派的任務
+- 每個任務展開顯示每位被指派人的狀態（待處理 / 已完成 / 已取消）
+- 可催促（重新發通知）、取消任務
+
+**Tab 3：指派給我的**
+- 列出 `task_assignees.user_id = 我` 且 `assigned_by ≠ 我` 的任務
+- 可標記完成、取消
+
+#### 助理視角
+- 助理登入後，在 Tab 2 可看到所屬**每位主管**的「我指派的」任務（有標示「{主管名} 的任務」）
+- 助理可代為標記完成，`completed_by` 記錄助理的 user_id
+- 助理**不能**新增或指派任務
+
+#### 搜尋
+- 每個 Tab 都有關鍵字搜尋（搜尋 `tasks.title`）
+- 可篩選狀態：全部 / 待處理 / 已完成 / 已取消
+
+#### 新增任務按鈕
+- 填寫：任務標題、說明（可選）、指派對象（可多選，不選 = 提醒自己）、提醒時間（可選）
+- 儲存後同步發 Telegram + Teams 通知
+
+---
+
+### 22.6 個人設定頁更新
+
+新增「我的助理」區塊：
+- 列出目前設定的助理
+- 新增助理：從 `users` 搜尋選擇
+- 移除助理
+
+---
+
+### 22.7 Migration SQL
+
+```sql
+-- 任務主表
+create table if not exists tasks (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text,
+  assigned_by uuid references users(id),
+  remind_at timestamptz,
+  created_at timestamptz default now()
+);
+
+-- 任務被指派人
+create table if not exists task_assignees (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid references tasks(id) on delete cascade,
+  user_id uuid references users(id),
+  status text not null default 'pending',
+  completed_at timestamptz,
+  completed_by uuid references users(id)
+);
+
+-- 助理關係
+create table if not exists user_assistants (
+  manager_id uuid references users(id) on delete cascade,
+  assistant_id uuid references users(id) on delete cascade,
+  primary key (manager_id, assistant_id)
+);
+```
+
+---
+
+## 二十三、v0.10 開發任務清單
+
+- [ ] **Task 50** `[修改]` — 執行 Migration SQL（tasks、task_assignees、user_assistants）
+- [ ] **Task 51** `[修改]` — 更新 Bot Webhook（`/work`、`/w`、`/tasks`、`/t` 指令，AI 解析人名和時間）
+- [ ] **Task 52** `[新增]` — Supabase Edge Function `send-reminder`（pg_cron 每分鐘觸發，發 Telegram + Teams）
+- [ ] **Task 53** `[新增]` — Teams Bot 設定（`/api/teams/callback`、`/api/teams/actions` routes，Adaptive Card）
+- [ ] **Task 54** `[新增]` — 新增任務管理頁 `/tasks`（三個 Tab、搜尋、助理視角、新增任務）
+- [ ] **Task 55** `[修改]` — 更新個人設定頁（新增「我的助理」管理區塊）
+- [ ] **Task 56** `[修改]` — 更新 Dashboard Layout（Sidebar 新增「任務管理」項目）

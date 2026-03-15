@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## v0.10 — 任務管理 + Teams 整合（待實作）
+
+### 變更項目
+- **Bot 新指令 `/work` / `/w`**：AI 解析自然語言，指派任務給多人或提醒自己，同時發 Telegram + Teams 通知
+- **Bot 新指令 `/tasks` / `/t`**：列出我的待處理任務，可標記完成 / 延後 / 取消
+- **Microsoft Teams 整合**：Azure AD Bot Channel Registration，Adaptive Card 附按鈕，支援回調
+- **提醒機制**：pg_cron 每分鐘掃描，Supabase Edge Function `send-reminder` 同時發 Telegram + Teams
+- **新增任務管理頁 `/tasks`**：三個 Tab（我的提醒 / 我指派的 / 指派給我的）+ 搜尋 + 助理視角
+- **助理權限**：可代主管標記完成任務，不能指派，`completed_by` 記錄操作者
+- **個人設定新增「我的助理」**：主管自行設定多位助理，助理可協助多位主管
+- **新增資料表**：`tasks`、`task_assignees`、`user_assistants`
+- **新增環境變數**：`TEAMS_BOT_APP_ID`、`TEAMS_BOT_APP_SECRET`、`TEAMS_TENANT_ID`
+
+---
+
+
 ## v0.9 — 報表功能（待實作）
 
 ### 變更項目
