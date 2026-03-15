@@ -980,6 +980,8 @@ SELECT cron.schedule(
 | notes | text (nullable) | 備註（自由填寫） |
 | second_email | text (nullable) | 第二 Email |
 | second_phone | text (nullable) | 第二電話 |
+| linkedin_url | text (nullable) | LinkedIn 個人頁面 URL |
+| facebook_url | text (nullable) | Facebook 個人頁面 URL |
 
 #### `contacts` 表移除欄位
 - `card_img_url` — 移至 `contact_cards` 子表
@@ -1016,7 +1018,9 @@ System Prompt 更新為辨識所有新欄位，回傳 JSON：
   "phone": "",          // 主要電話
   "second_phone": "",   // 第二電話（若有）
   "address": "",        // 地址（若有）
-  "website": ""         // 官網（若有）
+  "website": "",        // 官網（若有）
+  "linkedin_url": "",   // LinkedIn URL（若有）
+  "facebook_url": ""    // Facebook URL（若有）
 }
 ```
 
@@ -1089,6 +1093,8 @@ alter table contacts add column if not exists website text;
 alter table contacts add column if not exists notes text;
 alter table contacts add column if not exists second_email text;
 alter table contacts add column if not exists second_phone text;
+alter table contacts add column if not exists linkedin_url text;
+alter table contacts add column if not exists facebook_url text;
 
 -- contact_cards 子表
 create table if not exists contact_cards (
