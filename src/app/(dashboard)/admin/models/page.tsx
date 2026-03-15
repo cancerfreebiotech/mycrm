@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Plus, Trash2, Loader2, X, ToggleLeft, ToggleRight, Eye, EyeOff, ChevronRight } from 'lucide-react'
 
@@ -27,6 +28,8 @@ interface AiModel {
 export default function AdminModelsPage() {
   const supabase = createBrowserSupabaseClient()
   const router = useRouter()
+  const t = useTranslations('models')
+  const tc = useTranslations('common')
 
   const [loading, setLoading] = useState(true)
   const [endpoints, setEndpoints] = useState<Endpoint[]>([])
@@ -111,7 +114,7 @@ export default function AdminModelsPage() {
   async function addEndpoint() {
     setEpError(null)
     if (!epForm.name.trim() || !epForm.base_url.trim() || !epForm.api_key.trim()) {
-      setEpError('請填寫所有欄位'); return
+      setEpError(t('fillAllFields')); return
     }
     setEpSaving(true)
     const { error } = await supabase.from('ai_endpoints').insert({
@@ -153,7 +156,7 @@ export default function AdminModelsPage() {
     if (!selectedEndpoint) return
     setMdError(null)
     if (!mdForm.model_id.trim() || !mdForm.display_name.trim()) {
-      setMdError('請填寫所有欄位'); return
+      setMdError(t('fillAllFields')); return
     }
     setMdSaving(true)
     const { error } = await supabase.from('ai_models').insert({
@@ -188,7 +191,7 @@ export default function AdminModelsPage() {
 
   return (
     <div className="max-w-5xl space-y-8">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">AI Endpoint 管理</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
 
       {/* ── Endpoints ── */}
       <div>
@@ -198,19 +201,19 @@ export default function AdminModelsPage() {
             onClick={() => { setShowEndpointForm(true); setEpError(null) }}
             className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
-            <Plus size={14} /> 新增 Endpoint
+            <Plus size={14} /> {t('addEndpoint')}
           </button>
         </div>
 
         {showEndpointForm && (
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-3">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium text-gray-800 dark:text-gray-200">新增 Endpoint</span>
+              <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{t('addEndpoint')}</span>
               <button onClick={() => setShowEndpointForm(false)}><X size={15} className="text-gray-400" /></button>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
-                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">名稱</label>
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('colName')}</label>
                 <input type="text" value={epForm.name} onChange={(e) => setEpForm((f) => ({ ...f, name: e.target.value }))}
                   placeholder="例：Google Gemini"
                   className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -230,11 +233,11 @@ export default function AdminModelsPage() {
             </div>
             {epError && <p className="text-xs text-red-500 mt-2">{epError}</p>}
             <div className="flex justify-end gap-2 mt-3">
-              <button onClick={() => setShowEndpointForm(false)} className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">取消</button>
+              <button onClick={() => setShowEndpointForm(false)} className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">{tc('cancel')}</button>
               <button onClick={addEndpoint} disabled={epSaving}
                 className="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40">
                 {epSaving && <Loader2 size={13} className="animate-spin" />}
-                {epSaving ? '新增中...' : '新增'}
+                {epSaving ? t('adding') : tc('add')}
               </button>
             </div>
           </div>
@@ -244,16 +247,16 @@ export default function AdminModelsPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
               <tr>
-                {['名稱', 'Base URL', 'API Key', 'Models', '狀態', ''].map((h) => (
+                {[t('colName'), 'Base URL', 'API Key', 'Models', t('colStatus'), ''].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">載入中...</td></tr>
+                <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">{tc('loading')}</td></tr>
               ) : endpoints.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">尚無 Endpoint</td></tr>
+                <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">{t('noEndpoints')}</td></tr>
               ) : endpoints.map((ep) => (
                 <tr key={ep.id}
                   onClick={() => selectEndpoint(ep)}
@@ -269,8 +272,8 @@ export default function AdminModelsPage() {
                         <input type="password" value={newApiKey} onChange={(e) => setNewApiKey(e.target.value)}
                           placeholder="新 API Key"
                           className="text-xs px-2 py-1 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 w-28 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                        <button onClick={() => saveApiKey(ep.id)} className="text-xs text-blue-600 hover:underline">儲存</button>
-                        <button onClick={() => { setEditingKeyId(null); setNewApiKey('') }} className="text-xs text-gray-400">取消</button>
+                        <button onClick={() => saveApiKey(ep.id)} className="text-xs text-blue-600 hover:underline">{tc('save')}</button>
+                        <button onClick={() => { setEditingKeyId(null); setNewApiKey('') }} className="text-xs text-gray-400">{tc('cancel')}</button>
                       </div>
                     ) : (
                       <div className="flex items-center gap-1">
@@ -281,7 +284,7 @@ export default function AdminModelsPage() {
                           {showApiKey ? <EyeOff size={12} /> : <Eye size={12} />}
                         </button>
                         <button onClick={() => { setEditingKeyId(ep.id); setNewApiKey('') }}
-                          className="text-xs text-blue-500 hover:underline ml-1">變更</button>
+                          className="text-xs text-blue-500 hover:underline ml-1">{t('changeKey')}</button>
                       </div>
                     )}
                   </td>
@@ -289,15 +292,15 @@ export default function AdminModelsPage() {
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <button onClick={() => toggleEndpoint(ep)}
                       className={`flex items-center gap-1 text-xs font-medium ${ep.is_active ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`}>
-                      {ep.is_active ? <><ToggleRight size={15} /> 啟用</> : <><ToggleLeft size={15} /> 停用</>}
+                      {ep.is_active ? <><ToggleRight size={15} /> {t('enabled')}</> : <><ToggleLeft size={15} /> {t('disabled')}</>}
                     </button>
                   </td>
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     {confirmDeleteEpId === ep.id ? (
                       <div className="flex items-center gap-1">
-                        <span className="text-xs text-red-500">確認？</span>
-                        <button onClick={() => deleteEndpoint(ep.id)} className="text-xs text-red-600 hover:underline">確認</button>
-                        <button onClick={() => setConfirmDeleteEpId(null)} className="text-xs text-gray-400">取消</button>
+                        <span className="text-xs text-red-500">{t('confirmDelete')}</span>
+                        <button onClick={() => deleteEndpoint(ep.id)} className="text-xs text-red-600 hover:underline">{tc('confirm')}</button>
+                        <button onClick={() => setConfirmDeleteEpId(null)} className="text-xs text-gray-400">{tc('cancel')}</button>
                       </div>
                     ) : (
                       <button onClick={() => setConfirmDeleteEpId(ep.id)} className="text-gray-400 hover:text-red-500 dark:hover:text-red-400">
@@ -323,14 +326,14 @@ export default function AdminModelsPage() {
               onClick={() => { setShowModelForm(true); setMdError(null) }}
               className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
-              <Plus size={14} /> 新增 Model
+              <Plus size={14} /> {t('addModel')}
             </button>
           </div>
 
           {showModelForm && (
             <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-3">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-medium text-gray-800 dark:text-gray-200">新增 Model</span>
+                <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{t('addModel')}</span>
                 <button onClick={() => setShowModelForm(false)}><X size={15} className="text-gray-400" /></button>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -341,7 +344,7 @@ export default function AdminModelsPage() {
                     className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">顯示名稱</label>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('colDisplayName')}</label>
                   <input type="text" value={mdForm.display_name} onChange={(e) => setMdForm((f) => ({ ...f, display_name: e.target.value }))}
                     placeholder="例：Gemini 2.5 Flash"
                     className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -349,11 +352,11 @@ export default function AdminModelsPage() {
               </div>
               {mdError && <p className="text-xs text-red-500 mt-2">{mdError}</p>}
               <div className="flex justify-end gap-2 mt-3">
-                <button onClick={() => setShowModelForm(false)} className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">取消</button>
+                <button onClick={() => setShowModelForm(false)} className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">{tc('cancel')}</button>
                 <button onClick={addModel} disabled={mdSaving}
                   className="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40">
                   {mdSaving && <Loader2 size={13} className="animate-spin" />}
-                  {mdSaving ? '新增中...' : '新增'}
+                  {mdSaving ? t('adding') : tc('add')}
                 </button>
               </div>
             </div>
@@ -363,16 +366,16 @@ export default function AdminModelsPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                 <tr>
-                  {['顯示名稱', 'Model ID', '狀態', '建立時間', ''].map((h) => (
+                  {[t('colDisplayName'), 'Model ID', t('colStatus'), t('colCreated'), ''].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {modelsLoading ? (
-                  <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">載入中...</td></tr>
+                  <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">{tc('loading')}</td></tr>
                 ) : models.length === 0 ? (
-                  <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">此 Endpoint 尚無 Model</td></tr>
+                  <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">{t('noModels')}</td></tr>
                 ) : models.map((m) => (
                   <tr key={m.id} className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
                     <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200">{m.display_name}</td>
@@ -380,18 +383,18 @@ export default function AdminModelsPage() {
                     <td className="px-4 py-3">
                       <button onClick={() => toggleModel(m)}
                         className={`flex items-center gap-1 text-xs font-medium ${m.is_active ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`}>
-                        {m.is_active ? <><ToggleRight size={15} /> 啟用</> : <><ToggleLeft size={15} /> 停用</>}
+                        {m.is_active ? <><ToggleRight size={15} /> {t('enabled')}</> : <><ToggleLeft size={15} /> {t('disabled')}</>}
                       </button>
                     </td>
                     <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">
-                      {new Date(m.created_at).toLocaleDateString('zh-TW')}
+                      {new Date(m.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-3">
                       {confirmDeleteMdId === m.id ? (
                         <div className="flex items-center gap-1">
-                          <span className="text-xs text-red-500">確認？</span>
-                          <button onClick={() => deleteModel(m.id)} className="text-xs text-red-600 hover:underline">確認</button>
-                          <button onClick={() => setConfirmDeleteMdId(null)} className="text-xs text-gray-400">取消</button>
+                          <span className="text-xs text-red-500">{t('confirmDelete')}</span>
+                          <button onClick={() => deleteModel(m.id)} className="text-xs text-red-600 hover:underline">{tc('confirm')}</button>
+                          <button onClick={() => setConfirmDeleteMdId(null)} className="text-xs text-gray-400">{tc('cancel')}</button>
                         </div>
                       ) : (
                         <button onClick={() => setConfirmDeleteMdId(m.id)} className="text-gray-400 hover:text-red-500 dark:hover:text-red-400">

@@ -2,8 +2,17 @@
 
 import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
+import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Sun, Moon, Check } from 'lucide-react'
+import { SUPPORTED_LOCALES, type Locale } from '@/i18n/request'
+
+const LOCALE_LABELS: Record<Locale, string> = {
+  'zh-TW': '繁體中文',
+  'en': 'English',
+  'ja': '日本語',
+}
 
 interface AiEndpoint {
   id: string
@@ -18,20 +27,19 @@ interface AiModel {
   display_name: string
 }
 
-const ROLE_LABEL: Record<string, string> = {
-  super_admin: 'Super Admin',
-  member: 'Member',
-}
-
 export default function SettingsPage() {
   const supabase = createBrowserSupabaseClient()
   const { theme, setTheme } = useTheme()
+  const router = useRouter()
+  const t = useTranslations('settings')
+  const tc = useTranslations('common')
   const [mounted, setMounted] = useState(false)
 
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [role, setRole] = useState('')
   const [telegramId, setTelegramId] = useState('')
+  const [locale, setLocale] = useState<Locale>('zh-TW')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -41,6 +49,10 @@ export default function SettingsPage() {
   const [allModels, setAllModels] = useState<AiModel[]>([])
   const [selectedEndpointId, setSelectedEndpointId] = useState<string>('')
   const [selectedModelId, setSelectedModelId] = useState<string>('')  // ai_models.id (UUID)
+
+  const [assistants, setAssistants] = useState<Array<{ id: string; assistant_email: string; users: { display_name: string | null } | null }>>([])
+  const [newAssistantEmail, setNewAssistantEmail] = useState('')
+  const [assistantError, setAssistantError] = useState<string | null>(null)
 
   const filteredModels = allModels.filter((m) => m.endpoint_id === selectedEndpointId)
 
@@ -55,7 +67,7 @@ export default function SettingsPage() {
       const [{ data: userData }, { data: eps }, { data: mds }] = await Promise.all([
         supabase
           .from('users')
-          .select('display_name, role, telegram_id, ai_model_id, theme')
+          .select('display_name, role, telegram_id, ai_model_id, theme, locale')
           .eq('email', user.email)
           .single(),
         supabase
@@ -80,6 +92,10 @@ export default function SettingsPage() {
         setRole(userData.role ?? 'member')
         setTelegramId(userData.telegram_id ? String(userData.telegram_id) : '')
         if (userData.theme) setTheme(userData.theme)
+        const savedLocale = userData.locale as Locale
+        if (savedLocale && (SUPPORTED_LOCALES as readonly string[]).includes(savedLocale)) {
+          setLocale(savedLocale)
+        }
 
         // Restore selected endpoint/model from saved ai_model_id
         if (userData.ai_model_id) {
@@ -96,7 +112,41 @@ export default function SettingsPage() {
       setLoading(false)
     }
     load()
+    loadAssistants()
   }, [])
+
+  async function loadAssistants() {
+    const res = await fetch('/api/assistants')
+    if (res.ok) {
+      const data = await res.json()
+      setAssistants(data.assistants ?? [])
+    }
+  }
+
+  async function handleAddAssistant() {
+    setAssistantError(null)
+    const res = await fetch('/api/assistants', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assistant_email: newAssistantEmail.trim() }),
+    })
+    if (res.ok) {
+      setNewAssistantEmail('')
+      loadAssistants()
+    } else {
+      const data = await res.json()
+      setAssistantError(data.error ?? '新增失敗')
+    }
+  }
+
+  async function handleRemoveAssistant(email: string) {
+    await fetch('/api/assistants', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assistant_email: email }),
+    })
+    loadAssistants()
+  }
 
   // When endpoint changes, reset model selection to first available
   function handleEndpointChange(epId: string) {
@@ -114,14 +164,22 @@ export default function SettingsPage() {
     }
 
     setSaving(true)
-    const { error: err } = await supabase
-      .from('users')
-      .update({
-        telegram_id: parsed,
-        ai_model_id: selectedModelId || null,
-        theme: theme ?? 'light',
-      })
-      .eq('email', email)
+    const [{ error: err }] = await Promise.all([
+      supabase
+        .from('users')
+        .update({
+          telegram_id: parsed,
+          ai_model_id: selectedModelId || null,
+          theme: theme ?? 'light',
+          locale,
+        })
+        .eq('email', email),
+      fetch('/api/set-locale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locale }),
+      }),
+    ])
 
     setSaving(false)
     if (err) {
@@ -129,35 +187,36 @@ export default function SettingsPage() {
     } else {
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
+      router.refresh()
     }
   }
 
-  if (loading) return <div className="text-sm text-gray-400">載入中...</div>
+  if (loading) return <div className="text-sm text-gray-400">{tc('loading')}</div>
 
   return (
     <div className="max-w-lg">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">個人設定</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">{t('title')}</h1>
 
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-5">
 
         {/* Account info (read-only) */}
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">帳號</label>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('email')}</label>
             <p className="text-sm text-gray-900 dark:text-gray-100">{email}</p>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">顯示名稱</label>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('displayName')}</label>
             <p className="text-sm text-gray-900 dark:text-gray-100">{displayName || '—'}</p>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">角色</label>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('role')}</label>
             <span className={`inline-block text-xs px-2.5 py-1 rounded-full font-medium ${
               role === 'super_admin'
                 ? 'bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-400'
                 : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
             }`}>
-              {ROLE_LABEL[role] ?? role}
+              {t(`roles.${role as 'super_admin' | 'member'}`)}
             </span>
           </div>
         </div>
@@ -167,7 +226,7 @@ export default function SettingsPage() {
         {/* Telegram ID */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Telegram ID
+            {t('telegramId')}
           </label>
           <input
             type="text"
@@ -176,39 +235,37 @@ export default function SettingsPage() {
             placeholder="例：123456789"
             className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
-            在 Telegram 傳訊給 <span className="font-medium text-gray-600 dark:text-gray-400">@userinfobot</span> 取得數字 ID，綁定後即可使用 Bot 掃描名片。
-          </p>
+          <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">{t('telegramHint')}</p>
         </div>
 
         {/* AI Model (two-layer) */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            AI OCR 模型
+            {t('aiModel')}
           </label>
           <div className="space-y-2">
             <div>
-              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Endpoint</label>
+              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('endpointLabel')}</label>
               <select
                 value={selectedEndpointId}
                 onChange={(e) => handleEndpointChange(e.target.value)}
                 className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {endpoints.length === 0 && <option value="">（尚無可用 Endpoint）</option>}
+                {endpoints.length === 0 && <option value="">{t('selectEndpoint')}</option>}
                 {endpoints.map((ep) => (
                   <option key={ep.id} value={ep.id}>{ep.name}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Model</label>
+              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('modelLabel')}</label>
               <select
                 value={selectedModelId}
                 onChange={(e) => setSelectedModelId(e.target.value)}
                 disabled={filteredModels.length === 0}
                 className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
               >
-                {filteredModels.length === 0 && <option value="">（此 Endpoint 尚無 Model）</option>}
+                {filteredModels.length === 0 && <option value="">{t('selectModel')}</option>}
                 {filteredModels.map((m) => (
                   <option key={m.id} value={m.id}>{m.display_name}</option>
                 ))}
@@ -223,7 +280,7 @@ export default function SettingsPage() {
         {/* Theme */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            介面主題
+            {t('theme')}
           </label>
           <div className="flex gap-2">
             <button
@@ -235,7 +292,7 @@ export default function SettingsPage() {
                   : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
               }`}
             >
-              <Sun size={15} /> 淺色
+              <Sun size={15} /> {t('light')}
               {mounted && theme === 'light' && <Check size={13} />}
             </button>
             <button
@@ -247,16 +304,83 @@ export default function SettingsPage() {
                   : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
               }`}
             >
-              <Moon size={15} /> 深色
+              <Moon size={15} /> {t('dark')}
               {mounted && theme === 'dark' && <Check size={13} />}
             </button>
           </div>
         </div>
 
+        {/* Language */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            {t('language')}
+          </label>
+          <div className="flex gap-2 flex-wrap">
+            {SUPPORTED_LOCALES.map((loc) => (
+              <button
+                key={loc}
+                type="button"
+                onClick={() => setLocale(loc)}
+                className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg border transition-colors ${
+                  locale === loc
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300'
+                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                {LOCALE_LABELS[loc]}
+                {locale === loc && <Check size={13} />}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Assistants */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {t('assistants')}
+          </label>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">{t('assistantsHint')}</p>
+          <div className="space-y-1 mb-2">
+            {assistants.length === 0 ? (
+              <p className="text-xs text-gray-400">{t('noAssistants')}</p>
+            ) : (
+              assistants.map(a => (
+                <div key={a.id} className="flex items-center justify-between text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 px-3 py-1.5 rounded-lg">
+                  <span>{a.users?.display_name ?? a.assistant_email}</span>
+                  <button
+                    onClick={() => handleRemoveAssistant(a.assistant_email)}
+                    className="text-gray-400 hover:text-red-500 transition-colors ml-2"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="email"
+              value={newAssistantEmail}
+              onChange={e => { setNewAssistantEmail(e.target.value); setAssistantError(null) }}
+              placeholder={t('assistantEmailPlaceholder')}
+              onKeyDown={e => { if (e.key === 'Enter') handleAddAssistant() }}
+              className="flex-1 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={handleAddAssistant}
+              disabled={!newAssistantEmail.trim()}
+              className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
+            >
+              {t('addAssistant')}
+            </button>
+          </div>
+          {assistantError && <p className="mt-1 text-xs text-red-500">{assistantError}</p>}
+        </div>
+
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         {saved && (
           <p className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
-            <Check size={14} /> 已儲存
+            <Check size={14} /> {t('saved')}
           </p>
         )}
 
@@ -265,7 +389,7 @@ export default function SettingsPage() {
           disabled={saving}
           className="px-5 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
         >
-          {saving ? '儲存中...' : '儲存'}
+          {saving ? t('saving') : tc('save')}
         </button>
       </div>
     </div>

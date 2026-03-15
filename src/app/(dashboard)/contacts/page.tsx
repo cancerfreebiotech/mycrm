@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Search, Download, Plus, ChevronDown } from 'lucide-react'
 import * as XLSX from 'xlsx'
@@ -26,6 +27,8 @@ interface Contact {
 const PAGE_SIZE = 20
 
 export default function ContactsPage() {
+  const t = useTranslations('contacts')
+  const tc = useTranslations('common')
   const [contacts, setContacts] = useState<Contact[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [query, setQuery] = useState('')
@@ -75,28 +78,28 @@ export default function ContactsPage() {
 
   function exportData(format: 'xlsx' | 'csv') {
     const rows = filtered.map((c) => ({
-      姓名: c.name ?? '',
-      公司: c.company ?? '',
-      職稱: c.job_title ?? '',
+      [t('name')]: c.name ?? '',
+      [t('company')]: c.company ?? '',
+      [t('jobTitle')]: c.job_title ?? '',
       Email: c.email ?? '',
-      電話: c.phone ?? '',
+      [t('phone')]: c.phone ?? '',
       Tags: c.contact_tags.map((ct) => ct.tags?.name).filter(Boolean).join(', '),
-      建立者: c.users?.display_name ?? '',
-      建立時間: new Date(c.created_at).toLocaleDateString('zh-TW'),
+      [t('creator')]: c.users?.display_name ?? '',
+      [t('createdAt')]: new Date(c.created_at).toLocaleDateString(),
     }))
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, '聯絡人')
+    XLSX.utils.book_append_sheet(wb, ws, t('title'))
     XLSX.writeFile(wb, `contacts.${format}`)
   }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">聯絡人</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500 dark:text-gray-400">共 {filtered.length} 筆</span>
-          <span className="text-sm text-gray-400 dark:text-gray-500">第 {page}/{totalPages} 頁</span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">{tc('total', { count: filtered.length })}</span>
+          <span className="text-sm text-gray-400 dark:text-gray-500">{tc('page', { page, total: totalPages })}</span>
           <button
             onClick={() => exportData('xlsx')}
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
@@ -113,13 +116,13 @@ export default function ContactsPage() {
             href="/contacts/batch-upload"
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
           >
-            <Plus size={14} /> 批次上傳
+            <Plus size={14} /> {t('batchUpload')}
           </Link>
           <Link
             href="/contacts/new"
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
-            <Plus size={14} /> 新增聯絡人
+            <Plus size={14} /> {t('new')}
           </Link>
         </div>
       </div>
@@ -130,7 +133,7 @@ export default function ContactsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           <input
             type="text"
-            placeholder="搜尋姓名或公司..."
+            placeholder={t('searchPlaceholder')}
             value={query}
             onChange={(e) => { setQuery(e.target.value); setPage(1) }}
             className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -143,7 +146,7 @@ export default function ContactsPage() {
             onClick={() => setTagDropdownOpen((v) => !v)}
             className="flex items-center gap-2 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
           >
-            Tags 篩選
+            {t('tagFilter')}
             {selectedTags.length > 0 && (
               <span className="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs px-1.5 py-0.5 rounded-full">
                 {selectedTags.length}
@@ -154,7 +157,7 @@ export default function ContactsPage() {
           {tagDropdownOpen && (
             <div className="absolute top-full mt-1 left-0 z-10 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-40">
               {allTags.length === 0 && (
-                <p className="px-3 py-2 text-xs text-gray-400">尚無 Tags</p>
+                <p className="px-3 py-2 text-xs text-gray-400">{t('noTagsMatch')}</p>
               )}
               {allTags.map((tag) => (
                 <button
@@ -173,7 +176,7 @@ export default function ContactsPage() {
                   onClick={() => setSelectedTags([])}
                   className="w-full text-left px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600 border-t border-gray-100 dark:border-gray-700 mt-1 pt-1"
                 >
-                  清除篩選
+                  {t('clearFilter')}
                 </button>
               )}
             </div>
@@ -186,7 +189,7 @@ export default function ContactsPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <tr>
-              {['姓名', '公司', '職稱', 'Email', '電話', 'Tags', '建立者', '建立時間'].map((h) => (
+              {[t('name'), t('company'), t('jobTitle'), 'Email', t('phone'), 'Tags', t('creator'), t('createdAt')].map((h) => (
                 <th key={h} className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">
                   {h}
                 </th>
@@ -196,11 +199,11 @@ export default function ContactsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">載入中...</td>
+                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">{tc('loading')}</td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">無符合結果</td>
+                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">{t('noResults')}</td>
               </tr>
             ) : (
               paginated.map((c) => (
@@ -225,7 +228,7 @@ export default function ContactsPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{c.users?.display_name || '—'}</td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                    {new Date(c.created_at).toLocaleDateString('zh-TW')}
+                    {new Date(c.created_at).toLocaleDateString()}
                   </td>
                 </tr>
               ))

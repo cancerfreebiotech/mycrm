@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Upload, Loader2, AlertTriangle, X } from 'lucide-react'
 
@@ -21,6 +22,8 @@ const EMPTY_FORM = {
 
 export default function NewContactPage() {
   const router = useRouter()
+  const t = useTranslations('contacts')
+  const tc = useTranslations('common')
   const supabase = createBrowserSupabaseClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -191,9 +194,9 @@ export default function NewContactPage() {
     <div className="max-w-2xl">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => router.back()} className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
-          ← 返回
+          ← {tc('back')}
         </button>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">新增聯絡人</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('new')}</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
@@ -215,10 +218,10 @@ export default function NewContactPage() {
           ) : (
             <div className="py-4 text-gray-400 dark:text-gray-500">
               <Upload size={32} className="mx-auto mb-2" />
-              <p className="text-sm">點擊上傳名片照片（自動 AI 辨識）</p>
+              <p className="text-sm">{t('uploadCardHint')}</p>
             </div>
           )}
-          {imagePreview && !ocring && <p className="text-xs text-gray-400 mt-2">點擊重新上傳</p>}
+          {imagePreview && !ocring && <p className="text-xs text-gray-400 mt-2">{t('reupload')}</p>}
         </div>
 
         {/* Duplicate warning */}
@@ -227,13 +230,13 @@ export default function NewContactPage() {
             {dupExact && (
               <div className="flex items-start gap-2 text-sm text-yellow-800 dark:text-yellow-300">
                 <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                <span>此 email 已有聯絡人：<strong>{dupExact.name}</strong>（{dupExact.company}）</span>
+                <span>{t('duplicate.exactEmail', { name: dupExact.name, company: dupExact.company ?? '' })}</span>
               </div>
             )}
             {dupSimilar.map((d) => (
               <div key={d.id} className="flex items-start gap-2 text-sm text-yellow-700 dark:text-yellow-400">
                 <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                <span>系統有相似聯絡人：<strong>{d.name}</strong>（{d.company}）</span>
+                <span>{t('duplicate.similar', { name: d.name, company: d.company ?? '' })}</span>
               </div>
             ))}
           </div>
@@ -241,36 +244,36 @@ export default function NewContactPage() {
 
         {/* Basic info */}
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">基本資訊</h2>
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('sectionBasic')}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Field label="姓名（主要）" field="name" />
-            <Field label="英文姓名" field="name_en" />
-            <Field label="當地語言姓名" field="name_local" />
+            <Field label={t('name')} field="name" />
+            <Field label={t('nameEn')} field="name_en" />
+            <Field label={t('nameLocal')} field="name_local" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Field label="公司（主要）" field="company" />
-            <Field label="英文公司名" field="company_en" />
-            <Field label="當地語言公司名" field="company_local" />
+            <Field label={t('company')} field="company" />
+            <Field label={t('companyEn')} field="company_en" />
+            <Field label={t('companyLocal')} field="company_local" />
           </div>
-          <Field label="職稱" field="job_title" />
+          <Field label={t('jobTitle')} field="job_title" />
         </section>
 
         {/* Contact info */}
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">聯絡方式</h2>
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('sectionContact')}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Email" field="email" type="email" />
-            <Field label="第二 Email" field="second_email" type="email" />
-            <Field label="電話" field="phone" type="tel" />
-            <Field label="第二電話" field="second_phone" type="tel" />
+            <Field label={t('secondEmail')} field="second_email" type="email" />
+            <Field label={t('phone')} field="phone" type="tel" />
+            <Field label={t('secondPhone')} field="second_phone" type="tel" />
           </div>
-          <Field label="地址" field="address" />
-          <Field label="網站" field="website" type="url" />
+          <Field label={t('address')} field="address" />
+          <Field label={t('website')} field="website" type="url" />
         </section>
 
         {/* Social */}
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">社群連結</h2>
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('sectionSocial')}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="LinkedIn" field="linkedin_url" type="url" />
             <Field label="Facebook" field="facebook_url" type="url" />
@@ -279,9 +282,9 @@ export default function NewContactPage() {
 
         {/* Notes */}
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">備註</h2>
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('sectionNotes')}</h2>
           <div>
-            <label className={labelClass}>備註</label>
+            <label className={labelClass}>{t('notes')}</label>
             <textarea
               value={form.notes}
               onChange={(e) => set('notes', e.target.value)}
@@ -293,7 +296,7 @@ export default function NewContactPage() {
 
         {/* Tags */}
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Tags</h2>
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{t('tags')}</h2>
           <div className="flex flex-wrap gap-2">
             {allTags.map((tag) => (
               <button
@@ -309,7 +312,7 @@ export default function NewContactPage() {
                 {tag.name}
               </button>
             ))}
-            {allTags.length === 0 && <p className="text-xs text-gray-400">尚無 Tags，請先至 Tag 管理新增</p>}
+            {allTags.length === 0 && <p className="text-xs text-gray-400">{t('noTags')}</p>}
           </div>
         </section>
 
@@ -327,14 +330,14 @@ export default function NewContactPage() {
             className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
             {saving && <Loader2 size={14} className="animate-spin" />}
-            儲存
+            {tc('save')}
           </button>
           <button
             type="button"
             onClick={() => router.back()}
             className="px-5 py-2 text-sm text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
           >
-            取消
+            {tc('cancel')}
           </button>
         </div>
       </form>

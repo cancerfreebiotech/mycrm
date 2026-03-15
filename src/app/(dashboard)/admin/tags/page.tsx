@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Plus, Pencil, Trash2, Check, X } from 'lucide-react'
 
@@ -12,6 +13,8 @@ interface Tag {
 }
 
 export default function TagsPage() {
+  const t = useTranslations('tags')
+  const tc = useTranslations('common')
   const supabase = createBrowserSupabaseClient()
   const [tags, setTags] = useState<Tag[]>([])
   const [loading, setLoading] = useState(true)
@@ -33,11 +36,11 @@ export default function TagsPage() {
       .select('id, name, created_at, contact_tags(count)')
       .order('name')
     setTags(
-      (data ?? []).map((t) => ({
-        id: t.id,
-        name: t.name,
-        created_at: t.created_at,
-        count: (t.contact_tags as unknown as { count: number }[])?.[0]?.count ?? 0,
+      (data ?? []).map((tag) => ({
+        id: tag.id,
+        name: tag.name,
+        created_at: tag.created_at,
+        count: (tag.contact_tags as unknown as { count: number }[])?.[0]?.count ?? 0,
       }))
     )
     setLoading(false)
@@ -49,7 +52,7 @@ export default function TagsPage() {
     setAdding(true); setError(null)
     const { error: err } = await supabase.from('tags').insert({ name })
     if (err) {
-      setError(err.message.includes('unique') ? '此 Tag 名稱已存在' : err.message)
+      setError(err.message.includes('unique') ? t('errorDuplicate') : err.message)
     } else {
       setNewName('')
       await loadTags()
@@ -63,7 +66,7 @@ export default function TagsPage() {
     setSavingId(id); setError(null)
     const { error: err } = await supabase.from('tags').update({ name }).eq('id', id)
     if (err) {
-      setError(err.message.includes('unique') ? '此 Tag 名稱已存在' : err.message)
+      setError(err.message.includes('unique') ? t('errorDuplicate') : err.message)
     } else {
       setEditingId(null)
       await loadTags()
@@ -75,7 +78,7 @@ export default function TagsPage() {
     setDeletingId(id)
     await supabase.from('tags').delete().eq('id', id)
     setConfirmDeleteId(null)
-    setTags((prev) => prev.filter((t) => t.id !== id))
+    setTags((prev) => prev.filter((tag) => tag.id !== id))
     setDeletingId(null)
   }
 
@@ -83,10 +86,10 @@ export default function TagsPage() {
     <div className="max-w-2xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Tag 管理</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">所有成員均可管理 Tags</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('subtitle')}</p>
         </div>
-        <span className="text-sm text-gray-500 dark:text-gray-400">共 {tags.length} 個</span>
+        <span className="text-sm text-gray-500 dark:text-gray-400">{t('count', { n: tags.length })}</span>
       </div>
 
       {/* Add new tag */}
@@ -97,7 +100,7 @@ export default function TagsPage() {
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-            placeholder="輸入新 Tag 名稱..."
+            placeholder={t('namePlaceholder')}
             className="flex-1 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <button
@@ -105,7 +108,7 @@ export default function TagsPage() {
             disabled={adding || !newName.trim()}
             className="flex items-center gap-1.5 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40"
           >
-            <Plus size={14} /> 新增
+            <Plus size={14} /> {tc('add')}
           </button>
         </div>
         {error && <p className="text-xs text-red-500 dark:text-red-400 mt-2">{error}</p>}
@@ -114,14 +117,14 @@ export default function TagsPage() {
       {/* Tag list */}
       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
         {loading ? (
-          <p className="text-sm text-gray-400 text-center py-8">載入中...</p>
+          <p className="text-sm text-gray-400 text-center py-8">{tc('loading')}</p>
         ) : tags.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-8">尚無 Tags</p>
+          <p className="text-sm text-gray-400 text-center py-8">{t('noTags')}</p>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
               <tr>
-                {['Tag 名稱', '使用中聯絡人', '建立時間', ''].map((h) => (
+                {[t('colName'), t('colContacts'), t('colCreated'), ''].map((h) => (
                   <th key={h} className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">{h}</th>
                 ))}
               </tr>
@@ -144,9 +147,9 @@ export default function TagsPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{tag.count} 筆</td>
+                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{t('contactCount', { n: tag.count })}</td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                    {new Date(tag.created_at).toLocaleDateString('zh-TW')}
+                    {new Date(tag.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 justify-end">
@@ -162,10 +165,10 @@ export default function TagsPage() {
                         </>
                       ) : confirmDeleteId === tag.id ? (
                         <>
-                          <span className="text-xs text-red-500 dark:text-red-400">確認刪除？</span>
+                          <span className="text-xs text-red-500 dark:text-red-400">{t('confirmDelete')}</span>
                           <button onClick={() => handleDelete(tag.id)} disabled={deletingId === tag.id}
-                            className="text-xs text-red-600 dark:text-red-400 hover:underline disabled:opacity-40">確認</button>
-                          <button onClick={() => setConfirmDeleteId(null)} className="text-xs text-gray-400 hover:text-gray-600">取消</button>
+                            className="text-xs text-red-600 dark:text-red-400 hover:underline disabled:opacity-40">{tc('confirm')}</button>
+                          <button onClick={() => setConfirmDeleteId(null)} className="text-xs text-gray-400 hover:text-gray-600">{tc('cancel')}</button>
                         </>
                       ) : (
                         <>

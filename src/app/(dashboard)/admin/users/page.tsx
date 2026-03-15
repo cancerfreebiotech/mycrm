@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 
 interface CrmUser {
@@ -16,6 +17,8 @@ interface CrmUser {
 
 export default function AdminUsersPage() {
   const router = useRouter()
+  const t = useTranslations('users')
+  const tc = useTranslations('common')
   const supabase = createBrowserSupabaseClient()
 
   const [users, setUsers] = useState<CrmUser[]>([])
@@ -60,14 +63,14 @@ export default function AdminUsersPage() {
 
   return (
     <div className="max-w-5xl">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">使用者管理</h1>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">使用者以 Microsoft 帳號登入後自動建立。僅 super_admin 可存取此頁面。</p>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">{t('title')}</h1>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{t('subtitle')}</p>
 
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <tr>
-              {['姓名', 'Email', 'Telegram', '角色', '最後登入', '操作'].map((h) => (
+              {[t('colName'), t('colEmail'), t('colTelegram'), t('colRole'), t('colLastLogin'), t('colActions')].map((h) => (
                 <th key={h} className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">{h}</th>
               ))}
             </tr>
@@ -75,11 +78,11 @@ export default function AdminUsersPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">載入中...</td>
+                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">{tc('loading')}</td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">尚無使用者</td>
+                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">{t('noUsers')}</td>
               </tr>
             ) : (
               users.map((u) => (
@@ -88,9 +91,9 @@ export default function AdminUsersPage() {
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{u.email}</td>
                   <td className="px-4 py-3">
                     {u.telegram_id ? (
-                      <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 rounded-full">已綁定</span>
+                      <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 rounded-full">{t('telegramBound')}</span>
                     ) : (
-                      <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-full">未綁定</span>
+                      <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-full">{t('telegramUnbound')}</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
@@ -101,20 +104,20 @@ export default function AdminUsersPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                    {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString('zh-TW') : '—'}
+                    {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : '—'}
                   </td>
                   <td className="px-4 py-3">
                     <button
                       onClick={() => toggleRole(u)}
                       disabled={updatingId === u.id || u.id === currentUserId}
-                      title={u.id === currentUserId ? '不可修改自己的角色' : undefined}
+                      title={u.id === currentUserId ? t('selfRoleHint') : undefined}
                       className="px-3 py-1 text-xs border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 transition-colors"
                     >
                       {updatingId === u.id
-                        ? '更新中...'
+                        ? t('updating')
                         : u.role === 'super_admin'
-                        ? '降為 member'
-                        : '升為 super_admin'}
+                        ? t('demoteToMember')
+                        : t('promoteToAdmin')}
                     </button>
                   </td>
                 </tr>

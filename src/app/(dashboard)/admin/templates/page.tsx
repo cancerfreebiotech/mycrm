@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Pencil, Trash2, Plus, X, Upload, Paperclip, Loader2, Sparkles } from 'lucide-react'
 
@@ -25,6 +26,8 @@ interface Template {
 const emptyForm = () => ({ title: '', subject: '', body_content: '' })
 
 export default function AdminTemplatesPage() {
+  const t = useTranslations('templates')
+  const tc = useTranslations('common')
   const supabase = createBrowserSupabaseClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -51,9 +54,9 @@ export default function AdminTemplatesPage() {
       .select('id, title, subject, body_content, created_at, template_attachments(id, file_name, file_url, file_size)')
       .order('created_at', { ascending: false })
 
-    setTemplates((data ?? []).map((t) => ({
-      ...t,
-      attachments: (t.template_attachments as Attachment[]) ?? [],
+    setTemplates((data ?? []).map((tpl) => ({
+      ...tpl,
+      attachments: (tpl.template_attachments as Attachment[]) ?? [],
     })))
     setLoading(false)
   }
@@ -66,10 +69,10 @@ export default function AdminTemplatesPage() {
     setShowForm(true)
   }
 
-  function openEdit(t: Template) {
-    setEditing(t)
-    setForm({ title: t.title, subject: t.subject ?? '', body_content: t.body_content ?? '' })
-    setAttachments([...t.attachments])
+  function openEdit(tpl: Template) {
+    setEditing(tpl)
+    setForm({ title: tpl.title, subject: tpl.subject ?? '', body_content: tpl.body_content ?? '' })
+    setAttachments([...tpl.attachments])
     setFileError(null)
     setShowForm(true)
   }
@@ -169,7 +172,7 @@ export default function AdminTemplatesPage() {
 
   async function deleteTemplate(id: string) {
     await supabase.from('email_templates').delete().eq('id', id)
-    setTemplates((prev) => prev.filter((t) => t.id !== id))
+    setTemplates((prev) => prev.filter((tpl) => tpl.id !== id))
     setConfirmDeleteId(null)
   }
 
@@ -182,9 +185,9 @@ export default function AdminTemplatesPage() {
   return (
     <div className="max-w-4xl">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">郵件範本</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
         <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-          <Plus size={16} /> 新增範本
+          <Plus size={16} /> {t('addTemplate')}
         </button>
       </div>
 
@@ -192,42 +195,42 @@ export default function AdminTemplatesPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <tr>
-              {['範本名稱', '郵件主旨', '附件', '建立時間', ''].map((h) => (
+              {[t('colTitle'), t('colSubject'), t('colAttachments'), t('colCreated'), ''].map((h) => (
                 <th key={h} className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">載入中...</td></tr>
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">{tc('loading')}</td></tr>
             ) : templates.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">尚無郵件範本</td></tr>
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">{t('noTemplates')}</td></tr>
             ) : (
-              templates.map((t) => (
-                <tr key={t.id} className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                  <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200">{t.title}</td>
-                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{t.subject || '—'}</td>
+              templates.map((tpl) => (
+                <tr key={tpl.id} className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                  <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200">{tpl.title}</td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{tpl.subject || '—'}</td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                    {t.attachments.length > 0
-                      ? <span className="flex items-center gap-1"><Paperclip size={13} />{t.attachments.length} 個</span>
+                    {tpl.attachments.length > 0
+                      ? <span className="flex items-center gap-1"><Paperclip size={13} />{tpl.attachments.length} 個</span>
                       : '—'}
                   </td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                    {new Date(t.created_at).toLocaleDateString('zh-TW')}
+                    {new Date(tpl.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-3 justify-end">
-                      <button onClick={() => openEdit(t)} className="text-gray-400 hover:text-blue-500 dark:hover:text-blue-400">
+                      <button onClick={() => openEdit(tpl)} className="text-gray-400 hover:text-blue-500 dark:hover:text-blue-400">
                         <Pencil size={16} />
                       </button>
-                      {confirmDeleteId === t.id ? (
+                      {confirmDeleteId === tpl.id ? (
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-red-500">確認刪除？</span>
-                          <button onClick={() => deleteTemplate(t.id)} className="text-xs text-red-600 dark:text-red-400 hover:underline">確認</button>
-                          <button onClick={() => setConfirmDeleteId(null)} className="text-xs text-gray-400">取消</button>
+                          <span className="text-xs text-red-500">{t('confirmDelete')}</span>
+                          <button onClick={() => deleteTemplate(tpl.id)} className="text-xs text-red-600 dark:text-red-400 hover:underline">{tc('confirm')}</button>
+                          <button onClick={() => setConfirmDeleteId(null)} className="text-xs text-gray-400">{tc('cancel')}</button>
                         </div>
                       ) : (
-                        <button onClick={() => setConfirmDeleteId(t.id)} className="text-gray-400 hover:text-red-500 dark:hover:text-red-400">
+                        <button onClick={() => setConfirmDeleteId(tpl.id)} className="text-gray-400 hover:text-red-500 dark:hover:text-red-400">
                           <Trash2 size={16} />
                         </button>
                       )}
@@ -245,32 +248,32 @@ export default function AdminTemplatesPage() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{editing ? '編輯範本' : '新增範本'}</h2>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{editing ? t('editTemplate') : t('newTemplate')}</h2>
               <button onClick={closeForm} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"><X size={20} /></button>
             </div>
 
             <div className="px-6 py-5 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">範本名稱 *</label>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('nameLabel')}</label>
                 <input type="text" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                   className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">郵件主旨</label>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('subjectLabel')}</label>
                 <input type="text" value={form.subject} onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
                   className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               {/* AI Generate */}
               <div className="rounded-lg border border-dashed border-purple-300 dark:border-purple-700 bg-purple-50 dark:bg-purple-950/30 p-3 space-y-2">
                 <label className="block text-xs font-medium text-purple-700 dark:text-purple-400 flex items-center gap-1">
-                  <Sparkles size={13} /> AI 生成內文
+                  <Sparkles size={13} /> {t('aiGenerate')}
                 </label>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={aiDescription}
                     onChange={(e) => setAiDescription(e.target.value)}
-                    placeholder="描述這封信的目的，AI 幫你生成..."
+                    placeholder={t('aiPlaceholder')}
                     className="flex-1 text-sm px-3 py-2 border border-purple-200 dark:border-purple-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
                     onKeyDown={(e) => { if (e.key === 'Enter') handleAiGenerate() }}
                   />
@@ -281,27 +284,27 @@ export default function AdminTemplatesPage() {
                     className="flex items-center gap-1.5 px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-40 shrink-0"
                   >
                     {aiGenerating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-                    {aiGenerating ? '生成中...' : '生成'}
+                    {aiGenerating ? t('aiGenerating') : t('generate')}
                   </button>
                 </div>
                 {aiError && <p className="text-xs text-red-500 dark:text-red-400">{aiError}</p>}
-                <p className="text-xs text-purple-500 dark:text-purple-400">若已有內文，AI 將合併現有內容與描述一起生成。</p>
+                <p className="text-xs text-purple-500 dark:text-purple-400">{t('aiHint')}</p>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">郵件內文（支援 HTML）</label>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('bodyLabel')}</label>
                 <textarea rows={8} value={form.body_content} onChange={(e) => setForm((f) => ({ ...f, body_content: e.target.value }))}
                   className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
 
               {/* Attachments */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">附件（單檔最大 2MB）</label>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{t('attachLabel')}</label>
                 <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileUpload} />
                 <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading}
                   className="flex items-center gap-2 text-sm px-3 py-2 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-600 disabled:opacity-40 w-full justify-center">
                   {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
-                  {uploading ? '上傳中...' : '點擊上傳附件'}
+                  {uploading ? t('uploading') : t('uploadBtn')}
                 </button>
                 {fileError && <p className="text-xs text-red-500 dark:text-red-400 mt-1">{fileError}</p>}
                 {attachments.length > 0 && (
@@ -324,11 +327,11 @@ export default function AdminTemplatesPage() {
             </div>
 
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700 sticky bottom-0 bg-white dark:bg-gray-900">
-              <button onClick={closeForm} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900">取消</button>
+              <button onClick={closeForm} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900">{tc('cancel')}</button>
               <button onClick={save} disabled={saving || !form.title.trim() || uploading}
                 className="flex items-center gap-2 px-5 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40">
                 {saving && <Loader2 size={14} className="animate-spin" />}
-                {saving ? '儲存中...' : '儲存'}
+                {saving ? t('saving') : tc('save')}
               </button>
             </div>
           </div>

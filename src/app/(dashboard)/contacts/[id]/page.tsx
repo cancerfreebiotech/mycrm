@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { sendMail } from '@/lib/graph'
 import { ArrowLeft, ImageIcon, Mail, X, Pencil, Loader2, Plus, Upload, Trash2 } from 'lucide-react'
@@ -43,7 +44,6 @@ interface Log {
 }
 interface EmailTemplate { id: string; title: string; subject: string | null; body_content: string | null }
 
-const TYPE_LABEL: Record<string, string> = { note: '筆記', meeting: '會議', email: '郵件', system: '系統' }
 const TYPE_COLOR: Record<string, string> = {
   note: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
   meeting: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400',
@@ -65,6 +65,9 @@ const EMPTY_EDIT = {
 export default function ContactDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  const t = useTranslations('contacts')
+  const tm = useTranslations('mail')
+  const tc = useTranslations('common')
   const supabase = createBrowserSupabaseClient()
   const editFileRef = useRef<HTMLInputElement>(null)
   const cardUploadRef = useRef<HTMLInputElement>(null)
@@ -315,7 +318,7 @@ export default function ContactDetailPage() {
     } finally { setMailSending(false) }
   }
 
-  if (!contact) return <div className="text-gray-400 text-sm">載入中...</div>
+  if (!contact) return <div className="text-gray-400 text-sm">{tc('loading')}</div>
 
   const inputClass = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
   const labelClass = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1'
@@ -347,32 +350,32 @@ export default function ContactDetailPage() {
   return (
     <div className="max-w-2xl mx-auto">
       <button onClick={() => router.push('/contacts')} className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 mb-5">
-        <ArrowLeft size={16} /> 返回聯絡人列表
+        <ArrowLeft size={16} /> {t('backToList')}
       </button>
 
       {/* Basic Info */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-4">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div className="flex-1 min-w-0 space-y-1.5">
-            <InfoRow label="姓名" value={contact.name} />
-            <InfoRow label="英文姓名" value={contact.name_en} />
-            <InfoRow label="當地語言" value={contact.name_local} />
-            <InfoRow label="公司" value={contact.company} />
-            <InfoRow label="英文公司" value={contact.company_en} />
-            <InfoRow label="當地公司" value={contact.company_local} />
-            <InfoRow label="職稱" value={contact.job_title} />
+            <InfoRow label={t('name')} value={contact.name} />
+            <InfoRow label={t('nameEn')} value={contact.name_en} />
+            <InfoRow label={t('nameLocal')} value={contact.name_local} />
+            <InfoRow label={t('company')} value={contact.company} />
+            <InfoRow label={t('companyEn')} value={contact.company_en} />
+            <InfoRow label={t('companyLocal')} value={contact.company_local} />
+            <InfoRow label={t('jobTitle')} value={contact.job_title} />
             <InfoRow label="Email" value={contact.email} href={contact.email ? `mailto:${contact.email}` : undefined} />
-            <InfoRow label="第二 Email" value={contact.second_email} href={contact.second_email ? `mailto:${contact.second_email}` : undefined} />
-            <InfoRow label="電話" value={contact.phone} href={contact.phone ? `tel:${contact.phone}` : undefined} />
-            <InfoRow label="第二電話" value={contact.second_phone} href={contact.second_phone ? `tel:${contact.second_phone}` : undefined} />
-            <InfoRow label="地址" value={contact.address} />
-            <InfoRow label="網站" value={contact.website} href={contact.website ?? undefined} />
+            <InfoRow label={t('secondEmail')} value={contact.second_email} href={contact.second_email ? `mailto:${contact.second_email}` : undefined} />
+            <InfoRow label={t('phone')} value={contact.phone} href={contact.phone ? `tel:${contact.phone}` : undefined} />
+            <InfoRow label={t('secondPhone')} value={contact.second_phone} href={contact.second_phone ? `tel:${contact.second_phone}` : undefined} />
+            <InfoRow label={t('address')} value={contact.address} />
+            <InfoRow label={t('website')} value={contact.website} href={contact.website ?? undefined} />
             <InfoRow label="LinkedIn" value={contact.linkedin_url} href={contact.linkedin_url ?? undefined} />
             <InfoRow label="Facebook" value={contact.facebook_url} href={contact.facebook_url ?? undefined} />
-            <InfoRow label="建立者" value={contact.users?.display_name} />
+            <InfoRow label={t('creator')} value={contact.users?.display_name} />
             {contact.notes && (
               <div className="flex gap-3 text-sm mt-2">
-                <span className="w-24 text-gray-400 dark:text-gray-500 shrink-0">備註</span>
+                <span className="w-24 text-gray-400 dark:text-gray-500 shrink-0">{t('notes')}</span>
                 <span className="text-gray-700 dark:text-gray-300 whitespace-pre-line">{contact.notes}</span>
               </div>
             )}
@@ -390,15 +393,15 @@ export default function ContactDetailPage() {
             ))}
             <div className="relative">
               <button onClick={() => setTagDropOpen((v) => !v)} className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 hover:text-blue-600 px-2 py-0.5 rounded-full border border-dashed border-gray-300 dark:border-gray-600">
-                <Plus size={10} /> 新增 Tag
+                <Plus size={10} /> {t('addTag')}
               </button>
               {tagDropOpen && (
                 <div className="absolute top-full mt-1 left-0 z-10 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-2 min-w-40">
                   <input autoFocus value={tagInput} onChange={(e) => setTagInput(e.target.value)} placeholder="搜尋 tag..." className="w-full text-xs px-2 py-1 border border-gray-200 dark:border-gray-700 rounded mb-1 bg-white dark:bg-gray-800" />
-                  {filteredTags.map((t) => (
-                    <button key={t.id} onClick={() => addTag(t)} className="w-full text-left text-xs px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 rounded text-gray-700 dark:text-gray-300">{t.name}</button>
+                  {filteredTags.map((tag) => (
+                    <button key={tag.id} onClick={() => addTag(tag)} className="w-full text-left text-xs px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 rounded text-gray-700 dark:text-gray-300">{tag.name}</button>
                   ))}
-                  {filteredTags.length === 0 && <p className="text-xs text-gray-400 px-2 py-1">無符合 Tag</p>}
+                  {filteredTags.length === 0 && <p className="text-xs text-gray-400 px-2 py-1">{t('noTagsMatch')}</p>}
                 </div>
               )}
             </div>
@@ -408,11 +411,11 @@ export default function ContactDetailPage() {
         {/* Actions */}
         <div className="flex gap-2 pt-4 border-t border-gray-100 dark:border-gray-800">
           <button onClick={openEdit} className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
-            <Pencil size={14} /> 編輯
+            <Pencil size={14} /> {tc('edit')}
           </button>
           {contact.email && (
             <button onClick={openMailModal} className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-              <Mail size={14} /> 寄信
+              <Mail size={14} /> {t('sendMail')}
             </button>
           )}
         </div>
@@ -420,7 +423,7 @@ export default function ContactDetailPage() {
 
       {/* Contact Cards */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-4">
-        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">名片圖片</h2>
+        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('cardImages')}</h2>
 
         {/* Card gallery */}
         {allCards.length > 0 ? (
@@ -454,7 +457,7 @@ export default function ContactDetailPage() {
             type="text"
             value={cardLabel}
             onChange={(e) => setCardLabel(e.target.value)}
-            placeholder="標籤（選填，如：正面、反面）"
+            placeholder={t('cardLabel')}
             className="text-sm px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1"
           />
           <button
@@ -463,7 +466,7 @@ export default function ContactDetailPage() {
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
           >
             {cardUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-            上傳名片
+            {t('uploadCard')}
           </button>
           <input ref={cardUploadRef} type="file" accept="image/*" className="hidden" onChange={handleCardUpload} />
         </div>
@@ -471,14 +474,14 @@ export default function ContactDetailPage() {
 
       {/* Interaction Logs */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">互動紀錄</h2>
+        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('interactionLogs')}</h2>
         {/* Add Log */}
         <div className="space-y-2 mb-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
           <div className="flex gap-2">
             <select value={logType} onChange={(e) => setLogType(e.target.value as 'note' | 'meeting')}
               className="text-sm px-2 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-              <option value="note">筆記</option>
-              <option value="meeting">會議</option>
+              <option value="note">{t('logTypes.note')}</option>
+              <option value="meeting">{t('logTypes.meeting')}</option>
             </select>
             {logType === 'meeting' && (
               <input type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)}
@@ -487,27 +490,29 @@ export default function ContactDetailPage() {
           </div>
           <div className="flex gap-2">
             <input type="text" value={logContent} onChange={(e) => setLogContent(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddLog()}
-              placeholder="輸入互動紀錄..." className="flex-1 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              placeholder={t('logPlaceholder')} className="flex-1 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             <button onClick={handleAddLog} disabled={addingLog || !logContent.trim()}
-              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40">新增</button>
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40">{tc('add')}</button>
           </div>
         </div>
         {/* Timeline */}
         {logs.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-4">尚無互動紀錄</p>
+          <p className="text-sm text-gray-400 text-center py-4">{t('noLogs')}</p>
         ) : (
           <ol className="relative border-l border-gray-200 dark:border-gray-700 space-y-5 pl-5">
             {logs.map((log) => (
               <li key={log.id} className="relative">
                 <div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-white dark:border-gray-900" />
                 <div className="flex items-center gap-2 mb-1">
-                  <span className={`text-xs px-2 py-0.5 rounded ${TYPE_COLOR[log.type] ?? TYPE_COLOR.note}`}>{TYPE_LABEL[log.type] ?? log.type}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded ${TYPE_COLOR[log.type] ?? TYPE_COLOR.note}`}>
+                    {t(`logTypes.${log.type as 'note' | 'meeting' | 'email' | 'system'}`)}
+                  </span>
                   {log.meeting_date && <span className="text-xs text-gray-500 dark:text-gray-400">📅 {log.meeting_date}</span>}
                 </div>
                 <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-line">{log.content}</p>
                 <div className="flex items-center gap-2 mt-0.5">
                   {log.users?.display_name && <span className="text-xs text-gray-500 dark:text-gray-400">{log.users.display_name}</span>}
-                  <time className="text-xs text-gray-400 dark:text-gray-500">{new Date(log.created_at).toLocaleString('zh-TW')}</time>
+                  <time className="text-xs text-gray-400 dark:text-gray-500">{new Date(log.created_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}</time>
                 </div>
               </li>
             ))}
@@ -518,7 +523,7 @@ export default function ContactDetailPage() {
           <div ref={sentinelRef} className="pt-4 text-center">
             {loadingMoreLogs && (
               <span className="inline-flex items-center gap-1 text-xs text-gray-400">
-                <Loader2 size={12} className="animate-spin" /> 載入更多...
+                <Loader2 size={12} className="animate-spin" /> {t('loadMore')}
               </span>
             )}
           </div>
@@ -537,7 +542,7 @@ export default function ContactDetailPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900 z-10">
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100">編輯聯絡人</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('editContact')}</h3>
               <button onClick={() => setEditOpen(false)} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"><X size={18} /></button>
             </div>
             <div className="px-6 py-5 space-y-5">
@@ -549,15 +554,15 @@ export default function ContactDetailPage() {
                     <Loader2 size={16} className="animate-spin" /> AI 辨識中...
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-400 py-2">點擊掃描名片自動填入欄位（不會存圖）</p>
+                  <p className="text-sm text-gray-400 py-2">{t('scanCard')}</p>
                 )}
               </div>
 
               {/* Name section */}
               <div>
-                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">姓名</p>
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">{t('name')}</p>
                 <div className="grid grid-cols-1 gap-3">
-                  {[['姓名', 'name'], ['英文姓名', 'name_en'], ['當地語言姓名', 'name_local']].map(([label, field]) => (
+                  {([[t('name'), 'name'], [t('nameEn'), 'name_en'], [t('nameLocal'), 'name_local']] as [string, string][]).map(([label, field]) => (
                     <div key={field}>
                       <label className={labelClass}>{label}</label>
                       <input type="text" value={editForm[field as keyof typeof editForm]}
@@ -570,9 +575,9 @@ export default function ContactDetailPage() {
 
               {/* Company section */}
               <div>
-                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">公司 / 職稱</p>
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">{t('sectionCompany')}</p>
                 <div className="grid grid-cols-1 gap-3">
-                  {[['公司', 'company'], ['英文公司名', 'company_en'], ['當地語言公司名', 'company_local'], ['職稱', 'job_title']].map(([label, field]) => (
+                  {([[t('company'), 'company'], [t('companyEn'), 'company_en'], [t('companyLocal'), 'company_local'], [t('jobTitle'), 'job_title']] as [string, string][]).map(([label, field]) => (
                     <div key={field}>
                       <label className={labelClass}>{label}</label>
                       <input type="text" value={editForm[field as keyof typeof editForm]}
@@ -585,9 +590,9 @@ export default function ContactDetailPage() {
 
               {/* Contact section */}
               <div>
-                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">聯絡方式</p>
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">{t('sectionContact')}</p>
                 <div className="grid grid-cols-1 gap-3">
-                  {[['Email', 'email', 'email'], ['第二 Email', 'second_email', 'email'], ['電話', 'phone', 'tel'], ['第二電話', 'second_phone', 'tel'], ['地址', 'address', 'text'], ['網站', 'website', 'url']].map(([label, field, type]) => (
+                  {([['Email', 'email', 'email'], [t('secondEmail'), 'second_email', 'email'], [t('phone'), 'phone', 'tel'], [t('secondPhone'), 'second_phone', 'tel'], [t('address'), 'address', 'text'], [t('website'), 'website', 'url']] as [string, string, string][]).map(([label, field, type]) => (
                     <div key={field}>
                       <label className={labelClass}>{label}</label>
                       <input type={type} value={editForm[field as keyof typeof editForm]}
@@ -600,9 +605,9 @@ export default function ContactDetailPage() {
 
               {/* Social section */}
               <div>
-                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">社群</p>
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">{t('sectionSocial')}</p>
                 <div className="grid grid-cols-1 gap-3">
-                  {[['LinkedIn', 'linkedin_url'], ['Facebook', 'facebook_url']].map(([label, field]) => (
+                  {([['LinkedIn', 'linkedin_url'], ['Facebook', 'facebook_url']] as [string, string][]).map(([label, field]) => (
                     <div key={field}>
                       <label className={labelClass}>{label}</label>
                       <input type="url" value={editForm[field as keyof typeof editForm]}
@@ -615,16 +620,16 @@ export default function ContactDetailPage() {
 
               {/* Notes */}
               <div>
-                <label className={labelClass}>備註</label>
+                <label className={labelClass}>{t('notes')}</label>
                 <textarea value={editForm.notes} onChange={(e) => setEditForm((prev) => ({ ...prev, notes: e.target.value }))}
                   rows={3} className={inputClass + ' resize-none'} />
               </div>
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700 sticky bottom-0 bg-white dark:bg-gray-900">
-              <button onClick={() => setEditOpen(false)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900">取消</button>
+              <button onClick={() => setEditOpen(false)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900">{tc('cancel')}</button>
               <button onClick={saveEdit} disabled={editSaving || editOcring}
                 className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                {editSaving && <Loader2 size={14} className="animate-spin" />} 儲存
+                {editSaving && <Loader2 size={14} className="animate-spin" />} {tc('save')}
               </button>
             </div>
           </div>
@@ -636,41 +641,41 @@ export default function ContactDetailPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100">寄送郵件</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">{tm('title')}</h3>
               <button onClick={() => setMailOpen(false)} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"><X size={18} /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">收件人</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">{tm('recipient')}</label>
                 <input type="text" value={contact.email ?? ''} readOnly className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400" />
               </div>
               {templates.length > 0 && (
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">套用範本</label>
-                  <select defaultValue="" onChange={(e) => { const t = templates.find((t) => t.id === e.target.value); if (t) { setMailSubject(t.subject ?? ''); setMailBody(t.body_content ?? '') } }}
+                  <label className="block text-xs font-medium text-gray-500 mb-1">{tm('template')}</label>
+                  <select defaultValue="" onChange={(e) => { const tpl = templates.find((tpl) => tpl.id === e.target.value); if (tpl) { setMailSubject(tpl.subject ?? ''); setMailBody(tpl.body_content ?? '') } }}
                     className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-                    <option value="">— 選擇範本 —</option>
-                    {templates.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+                    <option value="">{tm('selectTemplate')}</option>
+                    {templates.map((tpl) => <option key={tpl.id} value={tpl.id}>{tpl.title}</option>)}
                   </select>
                 </div>
               )}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">主旨</label>
-                <input type="text" value={mailSubject} onChange={(e) => setMailSubject(e.target.value)} placeholder="郵件主旨"
+                <label className="block text-xs font-medium text-gray-500 mb-1">{tm('subject')}</label>
+                <input type="text" value={mailSubject} onChange={(e) => setMailSubject(e.target.value)} placeholder={tm('subjectPlaceholder')}
                   className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">內文（支援 HTML）</label>
-                <textarea value={mailBody} onChange={(e) => setMailBody(e.target.value)} rows={6} placeholder="郵件內文..."
+                <label className="block text-xs font-medium text-gray-500 mb-1">{tm('body')}</label>
+                <textarea value={mailBody} onChange={(e) => setMailBody(e.target.value)} rows={6} placeholder={tm('bodyPlaceholder')}
                   className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               {mailError && <p className="text-sm text-red-600 dark:text-red-400">{mailError}</p>}
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-              <button onClick={() => setMailOpen(false)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900">取消</button>
+              <button onClick={() => setMailOpen(false)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900">{tc('cancel')}</button>
               <button onClick={handleSendMail} disabled={mailSending || !mailSubject.trim()}
                 className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40">
-                <Mail size={14} /> {mailSending ? '寄送中...' : '送出'}
+                <Mail size={14} /> {mailSending ? tm('sending') : tm('send')}
               </button>
             </div>
           </div>

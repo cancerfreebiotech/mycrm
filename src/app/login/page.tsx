@@ -1,16 +1,12 @@
 'use client'
 
 import { useSearchParams } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Suspense } from 'react'
 
-const errorMessages: Record<string, string> = {
-  unauthorized_domain: 'Access restricted to @cancerfree.io accounts only.',
-  auth_failed: 'Authentication failed. Please try again.',
-  no_code: 'Invalid login attempt. Please try again.',
-}
-
 function LoginContent() {
+  const t = useTranslations('login')
   const searchParams = useSearchParams()
   const error = searchParams.get('error')
 
@@ -29,11 +25,11 @@ function LoginContent() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-10 w-full max-w-sm text-center">
         <h1 className="text-2xl font-bold text-gray-900 mb-1">myCRM</h1>
-        <p className="text-sm text-gray-500 mb-8">Sign in with your cancerfree.io account</p>
+        <p className="text-sm text-gray-500 mb-8">{t('subtitle')}</p>
 
         {error && (
           <div className="mb-6 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-            {errorMessages[error] ?? 'An error occurred. Please try again.'}
+            {t(`errors.${error as 'unauthorized_domain' | 'auth_failed' | 'no_code'}`, { fallback: t('errors.unknown') })}
           </div>
         )}
 
@@ -47,8 +43,9 @@ function LoginContent() {
             <rect x="1" y="11" width="9" height="9" fill="#00A4EF"/>
             <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
           </svg>
-          Sign in with Microsoft
+          {t('button')}
         </button>
+        <p className="mt-4 text-xs text-gray-400">{t('hint')}</p>
       </div>
     </div>
   )

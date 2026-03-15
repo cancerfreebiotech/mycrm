@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Users, CalendarPlus, X, Search, StickyNote, Tag } from 'lucide-react'
 
@@ -26,6 +27,9 @@ interface ContactOption {
 }
 
 export default function DashboardPage() {
+  const t = useTranslations('dashboard')
+  const tc = useTranslations('contacts')
+  const tu = useTranslations('unassignedNotes')
   const [totalContacts, setTotalContacts] = useState<number>(0)
   const [monthlyContacts, setMonthlyContacts] = useState<number>(0)
   const [unassignedCount, setUnassignedCount] = useState<number>(0)
@@ -133,13 +137,11 @@ export default function DashboardPage() {
     loadUnassignedNotes()
   }
 
-  const typeLabel: Record<string, string> = { note: '筆記', meeting: '會議', email: '郵件' }
-
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
-        <p className="text-gray-500 dark:text-gray-400 mt-1">歡迎使用 myCRM</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
+        <p className="text-gray-500 dark:text-gray-400 mt-1">{t('welcome')}</p>
       </div>
 
       {/* 統計卡片 */}
@@ -147,21 +149,21 @@ export default function DashboardPage() {
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
           <div className="flex items-center gap-2 mb-2">
             <Users size={18} className="text-blue-500" />
-            <span className="text-sm text-gray-500 dark:text-gray-400">聯絡人總數</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">{t('totalContacts')}</span>
           </div>
           <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{totalContacts}</p>
         </div>
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
           <div className="flex items-center gap-2 mb-2">
             <CalendarPlus size={18} className="text-green-500" />
-            <span className="text-sm text-gray-500 dark:text-gray-400">本月新增名片</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">{t('recentContacts')}</span>
           </div>
           <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{monthlyContacts}</p>
         </div>
         <Link href="/unassigned-notes" className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 hover:border-orange-300 dark:hover:border-orange-700 transition-colors">
           <div className="flex items-center gap-2 mb-2">
             <StickyNote size={18} className="text-orange-500" />
-            <span className="text-sm text-gray-500 dark:text-gray-400">未歸類筆記</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">{t('unassignedNotes')}</span>
           </div>
           <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{unassignedCount}</p>
         </Link>
@@ -172,22 +174,22 @@ export default function DashboardPage() {
         <div>
           <div className="flex items-center gap-2 mb-3">
             <Tag size={16} className="text-gray-400" />
-            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Tag 聯絡人分布</h2>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('tagDistribution')}</h2>
           </div>
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 max-w-lg space-y-2">
-            {tagStats.map((t) => {
+            {tagStats.map((tag) => {
               const max = tagStats[0]?.count || 1
-              const pct = Math.round((t.count / max) * 100)
+              const pct = Math.round((tag.count / max) * 100)
               return (
-                <div key={t.name} className="flex items-center gap-3">
-                  <span className="text-sm text-gray-600 dark:text-gray-400 w-28 shrink-0 truncate">{t.name}</span>
+                <div key={tag.name} className="flex items-center gap-3">
+                  <span className="text-sm text-gray-600 dark:text-gray-400 w-28 shrink-0 truncate">{tag.name}</span>
                   <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-2">
                     <div
                       className="bg-blue-500 h-2 rounded-full transition-all"
                       style={{ width: `${pct}%` }}
                     />
                   </div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300 w-6 text-right shrink-0">{t.count}</span>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300 w-6 text-right shrink-0">{tag.count}</span>
                 </div>
               )
             })}
@@ -198,14 +200,14 @@ export default function DashboardPage() {
       {/* 待處理未歸類筆記 */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">待處理</h2>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('pendingNotes')}</h2>
           <Link href="/unassigned-notes" className="text-sm text-blue-600 hover:underline dark:text-blue-400">
-            查看全部未歸類筆記 →
+            {t('viewAll')}
           </Link>
         </div>
 
         {notes.length === 0 ? (
-          <p className="text-sm text-gray-400 dark:text-gray-500">目前沒有未歸類筆記</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500">{t('noNotes')}</p>
         ) : (
           <div className="space-y-2">
             {notes.map((note) => (
@@ -216,13 +218,13 @@ export default function DashboardPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded">
-                      {typeLabel[note.type] ?? note.type}
+                      {tc(`logTypes.${note.type as 'note' | 'meeting' | 'email' | 'system'}`)}
                     </span>
                     {note.creator && (
                       <span className="text-xs text-gray-400 dark:text-gray-500">{note.creator}</span>
                     )}
                     <span className="text-xs text-gray-400 dark:text-gray-500">
-                      {new Date(note.created_at).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      {new Date(note.created_at).toLocaleString(undefined, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                   <p className="text-sm text-gray-700 dark:text-gray-300 truncate">{note.content}</p>
@@ -231,7 +233,7 @@ export default function DashboardPage() {
                   onClick={() => { setAssigningNote(note.id); setSearchQuery(''); setSearchResults([]) }}
                   className="shrink-0 text-xs text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap"
                 >
-                  指定聯絡人
+                  {tu('assignContact')}
                 </button>
               </div>
             ))}
@@ -244,7 +246,7 @@ export default function DashboardPage() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100">指定聯絡人</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">{tu('assignTitle')}</h3>
               <button onClick={() => setAssigningNote(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                 <X size={20} />
               </button>
@@ -253,7 +255,7 @@ export default function DashboardPage() {
               <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
               <input
                 type="text"
-                placeholder="搜尋姓名或 Email..."
+                placeholder={tu('assignSearch')}
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -261,9 +263,9 @@ export default function DashboardPage() {
               />
             </div>
             <div className="space-y-1 max-h-60 overflow-y-auto">
-              {searching && <p className="text-sm text-gray-400 px-2">搜尋中...</p>}
+              {searching && <p className="text-sm text-gray-400 px-2">{tu('searching')}</p>}
               {!searching && searchQuery && searchResults.length === 0 && (
-                <p className="text-sm text-gray-400 px-2">找不到聯絡人</p>
+                <p className="text-sm text-gray-400 px-2">{tu('notFound')}</p>
               )}
               {searchResults.map((c) => (
                 <button

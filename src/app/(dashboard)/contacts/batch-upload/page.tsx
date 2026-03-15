@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Upload, Loader2, AlertTriangle, CheckCircle, X, Save } from 'lucide-react'
 
@@ -55,6 +56,8 @@ function makeRow(file: File): RowData {
 
 export default function BatchUploadPage() {
   const router = useRouter()
+  const t = useTranslations('batch')
+  const tc = useTranslations('common')
   const supabase = createBrowserSupabaseClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -211,16 +214,16 @@ export default function BatchUploadPage() {
     <div className="max-w-5xl">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => router.push('/contacts')} className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
-          ← 返回
+          ← {tc('back')}
         </button>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">批次上傳名片</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
       </div>
 
       {saveResult && (
         <div className="mb-5 flex items-center gap-2 text-sm bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg px-4 py-3 text-green-700 dark:text-green-300">
           <CheckCircle size={16} />
-          已儲存 {saveResult.saved} 筆，跳過 {saveResult.skipped} 筆。
-          <button onClick={() => router.push('/contacts')} className="ml-auto underline">前往聯絡人列表</button>
+          {t('saved', { saved: saveResult.saved, skipped: saveResult.skipped })}
+          <button onClick={() => router.push('/contacts')} className="ml-auto underline">{t('goToList')}</button>
         </div>
       )}
 
@@ -232,27 +235,27 @@ export default function BatchUploadPage() {
         >
           <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileSelect} />
           <Upload size={40} className="mx-auto mb-3 text-gray-300 dark:text-gray-600" />
-          <p className="text-gray-500 dark:text-gray-400">點擊選取名片照片（最多 {MAX_FILES} 張）</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">支援 JPG、PNG、HEIC 等格式</p>
+          <p className="text-gray-500 dark:text-gray-400">{t('dropzone', { max: MAX_FILES })}</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t('dropzoneHint')}</p>
         </div>
       )}
 
       {/* File count + start button */}
       {rows.length > 0 && !processing && doneCount === 0 && (
         <div className="flex items-center justify-between mb-4">
-          <p className="text-sm text-gray-600 dark:text-gray-400">已選取 {rows.length} 張圖片</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">{t('selected', { count: rows.length })}</p>
           <div className="flex gap-2">
             <button
               onClick={() => { setRows([]); setSaveResult(null) }}
               className="px-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
             >
-              重新選取
+              {t('reselect')}
             </button>
             <button
               onClick={processAll}
               className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
-              開始辨識
+              {t('startOcr')}
             </button>
           </div>
         </div>
@@ -262,7 +265,7 @@ export default function BatchUploadPage() {
       {(processing || (rows.length > 0 && processedCount > 0)) && rows.length > 0 && (
         <div className="mb-4">
           <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
-            <span>{processing ? '辨識中...' : '辨識完成'} {processedCount}/{rows.length}</span>
+            <span>{processing ? t('processing') : t('done')} {t('progress', { done: processedCount, total: rows.length })}</span>
             {processing && <Loader2 size={12} className="animate-spin" />}
           </div>
           <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2">
@@ -281,14 +284,14 @@ export default function BatchUploadPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-800 text-xs text-gray-500 dark:text-gray-400">
                 <tr>
-                  <th className="px-3 py-2 text-left w-8">跳過</th>
-                  <th className="px-3 py-2 text-left w-20">圖片</th>
-                  <th className="px-3 py-2 text-left">姓名</th>
-                  <th className="px-3 py-2 text-left">公司</th>
-                  <th className="px-3 py-2 text-left">職稱</th>
+                  <th className="px-3 py-2 text-left w-8">{t('colSkip')}</th>
+                  <th className="px-3 py-2 text-left w-20">{t('colImage')}</th>
+                  <th className="px-3 py-2 text-left">{t('colName')}</th>
+                  <th className="px-3 py-2 text-left">{t('colCompany')}</th>
+                  <th className="px-3 py-2 text-left">{t('colJobTitle')}</th>
                   <th className="px-3 py-2 text-left">Email</th>
-                  <th className="px-3 py-2 text-left">電話</th>
-                  <th className="px-3 py-2 text-left w-20">狀態</th>
+                  <th className="px-3 py-2 text-left">{t('colPhone')}</th>
+                  <th className="px-3 py-2 text-left w-20">{t('colStatus')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -341,19 +344,19 @@ export default function BatchUploadPage() {
                       ) : <span className="text-gray-400">—</span>}
                     </td>
                     <td className="px-3 py-2">
-                      {row.status === 'processing' && <span className="text-blue-500 text-xs flex items-center gap-1"><Loader2 size={10} className="animate-spin" />辨識中</span>}
-                      {row.status === 'pending' && <span className="text-gray-400 text-xs">等待中</span>}
+                      {row.status === 'processing' && <span className="text-blue-500 text-xs flex items-center gap-1"><Loader2 size={10} className="animate-spin" />{t('status.processing')}</span>}
+                      {row.status === 'pending' && <span className="text-gray-400 text-xs">{t('status.pending')}</span>}
                       {row.status === 'error' && (
-                        <span className="text-red-500 text-xs flex items-center gap-1" title={row.error}><X size={10} />失敗</span>
+                        <span className="text-red-500 text-xs flex items-center gap-1" title={row.error}><X size={10} />{t('status.error')}</span>
                       )}
                       {row.status === 'done' && row.dupType === 'exact' && (
-                        <span className="text-red-500 text-xs flex items-center gap-1"><AlertTriangle size={10} />重複</span>
+                        <span className="text-red-500 text-xs flex items-center gap-1"><AlertTriangle size={10} />{t('status.duplicate')}</span>
                       )}
                       {row.status === 'done' && row.dupType === 'similar' && (
-                        <span className="text-yellow-500 text-xs flex items-center gap-1"><AlertTriangle size={10} />相似</span>
+                        <span className="text-yellow-500 text-xs flex items-center gap-1"><AlertTriangle size={10} />{t('status.similar')}</span>
                       )}
                       {row.status === 'done' && row.dupType === 'none' && (
-                        <span className="text-green-600 text-xs flex items-center gap-1"><CheckCircle size={10} />OK</span>
+                        <span className="text-green-600 text-xs flex items-center gap-1"><CheckCircle size={10} />{t('status.ok')}</span>
                       )}
                     </td>
                   </tr>
@@ -365,8 +368,8 @@ export default function BatchUploadPage() {
           {/* Dup legend */}
           {rows.some((r) => r.dupType !== 'none') && (
             <div className="flex gap-4 text-xs text-gray-500 dark:text-gray-400 mb-4">
-              <span className="flex items-center gap-1"><AlertTriangle size={10} className="text-red-500" /> 重複：email 完全相同，預設勾選跳過</span>
-              <span className="flex items-center gap-1"><AlertTriangle size={10} className="text-yellow-500" /> 相似：姓名相似度高，請確認</span>
+              <span className="flex items-center gap-1"><AlertTriangle size={10} className="text-red-500" /> {t('dupLegend.exact')}</span>
+              <span className="flex items-center gap-1"><AlertTriangle size={10} className="text-yellow-500" /> {t('dupLegend.similar')}</span>
             </div>
           )}
 
@@ -374,14 +377,14 @@ export default function BatchUploadPage() {
           {!processing && doneCount > 0 && !saveResult && (
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                將儲存 <strong>{toSaveCount}</strong> 筆（跳過 {rows.length - toSaveCount} 筆）
+                {t('willSave', { count: toSaveCount, skip: rows.length - toSaveCount })}
               </p>
               <div className="flex gap-2">
                 <button
                   onClick={() => { setRows([]); setSaveResult(null) }}
                   className="px-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
                 >
-                  重新選取
+                  {t('reselect')}
                 </button>
                 <button
                   onClick={saveAll}
@@ -389,7 +392,7 @@ export default function BatchUploadPage() {
                   className="flex items-center gap-2 px-5 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                 >
                   {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                  一鍵存檔
+                  {t('saveAll')}
                 </button>
               </div>
             </div>

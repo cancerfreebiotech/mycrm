@@ -2,10 +2,18 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon, Globe, BarChart2, ClipboardList } from 'lucide-react'
 import { useTheme } from 'next-themes'
+import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { SUPPORTED_LOCALES, type Locale } from '@/i18n/request'
+
+const LOCALE_LABELS: Record<Locale, string> = {
+  'zh-TW': '繁中',
+  'en': 'EN',
+  'ja': '日本語',
+}
 
 interface UserProfile {
   display_name: string | null
@@ -15,11 +23,32 @@ interface UserProfile {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  const t = useTranslations('nav')
+  const tf = useTranslations('footer')
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
+  const [localeMenuOpen, setLocaleMenuOpen] = useState(false)
+  const [currentLocale, setCurrentLocale] = useState<Locale>('zh-TW')
+  const localeRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { setMounted(true) }, [])
+
+  useEffect(() => {
+    const cookie = document.cookie.split('; ').find(r => r.startsWith('MYCRM_LOCALE='))
+    const val = cookie?.split('=')[1] as Locale | undefined
+    if (val && (SUPPORTED_LOCALES as readonly string[]).includes(val)) setCurrentLocale(val)
+  }, [])
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (localeRef.current && !localeRef.current.contains(e.target as Node)) {
+        setLocaleMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   useEffect(() => {
     async function loadProfile() {
@@ -38,6 +67,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     loadProfile()
   }, [])
 
+  async function handleLocaleChange(locale: Locale) {
+    setLocaleMenuOpen(false)
+    await fetch('/api/set-locale', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locale }),
+    })
+    setCurrentLocale(locale)
+    router.refresh()
+  }
+
   async function handleSignOut() {
     const supabase = createBrowserSupabaseClient()
     await supabase.auth.signOut()
@@ -47,18 +87,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isSuperAdmin = profile?.role === 'super_admin'
 
   const navItems = [
-    { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/contacts', label: '聯絡人', icon: Users },
-    { href: '/notes', label: '筆記搜尋', icon: Search },
-    { href: '/admin/tags', label: 'Tag 管理', icon: Tag },
-    { href: '/unassigned-notes', label: '未歸類筆記', icon: StickyNote },
+    { href: '/', label: t('dashboard'), icon: LayoutDashboard },
+    { href: '/contacts', label: t('contacts'), icon: Users },
+    { href: '/notes', label: t('notes'), icon: Search },
+    { href: '/tasks', label: t('tasks'), icon: ClipboardList },
+    { href: '/admin/tags', label: t('tags'), icon: Tag },
+    { href: '/unassigned-notes', label: t('unassignedNotes'), icon: StickyNote },
     ...(isSuperAdmin ? [
-      { href: '/admin/models', label: '模型管理', icon: ShieldCheck },
-      { href: '/admin/users', label: '使用者管理', icon: ShieldCheck },
+      { href: '/admin/models', label: t('models'), icon: ShieldCheck },
+      { href: '/admin/users', label: t('users'), icon: ShieldCheck },
+      { href: '/admin/reports', label: t('reports'), icon: BarChart2 },
     ] : []),
-    { href: '/admin/templates', label: '郵件範本', icon: Mail },
-    { href: '/settings', label: '個人設定', icon: Settings },
-    { href: '/docs', label: '使用說明', icon: BookOpen },
+    { href: '/admin/templates', label: t('emailTemplates'), icon: Mail },
+    { href: '/settings', label: t('settings'), icon: Settings },
+    { href: '/docs', label: t('docs'), icon: BookOpen },
   ]
 
   return (
@@ -90,11 +132,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Version footer */}
         <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800">
           <p className="text-xs text-gray-400 dark:text-gray-500">
-            v{process.env.NEXT_PUBLIC_APP_VERSION}
+            {tf('version')} {process.env.NEXT_PUBLIC_APP_VERSION}
           </p>
           {process.env.NEXT_PUBLIC_DEPLOY_TIME && (
             <p className="text-xs text-gray-400 dark:text-gray-500">
-              部署於 {process.env.NEXT_PUBLIC_DEPLOY_TIME}
+              {tf('deployTime')} {process.env.NEXT_PUBLIC_DEPLOY_TIME}
             </p>
           )}
         </div>
@@ -104,11 +146,39 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <header className="h-14 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-6">
-          <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 tracking-wide">myCRM 管理系統</span>
+          <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 tracking-wide">{t('appTitle')}</span>
           <div className="flex items-center gap-4">
             {profile?.display_name && (
               <span className="text-sm text-gray-600 dark:text-gray-400">{profile.display_name}</span>
             )}
+            {/* Language switcher */}
+            <div className="relative" ref={localeRef}>
+              <button
+                onClick={() => setLocaleMenuOpen(o => !o)}
+                className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 transition-colors"
+                title="Language"
+              >
+                <Globe size={16} />
+                <span>{LOCALE_LABELS[currentLocale]}</span>
+              </button>
+              {localeMenuOpen && (
+                <div className="absolute right-0 top-7 z-50 w-28 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
+                  {SUPPORTED_LOCALES.map((loc) => (
+                    <button
+                      key={loc}
+                      onClick={() => handleLocaleChange(loc)}
+                      className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                        loc === currentLocale
+                          ? 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-medium'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      {LOCALE_LABELS[loc]}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             {mounted && (
               <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
@@ -123,7 +193,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-colors"
             >
               <LogOut size={16} />
-              Sign out
+              {t('logout')}
             </button>
           </div>
         </header>

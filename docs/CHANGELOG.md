@@ -1,45 +1,50 @@
 # CHANGELOG
 
-## v1.0 — 任務管理 + Teams 整合（待實作）
+## v1.0 — 任務管理 + Teams 整合（已完成 2026-03-15）
 
 ### 變更項目
-- **Bot 新指令 `/work` / `/w`**：AI 解析自然語言，指派任務給多人或提醒自己，同時發 Telegram + Teams 通知
-- **Bot 新指令 `/tasks` / `/t`**：列出我的待處理任務，可標記完成 / 延後 / 取消
-- **Microsoft Teams 整合**：Azure AD Bot Channel Registration，Adaptive Card 附按鈕，支援回調
-- **提醒機制**：pg_cron 每分鐘掃描，Supabase Edge Function `send-reminder` 同時發 Telegram + Teams
-- **新增任務管理頁 `/tasks`**：三個 Tab（我的提醒 / 我指派的 / 指派給我的）+ 搜尋 + 助理視角
-- **助理權限**：可代主管標記完成任務，不能指派，`completed_by` 記錄操作者
-- **個人設定新增「我的助理」**：主管自行設定多位助理，助理可協助多位主管
-- **新增資料表**：`tasks`、`task_assignees`、`user_assistants`
+- **Bot 新指令 `/work` / `/w`**：AI（Gemini）解析自然語言，提取任務標題、截止時間、負責人名稱，搜尋 users 表比對成員，建立任務並發 Telegram 通知指派對象；無指派對象時為自我提醒
+- **Bot 新指令 `/tasks` / `/t`**：列出待處理任務（assigned to me + I created），每筆附 Inline Keyboard：✅ 完成 / ⏭ 延後 / ❌ 取消；延後需輸入新截止時間
+- **任務管理頁 `/tasks`**：三個 Tab（我的提醒 / 我指派的 / 指派給我的）+ 關鍵字搜尋 + 狀態 badge + 完成/延後/取消操作 + 新增/編輯 modal（含多人指派 checkbox）
+- **API routes**：`/api/tasks`（GET/POST）、`/api/tasks/[id]`（PATCH/DELETE）；助理可代主管標記完成，`completed_by` 記錄操作者
+- **個人設定新增「我的助理」**：主管設定多位助理 Email，`/api/assistants`（GET/POST/DELETE）
+- **Microsoft Teams Bot**：`/api/teams-bot` webhook（Adaptive Card 附「標記完成」按鈕、「前往任務管理」連結）；`src/lib/teams.ts` 封裝 Bot Framework token + sendTeamsTaskNotification()
+- **提醒機制**：`supabase/functions/send-reminder/index.ts`，掃描 due_at 剛過 1 分鐘的 pending 任務，Telegram 通知指派者與建立者
+- **新增資料表**：`tasks`、`task_assignees`、`user_assistants`（含 RLS）
 - **新增環境變數**：`TEAMS_BOT_APP_ID`、`TEAMS_BOT_APP_SECRET`、`TEAMS_TENANT_ID`
+- **i18n**：新增 `tasks` namespace（zh-TW / en / ja），nav 新增 `tasks` key
+- **pg_cron 設定（手動執行一次）**：見 `send-reminder/index.ts` 頂部說明
 
 ---
 
 
-## v0.9 — 報表功能（待實作）
+## v0.9 — 報表功能（已完成 2026-03-15）
 
 ### 變更項目
 - **新增報表管理頁 `/admin/reports`**（僅 super_admin）
-- **立即產生**：自由選取時間範圍，網頁呈現表格，可下載 Excel
-- **定時寄送**：pg_cron + Supabase Edge Function + Gmail API（OAuth）
-- **報表內容**：新增名片（Sheet 1）+ 互動紀錄（Sheet 2）
-- **Gmail OAuth 一次性設定**：super admin 在頁面授權，token 存 Supabase Vault
-- **排程規則**：可新增多條，支援每週/每月/自訂 cron，自由設定時間範圍與收件人
-- **新增資料表**：`report_schedules`、`gmail_oauth`
-- **新增環境變數**：`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`、`GMAIL_OAUTH_REDIRECT_URI`
+- **立即產生**：自由選取時間範圍，網頁呈現表格，可下載 Excel（兩個 Sheet：新增名片 + 互動紀錄）
+- **定時寄送**：排程 CRUD UI（週期 radio 選擇器：每週/每月/自訂 cron），排程清單可啟用/停用/刪除
+- **Supabase Edge Function `send-report`**：接收 scheduleId 或批次執行所有活躍排程，產生 Excel 並透過 Gmail API 寄出
+- **Gmail OAuth**：`/api/auth/gmail` 導向 Google OAuth，`/api/auth/gmail/callback` 交換 token 並存入 `gmail_oauth` 表；`/api/auth/gmail/status` 顯示已連結帳戶
+- **callback URL 使用 `NEXT_PUBLIC_APP_URL`**：換網域只需更新環境變數
+- **導覽列新增「報表管理」**（BarChart2 圖示，僅 super_admin 可見）
+- **新增資料表**：`report_schedules`、`gmail_oauth`（含 RLS：super_admin only）
+- **新增 API routes**：`/api/reports/generate`、`/api/reports/schedules`、`/api/reports/schedules/[id]`、`/api/auth/gmail`、`/api/auth/gmail/callback`、`/api/auth/gmail/status`
+- **新增環境變數**：`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`、`NEXT_PUBLIC_APP_URL`
+- **i18n**：新增 `reports` namespace（zh-TW / en / ja），導覽列新增 `nav.reports` key
 
 ---
 
 
-## v0.8 — 多語言支援 i18n（待實作）
+## v0.8 — 多語言支援 i18n（已完成 2026-03-15）
 
 ### 變更項目
-- **新增 `next-intl` 套件**：支援繁體中文、English、日本語
-- **語言檔**：`src/messages/zh-TW.json`、`en.json`、`ja.json`，涵蓋所有 UI 文字
-- **語言切換 UI**：Header 右上角加 `[🌐]` dropdown
-- **語言偏好儲存**：`users.locale` 欄位 + localStorage
-- **預設語言**：瀏覽器自動偵測，fallback 繁體中文
-- **所有頁面 hardcode 文字替換為 i18n key**
+- **新增 `next-intl` 套件**：支援繁體中文、English、日本語（cookie-based，無 URL prefix）
+- **語言檔**：`messages/zh-TW.json`、`en.json`、`ja.json`，涵蓋全站所有 UI 文字
+- **語言切換 UI**：Header 右上角 `🌐` dropdown，個人設定頁語言按鈕群組
+- **語言偏好儲存**：`users.locale` 欄位（DB）+ `MYCRM_LOCALE` cookie（1 年），兩端同步
+- **API route `/api/set-locale`**：POST 設定語言 cookie
+- **所有頁面 hardcode 文字替換為 `useTranslations()` 呼叫**：涵蓋 contacts、notes、unassigned-notes、batch-upload、admin/tags、admin/users、admin/models、admin/templates、settings、dashboard、login 等 14 頁
 
 ---
 

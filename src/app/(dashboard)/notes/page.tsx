@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Search, FileText, Users, Mail, Calendar } from 'lucide-react'
 
@@ -19,15 +20,23 @@ interface NoteRow {
   users: { display_name: string | null; email: string } | null
 }
 
-const TYPE_LABEL: Record<string, { label: string; color: string; icon: React.ElementType }> = {
-  note:    { label: '筆記',   color: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',    icon: FileText },
-  meeting: { label: '會議',   color: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300', icon: Users },
-  email:   { label: '郵件',   color: 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300', icon: Mail },
+const TYPE_COLOR: Record<string, string> = {
+  note:    'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+  meeting: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300',
+  email:   'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300',
+}
+
+const TYPE_ICON: Record<string, React.ElementType> = {
+  note: FileText,
+  meeting: Users,
+  email: Mail,
 }
 
 const PAGE_SIZE = 20
 
 export default function NotesPage() {
+  const t = useTranslations('notes')
+  const tc = useTranslations('common')
   const supabase = createBrowserSupabaseClient()
 
   const [logs, setLogs] = useState<NoteRow[]>([])
@@ -67,7 +76,7 @@ export default function NotesPage() {
   }
 
   function formatDate(str: string) {
-    return new Date(str).toLocaleString('zh-TW', { dateStyle: 'short', timeStyle: 'short' })
+    return new Date(str).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
   }
 
   function snippet(text: string | null, max = 120) {
@@ -78,7 +87,7 @@ export default function NotesPage() {
 
   return (
     <div className="max-w-4xl">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">筆記搜尋</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">{t('title')}</h1>
 
       {/* Filters */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-5 space-y-3">
@@ -90,7 +99,7 @@ export default function NotesPage() {
               type="text"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
-              placeholder="搜尋內容或主旨..."
+              placeholder={t('searchPlaceholder')}
               className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -101,10 +110,10 @@ export default function NotesPage() {
             onChange={(e) => setTypeFilter(e.target.value as LogType)}
             className="text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="all">全部類型</option>
-            <option value="note">筆記</option>
-            <option value="meeting">會議</option>
-            <option value="email">郵件</option>
+            <option value="all">{t('allTypes')}</option>
+            <option value="note">{t('types.note')}</option>
+            <option value="meeting">{t('types.meeting')}</option>
+            <option value="email">{t('types.email')}</option>
           </select>
         </div>
 
@@ -117,7 +126,7 @@ export default function NotesPage() {
             onChange={(e) => setDateFrom(e.target.value)}
             className="text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <span className="text-gray-400 text-sm">至</span>
+          <span className="text-gray-400 text-sm">{t('dateFrom')}</span>
           <input
             type="date"
             value={dateTo}
@@ -129,7 +138,7 @@ export default function NotesPage() {
               onClick={() => { setDateFrom(''); setDateTo('') }}
               className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
             >
-              清除
+              {t('clearDate')}
             </button>
           )}
         </div>
@@ -138,21 +147,21 @@ export default function NotesPage() {
       {/* Results header */}
       {!loading && (
         <div className="flex items-center justify-between mb-2 text-sm text-gray-500 dark:text-gray-400">
-          <span>共 {total} 筆</span>
-          {total > PAGE_SIZE && <span>第 {page}/{Math.ceil(total / PAGE_SIZE)} 頁</span>}
+          <span>{tc('total', { count: total })}</span>
+          {total > PAGE_SIZE && <span>{tc('page', { page, total: Math.ceil(total / PAGE_SIZE) })}</span>}
         </div>
       )}
 
       {/* Results */}
       <div className="space-y-2">
         {loading ? (
-          <div className="text-sm text-gray-400 py-8 text-center">載入中...</div>
+          <div className="text-sm text-gray-400 py-8 text-center">{tc('loading')}</div>
         ) : logs.length === 0 ? (
-          <div className="text-sm text-gray-400 py-8 text-center">無符合條件的紀錄</div>
+          <div className="text-sm text-gray-400 py-8 text-center">{t('noResults')}</div>
         ) : (
           logs.map((log) => {
-            const typeMeta = TYPE_LABEL[log.type] ?? TYPE_LABEL.note
-            const TypeIcon = typeMeta.icon
+            const color = TYPE_COLOR[log.type] ?? TYPE_COLOR.note
+            const TypeIcon = TYPE_ICON[log.type] ?? FileText
             const contactName = (log.contacts as { name: string } | null)?.name
             const creatorName = (log.users as { display_name: string | null; email: string } | null)?.display_name
               || (log.users as { display_name: string | null; email: string } | null)?.email
@@ -164,9 +173,9 @@ export default function NotesPage() {
                 className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4"
               >
                 <div className="flex items-start gap-3">
-                  <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium shrink-0 mt-0.5 ${typeMeta.color}`}>
+                  <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium shrink-0 mt-0.5 ${color}`}>
                     <TypeIcon size={11} />
-                    {typeMeta.label}
+                    {t(`types.${log.type as 'note' | 'meeting' | 'email'}`)}
                   </span>
                   <div className="flex-1 min-w-0">
                     {log.type === 'email' && log.email_subject && (
@@ -175,7 +184,7 @@ export default function NotesPage() {
                       </p>
                     )}
                     {log.type === 'meeting' && log.meeting_date && (
-                      <p className="text-xs text-gray-400 mb-1">會議日期：{log.meeting_date}</p>
+                      <p className="text-xs text-gray-400 mb-1">{t('meetingDate', { date: log.meeting_date })}</p>
                     )}
                     <p className="text-sm text-gray-600 dark:text-gray-400 break-words">
                       {snippet(log.content)}
@@ -189,7 +198,7 @@ export default function NotesPage() {
                           {contactName}
                         </Link>
                       ) : (
-                        <span className="text-gray-400">未歸類</span>
+                        <span className="text-gray-400">{t('unassigned')}</span>
                       )}
                       <span>·</span>
                       <span>{creatorName}</span>

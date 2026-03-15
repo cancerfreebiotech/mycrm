@@ -78,6 +78,37 @@ export async function analyzeBusinessCard(
   return JSON.parse(json) as CardData
 }
 
+export interface TaskParsed {
+  title: string
+  due_at: string | null   // ISO 8601 UTC string or null
+  assignees: string[]     // names or emails to search; empty = self-reminder
+}
+
+export async function parseTaskCommand(
+  text: string,
+  nowIso: string,
+  aiModelId: string | null = null
+): Promise<TaskParsed> {
+  const { modelId, apiKey } = await resolveModelConfig(aiModelId)
+  const genAI = new GoogleGenerativeAI(apiKey)
+  const geminiModel = genAI.getGenerativeModel({ model: modelId })
+
+  const prompt = `現在時間（UTC）：${nowIso}
+請從以下任務描述中提取結構化資訊，回傳純 JSON，不要有任何其他文字：
+{"title":"任務標題","due_at":"ISO8601 UTC 時間或 null","assignees":["姓名或email陣列，若為自我提醒則空陣列"]}
+
+規則：
+- title：簡潔的任務標題
+- due_at：若有提到時間（明天/下週/X月X日/X點等），換算為 UTC ISO 8601；無則 null
+- assignees：提到要指派給誰的姓名或 email（可多人）；若是"提醒我自己"則空陣列
+
+任務描述：${text}`
+
+  const result = await geminiModel.generateContent(prompt)
+  const raw = result.response.text().trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
+  return JSON.parse(raw) as TaskParsed
+}
+
 export async function generateEmailContent(
   description: string,
   templateContent?: string,

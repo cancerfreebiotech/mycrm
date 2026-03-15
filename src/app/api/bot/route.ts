@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
-import { analyzeBusinessCard, generateEmailContent } from '@/lib/gemini'
+import { analyzeBusinessCard, generateEmailContent, parseTaskCommand } from '@/lib/gemini'
 import { processCardImage, generateCardFilename } from '@/lib/imageProcessor'
 import { checkDuplicates } from '@/lib/duplicate'
 import { sendMail } from '@/lib/graph'
@@ -85,10 +85,10 @@ async function getAuthorizedUser(telegramId: number) {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('users')
-    .select('id, ai_model_id, provider_token')
+    .select('id, email, ai_model_id, provider_token')
     .eq('telegram_id', telegramId)
     .single()
-  return data as { id: string; ai_model_id: string | null; provider_token: string | null } | null
+  return data as { id: string; email: string; ai_model_id: string | null; provider_token: string | null } | null
 }
 
 // ── Download photo from Telegram ──────────────────────────────────────────────
@@ -123,6 +123,8 @@ async function handleHelp(chatId: number) {
     `/note — 新增筆記\n` +
     `/email　/e — 發送郵件給聯絡人\n` +
     `/add_back @姓名　/ab @姓名 — 補充名片反面\n` +
+    `/work [描述]　/w — AI 解析任務，指派給他人或提醒自己\n` +
+    `/tasks　/t — 列出我的待處理任務\n` +
     `/user　/u — 列出組織成員\n` +
     `/help　/h — 顯示此說明`
   await sendMessage(chatId, text)
@@ -306,6 +308,146 @@ async function handlePhoto(
   }
 }
 
+// ── Handle /work ──────────────────────────────────────────────────────────────
+
+async function handleWork(
+  chatId: number,
+  user: { id: string; email: string; ai_model_id: string | null; provider_token: string | null },
+  naturalText: string
+) {
+  const supabase = createServiceClient()
+  await sendMessage(chatId, '⏳ AI 解析任務中，請稍候...')
+
+  let parsed
+  try {
+    parsed = await parseTaskCommand(naturalText, new Date().toISOString(), user.ai_model_id)
+  } catch {
+    await sendMessage(chatId, '❌ AI 解析失敗，請重試或換個說法。')
+    return
+  }
+
+  // Resolve assignees from users table
+  const assigneeEmails: string[] = []
+  const assigneeNames: string[] = []
+  for (const name of parsed.assignees) {
+    const { data: found } = await supabase
+      .from('users')
+      .select('email, display_name, telegram_id')
+      .or(`display_name.ilike.%${name}%,email.ilike.%${name}%`)
+      .limit(1)
+      .single()
+    if (found) {
+      assigneeEmails.push(found.email)
+      assigneeNames.push(found.display_name ?? found.email)
+    }
+  }
+
+  // Self-reminder if no assignees found / specified
+  const isSelfReminder = assigneeEmails.length === 0
+  if (isSelfReminder) {
+    assigneeEmails.push(user.email)
+    assigneeNames.push('自己')
+  }
+
+  // Create task
+  const { data: task, error } = await supabase
+    .from('tasks')
+    .insert({
+      title: parsed.title,
+      due_at: parsed.due_at ?? null,
+      created_by: user.email,
+    })
+    .select('id')
+    .single()
+
+  if (error || !task) {
+    await sendMessage(chatId, '❌ 建立任務失敗，請稍後再試。')
+    return
+  }
+
+  // Create task_assignees
+  for (const email of assigneeEmails) {
+    await supabase.from('task_assignees').insert({ task_id: task.id, assignee_email: email })
+  }
+
+  // Notify assignees via Telegram (fetch their telegram_id)
+  const { data: assigneeUsers } = await supabase
+    .from('users')
+    .select('email, display_name, telegram_id')
+    .in('email', assigneeEmails)
+
+  for (const au of assigneeUsers ?? []) {
+    if (!au.telegram_id || au.email === user.email) continue
+    await sendMessage(au.telegram_id,
+      `📋 <b>新任務指派給你</b>\n\n` +
+      `📌 ${parsed.title}\n` +
+      (parsed.due_at ? `⏰ 截止：${new Date(parsed.due_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}\n` : '') +
+      `\n由 ${user.email} 指派。`
+    )
+  }
+
+  const dueStr = parsed.due_at
+    ? `\n⏰ 截止：${new Date(parsed.due_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}`
+    : ''
+  const assigneeStr = isSelfReminder ? '（自我提醒）' : `→ ${assigneeNames.join('、')}`
+
+  await sendMessage(chatId,
+    `✅ 任務已建立 ${assigneeStr}\n\n📌 ${parsed.title}${dueStr}`
+  )
+}
+
+// ── Handle /tasks ─────────────────────────────────────────────────────────────
+
+async function handleTasks(
+  chatId: number,
+  user: { id: string; email: string; ai_model_id: string | null; provider_token: string | null }
+) {
+  const supabase = createServiceClient()
+
+  // Tasks assigned to me
+  const { data: assignedRows } = await supabase
+    .from('task_assignees')
+    .select('task_id')
+    .eq('assignee_email', user.email)
+
+  const assignedIds = (assignedRows ?? []).map(r => r.task_id)
+
+  // Query tasks: assigned to me OR created by me, status = pending
+  const { data: tasks } = await supabase
+    .from('tasks')
+    .select('id, title, due_at, created_by, status')
+    .eq('status', 'pending')
+    .or(`created_by.eq.${user.email},id.in.(${assignedIds.length > 0 ? assignedIds.join(',') : 'null'})`)
+    .order('due_at', { ascending: true, nullsFirst: false })
+    .limit(10)
+
+  if (!tasks || tasks.length === 0) {
+    await sendMessage(chatId, '✅ 你目前沒有待處理任務！')
+    return
+  }
+
+  for (const task of tasks) {
+    const dueStr = task.due_at
+      ? `⏰ ${new Date(task.due_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}`
+      : '⏰ 無截止時間'
+    const isAssignedToMe = assignedIds.includes(task.id)
+    const roleStr = task.created_by === user.email && !isAssignedToMe ? '（我建立）' : '（指派給我）'
+
+    await sendMessage(chatId,
+      `📋 <b>${task.title}</b> ${roleStr}\n${dueStr}`,
+      {
+        reply_markup: {
+          inline_keyboard: [[
+            { text: '✅ 完成', callback_data: `task_done_${task.id}` },
+            { text: '⏭ 延後', callback_data: `task_postpone_${task.id}` },
+            { text: '❌ 取消', callback_data: `task_cancel_${task.id}` },
+          ]],
+        },
+      }
+    )
+  }
+}
+
 // ── Handle text messages ──────────────────────────────────────────────────────
 
 async function handleText(
@@ -476,6 +618,35 @@ async function handleText(
       ? `✅ 已儲存筆記（${contactName}）`
       : '✅ 已儲存為未歸類筆記'
     )
+    return
+  }
+
+  // ── /work /w ───────────────────────────────────────────────────────────────
+  const workMatch = cmd.match(/^\/(?:work|w)\s+(.+)/s)
+  if (workMatch) {
+    await handleWork(chatId, user, workMatch[1].trim())
+    return
+  }
+
+  // ── /tasks /t ──────────────────────────────────────────────────────────────
+  if (cmd === '/tasks' || cmd === '/t') {
+    await handleTasks(chatId, user)
+    return
+  }
+
+  // ── Session: waiting_task_postpone_date ───────────────────────────────────
+  if (session?.state === 'waiting_task_postpone_date') {
+    const taskId = session.context.task_id as string
+    const dateStr = text.trim()
+    // Try to parse the date
+    const parsed = Date.parse(dateStr)
+    if (isNaN(parsed)) {
+      await sendMessage(chatId, '無法解析日期，請輸入格式如：2026-03-20 15:00 或 tomorrow 3pm')
+      return
+    }
+    await supabase.from('tasks').update({ due_at: new Date(parsed).toISOString() }).eq('id', taskId)
+    await clearSession(fromId)
+    await sendMessage(chatId, `✅ 已延後任務截止時間至 ${new Date(parsed).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}`)
     return
   }
 
@@ -951,6 +1122,39 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId, '已取消')
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await sendMessage(from.id, '已取消發信。')
+        }
+
+        // ── /tasks: mark done ─────────────────────────────────────────────────
+        else if (data?.startsWith('task_done_')) {
+          const taskId = data.replace('task_done_', '')
+          const { data: task } = await supabase.from('tasks').select('title').eq('id', taskId).single()
+          await supabase.from('tasks').update({
+            status: 'done',
+            completed_by: user.id,
+            completed_at: new Date().toISOString(),
+          }).eq('id', taskId)
+          await answerCallbackQuery(callbackQueryId, '✅ 已完成')
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, `✅ 任務已完成：${task?.title ?? ''}`)
+        }
+
+        // ── /tasks: postpone ──────────────────────────────────────────────────
+        else if (data?.startsWith('task_postpone_')) {
+          const taskId = data.replace('task_postpone_', '')
+          await setSession(from.id, 'waiting_task_postpone_date', { task_id: taskId })
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, '請輸入新的截止時間（例：2026-03-20 15:00）：')
+        }
+
+        // ── /tasks: cancel task ───────────────────────────────────────────────
+        else if (data?.startsWith('task_cancel_')) {
+          const taskId = data.replace('task_cancel_', '')
+          const { data: task } = await supabase.from('tasks').select('title').eq('id', taskId).single()
+          await supabase.from('tasks').update({ status: 'cancelled' }).eq('id', taskId)
+          await answerCallbackQuery(callbackQueryId, '已取消任務')
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, `❌ 任務已取消：${task?.title ?? ''}`)
         }
 
       } catch (err) {
