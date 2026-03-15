@@ -2,6 +2,9 @@ title: myCRM 說明書
 description: CancerFree Biotech 內部 CRM 系統使用說明
 remote_theme: just-the-docs/just-the-docs@v0.10.0
 
+plugins:
+  - jekyll-remote-theme
+
 url: https://cancerfreebiotech.github.io
 baseurl: /mycrm
 
