@@ -7,7 +7,7 @@ import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut, Settings, Tag, Stick
 import { useTheme } from 'next-themes'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { SUPPORTED_LOCALES, type Locale } from '@/i18n/request'
+import { SUPPORTED_LOCALES, type Locale } from '@/i18n/config'
 
 const LOCALE_LABELS: Record<Locale, string> = {
   'zh-TW': '繁中',
