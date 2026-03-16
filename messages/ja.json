@@ -358,6 +358,28 @@
     "enabled": "有効",
     "disabled": "無効"
   },
+  "countries": {
+    "title": "国管理",
+    "addCountry": "国を追加",
+    "editCountry": "国を編集",
+    "newCountry": "国を追加",
+    "colCode": "コード",
+    "colName": "名称",
+    "colStatus": "ステータス",
+    "colActions": "操作",
+    "noCountries": "国データなし",
+    "enabled": "有効",
+    "disabled": "無効",
+    "codeLabel": "ISOコード（2文字）",
+    "nameLabel": "名称",
+    "codePlaceholder": "例：TW",
+    "namePlaceholder": "例：台湾",
+    "errorRequired": "コードと名称は必須です",
+    "errorCodeFormat": "コードは2文字の大文字英字（ISO 3166-1 alpha-2）",
+    "errorSave": "保存失敗",
+    "confirmDelete": "削除を確認？",
+    "saving": "保存中..."
+  },
   "templates": {
     "title": "メールテンプレート",
     "addTemplate": "テンプレート追加",

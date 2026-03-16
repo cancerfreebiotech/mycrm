@@ -358,6 +358,28 @@
     "enabled": "啟用",
     "disabled": "停用"
   },
+  "countries": {
+    "title": "國家管理",
+    "addCountry": "新增國家",
+    "editCountry": "編輯國家",
+    "newCountry": "新增國家",
+    "colCode": "代碼",
+    "colName": "名稱",
+    "colStatus": "狀態",
+    "colActions": "操作",
+    "noCountries": "尚無國家資料",
+    "enabled": "啟用",
+    "disabled": "停用",
+    "codeLabel": "ISO 代碼（2 碼）",
+    "nameLabel": "名稱",
+    "codePlaceholder": "例：TW",
+    "namePlaceholder": "例：台灣",
+    "errorRequired": "代碼與名稱為必填",
+    "errorCodeFormat": "代碼必須為 2 個大寫英文字母（ISO 3166-1 alpha-2）",
+    "errorSave": "儲存失敗",
+    "confirmDelete": "確認刪除？",
+    "saving": "儲存中..."
+  },
   "templates": {
     "title": "郵件範本",
     "addTemplate": "新增範本",

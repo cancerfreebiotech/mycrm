@@ -358,6 +358,28 @@
     "enabled": "Enabled",
     "disabled": "Disabled"
   },
+  "countries": {
+    "title": "Country Management",
+    "addCountry": "Add Country",
+    "editCountry": "Edit Country",
+    "newCountry": "Add Country",
+    "colCode": "Code",
+    "colName": "Name",
+    "colStatus": "Status",
+    "colActions": "Actions",
+    "noCountries": "No countries yet",
+    "enabled": "Active",
+    "disabled": "Inactive",
+    "codeLabel": "ISO Code (2 chars)",
+    "nameLabel": "Name",
+    "codePlaceholder": "e.g. TW",
+    "namePlaceholder": "e.g. Taiwan",
+    "errorRequired": "Code and name are required",
+    "errorCodeFormat": "Code must be 2 uppercase letters (ISO 3166-1 alpha-2)",
+    "errorSave": "Save failed",
+    "confirmDelete": "Confirm delete?",
+    "saving": "Saving..."
+  },
   "templates": {
     "title": "Email Templates",
     "addTemplate": "New Template",

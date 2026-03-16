@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Plus, Pencil, Trash2, Check, X, Loader2 } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 interface Country {
   code: string
@@ -14,6 +15,8 @@ const EMPTY_FORM = { code: '', name: '' }
 
 export default function AdminCountriesPage() {
   const supabase = createBrowserSupabaseClient()
+  const t = useTranslations('countries')
+  const tc = useTranslations('common')
   const [countries, setCountries] = useState<Country[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -55,8 +58,8 @@ export default function AdminCountriesPage() {
   async function handleSave() {
     const code = form.code.trim().toUpperCase()
     const name = form.name.trim()
-    if (!code || !name) { setError('代碼與名稱為必填'); return }
-    if (!/^[A-Z]{2}$/.test(code)) { setError('代碼必須為 2 個大寫英文字母（ISO 3166-1 alpha-2）'); return }
+    if (!code || !name) { setError(t('errorRequired')); return }
+    if (!/^[A-Z]{2}$/.test(code)) { setError(t('errorCodeFormat')); return }
     setSaving(true)
     setError(null)
     try {
@@ -70,7 +73,7 @@ export default function AdminCountriesPage() {
       closeForm()
       fetchCountries()
     } catch (e) {
-      setError(e instanceof Error ? e.message : '儲存失敗')
+      setError(e instanceof Error ? e.message : t('errorSave'))
     } finally {
       setSaving(false)
     }
@@ -92,12 +95,12 @@ export default function AdminCountriesPage() {
   return (
     <div className="max-w-2xl">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">國家管理</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
         <button
           onClick={openNew}
           className="flex items-center gap-1.5 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
         >
-          <Plus size={14} /> 新增國家
+          <Plus size={14} /> {t('addCountry')}
         </button>
       </div>
 
@@ -106,10 +109,10 @@ export default function AdminCountriesPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <tr>
-              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 w-24">代碼</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">名稱</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 w-24">狀態</th>
-              <th className="px-4 py-3 text-right font-medium text-gray-600 dark:text-gray-400 w-28">操作</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 w-24">{t('colCode')}</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">{t('colName')}</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 w-24">{t('colStatus')}</th>
+              <th className="px-4 py-3 text-right font-medium text-gray-600 dark:text-gray-400 w-28">{t('colActions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -121,7 +124,7 @@ export default function AdminCountriesPage() {
               </tr>
             ) : countries.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-gray-400">尚無國家資料</td>
+                <td colSpan={4} className="px-4 py-8 text-center text-gray-400">{t('noCountries')}</td>
               </tr>
             ) : (
               countries.map((c) => (
@@ -138,7 +141,7 @@ export default function AdminCountriesPage() {
                       }`}
                     >
                       {c.is_active ? <Check size={11} /> : <X size={11} />}
-                      {c.is_active ? '啟用' : '停用'}
+                      {c.is_active ? t('enabled') : t('disabled')}
                     </button>
                   </td>
                   <td className="px-4 py-3">
@@ -156,13 +159,13 @@ export default function AdminCountriesPage() {
                             onClick={() => handleDelete(c.code)}
                             className="text-xs text-red-600 hover:underline"
                           >
-                            確認
+                            {tc('confirm')}
                           </button>
                           <button
                             onClick={() => setConfirmDeleteCode(null)}
                             className="text-xs text-gray-400 hover:underline"
                           >
-                            取消
+                            {tc('cancel')}
                           </button>
                         </span>
                       ) : (
@@ -189,7 +192,7 @@ export default function AdminCountriesPage() {
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <h3 className="font-semibold text-gray-900 dark:text-gray-100">
-                {editing ? '編輯國家' : '新增國家'}
+                {editing ? t('editCountry') : t('newCountry')}
               </h3>
               <button onClick={closeForm} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
                 <X size={18} />
@@ -198,7 +201,7 @@ export default function AdminCountriesPage() {
             <div className="px-6 py-5 space-y-4">
               <div>
                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                  ISO 代碼（2 碼）
+                  {t('codeLabel')}
                 </label>
                 <input
                   type="text"
@@ -206,17 +209,17 @@ export default function AdminCountriesPage() {
                   onChange={(e) => setForm((p) => ({ ...p, code: e.target.value.toUpperCase() }))}
                   disabled={!!editing}
                   maxLength={2}
-                  placeholder="例：TW"
+                  placeholder={t('codePlaceholder')}
                   className={inputClass + (editing ? ' opacity-50 cursor-not-allowed' : '')}
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">名稱</label>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('nameLabel')}</label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                  placeholder="例：台灣"
+                  placeholder={t('namePlaceholder')}
                   className={inputClass}
                   onKeyDown={(e) => e.key === 'Enter' && handleSave()}
                   autoFocus={!editing}
@@ -226,7 +229,7 @@ export default function AdminCountriesPage() {
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
               <button onClick={closeForm} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900">
-                取消
+                {tc('cancel')}
               </button>
               <button
                 onClick={handleSave}
@@ -234,7 +237,7 @@ export default function AdminCountriesPage() {
                 className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
                 {saving && <Loader2 size={14} className="animate-spin" />}
-                儲存
+                {saving ? t('saving') : tc('save')}
               </button>
             </div>
           </div>

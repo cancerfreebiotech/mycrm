@@ -22,11 +22,13 @@ const sections: Section[] = [
   { id: 'tags', title: '使用 Tag 分類', level: 2 },
   { id: 'export', title: 'Export 聯絡人', level: 2 },
   { id: 'personal-settings', title: '個人設定', level: 2 },
+  { id: 'tasks', title: '任務管理', level: 2 },
   { id: 'admin', title: 'Super Admin', level: 1 },
   { id: 'admin-users', title: '管理使用者角色', level: 2 },
   { id: 'admin-models', title: '管理 AI Endpoint 與 Model', level: 2 },
   { id: 'admin-tags', title: '管理 Tag', level: 2 },
   { id: 'admin-templates', title: '管理郵件範本', level: 2 },
+  { id: 'admin-countries', title: '管理國家', level: 2 },
 ]
 
 export default function DocsPage() {
@@ -146,10 +148,16 @@ export default function DocsPage() {
           <h3>新增聯絡人</h3>
           <ol>
             <li>點擊右上角「<strong>新增聯絡人</strong>」</li>
-            <li>可直接填寫表單，或上傳名片照片讓 AI 自動填入</li>
+            <li>可直接填寫表單，或一次上傳最多 <strong>6 張</strong>名片照片讓 AI 合併辨識</li>
+            <li>上傳後點擊「掃描名片」，左側顯示預覽、右側顯示辨識結果比對，確認後點擊「套用到表單」</li>
             <li>系統會即時偵測重複聯絡人（相同 Email 或相似姓名）</li>
             <li>選擇 Tag 後點擊「儲存」</li>
           </ol>
+          <h3>聯絡人詳情</h3>
+          <ul>
+            <li>Email / 電話欄位旁有複製圖示，點擊即可複製到剪貼簿</li>
+            <li>名片區塊可補充上傳多張照片（最多 6 張），AI 辨識後顯示差異欄位供確認</li>
+          </ul>
           <h3>編輯聯絡人</h3>
           <p>進入聯絡人詳情頁，點擊「<strong>編輯</strong>」按鈕，可修改所有欄位或重新上傳名片照片（AI 重新辨識）。</p>
 
@@ -165,7 +173,9 @@ export default function DocsPage() {
           <h3>從聯絡人詳情頁發信</h3>
           <ol>
             <li>進入聯絡人詳情頁，點擊「<strong>寄信</strong>」</li>
-            <li>選擇現有範本，或輸入描述讓 AI 生成內容</li>
+            <li>收件人（To）欄位可手動修改，預設帶入聯絡人 Email</li>
+            <li>選擇現有範本（範本附件會自動帶入），或輸入描述讓 AI 生成內容</li>
+            <li>可額外上傳臨時附件（單次發信，不儲存到範本）</li>
             <li>確認主旨與內文後點擊「發送」</li>
             <li>郵件從你的 Microsoft 信箱寄出，並自動記錄於互動紀錄</li>
           </ol>
@@ -188,6 +198,15 @@ export default function DocsPage() {
             <li>點擊右上角「<strong>Export</strong>」，選擇 Excel（.xlsx）或 CSV 格式下載</li>
           </ol>
           <p>匯出欄位：姓名、公司、職稱、Email、電話、Tags、建立者、建立時間。</p>
+
+          <h2 id="tasks">任務管理</h2>
+          <p>點擊左側「<strong>任務管理</strong>」可建立、追蹤工作提醒與指派任務。</p>
+          <ul>
+            <li><strong>我的提醒</strong>：自己建立給自己的待辦事項</li>
+            <li><strong>我指派的</strong>：指派給其他成員的任務</li>
+            <li><strong>指派給我的</strong>：他人指派給你的任務</li>
+          </ul>
+          <p>任務狀態：待處理 → 已完成 / 已延後 / 已取消。助理（在個人設定中設定）可代為標記任務完成。</p>
 
           <h2 id="personal-settings">個人設定</h2>
           <p>點擊左側「<strong>個人設定</strong>」可調整：</p>
@@ -235,7 +254,16 @@ export default function DocsPage() {
           <ul>
             <li>新增 / 編輯範本：填寫名稱、主旨、HTML 內文</li>
             <li><strong>AI 生成</strong>：在編輯框上方輸入描述，點擊「生成」，AI 自動產生或合併現有內文</li>
-            <li>附件管理：上傳附件（單檔限 2MB），發信時附件檔名會記錄於互動紀錄</li>
+            <li>附件管理：上傳附件（單檔限 2MB），發信時附件自動帶入郵件，附件檔名會記錄於互動紀錄</li>
+          </ul>
+
+          <h2 id="admin-countries">管理國家</h2>
+          <p>前往「<strong>國家管理</strong>」維護 ISO 3166-1 國家代碼清單：</p>
+          <ul>
+            <li>新增國家：填寫 2 碼 ISO 代碼（如 <code>TW</code>）與名稱</li>
+            <li>啟用 / 停用：點擊狀態徽章即可切換，停用後不出現在相關 dropdown</li>
+            <li>編輯名稱：代碼建立後不可修改，只能修改顯示名稱</li>
+            <li>刪除：點擊刪除圖示，確認後移除</li>
           </ul>
 
           <div className="mt-12 pt-6 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-400 dark:text-gray-500">
