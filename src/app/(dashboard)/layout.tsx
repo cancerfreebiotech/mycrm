@@ -92,16 +92,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/contacts', label: t('contacts'), icon: Users },
     { href: '/notes', label: t('notes'), icon: Search },
     { href: '/tasks', label: t('tasks'), icon: ClipboardList },
-    { href: '/admin/tags', label: t('tags'), icon: Tag },
-    { href: '/unassigned-notes', label: t('unassignedNotes'), icon: StickyNote },
+    { href: '/settings', label: t('settings'), icon: Settings },
+    { href: docsUrl, label: t('docs'), icon: BookOpen, external: docsUrl.startsWith('http') },
     ...(isSuperAdmin ? [
+      { href: '/admin/tags', label: t('tags'), icon: Tag },
+      { href: '/unassigned-notes', label: t('unassignedNotes'), icon: StickyNote },
+      { href: '/admin/templates', label: t('emailTemplates'), icon: Mail },
       { href: '/admin/models', label: t('models'), icon: ShieldCheck },
       { href: '/admin/users', label: t('users'), icon: ShieldCheck },
       { href: '/admin/reports', label: t('reports'), icon: BarChart2 },
     ] : []),
-    { href: '/admin/templates', label: t('emailTemplates'), icon: Mail },
-    { href: '/settings', label: t('settings'), icon: Settings },
-    { href: docsUrl, label: t('docs'), icon: BookOpen, external: docsUrl.startsWith('http') },
   ]
 
   return (
