@@ -87,22 +87,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isSuperAdmin = profile?.role === 'super_admin'
 
   const docsUrl = process.env.NEXT_PUBLIC_DOCS_URL ?? '/docs'
-  const navItems: { href: string; label: string; icon: React.ElementType; external?: boolean }[] = [
+  type NavItem = { href: string; label: string; icon: React.ElementType; external?: boolean }
+  const memberItems: NavItem[] = [
     { href: '/', label: t('dashboard'), icon: LayoutDashboard },
     { href: '/contacts', label: t('contacts'), icon: Users },
     { href: '/notes', label: t('notes'), icon: Search },
     { href: '/tasks', label: t('tasks'), icon: ClipboardList },
     { href: '/settings', label: t('settings'), icon: Settings },
     { href: docsUrl, label: t('docs'), icon: BookOpen, external: docsUrl.startsWith('http') },
-    ...(isSuperAdmin ? [
-      { href: '/admin/tags', label: t('tags'), icon: Tag },
-      { href: '/unassigned-notes', label: t('unassignedNotes'), icon: StickyNote },
-      { href: '/admin/templates', label: t('emailTemplates'), icon: Mail },
-      { href: '/admin/models', label: t('models'), icon: ShieldCheck },
-      { href: '/admin/users', label: t('users'), icon: ShieldCheck },
-      { href: '/admin/reports', label: t('reports'), icon: BarChart2 },
-    ] : []),
   ]
+  const adminItems: NavItem[] = isSuperAdmin ? [
+    { href: '/admin/tags', label: t('tags'), icon: Tag },
+    { href: '/unassigned-notes', label: t('unassignedNotes'), icon: StickyNote },
+    { href: '/admin/templates', label: t('emailTemplates'), icon: Mail },
+    { href: '/admin/models', label: t('models'), icon: ShieldCheck },
+    { href: '/admin/users', label: t('users'), icon: ShieldCheck },
+    { href: '/admin/reports', label: t('reports'), icon: BarChart2 },
+  ] : []
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-950">
@@ -112,23 +113,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <span className="text-lg font-bold text-gray-900 dark:text-gray-100">myCRM</span>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {navItems.map(({ href, label, icon: Icon, external }) => {
+          {[...memberItems, ...adminItems].map(({ href, label, icon: Icon, external }, idx) => {
             const active = !external && (href === '/' ? pathname === '/' : pathname.startsWith(href))
             const cls = `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
               active
                 ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400'
                 : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100'
             }`
-            return external ? (
-              <a key={href} href={href} target="_blank" rel="noopener noreferrer" className={cls}>
-                <Icon size={18} />
-                {label}
-              </a>
-            ) : (
-              <Link key={href} href={href} className={cls}>
-                <Icon size={18} />
-                {label}
-              </Link>
+            const isFirstAdminItem = isSuperAdmin && idx === memberItems.length
+            return (
+              <React.Fragment key={href}>
+                {isFirstAdminItem && (
+                  <div className="my-2 border-t border-gray-200 dark:border-gray-700" />
+                )}
+                {external ? (
+                  <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
+                    <Icon size={18} />
+                    {label}
+                  </a>
+                ) : (
+                  <Link href={href} className={cls}>
+                    <Icon size={18} />
+                    {label}
+                  </Link>
+                )}
+              </React.Fragment>
             )
           })}
         </nav>

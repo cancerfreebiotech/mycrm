@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## v1.1.0 — 權限控管改善（2026-03-16）
+
+### 變更項目
+- **側邊欄權限分離**：標籤管理、未指派筆記、郵件範本移至 `super_admin` 專屬，一般 Member 不再看到
+- **側邊欄分隔線**：Super Admin 的管理功能與一般功能之間加一條細線，視覺上明確區分
+- **修復 Bot Webhook URL**：Telegram webhook 誤指向 `mycrm.vercel.app`（他人的 SvelteKit app），改為正確的 `mycrm-vert.vercel.app`
+- **修復 middleware 攔截 Bot 請求**：`supabase.auth.getUser()` 在 bypass 檢查之前執行，導致 `/api/bot` 被攔截；改為對公開路由提前 return，不觸發 Supabase
+- **文件更新**：角色說明、側邊欄說明、管理員功能列表同步更新；修正文件中的 URL
+
+---
+
 ## v1.0.1 — Bug fixes & docs 改善（2026-03-16）
 
 ### 變更項目
