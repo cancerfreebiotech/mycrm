@@ -4,12 +4,20 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Upload, Loader2, AlertTriangle, X } from 'lucide-react'
+import { Upload, Loader2, AlertTriangle, X, Sparkles, Check } from 'lucide-react'
 
 interface Tag { id: string; name: string }
 interface DupContact { id: string; name: string; company: string | null }
 
-const EMPTY_FORM = {
+type OcrFields = {
+  name: string; name_en: string; name_local: string
+  company: string; company_en: string; company_local: string
+  job_title: string; email: string; second_email: string
+  phone: string; second_phone: string; address: string
+  website: string; linkedin_url: string; facebook_url: string
+}
+
+const EMPTY_FORM: OcrFields & { notes: string } = {
   name: '', name_en: '', name_local: '',
   company: '', company_en: '', company_local: '',
   job_title: '',
@@ -18,6 +26,14 @@ const EMPTY_FORM = {
   address: '', website: '',
   linkedin_url: '', facebook_url: '',
   notes: '',
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  name: '姓名', name_en: '英文姓名', name_local: '當地語言姓名',
+  company: '公司', company_en: '英文公司', company_local: '當地語言公司',
+  job_title: '職稱', email: 'Email', second_email: '第二 Email',
+  phone: '電話', second_phone: '第二電話', address: '地址', website: '網站',
+  linkedin_url: 'LinkedIn', facebook_url: 'Facebook',
 }
 
 export default function NewContactPage() {
@@ -30,9 +46,10 @@ export default function NewContactPage() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
-  const [imageBase64, setImageBase64] = useState<string | null>(null)
+  const [files, setFiles] = useState<File[]>([])
+  const [previews, setPreviews] = useState<string[]>([])
   const [ocring, setOcring] = useState(false)
+  const [ocrResult, setOcrResult] = useState<Partial<OcrFields> | null>(null)
   const [saving, setSaving] = useState(false)
   const [dupExact, setDupExact] = useState<DupContact | null>(null)
   const [dupSimilar, setDupSimilar] = useState<DupContact[]>([])
@@ -53,6 +70,11 @@ export default function NewContactPage() {
     init()
   }, [])
 
+  // Cleanup blob URLs on unmount
+  useEffect(() => {
+    return () => { previews.forEach((url) => URL.revokeObjectURL(url)) }
+  }, [])
+
   function set(field: keyof typeof EMPTY_FORM, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }))
   }
@@ -65,7 +87,6 @@ export default function NewContactPage() {
       exact = data ?? null
     }
     setDupExact(exact)
-
     if (form.name) {
       const { data } = await supabase.rpc('find_similar_contacts', { input_name: form.name, threshold: 0.6 })
       setDupSimilar((data ?? []).filter((c: DupContact) => c.id !== exact?.id).slice(0, 3))
@@ -76,7 +97,7 @@ export default function NewContactPage() {
 
   function compressImage(file: File, maxSide = 1024, quality = 0.85): Promise<string> {
     return new Promise((resolve, reject) => {
-      const img = new Image()
+      const img = new window.Image()
       const url = URL.createObjectURL(file)
       img.onload = () => {
         URL.revokeObjectURL(url)
@@ -95,44 +116,56 @@ export default function NewContactPage() {
     })
   }
 
-  async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  function handleFilesChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(e.target.files ?? [])
+    if (selected.length === 0) return
+    const toAdd = selected.slice(0, 6 - files.length)
+    const newPreviews = toAdd.map((f) => URL.createObjectURL(f))
+    setFiles((prev) => [...prev, ...toAdd])
+    setPreviews((prev) => [...prev, ...newPreviews])
+    setOcrResult(null)
+    if (e.target) e.target.value = ''
+  }
+
+  function removeFile(i: number) {
+    URL.revokeObjectURL(previews[i])
+    setFiles((prev) => prev.filter((_, idx) => idx !== i))
+    setPreviews((prev) => prev.filter((_, idx) => idx !== i))
+    setOcrResult(null)
+  }
+
+  async function handleOcr() {
+    if (files.length === 0) return
     setOcring(true)
+    setError(null)
     try {
-      const base64 = await compressImage(file)
-      setImagePreview(`data:image/jpeg;base64,${base64}`)
-      setImageBase64(base64)
+      const bases = await Promise.all(files.map((f) => compressImage(f)))
       const res = await fetch('/api/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: base64, model: aiModelId }),
+        body: JSON.stringify({ images: bases, model: aiModelId }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setForm((prev) => ({
-        ...prev,
-        name: data.name || prev.name,
-        name_en: data.name_en || prev.name_en,
-        name_local: data.name_local || prev.name_local,
-        company: data.company || prev.company,
-        company_en: data.company_en || prev.company_en,
-        company_local: data.company_local || prev.company_local,
-        job_title: data.job_title || prev.job_title,
-        email: data.email || prev.email,
-        second_email: data.second_email || prev.second_email,
-        phone: data.phone || prev.phone,
-        second_phone: data.second_phone || prev.second_phone,
-        address: data.address || prev.address,
-        website: data.website || prev.website,
-        linkedin_url: data.linkedin_url || prev.linkedin_url,
-        facebook_url: data.facebook_url || prev.facebook_url,
-      }))
+      setOcrResult(data as Partial<OcrFields>)
     } catch (err) {
       setError(err instanceof Error ? err.message : '辨識失敗')
     } finally {
       setOcring(false)
     }
+  }
+
+  function applyOcr() {
+    if (!ocrResult) return
+    setForm((prev) => {
+      const next = { ...prev }
+      for (const field of Object.keys(FIELD_LABELS) as (keyof OcrFields)[]) {
+        const val = ocrResult[field]
+        if (val) next[field] = val
+      }
+      return next
+    })
+    setOcrResult(null)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -146,27 +179,13 @@ export default function NewContactPage() {
       const { data: profile } = await supabase.from('users').select('id').eq('email', user.email!).single()
       if (!profile) throw new Error('找不到使用者')
 
-      let card_img_url: string | null = null
-      if (imageBase64) {
-        const buf = Uint8Array.from(atob(imageBase64), (c) => c.charCodeAt(0))
-        const filename = `web_${Date.now()}.jpg`
-        const storagePath = `cards/${filename}`
-        const { error: uploadErr } = await supabase.storage
-          .from('cards')
-          .upload(storagePath, buf, { contentType: 'image/jpeg' })
-        if (!uploadErr) {
-          const { data: urlData } = supabase.storage.from('cards').getPublicUrl(storagePath)
-          card_img_url = urlData.publicUrl
-        }
-      }
-
       const payload = Object.fromEntries(
         Object.entries(form).map(([k, v]) => [k, v.trim() || null])
       )
 
       const { data: inserted, error: insertErr } = await supabase
         .from('contacts')
-        .insert({ ...payload, card_img_url, created_by: profile.id })
+        .insert({ ...payload, created_by: profile.id })
         .select('id')
         .single()
       if (insertErr || !inserted) throw insertErr
@@ -174,6 +193,23 @@ export default function NewContactPage() {
       if (selectedTags.length > 0) {
         await supabase.from('contact_tags').insert(
           selectedTags.map((tag_id) => ({ contact_id: inserted.id, tag_id }))
+        )
+      }
+
+      // Upload images to contact_cards
+      if (files.length > 0) {
+        await Promise.all(
+          files.map(async (file, i) => {
+            try {
+              const base64 = await compressImage(file)
+              const uint8 = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+              const filename = `cards/${inserted.id}_${Date.now()}_${i}.jpg`
+              const { error: uploadErr } = await supabase.storage.from('cards').upload(filename, uint8, { contentType: 'image/jpeg' })
+              if (uploadErr) return
+              const { data: urlData } = supabase.storage.from('cards').getPublicUrl(filename)
+              await supabase.from('contact_cards').insert({ contact_id: inserted.id, url: urlData.publicUrl, storage_path: filename, label: null })
+            } catch { /* skip individual upload failures */ }
+          })
         )
       }
 
@@ -206,6 +242,8 @@ export default function NewContactPage() {
     )
   }
 
+  const ocrHasValues = ocrResult && Object.values(ocrResult).some(Boolean)
+
   return (
     <div className="max-w-2xl">
       <div className="flex items-center gap-3 mb-6">
@@ -216,29 +254,136 @@ export default function NewContactPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Photo upload */}
-        <div
-          onClick={() => fileInputRef.current?.click()}
-          className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-6 text-center cursor-pointer hover:border-blue-400 transition-colors"
-        >
-          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-          {imagePreview ? (
-            <div className="relative inline-block">
-              <img src={imagePreview} alt="名片預覽" className="max-h-40 rounded-lg object-contain mx-auto" />
-              {ocring && (
-                <div className="absolute inset-0 bg-white/70 dark:bg-black/50 flex items-center justify-center rounded-lg">
-                  <Loader2 size={24} className="animate-spin text-blue-500" />
-                </div>
-              )}
+        {/* Multi-photo upload */}
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('cardImages')}</h2>
+            {files.length > 0 && files.length < 6 && (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                + {t('uploadCard')}
+              </button>
+            )}
+          </div>
+
+          <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFilesChange} />
+
+          {files.length === 0 ? (
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-6 text-center cursor-pointer hover:border-blue-400 transition-colors"
+            >
+              <div className="py-2 text-gray-400 dark:text-gray-500">
+                <Upload size={28} className="mx-auto mb-2" />
+                <p className="text-sm">{t('uploadCardHint')}</p>
+                <p className="text-xs mt-1 text-gray-300 dark:text-gray-600">最多 6 張</p>
+              </div>
             </div>
           ) : (
-            <div className="py-4 text-gray-400 dark:text-gray-500">
-              <Upload size={32} className="mx-auto mb-2" />
-              <p className="text-sm">{t('uploadCardHint')}</p>
+            <div className="flex flex-wrap gap-3 mb-3">
+              {previews.map((src, i) => (
+                <div key={i} className="relative group">
+                  <div className="w-32 h-20 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={src} alt={`card-${i + 1}`} className="object-cover w-full h-full" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeFile(i)}
+                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
             </div>
           )}
-          {imagePreview && !ocring && <p className="text-xs text-gray-400 mt-2">{t('reupload')}</p>}
+
+          {/* OCR button */}
+          {files.length > 0 && !ocring && ocrResult === null && (
+            <button
+              type="button"
+              onClick={handleOcr}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              <Sparkles size={14} /> OCR 辨識（{files.length} 張）
+            </button>
+          )}
+          {ocring && (
+            <div className="flex items-center gap-2 text-sm text-blue-500">
+              <Loader2 size={14} className="animate-spin" /> AI 辨識中...
+            </div>
+          )}
         </div>
+
+        {/* OCR comparison panel */}
+        {ocrResult !== null && (
+          <div className="bg-white dark:bg-gray-900 border border-blue-200 dark:border-blue-800 rounded-xl overflow-hidden">
+            <div className="px-5 py-3 bg-blue-50 dark:bg-blue-950/40 border-b border-blue-200 dark:border-blue-800 flex items-center justify-between">
+              <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">OCR 辨識結果確認</span>
+              <button type="button" onClick={() => setOcrResult(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y sm:divide-y-0 sm:divide-x divide-gray-100 dark:divide-gray-800">
+              {/* Left: thumbnails */}
+              <div className="p-4">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">已上傳名片（{files.length} 張）</p>
+                <div className="flex flex-wrap gap-2">
+                  {previews.map((src, i) => (
+                    <div key={i} className="w-28 h-18 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={src} alt={`card-${i + 1}`} className="object-cover w-full h-full" style={{ height: '4.5rem' }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Right: OCR fields */}
+              <div className="p-4">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">辨識欄位</p>
+                {ocrHasValues ? (
+                  <div className="space-y-1.5">
+                    {(Object.keys(FIELD_LABELS) as (keyof OcrFields)[]).map((field) => {
+                      const val = ocrResult[field]
+                      if (!val) return null
+                      return (
+                        <div key={field} className="flex gap-2 text-sm">
+                          <span className="text-gray-400 dark:text-gray-500 w-24 shrink-0 text-xs pt-0.5">{FIELD_LABELS[field]}</span>
+                          <span className="text-gray-900 dark:text-gray-100 text-xs">{val}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400">未辨識到任何欄位</p>
+                )}
+              </div>
+            </div>
+
+            <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-800 flex gap-2">
+              <button
+                type="button"
+                onClick={applyOcr}
+                disabled={!ocrHasValues}
+                className="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40"
+              >
+                <Check size={14} /> 套用到表單
+              </button>
+              <button
+                type="button"
+                onClick={() => setOcrResult(null)}
+                className="px-4 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                忽略
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Duplicate warning */}
         {(dupExact || dupSimilar.length > 0) && (
