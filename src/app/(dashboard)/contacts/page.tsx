@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Search, Download, Plus, ChevronDown } from 'lucide-react'
+import { Search, Download, Plus, ChevronDown, Copy, Check } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 interface Tag {
@@ -36,6 +36,13 @@ export default function ContactsPage() {
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
+  const [copiedEmail, setCopiedEmail] = useState<string | null>(null)
+
+  function copyEmail(email: string) {
+    navigator.clipboard.writeText(email)
+    setCopiedEmail(email)
+    setTimeout(() => setCopiedEmail(null), 1500)
+  }
 
   useEffect(() => {
     fetchAll()
@@ -215,7 +222,20 @@ export default function ContactsPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{c.company || '—'}</td>
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{c.job_title || '—'}</td>
-                  <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{c.email || '—'}</td>
+                  <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
+                    {c.email ? (
+                      <span className="flex items-center gap-1.5">
+                        <span>{c.email}</span>
+                        <button
+                          onClick={() => copyEmail(c.email!)}
+                          className="text-gray-400 hover:text-blue-500 transition-colors flex-shrink-0"
+                          title="複製 Email"
+                        >
+                          {copiedEmail === c.email ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
+                        </button>
+                      </span>
+                    ) : '—'}
+                  </td>
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{c.phone || '—'}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
