@@ -7,6 +7,7 @@ import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Upload, Loader2, AlertTriangle, X, Sparkles, Check } from 'lucide-react'
 
 interface Tag { id: string; name: string }
+interface Country { code: string; name_zh: string; emoji: string }
 interface DupContact { id: string; name: string; company: string | null }
 
 type OcrFields = {
@@ -17,7 +18,7 @@ type OcrFields = {
   website: string; linkedin_url: string; facebook_url: string
 }
 
-const EMPTY_FORM: OcrFields & { notes: string } = {
+const EMPTY_FORM: OcrFields & { notes: string; country_code: string } = {
   name: '', name_en: '', name_local: '',
   company: '', company_en: '', company_local: '',
   job_title: '',
@@ -26,6 +27,7 @@ const EMPTY_FORM: OcrFields & { notes: string } = {
   address: '', website: '',
   linkedin_url: '', facebook_url: '',
   notes: '',
+  country_code: '',
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -45,6 +47,7 @@ export default function NewContactPage() {
 
   const [form, setForm] = useState(EMPTY_FORM)
   const [allTags, setAllTags] = useState<Tag[]>([])
+  const [allCountries, setAllCountries] = useState<Country[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [files, setFiles] = useState<File[]>([])
   const [previews, setPreviews] = useState<string[]>([])
@@ -60,11 +63,13 @@ export default function NewContactPage() {
     async function init() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const [{ data: tags }, { data: profile }] = await Promise.all([
+      const [{ data: tags }, { data: profile }, { data: countries }] = await Promise.all([
         supabase.from('tags').select('id, name').order('name'),
         supabase.from('users').select('ai_model_id').eq('email', user.email!).single(),
+        supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),
       ])
       setAllTags(tags ?? [])
+      setAllCountries(countries ?? [])
       if (profile?.ai_model_id) setAiModelId(profile.ai_model_id)
     }
     init()
@@ -430,6 +435,19 @@ export default function NewContactPage() {
           </div>
           <Field label={t('address')} field="address" />
           <Field label={t('website')} field="website" type="url" />
+          <div>
+            <label className={labelClass}>{t('country')}</label>
+            <select
+              value={form.country_code}
+              onChange={(e) => set('country_code', e.target.value)}
+              className={inputClass}
+            >
+              <option value="">—</option>
+              {allCountries.map((c) => (
+                <option key={c.code} value={c.code}>{c.emoji} {c.name_zh}</option>
+              ))}
+            </select>
+          </div>
         </section>
 
         {/* Social */}

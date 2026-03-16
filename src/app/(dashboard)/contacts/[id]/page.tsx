@@ -9,6 +9,7 @@ import { ArrowLeft, ImageIcon, Mail, X, Pencil, Loader2, Plus, Upload, Trash2, C
 import Image from 'next/image'
 
 interface Tag { id: string; name: string }
+interface Country { code: string; name_zh: string; emoji: string }
 interface Contact {
   id: string
   name: string | null
@@ -27,6 +28,7 @@ interface Contact {
   linkedin_url: string | null
   facebook_url: string | null
   notes: string | null
+  country_code: string | null
   card_img_url: string | null
   card_img_back_url: string | null
   created_at: string
@@ -61,6 +63,7 @@ const EMPTY_EDIT = {
   address: '', website: '',
   linkedin_url: '', facebook_url: '',
   notes: '',
+  country_code: '',
 }
 
 const OCR_FIELD_LABELS: Record<string, string> = {
@@ -93,6 +96,7 @@ export default function ContactDetailPage() {
   const [contact, setContact] = useState<Contact | null>(null)
   const [contactCards, setContactCards] = useState<ContactCard[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
+  const [allCountries, setAllCountries] = useState<Country[]>([])
   const [logs, setLogs] = useState<Log[]>([])
   const [hasMoreLogs, setHasMoreLogs] = useState(false)
   const [loadingMoreLogs, setLoadingMoreLogs] = useState(false)
@@ -152,11 +156,12 @@ export default function ContactDetailPage() {
       const { data: profile } = await supabase.from('users').select('id, ai_model_id').eq('email', user.email).single()
       if (profile) { setCurrentUserId(profile.id); setAiModelId(profile.ai_model_id ?? null) }
     }
-    const [{ data: c }, { data: l }, { data: tags }, { data: cards }] = await Promise.all([
+    const [{ data: c }, { data: l }, { data: tags }, { data: cards }, { data: countries }] = await Promise.all([
       supabase.from('contacts').select('*, users(display_name), contact_tags(tags(id, name))').eq('id', id).single(),
       supabase.from('interaction_logs').select('id, content, type, meeting_date, created_at, users(display_name)').eq('contact_id', id).order('created_at', { ascending: false }).range(0, LOG_PAGE - 1),
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('contact_cards').select('id, url, label, created_at').eq('contact_id', id).order('created_at', { ascending: true }),
+      supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),
     ])
     setContact(c as unknown as Contact)
     const initialLogs = (l as unknown as Log[]) ?? []
@@ -165,6 +170,7 @@ export default function ContactDetailPage() {
     setHasMoreLogs(initialLogs.length === LOG_PAGE)
     setAllTags(tags ?? [])
     setContactCards(cards ?? [])
+    setAllCountries(countries ?? [])
   }
 
   const loadMoreLogs = useCallback(async () => {
@@ -216,6 +222,7 @@ export default function ContactDetailPage() {
       linkedin_url: contact.linkedin_url ?? '',
       facebook_url: contact.facebook_url ?? '',
       notes: contact.notes ?? '',
+      country_code: contact.country_code ?? '',
     })
     setEditOpen(true)
   }
@@ -596,6 +603,10 @@ export default function ContactDetailPage() {
             <InfoRow label={t('secondPhone')} value={contact.second_phone} href={contact.second_phone ? `tel:${contact.second_phone}` : undefined} />
             <InfoRow label={t('address')} value={contact.address} />
             <InfoRow label={t('website')} value={contact.website} href={contact.website ?? undefined} />
+            {contact.country_code && (() => {
+              const c = allCountries.find((c) => c.code === contact.country_code)
+              return <InfoRow label={t('country')} value={c ? `${c.emoji} ${c.name_zh}` : contact.country_code} />
+            })()}
             <InfoRow label="LinkedIn" value={contact.linkedin_url} href={contact.linkedin_url ?? undefined} />
             <InfoRow label="Facebook" value={contact.facebook_url} href={contact.facebook_url ?? undefined} />
             <InfoRow label={t('creator')} value={contact.users?.display_name} />
@@ -904,6 +915,19 @@ export default function ContactDetailPage() {
                         className={inputClass} />
                     </div>
                   ))}
+                  <div>
+                    <label className={labelClass}>{t('country')}</label>
+                    <select
+                      value={editForm.country_code}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, country_code: e.target.value }))}
+                      className={inputClass}
+                    >
+                      <option value="">—</option>
+                      {allCountries.map((c) => (
+                        <option key={c.code} value={c.code}>{c.emoji} {c.name_zh}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
 
