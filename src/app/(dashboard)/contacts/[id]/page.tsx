@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { sendMail } from '@/lib/graph'
-import { ArrowLeft, ImageIcon, Mail, X, Pencil, Loader2, Plus, Upload, Trash2 } from 'lucide-react'
+import { ArrowLeft, ImageIcon, Mail, X, Pencil, Loader2, Plus, Upload, Trash2, Copy, Check, Sparkles, Paperclip } from 'lucide-react'
 import Image from 'next/image'
 
 interface Tag { id: string; name: string }
@@ -42,7 +42,8 @@ interface Log {
   created_at: string
   users: { display_name: string | null } | null
 }
-interface EmailTemplate { id: string; title: string; subject: string | null; body_content: string | null }
+interface TemplateAttachment { id: string; file_name: string; file_url: string; file_size: number }
+interface EmailTemplate { id: string; title: string; subject: string | null; body_content: string | null; attachments: TemplateAttachment[] }
 
 const TYPE_COLOR: Record<string, string> = {
   note: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
@@ -62,6 +63,22 @@ const EMPTY_EDIT = {
   notes: '',
 }
 
+const OCR_FIELD_LABELS: Record<string, string> = {
+  name: '姓名', name_en: '英文姓名', name_local: '當地語言姓名',
+  company: '公司', company_en: '英文公司', company_local: '當地語言公司',
+  job_title: '職稱',
+  email: 'Email', second_email: '第二 Email',
+  phone: '電話', second_phone: '第二電話',
+  address: '地址', website: '網站',
+  linkedin_url: 'LinkedIn', facebook_url: 'Facebook',
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`
+}
+
 export default function ContactDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
@@ -70,7 +87,8 @@ export default function ContactDetailPage() {
   const tc = useTranslations('common')
   const supabase = createBrowserSupabaseClient()
   const editFileRef = useRef<HTMLInputElement>(null)
-  const cardUploadRef = useRef<HTMLInputElement>(null)
+  const cardFilesRef = useRef<HTMLInputElement>(null)
+  const tempAttachRef = useRef<HTMLInputElement>(null)
 
   const [contact, setContact] = useState<Contact | null>(null)
   const [contactCards, setContactCards] = useState<ContactCard[]>([])
@@ -96,19 +114,31 @@ export default function ContactDetailPage() {
   const [editOcring, setEditOcring] = useState(false)
   const [editSaving, setEditSaving] = useState(false)
 
-  // Card upload
-  const [cardUploading, setCardUploading] = useState(false)
-  const [cardLabel, setCardLabel] = useState('')
+  // Multi-card staging
+  const [stagedFiles, setStagedFiles] = useState<File[]>([])
+  const [stagedPreviews, setStagedPreviews] = useState<string[]>([])
+  const [cardOcring, setCardOcring] = useState(false)
+  const [cardOcrDiff, setCardOcrDiff] = useState<Record<string, string> | null>(null)
+  const [cardSaving, setCardSaving] = useState(false)
 
   // Tags
   const [tagInput, setTagInput] = useState('')
   const [tagDropOpen, setTagDropOpen] = useState(false)
 
+  // Email copy
+  const [copiedEmail, setCopiedEmail] = useState<string | null>(null)
+
   // Mail modal
   const [mailOpen, setMailOpen] = useState(false)
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
+  const [mailTo, setMailTo] = useState('')
   const [mailSubject, setMailSubject] = useState('')
   const [mailBody, setMailBody] = useState('')
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
+  const [templateAttachments, setTemplateAttachments] = useState<TemplateAttachment[]>([])
+  const [tempAttaches, setTempAttaches] = useState<Array<{ name: string; base64: string; contentType: string; size: number }>>([])
+  const [mailAiDesc, setMailAiDesc] = useState('')
+  const [mailAiGenerating, setMailAiGenerating] = useState(false)
   const [mailSending, setMailSending] = useState(false)
   const [mailError, setMailError] = useState<string | null>(null)
 
@@ -154,7 +184,6 @@ export default function ContactDetailPage() {
     setLoadingMoreLogs(false)
   }, [loadingMoreLogs, hasMoreLogs, id])
 
-  // IntersectionObserver for infinite scroll sentinel
   useEffect(() => {
     const el = sentinelRef.current
     if (!el) return
@@ -193,7 +222,7 @@ export default function ContactDetailPage() {
 
   function compressImage(file: File, maxSide = 1024, quality = 0.85): Promise<string> {
     return new Promise((resolve, reject) => {
-      const img = new Image()
+      const img = new window.Image()
       const url = URL.createObjectURL(file)
       img.onload = () => {
         URL.revokeObjectURL(url)
@@ -253,28 +282,86 @@ export default function ContactDetailPage() {
     } finally { setEditSaving(false) }
   }
 
-  // ── Contact Cards ────────────────────────────────────────────────────────────
+  // ── Contact Cards (multi-stage) ────────────────────────────────────────────
 
-  async function handleCardUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]; if (!file) return
-    setCardUploading(true)
-    try {
-      const base64 = await compressImage(file)
-      const uint8 = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
-      const filename = `cards/${id}_${Date.now()}.jpg`
-      const { error: uploadErr } = await supabase.storage.from('cards').upload(filename, uint8, { contentType: 'image/jpeg' })
-      if (uploadErr) throw uploadErr
-      const { data: urlData } = supabase.storage.from('cards').getPublicUrl(filename)
-      await supabase.from('contact_cards').insert({ contact_id: id, url: urlData.publicUrl, storage_path: filename, label: cardLabel.trim() || null })
-      setCardLabel('')
-      if (cardUploadRef.current) cardUploadRef.current.value = ''
-      load()
-    } finally { setCardUploading(false) }
+  function handleCardFilesAdd(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    if (files.length === 0) return
+    setStagedFiles((prev) => {
+      const maxNew = 6 - allCards.length - prev.length
+      return [...prev, ...files].slice(0, prev.length + maxNew)
+    })
+    const newPreviews = files.map((f) => URL.createObjectURL(f))
+    setStagedPreviews((prev) => {
+      const maxNew = 6 - allCards.length - prev.length
+      return [...prev, ...newPreviews].slice(0, prev.length + maxNew)
+    })
+    setCardOcrDiff(null)
+    if (e.target) e.target.value = ''
   }
 
-  async function deleteCard(cardId: string, storagePath?: string) {
+  async function handleCardOcr() {
+    if (stagedFiles.length === 0 || !contact) return
+    setCardOcring(true)
+    try {
+      const bases = await Promise.all(stagedFiles.map((f) => compressImage(f)))
+      const res = await fetch('/api/ocr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ images: bases, model: aiModelId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      const diff: Record<string, string> = {}
+      for (const field of Object.keys(OCR_FIELD_LABELS)) {
+        const ocrVal = data[field] as string | undefined
+        const contactVal = contact[field as keyof Contact] as string | null
+        if (ocrVal && !contactVal) {
+          diff[field] = ocrVal
+        }
+      }
+      setCardOcrDiff(diff)
+    } catch {
+      setCardOcrDiff({})
+    } finally {
+      setCardOcring(false)
+    }
+  }
+
+  async function confirmCardSave() {
+    if (stagedFiles.length === 0) return
+    setCardSaving(true)
+    try {
+      await Promise.all(
+        stagedFiles.map(async (file, i) => {
+          const base64 = await compressImage(file)
+          const uint8 = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+          const filename = `cards/${id}_${Date.now()}_${i}.jpg`
+          const { error: uploadErr } = await supabase.storage.from('cards').upload(filename, uint8, { contentType: 'image/jpeg' })
+          if (uploadErr) throw uploadErr
+          const { data: urlData } = supabase.storage.from('cards').getPublicUrl(filename)
+          await supabase.from('contact_cards').insert({ contact_id: id, url: urlData.publicUrl, storage_path: filename, label: null })
+        })
+      )
+      if (cardOcrDiff && Object.keys(cardOcrDiff).length > 0) {
+        await supabase.from('contacts').update(cardOcrDiff).eq('id', id)
+      }
+      cancelCardUpload()
+      load()
+    } finally {
+      setCardSaving(false)
+    }
+  }
+
+  function cancelCardUpload() {
+    stagedPreviews.forEach((url) => URL.revokeObjectURL(url))
+    setStagedFiles([])
+    setStagedPreviews([])
+    setCardOcrDiff(null)
+  }
+
+  async function deleteCard(cardId: string) {
     if (!confirm('確定要刪除此名片圖？')) return
-    if (storagePath) await supabase.storage.from('cards').remove([storagePath])
     await supabase.from('contact_cards').delete().eq('id', cardId)
     load()
   }
@@ -309,21 +396,133 @@ export default function ContactDetailPage() {
     setLogContent(''); setLogDate(''); setAddingLog(false)
   }
 
+  // ── Email copy ────────────────────────────────────────────────────────────────
+
+  function copyEmail(email: string) {
+    navigator.clipboard.writeText(email)
+    setCopiedEmail(email)
+    setTimeout(() => setCopiedEmail(null), 1500)
+  }
+
   // ── Mail ─────────────────────────────────────────────────────────────────────
 
   async function openMailModal() {
-    const { data } = await supabase.from('email_templates').select('id, title, subject, body_content').order('title')
-    setTemplates(data ?? []); setMailSubject(''); setMailBody(''); setMailError(null); setMailOpen(true)
+    const { data } = await supabase
+      .from('email_templates')
+      .select('id, title, subject, body_content, template_attachments(id, file_name, file_url, file_size)')
+      .order('title')
+    const tplList = (data ?? []).map((t: Record<string, unknown>) => ({
+      id: t.id as string,
+      title: t.title as string,
+      subject: t.subject as string | null,
+      body_content: t.body_content as string | null,
+      attachments: (t.template_attachments as TemplateAttachment[]) ?? [],
+    }))
+    setTemplates(tplList)
+    setMailTo(contact?.email ?? '')
+    setMailSubject('')
+    setMailBody('')
+    setSelectedTemplateId('')
+    setTemplateAttachments([])
+    setTempAttaches([])
+    setMailAiDesc('')
+    setMailError(null)
+    setMailOpen(true)
+  }
+
+  function handleTemplateChange(templateId: string) {
+    setSelectedTemplateId(templateId)
+    if (!templateId) {
+      setTemplateAttachments([])
+      return
+    }
+    const tpl = templates.find((t) => t.id === templateId)
+    if (tpl) {
+      setMailSubject(tpl.subject ?? '')
+      setMailBody(tpl.body_content ?? '')
+      setTemplateAttachments(tpl.attachments)
+    }
+  }
+
+  async function handleAiGenerateMail() {
+    if (!mailAiDesc.trim()) return
+    setMailAiGenerating(true)
+    setMailError(null)
+    try {
+      const lastLog = logs[0]?.content ?? ''
+      const description = lastLog ? `${mailAiDesc}\n\n最近互動：${lastLog}` : mailAiDesc
+      const tpl = selectedTemplateId ? templates.find((t) => t.id === selectedTemplateId) : null
+      const res = await fetch('/api/ai-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description, templateContent: tpl?.body_content ?? undefined, model: aiModelId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setMailBody(data.html)
+    } catch (e) {
+      setMailError(e instanceof Error ? e.message : 'AI 生成失敗')
+    } finally {
+      setMailAiGenerating(false)
+    }
+  }
+
+  async function handleAddTempAttach(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    if (files.length === 0) return
+    const MAX = 2 * 1024 * 1024
+    setMailError(null)
+    for (const file of files) {
+      if (file.size > MAX) {
+        setMailError(`「${file.name}」超過 2MB 限制`)
+        continue
+      }
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve((reader.result as string).split(',')[1])
+        reader.readAsDataURL(file)
+      })
+      setTempAttaches((prev) => [...prev, { name: file.name, base64, contentType: file.type || 'application/octet-stream', size: file.size }])
+    }
+    if (e.target) e.target.value = ''
+  }
+
+  async function urlToBase64(url: string): Promise<string> {
+    const res = await fetch(url)
+    const buf = await res.arrayBuffer()
+    const bytes = new Uint8Array(buf)
+    let binary = ''
+    bytes.forEach((b) => { binary += String.fromCharCode(b) })
+    return btoa(binary)
   }
 
   async function handleSendMail() {
-    if (!contact?.email || !mailSubject.trim()) return
+    if (!mailTo.trim() || !mailSubject.trim()) return
     setMailSending(true); setMailError(null)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const accessToken = session?.provider_token
       if (!accessToken) throw new Error('找不到 Microsoft 存取權限，請重新登入')
-      await sendMail({ accessToken, to: contact.email, subject: mailSubject, body: mailBody })
+
+      const attachments: { name: string; contentType: string; contentBytes: string }[] = []
+
+      for (const a of templateAttachments) {
+        try {
+          const contentBytes = await urlToBase64(a.file_url)
+          const ext = a.file_name.split('.').pop()?.toLowerCase() ?? ''
+          const contentType = ext === 'pdf' ? 'application/pdf'
+            : ['xlsx', 'xls'].includes(ext) ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            : ext === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            : 'application/octet-stream'
+          attachments.push({ name: a.file_name, contentType, contentBytes })
+        } catch { /* skip failed fetch */ }
+      }
+
+      for (const a of tempAttaches) {
+        attachments.push({ name: a.name, contentType: a.contentType, contentBytes: a.base64 })
+      }
+
+      await sendMail({ accessToken, to: mailTo, subject: mailSubject, body: mailBody, attachments: attachments.length > 0 ? attachments : undefined })
       const { data } = await supabase.from('interaction_logs')
         .insert({ contact_id: id, content: `寄送郵件：${mailSubject}`, type: 'email', created_by: currentUserId })
         .select('id, content, type, meeting_date, created_at, users(display_name)').single()
@@ -339,16 +538,27 @@ export default function ContactDetailPage() {
   const inputClass = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
   const labelClass = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1'
 
-  function InfoRow({ label, value, href }: { label: string; value: string | null | undefined; href?: string }) {
+  function InfoRow({ label, value, href, copyable }: { label: string; value: string | null | undefined; href?: string; copyable?: boolean }) {
     if (!value) return null
     return (
       <div className="flex gap-3 text-sm">
         <span className="w-24 text-gray-400 dark:text-gray-500 shrink-0">{label}</span>
-        {href ? (
-          <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline truncate">{value}</a>
-        ) : (
-          <span className="text-gray-900 dark:text-gray-100">{value}</span>
-        )}
+        <span className="flex items-center gap-1.5 min-w-0">
+          {href ? (
+            <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline truncate">{value}</a>
+          ) : (
+            <span className="text-gray-900 dark:text-gray-100 truncate">{value}</span>
+          )}
+          {copyable && (
+            <button
+              onClick={() => copyEmail(value)}
+              className="text-gray-400 hover:text-blue-500 transition-colors flex-shrink-0"
+              title="複製"
+            >
+              {copiedEmail === value ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
+            </button>
+          )}
+        </span>
       </div>
     )
   }
@@ -380,8 +590,8 @@ export default function ContactDetailPage() {
             <InfoRow label={t('companyEn')} value={contact.company_en} />
             <InfoRow label={t('companyLocal')} value={contact.company_local} />
             <InfoRow label={t('jobTitle')} value={contact.job_title} />
-            <InfoRow label="Email" value={contact.email} href={contact.email ? `mailto:${contact.email}` : undefined} />
-            <InfoRow label={t('secondEmail')} value={contact.second_email} href={contact.second_email ? `mailto:${contact.second_email}` : undefined} />
+            <InfoRow label="Email" value={contact.email} href={contact.email ? `mailto:${contact.email}` : undefined} copyable />
+            <InfoRow label={t('secondEmail')} value={contact.second_email} href={contact.second_email ? `mailto:${contact.second_email}` : undefined} copyable />
             <InfoRow label={t('phone')} value={contact.phone} href={contact.phone ? `tel:${contact.phone}` : undefined} />
             <InfoRow label={t('secondPhone')} value={contact.second_phone} href={contact.second_phone ? `tel:${contact.second_phone}` : undefined} />
             <InfoRow label={t('address')} value={contact.address} />
@@ -441,8 +651,8 @@ export default function ContactDetailPage() {
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-4">
         <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('cardImages')}</h2>
 
-        {/* Card gallery */}
-        {allCards.length > 0 ? (
+        {/* Saved cards gallery */}
+        {allCards.length > 0 && (
           <div className="flex flex-wrap gap-3 mb-4">
             {allCards.map((card) => (
               <div key={card.id} className="relative group">
@@ -461,31 +671,109 @@ export default function ContactDetailPage() {
               </div>
             ))}
           </div>
-        ) : (
+        )}
+
+        {/* No cards placeholder */}
+        {allCards.length === 0 && stagedFiles.length === 0 && (
           <div className="flex items-center justify-center w-36 h-24 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 mb-4">
             <ImageIcon size={24} className="text-gray-300 dark:text-gray-600" />
           </div>
         )}
 
-        {/* Upload new card */}
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={cardLabel}
-            onChange={(e) => setCardLabel(e.target.value)}
-            placeholder={t('cardLabel')}
-            className="text-sm px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1"
-          />
-          <button
-            onClick={() => cardUploadRef.current?.click()}
-            disabled={cardUploading}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
-          >
-            {cardUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-            {t('uploadCard')}
-          </button>
-          <input ref={cardUploadRef} type="file" accept="image/*" className="hidden" onChange={handleCardUpload} />
-        </div>
+        {/* Staged files preview + actions */}
+        {stagedFiles.length > 0 && (
+          <div className="mb-4">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">待上傳（{stagedFiles.length} 張）</p>
+            <div className="flex flex-wrap gap-3 mb-3">
+              {stagedPreviews.map((src, i) => (
+                <div key={i} className="relative group">
+                  <div className="w-36 h-24 rounded-lg overflow-hidden border-2 border-dashed border-blue-400">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={src} alt={`待上傳-${i + 1}`} className="object-cover w-full h-full" />
+                  </div>
+                  <button
+                    onClick={() => {
+                      URL.revokeObjectURL(stagedPreviews[i])
+                      setStagedFiles((prev) => prev.filter((_, idx) => idx !== i))
+                      setStagedPreviews((prev) => prev.filter((_, idx) => idx !== i))
+                      setCardOcrDiff(null)
+                    }}
+                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* OCR diff */}
+            {cardOcrDiff !== null && (
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg text-sm mb-3">
+                {Object.keys(cardOcrDiff).length > 0 ? (
+                  <>
+                    <p className="text-xs font-medium text-blue-700 dark:text-blue-400 mb-2">以下空白欄位將補上 OCR 識別結果：</p>
+                    <div className="space-y-1">
+                      {Object.entries(cardOcrDiff).map(([field, value]) => (
+                        <div key={field} className="flex gap-2 text-xs">
+                          <span className="text-gray-500 dark:text-gray-400 w-28 shrink-0">{OCR_FIELD_LABELS[field] ?? field}</span>
+                          <span className="text-gray-900 dark:text-gray-100">{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">OCR 未找到可補充的空白欄位，仍可儲存名片圖</p>
+                )}
+              </div>
+            )}
+
+            {/* Card staging actions */}
+            <div className="flex gap-2">
+              {!cardOcring && cardOcrDiff === null && (
+                <button
+                  onClick={handleCardOcr}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  <Sparkles size={14} /> OCR 辨識
+                </button>
+              )}
+              {cardOcring && (
+                <span className="flex items-center gap-1.5 text-sm text-blue-500 px-1">
+                  <Loader2 size={14} className="animate-spin" /> 辨識中...
+                </span>
+              )}
+              {cardOcrDiff !== null && (
+                <button
+                  onClick={confirmCardSave}
+                  disabled={cardSaving}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {cardSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  確認儲存
+                </button>
+              )}
+              <button
+                onClick={cancelCardUpload}
+                className="px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Add card button */}
+        {stagedFiles.length === 0 && allCards.length < 6 && (
+          <div>
+            <button
+              onClick={() => cardFilesRef.current?.click()}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+            >
+              <Upload size={14} /> {t('uploadCard')}
+            </button>
+            <input ref={cardFilesRef} type="file" accept="image/*" multiple className="hidden" onChange={handleCardFilesAdd} />
+          </div>
+        )}
       </div>
 
       {/* Interaction Logs */}
@@ -655,41 +943,120 @@ export default function ContactDetailPage() {
       {/* Mail Modal */}
       {mailOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
               <h3 className="font-semibold text-gray-900 dark:text-gray-100">{tm('title')}</h3>
               <button onClick={() => setMailOpen(false)} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"><X size={18} /></button>
             </div>
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-6 py-5 space-y-4 overflow-y-auto">
+              {/* To */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">{tm('recipient')}</label>
-                <input type="text" value={contact.email ?? ''} readOnly className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400" />
+                <input
+                  type="email"
+                  value={mailTo}
+                  onChange={(e) => setMailTo(e.target.value)}
+                  className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
+
+              {/* Template */}
               {templates.length > 0 && (
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">{tm('template')}</label>
-                  <select defaultValue="" onChange={(e) => { const tpl = templates.find((tpl) => tpl.id === e.target.value); if (tpl) { setMailSubject(tpl.subject ?? ''); setMailBody(tpl.body_content ?? '') } }}
-                    className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                  <select
+                    value={selectedTemplateId}
+                    onChange={(e) => handleTemplateChange(e.target.value)}
+                    className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                  >
                     <option value="">{tm('selectTemplate')}</option>
                     {templates.map((tpl) => <option key={tpl.id} value={tpl.id}>{tpl.title}</option>)}
                   </select>
                 </div>
               )}
+
+              {/* Template attachments (read-only) */}
+              {templateAttachments.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 mb-1.5">範本附件</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {templateAttachments.map((a) => (
+                      <span key={a.id} className="flex items-center gap-1 text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded-lg">
+                        <Paperclip size={11} /> {a.file_name} <span className="text-gray-400">({formatFileSize(a.file_size)})</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* AI generate */}
+              <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg space-y-2">
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">AI 生成信件內文</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={mailAiDesc}
+                    onChange={(e) => setMailAiDesc(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAiGenerateMail()}
+                    placeholder="描述信件目的（如：感謝上次會面，介紹新產品）"
+                    className="flex-1 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    onClick={handleAiGenerateMail}
+                    disabled={mailAiGenerating || !mailAiDesc.trim()}
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-40"
+                  >
+                    {mailAiGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                    生成
+                  </button>
+                </div>
+              </div>
+
+              {/* Subject */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">{tm('subject')}</label>
                 <input type="text" value={mailSubject} onChange={(e) => setMailSubject(e.target.value)} placeholder={tm('subjectPlaceholder')}
                   className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
+
+              {/* Body */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">{tm('body')}</label>
-                <textarea value={mailBody} onChange={(e) => setMailBody(e.target.value)} rows={6} placeholder={tm('bodyPlaceholder')}
+                <textarea value={mailBody} onChange={(e) => setMailBody(e.target.value)} rows={7} placeholder={tm('bodyPlaceholder')}
                   className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
+
+              {/* Temp attachments */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-medium text-gray-500">額外附件（最大 2MB）</label>
+                  <button
+                    onClick={() => tempAttachRef.current?.click()}
+                    className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    <Paperclip size={11} /> 新增
+                  </button>
+                  <input ref={tempAttachRef} type="file" multiple className="hidden" onChange={handleAddTempAttach} />
+                </div>
+                {tempAttaches.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {tempAttaches.map((a, i) => (
+                      <span key={i} className="flex items-center gap-1 text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded-lg">
+                        <Paperclip size={11} /> {a.name} <span className="text-gray-400">({formatFileSize(a.size)})</span>
+                        <button onClick={() => setTempAttaches((prev) => prev.filter((_, idx) => idx !== i))} className="hover:text-red-500 ml-0.5">
+                          <X size={11} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {mailError && <p className="text-sm text-red-600 dark:text-red-400">{mailError}</p>}
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700 shrink-0">
               <button onClick={() => setMailOpen(false)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900">{tc('cancel')}</button>
-              <button onClick={handleSendMail} disabled={mailSending || !mailSubject.trim()}
+              <button onClick={handleSendMail} disabled={mailSending || !mailTo.trim() || !mailSubject.trim()}
                 className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40">
                 <Mail size={14} /> {mailSending ? tm('sending') : tm('send')}
               </button>
