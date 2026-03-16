@@ -17,6 +17,7 @@ export interface CardData {
   website: string
   linkedin_url: string
   facebook_url: string
+  country_code: string | null
 }
 
 interface ModelConfig {
@@ -26,7 +27,13 @@ interface ModelConfig {
 
 const SYSTEM_PROMPT = `你是一個專業名片辨識助手。名片可能為中文、英文或日文，請辨識後以原文回傳各欄位。
 從圖中提取以下資訊，回傳純 JSON，不要有任何其他文字：
-{"name":"","name_en":"","name_local":"","company":"","company_en":"","company_local":"","job_title":"","email":"","second_email":"","phone":"","second_phone":"","address":"","website":"","linkedin_url":"","facebook_url":""}`
+{"name":"","name_en":"","name_local":"","company":"","company_en":"","company_local":"","job_title":"","email":"","second_email":"","phone":"","second_phone":"","address":"","website":"","linkedin_url":"","facebook_url":"","country_code":null}
+
+country_code 規則：回傳 ISO 2 碼（如 "TW"、"JP"、"US"），依據以下優先順序判斷：
+1. 電話號碼國碼（+886→TW、+81→JP、+1→US、+82→KR、+65→SG、+91→IN）
+2. 地址內容（含國名、城市、郵遞區號格式）
+3. 公司名稱語言特徵（日文假名→JP、韓文→KR）
+找不到則回傳 null`
 
 // Resolve ai_model_id (UUID) → { modelId, apiKey }
 // Falls back to env GEMINI_API_KEY + default model string if aiModelId is a plain model string or null
