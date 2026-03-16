@@ -30,7 +30,10 @@ async function verifyTeamsRequest(req: NextRequest): Promise<boolean> {
 async function getBotToken(): Promise<string | null> {
   const appId = process.env.TEAMS_BOT_APP_ID
   const appSecret = process.env.TEAMS_BOT_APP_SECRET
-  if (!appId || !appSecret) return null
+  if (!appId || !appSecret) {
+    console.error('[teams-bot] getBotToken: TEAMS_BOT_APP_ID or TEAMS_BOT_APP_SECRET not set')
+    return null
+  }
   try {
     const res = await fetch('https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token', {
       method: 'POST',
@@ -43,8 +46,10 @@ async function getBotToken(): Promise<string | null> {
       }),
     })
     const data = await res.json()
+    if (!data.access_token) console.error('[teams-bot] getBotToken failed:', data.error, data.error_description)
     return (data.access_token as string) ?? null
-  } catch {
+  } catch (e) {
+    console.error('[teams-bot] getBotToken exception:', e)
     return null
   }
 }
@@ -55,7 +60,10 @@ async function resolveAadEmail(aadObjectId: string): Promise<string | null> {
   const appId = process.env.TEAMS_BOT_APP_ID
   const appSecret = process.env.TEAMS_BOT_APP_SECRET
   const tenantId = process.env.TEAMS_TENANT_ID
-  if (!appId || !appSecret || !tenantId) return null
+  if (!appId || !appSecret || !tenantId) {
+    console.error('[teams-bot] resolveAadEmail: missing env vars', { appId: !!appId, appSecret: !!appSecret, tenantId: !!tenantId })
+    return null
+  }
   try {
     // Get app-level Graph token
     const tokenRes = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
@@ -77,17 +85,26 @@ async function resolveAadEmail(aadObjectId: string): Promise<string | null> {
       `https://graph.microsoft.com/v1.0/users/${aadObjectId}?$select=mail,userPrincipalName`,
       { headers: { Authorization: `Bearer ${graphToken}` } },
     )
-    if (!userRes.ok) return null
+    if (!userRes.ok) {
+      const errBody = await userRes.text()
+      console.error('[teams-bot] resolveAadEmail Graph error:', userRes.status, errBody)
+      return null
+    }
     const userData = await userRes.json()
+    console.log('[teams-bot] resolveAadEmail result:', userData.mail ?? userData.userPrincipalName)
     return (userData.mail ?? userData.userPrincipalName ?? null) as string | null
-  } catch {
+  } catch (e) {
+    console.error('[teams-bot] resolveAadEmail exception:', e)
     return null
   }
 }
 
 async function sendToTeams(serviceUrl: string, conversationId: string, text: string, replyToId?: string) {
   const token = await getBotToken()
-  if (!token) return
+  if (!token) {
+    console.error('[teams-bot] sendToTeams: no token, skipping reply')
+    return
+  }
   const base = serviceUrl.replace(/\/$/, '')
   const url = replyToId
     ? `${base}/v3/conversations/${conversationId}/activities/${replyToId}`
@@ -139,6 +156,8 @@ export async function POST(req: NextRequest) {
   const from = body.from as Record<string, string> | undefined
   const aadId = from?.aadObjectId ?? ''
   const supabase = createServiceClient()
+
+  console.log('[teams-bot]', { activityType, aadId: aadId || '(none)', conversationId: conversationId.slice(0, 20) })
 
   // ── conversationUpdate: user added/messaged the bot for the first time ───
   if (activityType === 'conversationUpdate') {
