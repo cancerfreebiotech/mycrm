@@ -2021,13 +2021,13 @@ update report_schedules set owner_id = created_by where owner_id is null;
 
 ## 二十五、v1.3 開發任務清單
 
-- [ ] **Task 57** `[修改]` — 執行 Migration SQL（docs_content、prompts、user_prompts、report_schedules.owner_id）
-- [ ] **Task 58** `[新增]` — 新增 `src/lib/prompts.ts`（SYSTEM_PROMPTS 常數 + getPrompt() 函式，依層級取 prompt）
-- [ ] **Task 59** `[新增]` — 新增 `/api/docs/generate` route（讀 PRD、呼叫 AI 生成 6 份內容、upsert docs_content）；設定 Vercel build hook 自動觸發
-- [ ] **Task 60** `[修改]` — 更新 `/docs` 頁面（語言切換按鈕、從 docs_content 撈內容）
-- [ ] **Task 61** `[新增]` — 新增 Prompt 管理頁 `/admin/prompts`（4 個 prompt 的編輯 + 還原系統預設）
-- [ ] **Task 62** `[修改]` — 更新個人設定頁 `/settings`（新增 email_generate prompt 編輯區塊 + 還原組織預設）
-- [ ] **Task 63** `[修改]` — 更新所有 AI 呼叫處（OCR、email 生成、任務解析、說明書生成）改為呼叫 `getPrompt()`
-- [ ] **Task 64** `[修改]` — 更新報表頁 `/admin/reports`（依角色過濾規則，資料範圍加入 owner_id 判斷）
-- [ ] **Task 65** `[修改]` — 更新新增聯絡人頁 `/contacts/new`（補國家欄位）
-- [ ] **Task 66** `[修改]` — 更新聯絡人列表 `/contacts`（新增國家篩選 dropdown）
+- [ ] **Task 66** `[修改]` — 執行 Migration SQL（docs_content、prompts、user_prompts、report_schedules.owner_id）
+- [ ] **Task 67** `[新增]` — 新增 `src/lib/prompts.ts`（SYSTEM_PROMPTS 常數 + getPrompt() 函式，依層級取 prompt）
+- [ ] **Task 68** `[新增]` — 新增 `/api/docs/generate` route（讀 PRD、呼叫 AI 生成 6 份內容、upsert docs_content）；設定 Vercel build hook 自動觸發
+- [ ] **Task 69** `[修改]` — 更新 `/docs` 頁面（語言切換按鈕、從 docs_content 撈內容）
+- [ ] **Task 70** `[新增]` — 新增 Prompt 管理頁 `/admin/prompts`（4 個 prompt 的編輯 + 還原系統預設）
+- [ ] **Task 71** `[修改]` — 更新個人設定頁 `/settings`（新增 email_generate prompt 編輯區塊 + 還原組織預設）
+- [ ] **Task 72** `[修改]` — 更新所有 AI 呼叫處（OCR、email 生成、任務解析、說明書生成）改為呼叫 `getPrompt()`
+- [ ] **Task 73** `[修改]` — 更新報表頁 `/admin/reports`（依角色過濾規則，資料範圍加入 owner_id 判斷）
+- [ ] **Task 74** `[修改]` — 更新新增聯絡人頁 `/contacts/new`（補國家欄位）
+- [ ] **Task 75** `[修改]` — 更新聯絡人列表 `/contacts`（新增國家篩選 dropdown）
