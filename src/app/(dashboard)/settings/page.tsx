@@ -91,7 +91,6 @@ export default function SettingsPage() {
         setDisplayName(userData.display_name ?? '')
         setRole(userData.role ?? 'member')
         setTelegramId(userData.telegram_id ? String(userData.telegram_id) : '')
-        if (userData.theme) setTheme(userData.theme)
         const savedLocale = userData.locale as Locale
         if (savedLocale && (SUPPORTED_LOCALES as readonly string[]).includes(savedLocale)) {
           setLocale(savedLocale)
