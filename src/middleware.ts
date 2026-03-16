@@ -2,6 +2,19 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+
+  // Early return BEFORE Supabase for routes that don't need auth
+  if (
+    pathname.startsWith('/api/bot') ||
+    pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/docs') ||
+    pathname === '/api/set-locale' ||
+    pathname.startsWith('/api/admin/')
+  ) {
+    return NextResponse.next()
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -25,16 +38,7 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const isLoginPage = request.nextUrl.pathname === '/login'
-  const isDocsPage = request.nextUrl.pathname.startsWith('/docs')
-  const isApiBot = request.nextUrl.pathname.startsWith('/api/bot')
-  const isAuthCallback = request.nextUrl.pathname.startsWith('/api/auth')
-  const isSetLocale = request.nextUrl.pathname === '/api/set-locale'
-
-  // Allow bot webhook, auth callback, docs, and set-locale without session
-  if (isApiBot || isAuthCallback || isDocsPage || isSetLocale) {
-    return supabaseResponse
-  }
+  const isLoginPage = pathname === '/login'
 
   // Redirect unauthenticated users to login
   if (!user && !isLoginPage) {
