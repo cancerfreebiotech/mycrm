@@ -30,12 +30,13 @@ async function verifyTeamsRequest(req: NextRequest): Promise<boolean> {
 async function getBotToken(): Promise<string | null> {
   const appId = process.env.TEAMS_BOT_APP_ID
   const appSecret = process.env.TEAMS_BOT_APP_SECRET
+  const tenantId = process.env.TEAMS_TENANT_ID ?? 'botframework.com'
   if (!appId || !appSecret) {
     console.error('[teams-bot] getBotToken: TEAMS_BOT_APP_ID or TEAMS_BOT_APP_SECRET not set')
     return null
   }
   try {
-    const res = await fetch('https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token', {
+    const res = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
