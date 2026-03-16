@@ -1837,3 +1837,197 @@ alter table contacts add column if not exists country_code text references count
 - [ ] **Task 63** `[修改]` — 更新 Dashboard Layout（Sidebar RWD：手機 hamburger、平板 icon-only + 展開）
 - [ ] **Task 64** `[修改]` — 更新 `/docs` 說明書（同步 v1.2 新功能：多張名片、國家欄位、寄信強化、sidebar）
 - [ ] **Task 65** `[修改]` — i18n 語言檔新增 v1.2 相關 key（countries、copyEmail、sendEmail 強化）
+
+---
+
+## 二十四、v1.3 功能規格
+
+### 24.1 說明書多國語言
+
+#### 設計原則
+- 預先生成三種語言版本，存入資料庫，切換語言只是顯示不同內容，不消耗 AI token
+- 部署時自動觸發重新生成
+
+#### 資料表
+
+**`docs_content`**
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | 主鍵 |
+| locale | text (NOT NULL) | `zh-TW` / `en` / `ja` |
+| section | text (NOT NULL) | `user` / `super_admin` |
+| content | text | 生成的 Markdown 內容 |
+| generated_at | timestamptz | 生成時間 |
+| UNIQUE (locale, section) | | 每個語言每個 section 唯一一筆 |
+
+#### 生成流程
+1. Vercel build 時呼叫 `/api/docs/generate`（POST）
+2. API route 讀取 `docs/PRD.md`
+3. 分別呼叫 AI 生成 zh-TW、en、ja 三種語言 × user、super_admin 兩個 section = 共 6 次呼叫
+4. 結果 upsert 進 `docs_content` 表
+
+#### `/docs` 頁面更新
+- 頁面頂部加語言切換按鈕：`繁中` `English` `日本語`
+- 切換時從 `docs_content` 表撈對應語言的內容顯示
+- 預設語言跟隨使用者的 `users.locale` 設定
+
+---
+
+### 24.2 Prompt 自訂
+
+#### 層級設計
+```
+系統 hardcode（程式碼預設值）
+    ↓ super admin 可修改組織預設，可「還原成系統預設」
+組織預設（存 prompts 表）
+    ↓ 個人可修改，可「還原成組織預設」
+個人設定（存 user_prompts 表）
+```
+
+使用順序：個人設定 → 組織預設 → 系統 hardcode
+
+#### Prompt 清單
+
+| key | 說明 | Super Admin 可改 | 個人可改 |
+|-----|------|-----------------|---------|
+| `ocr_card` | 名片 OCR | ✅ | ❌ |
+| `email_generate` | Email 內容生成 | ✅ | ✅ |
+| `task_parse` | 任務 AI 解析 | ✅ | ❌ |
+| `docs_generate` | 說明書生成 | ✅ | ❌ |
+
+#### 資料表
+
+**`prompts`**（組織預設，super admin 管理）
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | 主鍵 |
+| key | text (UNIQUE, NOT NULL) | prompt 識別鍵，如 `ocr_card` |
+| content | text (NOT NULL) | prompt 內容 |
+| updated_by | uuid (FK → users.id) | 最後修改者 |
+| updated_at | timestamptz | 最後修改時間 |
+
+**`user_prompts`**（個人覆蓋）
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | 主鍵 |
+| user_id | uuid (FK → users.id, ON DELETE CASCADE) | 使用者 |
+| key | text (NOT NULL) | prompt 識別鍵（限 `email_generate`） |
+| content | text (NOT NULL) | 個人 prompt 內容 |
+| updated_at | timestamptz | 最後修改時間 |
+| UNIQUE (user_id, key) | | 每人每個 key 唯一一筆 |
+
+#### Super Admin 管理頁面（`/admin/prompts`）
+- 列出所有可管理的 prompt（4 個）
+- 每個 prompt 顯示：目前內容（組織預設或系統 hardcode）、最後修改者、修改時間
+- 點「編輯」開啟大型 textarea 修改
+- 「還原成系統預設」按鈕：清除 `prompts` 表該筆記錄，回到 hardcode
+- 儲存後更新 `prompts` 表
+
+#### 個人設定頁（`/settings`）新增 Prompt 區塊
+- 只顯示 `email_generate` prompt
+- 顯示目前使用的內容（個人設定 or 組織預設，標示來源）
+- 點「編輯」修改個人 prompt
+- 「還原成組織預設」按鈕：清除 `user_prompts` 該筆記錄
+
+#### 系統 hardcode 預設值（供還原參考）
+程式碼中以 `SYSTEM_PROMPTS` 常數定義，`src/lib/prompts.ts` 統一管理：
+```typescript
+export const SYSTEM_PROMPTS = {
+  ocr_card: `你是一個專業名片辨識助手...`,
+  email_generate: `你是一個專業的商務郵件撰寫助手...`,
+  task_parse: `你是一個任務解析助手...`,
+  docs_generate: `你是一個技術文件撰寫專家...`,
+}
+```
+
+---
+
+### 24.3 報表權限調整
+
+#### 一般使用者
+- 只能看到自己建立的 `report_schedules`
+- 立即產生報表：資料範圍限「自己新增的聯絡人」和「自己的互動紀錄」
+- 定時報表：同上，資料範圍限個人
+
+#### Super Admin
+- 可看到並管理所有人的 `report_schedules`
+- 立即產生 / 定時報表：資料範圍為全組織
+
+#### DB 變更
+```sql
+-- report_schedules 新增 owner_id
+alter table report_schedules add column if not exists owner_id uuid references users(id);
+-- 更新現有記錄：owner_id = created_by
+update report_schedules set owner_id = created_by where owner_id is null;
+```
+
+#### `/admin/reports` 頁面更新
+- Super admin：顯示所有規則，每筆顯示建立者
+- 一般使用者：只顯示自己的規則
+- 立即產生時依角色自動套用資料範圍
+
+---
+
+### 24.4 聯絡人國家欄位與篩選
+
+#### 新增聯絡人 `/contacts/new` 更新
+- 表單新增「國家」欄位（dropdown，從 `countries` 表撈 is_active=true 的項目）
+- 顯示旗幟 emoji + 國家名稱（依目前語言顯示）
+
+#### 聯絡人列表 `/contacts` 更新
+- 篩選列新增「國家」dropdown（多選，從 `countries` 表動態載入）
+- 國家篩選與 Tag 篩選可同時使用
+
+---
+
+### 24.5 Migration SQL
+
+```sql
+-- 說明書內容
+create table if not exists docs_content (
+  id uuid primary key default gen_random_uuid(),
+  locale text not null,
+  section text not null,
+  content text,
+  generated_at timestamptz default now(),
+  unique (locale, section)
+);
+
+-- 組織預設 prompt
+create table if not exists prompts (
+  id uuid primary key default gen_random_uuid(),
+  key text unique not null,
+  content text not null,
+  updated_by uuid references users(id),
+  updated_at timestamptz default now()
+);
+
+-- 個人 prompt 覆蓋
+create table if not exists user_prompts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id) on delete cascade,
+  key text not null,
+  content text not null,
+  updated_at timestamptz default now(),
+  unique (user_id, key)
+);
+
+-- report_schedules 新增 owner_id
+alter table report_schedules add column if not exists owner_id uuid references users(id);
+update report_schedules set owner_id = created_by where owner_id is null;
+```
+
+---
+
+## 二十五、v1.3 開發任務清單
+
+- [ ] **Task 57** `[修改]` — 執行 Migration SQL（docs_content、prompts、user_prompts、report_schedules.owner_id）
+- [ ] **Task 58** `[新增]` — 新增 `src/lib/prompts.ts`（SYSTEM_PROMPTS 常數 + getPrompt() 函式，依層級取 prompt）
+- [ ] **Task 59** `[新增]` — 新增 `/api/docs/generate` route（讀 PRD、呼叫 AI 生成 6 份內容、upsert docs_content）；設定 Vercel build hook 自動觸發
+- [ ] **Task 60** `[修改]` — 更新 `/docs` 頁面（語言切換按鈕、從 docs_content 撈內容）
+- [ ] **Task 61** `[新增]` — 新增 Prompt 管理頁 `/admin/prompts`（4 個 prompt 的編輯 + 還原系統預設）
+- [ ] **Task 62** `[修改]` — 更新個人設定頁 `/settings`（新增 email_generate prompt 編輯區塊 + 還原組織預設）
+- [ ] **Task 63** `[修改]` — 更新所有 AI 呼叫處（OCR、email 生成、任務解析、說明書生成）改為呼叫 `getPrompt()`
+- [ ] **Task 64** `[修改]` — 更新報表頁 `/admin/reports`（依角色過濾規則，資料範圍加入 owner_id 判斷）
+- [ ] **Task 65** `[修改]` — 更新新增聯絡人頁 `/contacts/new`（補國家欄位）
+- [ ] **Task 66** `[修改]` — 更新聯絡人列表 `/contacts`（新增國家篩選 dropdown）

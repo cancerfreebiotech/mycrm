@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## v1.3 — 說明書多語言 + Prompt 自訂 + 報表權限 + 聯絡人篩選（待實作）
+
+### 變更項目
+- **說明書多國語言**：預先生成 zh-TW / en / ja 三版，存 `docs_content` 表，部署時自動觸發，頁面加語言切換
+- **Prompt 自訂系統**：新增 `prompts`（組織）、`user_prompts`（個人）表；三層優先順序（個人 → 組織 → 系統 hardcode）；super admin 管理 4 個 prompt，個人可改 email_generate；兩層都有「還原預設」按鈕
+- **新增 `src/lib/prompts.ts`**：SYSTEM_PROMPTS 常數 + getPrompt() 依層級取值
+- **新增 Prompt 管理頁 `/admin/prompts`**（僅 super_admin）
+- **報表權限調整**：一般使用者只看自己的規則、只查自己的資料；super admin 看全部；`report_schedules` 新增 `owner_id`
+- **新增聯絡人補國家欄位**：`/contacts/new` 表單加國家 dropdown
+- **聯絡人列表加國家篩選**：可與 Tag 篩選同時使用
+- **新增資料表**：`docs_content`、`prompts`、`user_prompts`
+
+---
+
+
 ## v1.2.1 — Teams Bot 修復（2026-03-16）
 
 ### 變更項目
