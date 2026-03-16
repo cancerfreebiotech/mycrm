@@ -138,16 +138,22 @@ async function linkUser(
   const email = await resolveAadEmail(aadId)
   if (!email) return null
 
-  // Check if this email is a registered CRM user
-  const { data } = await supabase.from('users').select('email').eq('email', email).single()
-  if (!data) return null
+  // Check if this email is a registered CRM user (case-insensitive)
+  const emailLower = email.toLowerCase()
+  console.log('[teams-bot] linkUser resolved email:', emailLower)
+  const { data } = await supabase.from('users').select('email').ilike('email', emailLower).single()
+  if (!data) {
+    console.error('[teams-bot] linkUser: email not found in users table:', emailLower)
+    return null
+  }
 
   await supabase
     .from('users')
     .update({ teams_user_id: aadId, teams_conversation_id: conversationId, teams_service_url: serviceUrl })
-    .eq('email', email)
+    .eq('email', data.email)
 
-  return email
+  console.log('[teams-bot] linkUser: linked', data.email, '←', aadId)
+  return data.email
 }
 
 export async function POST(req: NextRequest) {
