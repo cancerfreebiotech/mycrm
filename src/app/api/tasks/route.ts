@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { sendTeamsTaskNotification } from '@/lib/teams'
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
@@ -75,6 +76,28 @@ export async function POST(req: NextRequest) {
   const emails: string[] = assignee_emails?.length ? assignee_emails : [user.email!]
   for (const email of emails) {
     await service.from('task_assignees').insert({ task_id: task.id, assignee_email: email })
+  }
+
+  // Send Teams notifications to assignees (skip self-reminders)
+  const otherAssignees = emails.filter((e) => e !== user.email!)
+  if (otherAssignees.length > 0) {
+    const { data: teamsUsers } = await service
+      .from('users')
+      .select('email, teams_conversation_id, teams_service_url')
+      .in('email', otherAssignees)
+      .not('teams_conversation_id', 'is', null)
+
+    const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL?.replace('.supabase.co', '') ?? ''
+    for (const u of teamsUsers ?? []) {
+      if (!u.teams_conversation_id || !u.teams_service_url) continue
+      sendTeamsTaskNotification(u.teams_service_url, u.teams_conversation_id, {
+        title: title.trim(),
+        description: description ?? undefined,
+        due_at: due_at ?? null,
+        task_id: task.id,
+        app_url: appUrl,
+      }).catch(() => { /* non-blocking */ })
+    }
   }
 
   return NextResponse.json({ task })

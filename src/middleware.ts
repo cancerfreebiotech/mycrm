@@ -7,6 +7,7 @@ export async function middleware(request: NextRequest) {
   // Early return BEFORE Supabase for routes that don't need auth
   if (
     pathname.startsWith('/api/bot') ||
+    pathname.startsWith('/api/teams-bot') ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/docs') ||
     pathname === '/api/set-locale' ||
