@@ -109,11 +109,22 @@ async function sendToTeams(serviceUrl: string, conversationId: string, text: str
   const url = replyToId
     ? `${base}/v3/conversations/${conversationId}/activities/${replyToId}`
     : `${base}/v3/conversations/${conversationId}/activities`
-  await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type: 'message', text }),
-  })
+  console.log('[teams-bot] sendToTeams →', url)
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'message', text }),
+    })
+    if (!res.ok) {
+      const body = await res.text()
+      console.error('[teams-bot] sendToTeams failed:', res.status, body)
+    } else {
+      console.log('[teams-bot] sendToTeams ok:', res.status)
+    }
+  } catch (e) {
+    console.error('[teams-bot] sendToTeams exception:', e)
+  }
 }
 
 async function linkUser(
