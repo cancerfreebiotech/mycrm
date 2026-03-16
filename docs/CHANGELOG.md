@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v1.2.1 — Teams Bot 修復（2026-03-16）
+
+### 變更項目
+- **修復 Teams Bot 無法回覆**：`getBotToken` 改用 tenant-specific 端點（支援 single-tenant App Registration）
+- **修復帳號自動綁定失敗**：email 比對改為大小寫不敏感（`ilike`），解決 Microsoft Graph 回傳大寫 email 與 DB 小寫不符問題
+- **補充 Teams Bot 說明文件**：新增帳號自動綁定流程說明
+
+---
+
 ## v1.2.0 — UX 強化 + 國家欄位 + 寄信強化（2026-03-16）
 
 ### 變更項目

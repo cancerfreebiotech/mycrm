@@ -39,8 +39,26 @@ myCRM Teams Bot 提供任務通知功能，當有任務指派給你時，會在 
 
 ---
 
+## 帳號綁定
+
+Bot 採用**自動綁定**機制，不需任何手動操作：
+
+1. 在 Teams 搜尋 Bot 名稱，開啟 **1-on-1 聊天**
+2. 傳送任何訊息（例如 `help`）
+3. Bot 自動透過 Microsoft Graph 解析你的 AAD 帳號 → 比對 CRM 使用者 → 完成綁定
+
+綁定成功後，`help` 指令會顯示：
+```
+📋 myCRM Bot（已綁定：your.email@company.com）
+任務通知會自動傳送到這裡。
+```
+
+> 綁定需要你的 Teams 帳號 email 與 CRM 登入 email 相同（同一個 Microsoft 365 帳號）。
+
+---
+
 ## 限制
 
 - Teams Bot 目前僅支援**個人聊天**通知（不支援 Channel 主動推播）
 - 需要使用者在 Teams 中先與 Bot 對話一次才能接收通知
-- 設定教學請見 [Teams Bot 設定](teams-setup.md)
+- 設定教學請見 [Teams Bot 設定](../deployment/teams-setup.md)
