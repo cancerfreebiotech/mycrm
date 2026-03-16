@@ -26,3 +26,24 @@
 
 ## 環境變數
 見 .env.local.example
+
+## 版本規則
+
+格式：`MAJOR.MINOR.PATCH`
+
+| 情況 | 動作 | 範例 |
+|------|------|------|
+| 新功能 | MINOR +1，PATCH 歸零 | 1.0.0 → 1.1.0 |
+| Bug fix / 小改進 | PATCH +1 | 1.0.0 → 1.0.1 |
+| MINOR 到達 9 後再新增功能 | MAJOR +1，MINOR/PATCH 歸零 | 1.9.x → 2.0.0 |
+
+### 每次 git push 必做
+1. 更新 `package.json` 的 `version` 欄位
+2. 在 `docs/CHANGELOG.md` 最頂端新增版本條目，格式：
+
+```markdown
+## v{VERSION} — {標題}（{YYYY-MM-DD}）
+
+### 變更項目
+- ...
+```

@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v1.0.1 — Bug fixes & docs 改善（2026-03-16）
+
+### 變更項目
+- **修復登入頁語言切換無效**：`/api/set-locale` 未列入 middleware bypass，未登入狀態呼叫會被導向 `/login` 而無法設定 cookie
+- **修復圖片上傳未壓縮**：新增聯絡人、名片重新辨識、名片附件上傳三個路徑補上 Canvas 壓縮（1024px、JPEG Q85），與 Bot / 批次上傳行為一致
+- **修復 GitHub Pages dark mode**：將按鈕與 JS 合併至 `footer_custom.html`，解決跨檔案時序問題；補強 table `th`/`td`/`tr` dark mode 樣式；修正 header 右上角白色背景
+- **文件結構重組**：新增「系統部署（IT）」章節，將環境設定、Telegram Bot 設定、Teams Bot 設定從使用者區移出，使用者與 IT 文件分開
+
+---
+
 ## v1.0 — 任務管理 + Teams 整合（已完成 2026-03-15）
 
 ### 變更項目
