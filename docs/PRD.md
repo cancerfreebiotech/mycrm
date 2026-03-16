@@ -1631,3 +1631,209 @@ create table if not exists user_assistants (
 - [ ] **Task 54** `[新增]` — 新增任務管理頁 `/tasks`（三個 Tab、搜尋、助理視角、新增任務）
 - [ ] **Task 55** `[修改]` — 更新個人設定頁（新增「我的助理」管理區塊）
 - [ ] **Task 56** `[修改]` — 更新 Dashboard Layout（Sidebar 新增「任務管理」項目）
+
+---
+
+## 二十四、v1.2 功能規格
+
+### 24.1 Email Copy 按鈕
+
+**聯絡人列表 `/contacts`**
+- Email 欄位旁加一個 📋 copy icon 按鈕
+- 點擊後複製 email 到剪貼簿
+- 顯示「✅ 已複製」tooltip，1.5 秒後消失
+
+**聯絡人詳情 `/contacts/[id]`**
+- 同上，Email 和 second_email 欄位旁都加 copy 按鈕
+
+---
+
+### 24.2 多張名片照片上傳（最多 6 張）
+
+#### 新增聯絡人 `/contacts/new`
+
+- 照片上傳區支援最多 **6 張**照片（正面 / 反面 / 其他名片）
+- 所有圖片上傳前先壓縮（1024px、JPEG Q85）
+- 點「開始辨識」後，6 張一起送 Gemini，合併辨識結果
+- AI 自動選最完整的欄位值填入表單
+- 若同一欄位在不同張名片有衝突值，AI 選信心度最高的，使用者可手動修改
+- **確認介面**：
+  - 左側：可點開放大的照片縮圖列表（支援左右切換）
+  - 右側：辨識結果表單（可逐欄修改）
+  - 方便使用者人工比對照片與 AI 辨識資料
+
+#### 編輯聯絡人（名片管理獨立區塊）
+
+- 編輯表單只包含文字欄位，照片上傳移至「名片管理」獨立區塊
+- 名片管理區塊支援上傳最多 **6 張**新照片
+- 上傳前壓縮（1024px、JPEG Q85）
+- 送 Gemini 合併辨識，結果用來**補充**現有欄位（空白欄位才填入，已有資料不覆蓋）
+- 使用者確認後存入 `contact_cards` 子表
+
+---
+
+### 24.3 國家欄位
+
+#### `countries` 資料表（super_admin 管理）
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | 主鍵 |
+| name_zh | text (NOT NULL) | 繁體中文名稱 |
+| name_en | text (NOT NULL) | 英文名稱 |
+| name_ja | text (NOT NULL) | 日文名稱 |
+| emoji | text | 旗幟 emoji，如 🇯🇵 |
+| code | text (UNIQUE, NOT NULL) | ISO 國碼，如 `JP`、`TW` |
+| is_active | boolean (default true) | 是否顯示於 dropdown |
+| created_at | timestamptz (default now()) | 建立時間 |
+
+**初始資料：**
+```sql
+insert into countries (name_zh, name_en, name_ja, emoji, code) values
+  ('台灣', 'Taiwan', '台湾', '🇹🇼', 'TW'),
+  ('日本', 'Japan', '日本', '🇯🇵', 'JP'),
+  ('美國', 'United States', 'アメリカ', '🇺🇸', 'US'),
+  ('韓國', 'South Korea', '韓国', '🇰🇷', 'KR'),
+  ('新加坡', 'Singapore', 'シンガポール', '🇸🇬', 'SG'),
+  ('印度', 'India', 'インド', '🇮🇳', 'IN')
+on conflict (code) do nothing;
+```
+
+#### `contacts` 表新增欄位
+```sql
+alter table contacts add column if not exists country_code text references countries(code);
+```
+
+#### AI 自動判斷國家
+
+Gemini OCR prompt 新增國家辨識，依據：
+- 電話號碼國碼（`+81` → JP，`+886` → TW）
+- 地址內容
+- 公司名稱語言特徵
+- 回傳 ISO 國碼（如 `JP`、`TW`），找不到則回傳 `null`
+
+OCR JSON 新增欄位：
+```json
+"country_code": "JP"
+```
+
+#### `/admin/countries` 頁面（僅 super_admin）
+- 列出所有國家（emoji + 名稱 + code + is_active）
+- 新增國家（填四個欄位）
+- 切換 is_active
+- 編輯、刪除
+
+---
+
+### 24.4 寄信功能強化
+
+#### 全新寄信介面（取代現有陽春 Modal）
+
+從聯絡人詳情頁點「寄信」後，開啟**全頁或大型 Modal**，包含：
+
+**收件人區塊**
+- 預帶聯絡人 email（可修改）
+- 顯示收件人姓名、公司（context 用，不顯示在信件）
+
+**Template 選擇**
+- Dropdown 選擇 email template
+- 選擇後自動帶入 subject、body_content
+- **附件自動帶入**：template 的附件（`template_attachments`）自動列入附件清單
+
+**AI 寫信**
+- 「AI 生成」按鈕
+- AI context：
+  - 收件人姓名、公司、職稱
+  - 最近 **1 筆** interaction_log 內容（自動抓取）
+- 使用者輸入描述後 AI 生成完整信件內容填入編輯框
+- 可再手動修改
+
+**信件編輯**
+- 主旨輸入框
+- 內文編輯框（支援基本 HTML 或純文字）
+
+**附件管理**
+- 支援臨時上傳多個附件（每次寄信時選）
+- 每個檔案限制 **2MB**
+- 若選了 template，template 附件自動帶入（可移除）
+- 顯示附件清單（檔名 + 大小），可個別刪除
+
+**發送**
+- 「確認發送」按鈕
+- 寄出後寫入 interaction_log：
+  - type = `email`
+  - email_subject = 主旨
+  - content = 完整內文
+  - email_attachments = 附件檔名陣列（只存檔名，不存檔案）
+
+---
+
+### 24.5 手機 / 平板 RWD Sidebar
+
+#### 手機（< 768px）
+- Sidebar 預設**隱藏**
+- 左上角顯示 ☰ hamburger 按鈕
+- 點擊後 sidebar 從左側滑出（overlay，帶半透明遮罩）
+- 點遮罩或任意選單項目後關閉 sidebar
+
+#### 平板（768px – 1024px）
+- Sidebar 預設收縮為**只顯示 icon**（不顯示文字）
+- 點擊 icon 直接導向對應頁面
+- sidebar 右上角有 `>` 按鈕，點擊展開為完整模式（顯示文字）
+- 展開狀態用 localStorage 記住
+
+#### 桌面（> 1024px）
+- 現有完整 sidebar，不變
+
+---
+
+### 24.6 圖片壓縮規範（全站統一）
+
+所有圖片上傳點一律壓縮後再處理：
+- 長邊最大 **1024px**（等比例縮放）
+- 格式：**JPEG**，品質 **85**
+- 適用範圍：Bot 名片上傳、網頁新增聯絡人、網頁編輯名片、批次上傳、template 附件**以外**的所有圖片
+
+---
+
+### 24.7 Migration SQL
+
+```sql
+-- 國家資料表
+create table if not exists countries (
+  id uuid primary key default gen_random_uuid(),
+  name_zh text not null,
+  name_en text not null,
+  name_ja text not null,
+  emoji text,
+  code text unique not null,
+  is_active boolean not null default true,
+  created_at timestamptz default now()
+);
+
+-- 初始國家資料
+insert into countries (name_zh, name_en, name_ja, emoji, code) values
+  ('台灣', 'Taiwan', '台湾', '🇹🇼', 'TW'),
+  ('日本', 'Japan', '日本', '🇯🇵', 'JP'),
+  ('美國', 'United States', 'アメリカ', '🇺🇸', 'US'),
+  ('韓國', 'South Korea', '韓国', '🇰🇷', 'KR'),
+  ('新加坡', 'Singapore', 'シンガポール', '🇸🇬', 'SG'),
+  ('印度', 'India', 'インド', '🇮🇳', 'IN')
+on conflict (code) do nothing;
+
+-- contacts 新增 country_code
+alter table contacts add column if not exists country_code text references countries(code);
+```
+
+---
+
+## 二十五、v1.2 開發任務清單
+
+- [ ] **Task 57** `[修改]` — 執行 Migration SQL（countries 表 + 初始資料、contacts.country_code）
+- [ ] **Task 58** `[修改]` — 更新 Gemini OCR prompt（新增 country_code 辨識）；更新 `src/lib/gemini.ts`
+- [ ] **Task 59** `[修改]` — 更新聯絡人列表（Email copy 按鈕）
+- [ ] **Task 60** `[修改]` — 更新聯絡人詳情（Email copy 按鈕、名片管理獨立區塊支援多張、全新寄信介面）
+- [ ] **Task 61** `[修改]` — 更新新增聯絡人頁（多張照片上傳最多6張、壓縮、合併辨識、左右對照確認介面）
+- [ ] **Task 62** `[新增]` — 新增國家管理頁 `/admin/countries`（super_admin，CRUD + is_active 切換）
+- [ ] **Task 63** `[修改]` — 更新 Dashboard Layout（Sidebar RWD：手機 hamburger、平板 icon-only + 展開）
+- [ ] **Task 64** `[修改]` — 更新 `/docs` 說明書（同步 v1.2 新功能：多張名片、國家欄位、寄信強化、sidebar）
+- [ ] **Task 65** `[修改]` — i18n 語言檔新增 v1.2 相關 key（countries、copyEmail、sendEmail 強化）
