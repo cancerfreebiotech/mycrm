@@ -74,49 +74,65 @@ export default function NewContactPage() {
     }
   }
 
+  function compressImage(file: File, maxSide = 1024, quality = 0.85): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      const url = URL.createObjectURL(file)
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        let { width, height } = img
+        if (width > maxSide || height > maxSide) {
+          if (width >= height) { height = Math.round((height * maxSide) / width); width = maxSide }
+          else { width = Math.round((width * maxSide) / height); height = maxSide }
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = width; canvas.height = height
+        canvas.getContext('2d')!.drawImage(img, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', quality).split(',')[1])
+      }
+      img.onerror = reject
+      img.src = url
+    })
+  }
+
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = async (ev) => {
-      const dataUrl = ev.target?.result as string
-      setImagePreview(dataUrl)
-      const base64 = dataUrl.split(',')[1]
+    setOcring(true)
+    try {
+      const base64 = await compressImage(file)
+      setImagePreview(`data:image/jpeg;base64,${base64}`)
       setImageBase64(base64)
-      setOcring(true)
-      try {
-        const res = await fetch('/api/ocr', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: base64, model: aiModelId }),
-        })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error)
-        setForm((prev) => ({
-          ...prev,
-          name: data.name || prev.name,
-          name_en: data.name_en || prev.name_en,
-          name_local: data.name_local || prev.name_local,
-          company: data.company || prev.company,
-          company_en: data.company_en || prev.company_en,
-          company_local: data.company_local || prev.company_local,
-          job_title: data.job_title || prev.job_title,
-          email: data.email || prev.email,
-          second_email: data.second_email || prev.second_email,
-          phone: data.phone || prev.phone,
-          second_phone: data.second_phone || prev.second_phone,
-          address: data.address || prev.address,
-          website: data.website || prev.website,
-          linkedin_url: data.linkedin_url || prev.linkedin_url,
-          facebook_url: data.facebook_url || prev.facebook_url,
-        }))
-      } catch (err) {
-        setError(err instanceof Error ? err.message : '辨識失敗')
-      } finally {
-        setOcring(false)
-      }
+      const res = await fetch('/api/ocr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64, model: aiModelId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setForm((prev) => ({
+        ...prev,
+        name: data.name || prev.name,
+        name_en: data.name_en || prev.name_en,
+        name_local: data.name_local || prev.name_local,
+        company: data.company || prev.company,
+        company_en: data.company_en || prev.company_en,
+        company_local: data.company_local || prev.company_local,
+        job_title: data.job_title || prev.job_title,
+        email: data.email || prev.email,
+        second_email: data.second_email || prev.second_email,
+        phone: data.phone || prev.phone,
+        second_phone: data.second_phone || prev.second_phone,
+        address: data.address || prev.address,
+        website: data.website || prev.website,
+        linkedin_url: data.linkedin_url || prev.linkedin_url,
+        facebook_url: data.facebook_url || prev.facebook_url,
+      }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '辨識失敗')
+    } finally {
+      setOcring(false)
     }
-    reader.readAsDataURL(file)
   }
 
   async function handleSubmit(e: React.FormEvent) {
