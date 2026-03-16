@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import React, { useEffect, useRef, useState } from 'react'
-import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon, Globe, BarChart2, ClipboardList, MapPin } from 'lucide-react'
+import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon, Globe, BarChart2, ClipboardList, MapPin, Menu, X } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
@@ -31,8 +31,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [localeMenuOpen, setLocaleMenuOpen] = useState(false)
   const [currentLocale, setCurrentLocale] = useState<Locale>('zh-TW')
   const localeRef = useRef<HTMLDivElement>(null)
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
+
+  // Close mobile sidebar on navigation
+  useEffect(() => { setMobileOpen(false) }, [pathname])
 
   useEffect(() => {
     const cookie = document.cookie.split('; ').find(r => r.startsWith('MYCRM_LOCALE='))
@@ -55,13 +59,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       const supabase = createBrowserSupabaseClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-
       const { data } = await supabase
         .from('users')
         .select('display_name, role')
         .eq('email', user.email)
         .single()
-
       if (data) setProfile(data)
     }
     loadProfile()
@@ -85,8 +87,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   const isSuperAdmin = profile?.role === 'super_admin'
-
   const docsUrl = process.env.NEXT_PUBLIC_DOCS_URL ?? '/docs'
+
   type NavItem = { href: string; label: string; icon: React.ElementType; external?: boolean }
   const memberItems: NavItem[] = [
     { href: '/', label: t('dashboard'), icon: LayoutDashboard },
@@ -106,22 +108,49 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/admin/countries', label: t('countries'), icon: MapPin },
   ] : []
 
+  // Label span shared classes — hidden on tablet, shown on hover & desktop
+  const labelCls = 'overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 max-w-[160px] sm:max-w-0 sm:opacity-0 group-hover/sb:max-w-[160px] group-hover/sb:opacity-100 lg:max-w-[160px] lg:opacity-100'
+
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="h-screen bg-gray-50 dark:bg-gray-950">
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 sm:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-56 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col">
-        <div className="h-14 flex items-center px-5 border-b border-gray-200 dark:border-gray-700">
-          <span className="text-lg font-bold text-gray-900 dark:text-gray-100">myCRM</span>
+      <aside
+        className={`group/sb fixed inset-y-0 left-0 z-50 flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-[width,transform] duration-200 overflow-hidden
+          w-56 sm:w-16 sm:hover:w-56 lg:w-56
+          ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} sm:translate-x-0`}
+      >
+        {/* Logo */}
+        <div className="h-14 flex items-center justify-between px-3 border-b border-gray-200 dark:border-gray-700 shrink-0">
+          <span className={`text-lg font-bold text-gray-900 dark:text-gray-100 ${labelCls}`}>
+            myCRM
+          </span>
+          {/* Mobile close button */}
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="sm:hidden text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 shrink-0 ml-auto"
+          >
+            <X size={18} />
+          </button>
         </div>
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+
+        {/* Nav */}
+        <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto overflow-x-hidden">
           {[...memberItems, ...adminItems].map(({ href, label, icon: Icon, external }, idx) => {
             const active = !external && (href === '/' ? pathname === '/' : pathname.startsWith(href))
+            const isFirstAdminItem = isSuperAdmin && idx === memberItems.length
             const cls = `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
               active
                 ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400'
                 : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100'
             }`
-            const isFirstAdminItem = isSuperAdmin && idx === memberItems.length
             return (
               <React.Fragment key={href}>
                 {isFirstAdminItem && (
@@ -129,40 +158,52 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 )}
                 {external ? (
                   <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
-                    <Icon size={18} />
-                    {label}
+                    <Icon size={18} className="shrink-0" />
+                    <span className={labelCls}>{label}</span>
                   </a>
                 ) : (
                   <Link href={href} className={cls}>
-                    <Icon size={18} />
-                    {label}
+                    <Icon size={18} className="shrink-0" />
+                    <span className={labelCls}>{label}</span>
                   </Link>
                 )}
               </React.Fragment>
             )
           })}
         </nav>
+
         {/* Version footer */}
-        <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800">
-          <p className="text-xs text-gray-400 dark:text-gray-500">
-            {tf('version')} {process.env.NEXT_PUBLIC_APP_VERSION}
-          </p>
-          {process.env.NEXT_PUBLIC_DEPLOY_TIME && (
-            <p className="text-xs text-gray-400 dark:text-gray-500">
-              {tf('deployTime')} {process.env.NEXT_PUBLIC_DEPLOY_TIME}
+        <div className="px-3 py-3 border-t border-gray-100 dark:border-gray-800 shrink-0">
+          <div className={labelCls}>
+            <p className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+              {tf('version')} {process.env.NEXT_PUBLIC_APP_VERSION}
             </p>
-          )}
+            {process.env.NEXT_PUBLIC_DEPLOY_TIME && (
+              <p className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                {tf('deployTime')} {process.env.NEXT_PUBLIC_DEPLOY_TIME}
+              </p>
+            )}
+          </div>
         </div>
       </aside>
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Main (offset by sidebar width) */}
+      <div className="h-full flex flex-col ml-0 sm:ml-16 lg:ml-56">
         {/* Header */}
-        <header className="h-14 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-6">
+        <header className="h-14 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 sm:px-6 shrink-0">
+          {/* Hamburger (mobile only) */}
+          <button
+            onClick={() => setMobileOpen(true)}
+            className="sm:hidden text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 mr-3"
+          >
+            <Menu size={20} />
+          </button>
+
           <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 tracking-wide">{t('appTitle')}</span>
+
           <div className="flex items-center gap-4">
             {profile?.display_name && (
-              <span className="text-sm text-gray-600 dark:text-gray-400">{profile.display_name}</span>
+              <span className="hidden sm:block text-sm text-gray-600 dark:text-gray-400">{profile.display_name}</span>
             )}
             {/* Language switcher */}
             <div className="relative" ref={localeRef}>
@@ -172,7 +213,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 title="Language"
               >
                 <Globe size={16} />
-                <span>{LOCALE_LABELS[currentLocale]}</span>
+                <span className="hidden sm:inline">{LOCALE_LABELS[currentLocale]}</span>
               </button>
               {localeMenuOpen && (
                 <div className="absolute right-0 top-7 z-50 w-28 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
@@ -206,13 +247,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-colors"
             >
               <LogOut size={16} />
-              {t('logout')}
+              <span className="hidden sm:inline">{t('logout')}</span>
             </button>
           </div>
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        <main className="flex-1 overflow-auto p-4 sm:p-6">{children}</main>
       </div>
     </div>
   )
