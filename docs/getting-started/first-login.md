@@ -1,7 +1,7 @@
 ---
 title: 第一次登入
 parent: 快速開始
-nav_order: 2
+nav_order: 1
 ---
 
 # 第一次登入

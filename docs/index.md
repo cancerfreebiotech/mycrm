@@ -52,3 +52,4 @@ Telegram Bot ──→ Webhook (Next.js API Route)
 - **一般使用者**：請從 [第一次登入](getting-started/first-login.md) 開始
 - **Bot 使用者**：請看 [指令列表](bot/commands.md)
 - **管理員**：請看 [管理員專區](admin/users.md)
+- **IT / 部署**：請看 [系統部署](deployment/setup.md)

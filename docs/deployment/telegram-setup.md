@@ -1,7 +1,7 @@
 ---
 title: Telegram Bot 設定
-parent: Bot 使用說明
-nav_order: 3
+parent: 系統部署（IT）
+nav_order: 2
 ---
 
 # Telegram Bot 設定教學

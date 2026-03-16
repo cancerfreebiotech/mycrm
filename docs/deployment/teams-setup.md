@@ -1,7 +1,7 @@
 ---
 title: Teams Bot 設定
-parent: Bot 使用說明
-nav_order: 5
+parent: 系統部署（IT）
+nav_order: 3
 ---
 
 # Teams Bot 設定教學
@@ -80,15 +80,11 @@ cd teams-app && zip myCRM-Bot.zip manifest.json color.png outline.png
 
 ## 步驟 6：上傳至 Teams（全公司部署）
 
-**方法：透過 Teams 管理中心（推薦，全公司可用）**
-
 1. 前往 [Microsoft Teams 管理中心](https://admin.teams.microsoft.com)
 2. **Teams apps** → **Manage apps** → **Upload new app**
 3. 上傳 `myCRM-Bot.zip`
 4. 審核通過後，前往 **Setup policies** → **Global (Org-wide default)**
 5. 在 **Installed apps** 新增 myCRM Bot → 儲存
-
-全公司成員即可在 Teams 中找到並使用 Bot。
 
 ---
 
@@ -98,9 +94,3 @@ cd teams-app && zip myCRM-Bot.zip manifest.json color.png outline.png
 方法二：在 Teams 頂部搜尋欄輸入 `@myCRM Bot`
 
 找到後，點擊「開啟」或「聊天」即可開始接收通知。
-
----
-
-## 使用者綁定（可選）
-
-若要讓 Bot 能識別你的身份（以便從 Teams 操作任務），系統管理員可以在 `users` 資料表記錄 `teams_user_id`（Azure AD Object ID）。目前此步驟透過 DB 管理，後續版本將提供 UI。

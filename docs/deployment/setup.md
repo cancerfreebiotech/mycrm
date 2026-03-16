@@ -1,6 +1,6 @@
 ---
 title: 環境設定與部署
-parent: 快速開始
+parent: 系統部署（IT）
 nav_order: 1
 ---
 
@@ -75,16 +75,6 @@ nav_order: 1
 | `report_schedules` | 報表排程 |
 | `gmail_oauth` | Gmail OAuth Token 儲存 |
 | `email_templates` | 郵件範本 |
-
----
-
-## Telegram Webhook 設定
-
-部署完成後，執行一次 webhook 設定（替換 `<TOKEN>` 和 `<DOMAIN>`）：
-
-```bash
-curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<DOMAIN>/api/bot"
-```
 
 ---
 
