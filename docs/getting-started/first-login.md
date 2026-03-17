@@ -31,6 +31,25 @@ myCRM 使用 **Microsoft 帳號（Azure AD）單一登入**，限 `@cancerfree.i
 
 ---
 
+## 綁定 Microsoft Teams Bot
+
+要接收任務通知並在 Teams 直接標記完成，需完成一次綁定：
+
+1. 在 Microsoft Teams 搜尋 Bot 名稱（由管理員提供）
+2. 開啟 **1-on-1 聊天**
+3. 傳送任何訊息（例如 `help`）
+4. Bot 自動解析你的 AAD 帳號並與 CRM 帳號綁定
+
+綁定成功時 Bot 會回覆：
+```
+📋 myCRM Bot（已綁定：your.email@cancerfree.io）
+任務通知會自動傳送到這裡。
+```
+
+> 綁定僅需操作一次，之後任務指派時會自動收到 Teams 通知卡片。
+
+---
+
 ## 語言設定
 
 myCRM 支援三種語言：**繁體中文**、**English**、**日本語**
