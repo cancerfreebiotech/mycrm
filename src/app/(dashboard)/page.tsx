@@ -191,13 +191,13 @@ export default function DashboardPage() {
 
       {/* 統計卡片 */}
       <div className="grid grid-cols-3 gap-4 max-w-2xl">
-        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+        <Link href="/contacts" className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
           <div className="flex items-center gap-2 mb-2">
             <Users size={18} className="text-blue-500" />
             <span className="text-sm text-gray-500 dark:text-gray-400">{t('totalContacts')}</span>
           </div>
           <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{totalContacts}</p>
-        </div>
+        </Link>
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
           <div className="flex items-center gap-2 mb-2">
             <CalendarPlus size={18} className="text-green-500" />

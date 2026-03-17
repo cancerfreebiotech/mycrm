@@ -40,6 +40,7 @@ export default function SettingsPage() {
   const [displayName, setDisplayName] = useState('')
   const [role, setRole] = useState('')
   const [telegramId, setTelegramId] = useState('')
+  const [teamsUserId, setTeamsUserId] = useState<string | null>(null)
   const [locale, setLocale] = useState<Locale>('zh-TW')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -73,7 +74,7 @@ export default function SettingsPage() {
       const [{ data: userData }, { data: eps }, { data: mds }] = await Promise.all([
         supabase
           .from('users')
-          .select('display_name, role, telegram_id, ai_model_id, theme, locale')
+          .select('display_name, role, telegram_id, teams_user_id, ai_model_id, theme, locale')
           .eq('email', user.email)
           .single(),
         supabase
@@ -97,6 +98,7 @@ export default function SettingsPage() {
         setDisplayName(userData.display_name ?? '')
         setRole(userData.role ?? 'member')
         setTelegramId(userData.telegram_id ? String(userData.telegram_id) : '')
+        setTeamsUserId(userData.teams_user_id ?? null)
         const savedLocale = userData.locale as Locale
         if (savedLocale && (SUPPORTED_LOCALES as readonly string[]).includes(savedLocale)) {
           setLocale(savedLocale)
@@ -275,6 +277,23 @@ export default function SettingsPage() {
             className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">{t('telegramHint')}</p>
+        </div>
+
+        {/* Teams Bot Status */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {t('teamsBot')}
+          </label>
+          {teamsUserId ? (
+            <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-400 font-medium">
+              ✅ {t('teamsBound')}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+              ⬜ {t('teamsUnbound')}
+            </span>
+          )}
+          <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">{t('teamsHint')}</p>
         </div>
 
         {/* AI Model (two-layer) */}

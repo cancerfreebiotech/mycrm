@@ -327,10 +327,24 @@ async function handlePhoto(
 async function handleWork(
   chatId: number,
   user: { id: string; email: string; ai_model_id: string | null; provider_token: string | null },
-  naturalText: string
+  naturalText: string,
+  lastContactId?: string | null
 ) {
   const supabase = createServiceClient()
   await sendMessage(chatId, '⏳ AI 解析任務中，請稍候...')
+
+  // Fetch related contact info if available
+  let contactLine = ''
+  if (lastContactId) {
+    const { data: contact } = await supabase
+      .from('contacts')
+      .select('name, company')
+      .eq('id', lastContactId)
+      .single()
+    if (contact?.name) {
+      contactLine = `🔗 聯絡人：${contact.name}${contact.company ? `（${contact.company}）` : ''}\n`
+    }
+  }
 
   let parsed
   try {
@@ -395,6 +409,7 @@ async function handleWork(
     await sendMessage(au.telegram_id,
       `📋 <b>新任務指派給你</b>\n\n` +
       `📌 ${parsed.title}\n` +
+      (contactLine ? contactLine : '') +
       (parsed.due_at ? `⏰ 截止：${new Date(parsed.due_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}\n` : '') +
       `\n由 ${user.email} 指派。`
     )
@@ -406,7 +421,7 @@ async function handleWork(
   const assigneeStr = isSelfReminder ? '（自我提醒）' : `→ ${assigneeNames.join('、')}`
 
   await sendMessage(chatId,
-    `✅ 任務已建立 ${assigneeStr}\n\n📌 ${parsed.title}${dueStr}`
+    `✅ 任務已建立 ${assigneeStr}\n\n📌 ${parsed.title}\n${contactLine}${dueStr}`
   )
 }
 
@@ -638,7 +653,7 @@ async function handleText(
   // ── /work /w ───────────────────────────────────────────────────────────────
   const workMatch = cmd.match(/^\/(?:work|w)\s+(.+)/s)
   if (workMatch) {
-    await handleWork(chatId, user, workMatch[1].trim())
+    await handleWork(chatId, user, workMatch[1].trim(), session?.last_contact_id)
     return
   }
 

@@ -50,7 +50,8 @@ export default function ContactsPage() {
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null)
-  const [sortField, setSortField] = useState<'job_title' | null>(null)
+  type SortField = 'name' | 'company' | 'job_title' | 'email' | 'phone' | 'created_at'
+  const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   function copyEmail(email: string) {
@@ -105,15 +106,16 @@ export default function ContactsPage() {
     setPage(1)
   }
 
-  function handleJobTitleSort() {
-    if (sortField !== 'job_title') {
-      setSortField('job_title')
+  function handleSort(field: SortField) {
+    if (sortField !== field) {
+      setSortField(field)
       setSortDir('asc')
     } else if (sortDir === 'asc') {
       setSortDir('desc')
     } else {
       setSortField(null)
     }
+    setPage(1)
   }
 
   const filtered = contacts.filter((c) => {
@@ -134,8 +136,8 @@ export default function ContactsPage() {
 
   const sorted = sortField
     ? [...filtered].sort((a, b) => {
-        const va = a.job_title ?? ''
-        const vb = b.job_title ?? ''
+        const va: string = sortField === 'created_at' ? a.created_at : (a[sortField] ?? '')
+        const vb: string = sortField === 'created_at' ? b.created_at : (b[sortField] ?? '')
         if (!va && !vb) return 0
         if (!va) return 1
         if (!vb) return -1
@@ -354,23 +356,38 @@ export default function ContactsPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <tr>
-              {[t('name'), t('company')].map((h) => (
-                <th key={h} className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">{h}</th>
+              {([
+                [t('name'), 'name'],
+                [t('company'), 'company'],
+                [t('jobTitle'), 'job_title'],
+                ['Email', 'email'],
+                [t('phone'), 'phone'],
+              ] as [string, SortField][]).map(([label, field]) => (
+                <th key={field} className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">
+                  <button
+                    onClick={() => handleSort(field)}
+                    className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                  >
+                    {label}
+                    {sortField !== field && <ChevronsUpDown size={12} className="text-gray-400" />}
+                    {sortField === field && sortDir === 'asc' && <ChevronUp size={12} className="text-blue-500" />}
+                    {sortField === field && sortDir === 'desc' && <ChevronDown size={12} className="text-blue-500" />}
+                  </button>
+                </th>
               ))}
+              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">Tags</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">{t('creator')}</th>
               <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">
                 <button
-                  onClick={handleJobTitleSort}
+                  onClick={() => handleSort('created_at')}
                   className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
                 >
-                  {t('jobTitle')}
-                  {sortField !== 'job_title' && <ChevronsUpDown size={12} className="text-gray-400" />}
-                  {sortField === 'job_title' && sortDir === 'asc' && <ChevronUp size={12} className="text-blue-500" />}
-                  {sortField === 'job_title' && sortDir === 'desc' && <ChevronDown size={12} className="text-blue-500" />}
+                  {t('createdAt')}
+                  {sortField !== 'created_at' && <ChevronsUpDown size={12} className="text-gray-400" />}
+                  {sortField === 'created_at' && sortDir === 'asc' && <ChevronUp size={12} className="text-blue-500" />}
+                  {sortField === 'created_at' && sortDir === 'desc' && <ChevronDown size={12} className="text-blue-500" />}
                 </button>
               </th>
-              {['Email', t('phone'), 'Tags', t('creator'), t('createdAt')].map((h) => (
-                <th key={h} className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">{h}</th>
-              ))}
             </tr>
           </thead>
           <tbody>
