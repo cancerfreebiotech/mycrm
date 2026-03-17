@@ -121,7 +121,7 @@ async function handleHelp(chatId: number) {
     `🤖 <b>myCRM Bot 指令列表</b>\n\n` +
     `📷 <b>傳送照片</b> — 掃描名片，AI 辨識後存入 CRM\n\n` +
     `/search [關鍵字]　/s — 搜尋聯絡人\n` +
-    `/note — 新增筆記\n` +
+    `/note　/n — 新增筆記\n` +
     `/email　/e — 發送郵件給聯絡人\n` +
     `/add_back @姓名　/ab @姓名 — 補充名片反面\n` +
     `/work [描述]　/w — AI 解析任務，指派給他人或提醒自己\n` +
@@ -334,23 +334,6 @@ async function handleWork(
   const supabase = createServiceClient()
   await sendMessage(chatId, '⏳ AI 解析任務中，請稍候...')
 
-  // Fetch related contact info if available
-  let contactLine = ''
-  let contactName: string | undefined
-  let contactCompany: string | undefined
-  if (lastContactId) {
-    const { data: contact } = await supabase
-      .from('contacts')
-      .select('name, company')
-      .eq('id', lastContactId)
-      .single()
-    if (contact?.name) {
-      contactName = contact.name
-      contactCompany = contact.company ?? undefined
-      contactLine = `🔗 聯絡人：${contact.name}${contact.company ? `（${contact.company}）` : ''}\n`
-    }
-  }
-
   let parsed
   try {
     parsed = await parseTaskCommand(naturalText, new Date().toISOString(), user.ai_model_id)
@@ -358,6 +341,38 @@ async function handleWork(
     await sendMessage(chatId, '❌ AI 解析失敗，請重試或換個說法。')
     return
   }
+
+  // Resolve contact: task text > session last_contact_id
+  let resolvedContactId: string | null = lastContactId ?? null
+  let contactName: string | undefined
+  let contactCompany: string | undefined
+
+  if (parsed.contact_name) {
+    const { data: found } = await supabase
+      .from('contacts')
+      .select('id, name, company')
+      .ilike('name', `%${parsed.contact_name}%`)
+      .limit(1)
+      .maybeSingle()
+    if (found) {
+      resolvedContactId = found.id
+      contactName = found.name ?? undefined
+      contactCompany = found.company ?? undefined
+    }
+  }
+
+  if (!contactName && resolvedContactId) {
+    const { data: contact } = await supabase
+      .from('contacts').select('name, company').eq('id', resolvedContactId).single()
+    if (contact?.name) {
+      contactName = contact.name
+      contactCompany = contact.company ?? undefined
+    }
+  }
+
+  const contactLine = contactName
+    ? `🔗 聯絡人：${contactName}${contactCompany ? `（${contactCompany}）` : ''}\n`
+    : ''
 
   // Resolve assignees from users table
   const assigneeEmails: string[] = []
@@ -382,14 +397,14 @@ async function handleWork(
     assigneeNames.push('自己')
   }
 
-  // Create task (include contact_id if available)
+  // Create task
   const { data: task, error } = await supabase
     .from('tasks')
     .insert({
       title: parsed.title,
       due_at: parsed.due_at ?? null,
       created_by: user.email,
-      contact_id: lastContactId ?? null,
+      contact_id: resolvedContactId,
     })
     .select('id')
     .single()
@@ -410,7 +425,7 @@ async function handleWork(
     .select('email, display_name, telegram_id, teams_conversation_id, teams_service_url')
     .in('email', assigneeEmails)
 
-  const appUrl = process.env.NEXTAUTH_URL ?? ''
+  const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
 
   for (const au of notifyUsers ?? []) {
     if (au.email === user.email) continue
@@ -435,7 +450,7 @@ async function handleWork(
         app_url: appUrl,
         contact_name: contactName,
         contact_company: contactCompany ?? undefined,
-      }).catch(() => { /* non-blocking */ })
+      }).catch((e) => console.error('[Teams] notification failed:', e))
     }
   }
 
@@ -704,7 +719,7 @@ async function handleText(
   }
 
   // ── /note command ──────────────────────────────────────────────────────────
-  if (cmd === '/note') {
+  if (cmd === '/note' || cmd === '/n') {
     const lastContactId = session?.last_contact_id
     if (lastContactId) {
       const { data: lastContact } = await supabase

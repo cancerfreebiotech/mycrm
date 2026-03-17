@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v1.3.5 — /n alias + /w 自動偵測聯絡人 + Teams 通知診斷（2026-03-17）
+
+### 變更項目
+- Bot：新增 `/n` 作為 `/note` 的別名
+- Bot `/w`：AI 解析任務時自動偵測提及的外部聯絡人姓名，從 contacts 表搜尋並關聯（優先於 session 記錄）
+- Bot `/w`：Teams 通知錯誤改為 console.error 記錄，便於診斷
+- Bot `/w`：appUrl 回退補上 NEXT_PUBLIC_APP_URL
+
 ## v1.3.4 — 說明書改由 Claude Code Skill 生成（2026-03-17）
 
 ### 變更項目

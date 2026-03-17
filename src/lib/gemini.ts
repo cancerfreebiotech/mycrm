@@ -81,8 +81,9 @@ export async function analyzeBusinessCard(
 
 export interface TaskParsed {
   title: string
-  due_at: string | null   // ISO 8601 UTC string or null
-  assignees: string[]     // names or emails to search; empty = self-reminder
+  due_at: string | null       // ISO 8601 UTC string or null
+  assignees: string[]         // names or emails to search; empty = self-reminder
+  contact_name: string | null // external CRM contact mentioned in the task
 }
 
 export async function parseTaskCommand(
