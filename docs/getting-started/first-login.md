@@ -23,11 +23,10 @@ myCRM 使用 **Microsoft 帳號（Azure AD）單一登入**，限 `@cancerfree.i
 
 要使用 Telegram Bot 功能（名片掃描、任務管理），需要先綁定你的 Telegram 帳號：
 
-1. 登入 Web Dashboard 後，前往右上角 → **個人設定**
-2. 找到「Telegram ID」欄位
-3. 前往 Telegram，找到 Bot（搜尋 `@YourBotName`）
-4. 發送 `/start` 指令，Bot 會顯示你的 Telegram ID
-5. 將 ID 填入個人設定並儲存
+1. 在 Telegram 搜尋 **`@userinfobot`**，發送任何訊息
+2. Bot 會回覆你的 Telegram ID（純數字，如 `123456789`）
+3. 登入 myCRM → 右上角 → **個人設定**
+4. 將 Telegram ID 填入並儲存
 
 ---
 
