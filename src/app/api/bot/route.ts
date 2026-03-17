@@ -771,13 +771,19 @@ export async function POST(req: NextRequest) {
         // ── Save card ─────────────────────────────────────────────────────────
         if (data?.startsWith('save_')) {
           const pendingId = data.replace('save_', '')
-          const { data: pending, error: pendingError } = await supabase
+          const { data: pending } = await supabase
             .from('pending_contacts')
             .select('data')
             .eq('id', pendingId)
             .single()
 
-          if (pendingError || !pending) throw new Error('找不到暫存資料')
+          // Already processed (Telegram retry) — ack silently
+          if (!pending) {
+            await answerCallbackQuery(callbackQueryId)
+            return NextResponse.json({ ok: true })
+          }
+
+          await answerCallbackQuery(callbackQueryId, '✅ 已成功存檔！')
 
           const contact = pending.data
           const { data: inserted, error } = await supabase
@@ -795,7 +801,6 @@ export async function POST(req: NextRequest) {
           })
           await supabase.from('pending_contacts').delete().eq('id', pendingId)
           await updateLastContact(from.id, inserted.id)
-          await answerCallbackQuery(callbackQueryId, '✅ 已成功存檔！')
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await sendMessage(from.id, '✅ 已成功存檔！')
         }
