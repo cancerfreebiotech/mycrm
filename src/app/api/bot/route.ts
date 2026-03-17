@@ -1203,7 +1203,7 @@ export async function POST(req: NextRequest) {
 
     const user = await getAuthorizedUser(fromId)
     if (!user) {
-      await sendMessage(chatId, '⛔ 你沒有使用權限，請先在 myCRM 網站的個人設定綁定你的 Telegram ID')
+      await sendMessage(chatId, '⛔ 此 Bot 為 CancerFree Biotech 內部專用，你的帳號尚未授權。')
       return NextResponse.json({ ok: true })
     }
 
