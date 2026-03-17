@@ -7,17 +7,14 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Verify super_admin
   const service = createServiceClient()
   const { data: profile } = await service
     .from('users')
-    .select('role')
+    .select('id, role')
     .eq('email', user.email!)
     .single()
 
-  if (profile?.role !== 'super_admin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { dateFrom, dateTo, format } = await req.json() as {
     dateFrom: string
@@ -30,8 +27,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const isSuperAdmin = profile.role === 'super_admin'
+
     // Sheet 1: contacts created in range
-    const { data: contacts } = await service
+    let contactsQuery = service
       .from('contacts')
       .select(`
         name, company, email, phone, job_title, created_at,
@@ -41,8 +40,13 @@ export async function POST(req: NextRequest) {
       .lte('created_at', `${dateTo}T23:59:59.999Z`)
       .order('created_at', { ascending: false })
 
+    if (!isSuperAdmin) {
+      contactsQuery = contactsQuery.eq('created_by', profile.id)
+    }
+    const { data: contacts } = await contactsQuery
+
     // Sheet 2: interaction logs in range
-    const { data: logs } = await service
+    let logsQuery = service
       .from('interaction_logs')
       .select(`
         type, content, email_subject, meeting_date, created_at,
@@ -51,6 +55,11 @@ export async function POST(req: NextRequest) {
       .gte('created_at', `${dateFrom}T00:00:00.000Z`)
       .lte('created_at', `${dateTo}T23:59:59.999Z`)
       .order('created_at', { ascending: false })
+
+    if (!isSuperAdmin) {
+      logsQuery = logsQuery.eq('created_by', profile.id)
+    }
+    const { data: logs } = await logsQuery
 
     const contactRows = (contacts ?? []).map((c) => ({
       name: c.name ?? '',

@@ -5,8 +5,9 @@ import { useTheme } from 'next-themes'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Sun, Moon, Check } from 'lucide-react'
+import { Sun, Moon, Check, RotateCcw } from 'lucide-react'
 import { SUPPORTED_LOCALES, type Locale } from '@/i18n/config'
+import { SYSTEM_PROMPTS } from '@/lib/prompts'
 
 const LOCALE_LABELS: Record<Locale, string> = {
   'zh-TW': '繁體中文',
@@ -53,6 +54,11 @@ export default function SettingsPage() {
   const [assistants, setAssistants] = useState<Array<{ id: string; assistant_email: string; users: { display_name: string | null } | null }>>([])
   const [newAssistantEmail, setNewAssistantEmail] = useState('')
   const [assistantError, setAssistantError] = useState<string | null>(null)
+
+  const [emailPrompt, setEmailPrompt] = useState('')
+  const [savedEmailPrompt, setSavedEmailPrompt] = useState('')
+  const [savingEmailPrompt, setSavingEmailPrompt] = useState(false)
+  const [savedEmailPromptFlag, setSavedEmailPromptFlag] = useState(false)
 
   const filteredModels = allModels.filter((m) => m.endpoint_id === selectedEndpointId)
 
@@ -112,7 +118,41 @@ export default function SettingsPage() {
     }
     load()
     loadAssistants()
+    loadEmailPrompt()
   }, [])
+
+  async function loadEmailPrompt() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user?.id) return
+    const { data } = await supabase
+      .from('user_prompts')
+      .select('content')
+      .eq('user_id', user.id)
+      .eq('key', 'email_generate')
+      .single()
+    const content = data?.content ?? ''
+    setEmailPrompt(content)
+    setSavedEmailPrompt(content)
+  }
+
+  async function handleSaveEmailPrompt() {
+    setSavingEmailPrompt(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user?.id) { setSavingEmailPrompt(false); return }
+    const content = emailPrompt.trim()
+    if (content === '') {
+      await supabase.from('user_prompts').delete().eq('user_id', user.id).eq('key', 'email_generate')
+    } else {
+      await supabase.from('user_prompts').upsert(
+        { user_id: user.id, key: 'email_generate', content },
+        { onConflict: 'user_id,key' }
+      )
+    }
+    setSavedEmailPrompt(content)
+    setSavingEmailPrompt(false)
+    setSavedEmailPromptFlag(true)
+    setTimeout(() => setSavedEmailPromptFlag(false), 2000)
+  }
 
   async function loadAssistants() {
     const res = await fetch('/api/assistants')
@@ -374,6 +414,50 @@ export default function SettingsPage() {
             </button>
           </div>
           {assistantError && <p className="mt-1 text-xs text-red-500">{assistantError}</p>}
+        </div>
+
+        {/* Email Generate Prompt */}
+        <div className="border-t border-gray-100 dark:border-gray-800 pt-5">
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              個人 Email 生成 Prompt
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setEmailPrompt('')}
+                className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                title="還原為組織預設"
+              >
+                <RotateCcw size={12} /> 還原組織預設
+              </button>
+              <button
+                onClick={handleSaveEmailPrompt}
+                disabled={savingEmailPrompt || emailPrompt === savedEmailPrompt}
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {savedEmailPromptFlag ? <Check size={12} /> : null}
+                {savingEmailPrompt ? '儲存中…' : savedEmailPromptFlag ? '已儲存' : '儲存'}
+              </button>
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
+            覆蓋組織預設的 Email 生成指令。留空則使用組織設定或系統預設。
+          </p>
+          <textarea
+            value={emailPrompt}
+            onChange={(e) => setEmailPrompt(e.target.value)}
+            rows={5}
+            placeholder="留空則使用組織/系統預設"
+            className="w-full text-sm font-mono bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+          />
+          {emailPrompt === '' && (
+            <div className="mt-2 space-y-1">
+              <p className="text-xs text-gray-400 dark:text-gray-500">目前生效的系統預設：</p>
+              <pre className="text-xs font-mono bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-500 dark:text-gray-400 whitespace-pre-wrap overflow-auto max-h-24">
+                {SYSTEM_PROMPTS.email_generate}
+              </pre>
+            </div>
+          )}
         </div>
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}

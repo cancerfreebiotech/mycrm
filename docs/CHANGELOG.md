@@ -1,13 +1,21 @@
 # CHANGELOG
 
-## v1.3 — 說明書多語言 + Prompt 自訂 + 報表權限 + 聯絡人篩選 + Dashboard 統計互動（待實作）
+## v1.3.0 — 說明書多語言 + Prompt 自訂 + 報表權限 + 聯絡人篩選 + Dashboard 統計互動（2026-03-17）
 
-### 已完成
-- ✅ **Task 74**：`/contacts/new` 表單新增國家欄位（dropdown）
-- ✅ **`/admin/countries`** 頁面（國家管理）
-
-### 待實作（Task 66–73, 75–78）
-- **[Task 66]** Migration SQL：`docs_content`、`prompts`、`user_prompts` 表；`report_schedules.owner_id` 欄位
+### 變更項目
+- **Task 66** Migration：新增 `docs_content`、`prompts`、`user_prompts` 表；`report_schedules` 新增 `owner_id`
+- **Task 67** 新增 `src/lib/prompts.ts`：`SYSTEM_PROMPTS` 常數 + `getPrompt()` 三層優先級函式
+- **Task 68** 新增 `/api/docs/generate` route：呼叫 AI 生成 3 語言 × 2 section 說明書，upsert `docs_content`
+- **Task 69** 更新 `/docs` 頁面：語言切換按鈕、從 `docs_content` 撈內容、Markdown 渲染（marked）
+- **Task 70** 新增 `/admin/prompts` 頁面：4 個 prompt 編輯 + 還原系統預設
+- **Task 71** 更新 `/settings`：新增個人 `email_generate` prompt 編輯 + 還原組織預設
+- **Task 72** 更新所有 AI 呼叫（OCR、email、任務解析）改用 `getPrompt()`
+- **Task 73** 更新報表頁：依角色過濾排程（member 只看自己），報表資料範圍依 `created_by` 過濾
+- **Task 74** `/contacts/new` 新增國家欄位 ✅（已完成）
+- **Task 75** 聯絡人列表新增國家篩選 dropdown（單選）
+- **Task 76** Dashboard 新增國家分布統計區塊（長條圖，可點擊跳轉 `/contacts?country=`）
+- **Task 77** Dashboard Tag 分布每行改為可點擊 `<Link>` 跳轉 `/contacts?tag=`
+- **Task 78** 聯絡人列表：URL query 初始化篩選、國家多選 dropdown、職稱三段排序（asc/desc/無）
 - **[Task 67]** 新增 `src/lib/prompts.ts`：`SYSTEM_PROMPTS` 常數 + `getPrompt()` 三層取值
 - **[Task 68]** 新增 `/api/docs/generate` route：讀 PRD → AI 生成 6 份說明書內容 → upsert `docs_content`；設定 Vercel build hook
 - **[Task 69]** 更新 `/docs` 頁面：語言切換按鈕（繁中/EN/日），內容從 `docs_content` 撈取

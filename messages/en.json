@@ -31,6 +31,7 @@
     "tasks": "Tasks",
     "reports": "Reports",
     "countries": "Countries",
+    "prompts": "Prompt Management",
     "logout": "Logout"
   },
   "contacts": {
@@ -40,6 +41,8 @@
     "searchPlaceholder": "Search by name or company...",
     "tagFilter": "Filter by Tags",
     "clearFilter": "Clear filter",
+    "countryFilter": "Country filter",
+    "countryOther": "Other / Not set",
     "name": "Name",
     "nameEn": "English Name",
     "nameLocal": "Local Language Name",
@@ -206,6 +209,8 @@
     "recentContacts": "Added This Month",
     "unassignedNotes": "Unassigned Notes",
     "tagDistribution": "Tag Distribution",
+    "countryDistribution": "Country Distribution",
+    "countryOther": "Other / Not set",
     "recentActivity": "Recent Activity",
     "noActivity": "No activity yet",
     "pendingNotes": "Pending",
@@ -339,6 +344,7 @@
     "colScheduleName": "Name",
     "colFrequency": "Frequency",
     "colRecipients": "Recipients",
+    "colOwner": "Owner",
     "colStatus": "Status",
     "freqWeekly": "Weekly",
     "freqMonthly": "Monthly",

@@ -97,6 +97,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/tasks', label: t('tasks'), icon: ClipboardList },
     { href: '/settings', label: t('settings'), icon: Settings },
     { href: docsUrl, label: t('docs'), icon: BookOpen, external: docsUrl.startsWith('http') },
+    { href: '/admin/reports', label: t('reports'), icon: BarChart2 },
   ]
   const adminItems: NavItem[] = isSuperAdmin ? [
     { href: '/admin/tags', label: t('tags'), icon: Tag },
@@ -104,7 +105,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/admin/templates', label: t('emailTemplates'), icon: Mail },
     { href: '/admin/models', label: t('models'), icon: ShieldCheck },
     { href: '/admin/users', label: t('users'), icon: ShieldCheck },
-    { href: '/admin/reports', label: t('reports'), icon: BarChart2 },
+    { href: '/admin/prompts', label: t('prompts'), icon: ShieldCheck },
     { href: '/admin/countries', label: t('countries'), icon: MapPin },
   ] : []
 

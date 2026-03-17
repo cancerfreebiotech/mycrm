@@ -31,6 +31,7 @@
     "tasks": "タスク管理",
     "reports": "レポート管理",
     "countries": "国管理",
+    "prompts": "プロンプト管理",
     "logout": "ログアウト"
   },
   "contacts": {
@@ -40,6 +41,8 @@
     "searchPlaceholder": "名前または会社で検索...",
     "tagFilter": "タグで絞り込み",
     "clearFilter": "絞り込み解除",
+    "countryFilter": "国でフィルター",
+    "countryOther": "その他 / 未設定",
     "name": "氏名",
     "nameEn": "英語名",
     "nameLocal": "現地語名",
@@ -206,6 +209,8 @@
     "recentContacts": "今月の追加数",
     "unassignedNotes": "未分類メモ",
     "tagDistribution": "タグ分布",
+    "countryDistribution": "国別分布",
+    "countryOther": "その他 / 未設定",
     "recentActivity": "最近のアクティビティ",
     "noActivity": "アクティビティなし",
     "pendingNotes": "未処理",
@@ -339,6 +344,7 @@
     "colScheduleName": "名称",
     "colFrequency": "頻度",
     "colRecipients": "宛先",
+    "colOwner": "作成者",
     "colStatus": "状態",
     "freqWeekly": "毎週",
     "freqMonthly": "毎月",

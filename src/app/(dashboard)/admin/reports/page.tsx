@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
 import { Plus, Pencil, Trash2, Check } from 'lucide-react'
+import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 
 interface Schedule {
   id: string
@@ -14,6 +15,7 @@ interface Schedule {
   recipients: string[]
   is_active: boolean
   created_at: string
+  owner_id?: string
 }
 
 interface ContactRow {
@@ -44,6 +46,8 @@ export default function ReportsPage() {
   const t = useTranslations('reports')
   const tc = useTranslations('common')
   const searchParams = useSearchParams()
+  const supabase = createBrowserSupabaseClient()
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
 
   // Generate section
   const today = new Date().toISOString().slice(0, 10)
@@ -75,6 +79,7 @@ export default function ReportsPage() {
   const [flashMsg, setFlashMsg] = useState<string | null>(null)
 
   useEffect(() => {
+    loadRole()
     loadSchedules()
     loadGmail()
     if (searchParams.get('gmail') === 'connected') {
@@ -83,6 +88,13 @@ export default function ReportsPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  async function loadRole() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user?.email) return
+    const { data } = await supabase.from('users').select('role').eq('email', user.email).single()
+    setIsSuperAdmin(data?.role === 'super_admin')
+  }
 
   async function loadSchedules() {
     setLoadingSchedules(true)
@@ -369,7 +381,7 @@ export default function ReportsPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
-                  {[t('colScheduleName'), t('colFrequency'), t('colRecipients'), t('colStatus'), ''].map((h, i) => (
+                  {[t('colScheduleName'), t('colFrequency'), t('colRecipients'), ...(isSuperAdmin ? [t('colOwner')] : []), t('colStatus'), ''].map((h, i) => (
                     <th key={i} className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{h}</th>
                   ))}
                 </tr>
@@ -380,6 +392,9 @@ export default function ReportsPage() {
                     <td className="px-3 py-2 font-medium text-gray-900 dark:text-gray-100">{s.name}</td>
                     <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{freqLabel(s.frequency)}</td>
                     <td className="px-3 py-2 text-gray-600 dark:text-gray-400 max-w-xs truncate">{s.recipients.join(', ')}</td>
+                    {isSuperAdmin && (
+                      <td className="px-3 py-2 text-gray-500 dark:text-gray-400 text-xs">{s.owner_id ?? '—'}</td>
+                    )}
                     <td className="px-3 py-2">
                       <button
                         onClick={() => handleToggle(s)}

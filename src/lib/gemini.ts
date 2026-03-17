@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createServiceClient } from '@/lib/supabase'
+import { getPrompt } from '@/lib/prompts'
 
 export interface CardData {
   name: string
@@ -25,15 +26,6 @@ interface ModelConfig {
   apiKey: string
 }
 
-const SYSTEM_PROMPT = `你是一個專業名片辨識助手。名片可能為中文、英文或日文，請辨識後以原文回傳各欄位。
-從圖中提取以下資訊，回傳純 JSON，不要有任何其他文字：
-{"name":"","name_en":"","name_local":"","company":"","company_en":"","company_local":"","job_title":"","email":"","second_email":"","phone":"","second_phone":"","address":"","website":"","linkedin_url":"","facebook_url":"","country_code":null}
-
-country_code 規則：回傳 ISO 2 碼（如 "TW"、"JP"、"US"），依據以下優先順序判斷：
-1. 電話號碼國碼（+886→TW、+81→JP、+1→US、+82→KR、+65→SG、+91→IN）
-2. 地址內容（含國名、城市、郵遞區號格式）
-3. 公司名稱語言特徵（日文假名→JP、韓文→KR）
-找不到則回傳 null`
 
 // Resolve ai_model_id (UUID) → { modelId, apiKey }
 // Falls back to env GEMINI_API_KEY + default model string if aiModelId is a plain model string or null
@@ -65,7 +57,8 @@ async function resolveModelConfig(aiModelId: string | null): Promise<ModelConfig
 
 export async function analyzeBusinessCard(
   imageBuffers: Buffer | Buffer[],
-  aiModelId: string | null = null
+  aiModelId: string | null = null,
+  userId?: string
 ): Promise<CardData> {
   const { modelId, apiKey } = await resolveModelConfig(aiModelId)
   const genAI = new GoogleGenerativeAI(apiKey)
@@ -79,7 +72,8 @@ export async function analyzeBusinessCard(
     },
   }))
 
-  const result = await geminiModel.generateContent([SYSTEM_PROMPT, ...imageParts])
+  const systemPrompt = await getPrompt('ocr_card', userId)
+  const result = await geminiModel.generateContent([systemPrompt, ...imageParts])
   const text = result.response.text().trim()
   const json = text.replace(/^```json\s*/, '').replace(/\s*```$/, '')
   return JSON.parse(json) as CardData
@@ -100,16 +94,8 @@ export async function parseTaskCommand(
   const genAI = new GoogleGenerativeAI(apiKey)
   const geminiModel = genAI.getGenerativeModel({ model: modelId })
 
-  const prompt = `現在時間（UTC）：${nowIso}
-請從以下任務描述中提取結構化資訊，回傳純 JSON，不要有任何其他文字：
-{"title":"任務標題","due_at":"ISO8601 UTC 時間或 null","assignees":["姓名或email陣列，若為自我提醒則空陣列"]}
-
-規則：
-- title：簡潔的任務標題
-- due_at：若有提到時間（明天/下週/X月X日/X點等），換算為 UTC ISO 8601；無則 null
-- assignees：提到要指派給誰的姓名或 email（可多人）；若是"提醒我自己"則空陣列
-
-任務描述：${text}`
+  const basePrompt = await getPrompt('task_parse')
+  const prompt = `現在時間（UTC）：${nowIso}\n${basePrompt}\n\n任務描述：${text}`
 
   const result = await geminiModel.generateContent(prompt)
   const raw = result.response.text().trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
@@ -119,15 +105,17 @@ export async function parseTaskCommand(
 export async function generateEmailContent(
   description: string,
   templateContent?: string,
-  aiModelId: string | null = null
+  aiModelId: string | null = null,
+  userId?: string
 ): Promise<string> {
   const { modelId, apiKey } = await resolveModelConfig(aiModelId)
   const genAI = new GoogleGenerativeAI(apiKey)
   const geminiModel = genAI.getGenerativeModel({ model: modelId })
 
+  const systemPrompt = await getPrompt('email_generate', userId)
   const prompt = templateContent
-    ? `你是一位專業的商務郵件撰寫助手。請根據以下範本和補充說明，生成一封完整的商務郵件內文（HTML 格式）。\n\n範本內容：\n${templateContent}\n\n補充說明：\n${description}\n\n請合併範本與補充說明，生成最終郵件內文。只回傳 HTML 內文，不要包含 <html>、<head>、<body> 標籤，不要有任何其他文字。`
-    : `你是一位專業的商務郵件撰寫助手。請根據以下描述，生成一封完整的商務郵件內文（HTML 格式）。\n\n描述：\n${description}\n\n只回傳 HTML 內文，不要包含 <html>、<head>、<body> 標籤，不要有任何其他文字。`
+    ? `${systemPrompt}\n\n範本內容：\n${templateContent}\n\n補充說明：\n${description}\n\n請合併範本與補充說明，生成最終郵件內文。只回傳 HTML 內文，不要包含 <html>、<head>、<body> 標籤，不要有任何其他文字。`
+    : `${systemPrompt}\n\n描述：\n${description}\n\n只回傳 HTML 內文，不要包含 <html>、<head>、<body> 標籤，不要有任何其他文字。`
 
   const result = await geminiModel.generateContent(prompt)
   return result.response.text().trim()

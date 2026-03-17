@@ -31,6 +31,7 @@
     "tasks": "任務管理",
     "reports": "報表管理",
     "countries": "國家管理",
+    "prompts": "Prompt 管理",
     "logout": "登出"
   },
   "contacts": {
@@ -40,6 +41,8 @@
     "searchPlaceholder": "搜尋姓名或公司...",
     "tagFilter": "Tags 篩選",
     "clearFilter": "清除篩選",
+    "countryFilter": "國家篩選",
+    "countryOther": "其他 / 未設定",
     "name": "姓名",
     "nameEn": "英文姓名",
     "nameLocal": "當地語言姓名",
@@ -206,6 +209,8 @@
     "recentContacts": "本月新增",
     "unassignedNotes": "未歸類筆記",
     "tagDistribution": "Tag 分布",
+    "countryDistribution": "國家分布",
+    "countryOther": "其他 / 未設定",
     "recentActivity": "最近活動",
     "noActivity": "尚無活動紀錄",
     "pendingNotes": "待處理",
@@ -339,6 +344,7 @@
     "colScheduleName": "名稱",
     "colFrequency": "頻率",
     "colRecipients": "收件人",
+    "colOwner": "建立者",
     "colStatus": "狀態",
     "freqWeekly": "每週",
     "freqMonthly": "每月",

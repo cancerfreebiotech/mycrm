@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Users, CalendarPlus, X, Search, StickyNote, Tag } from 'lucide-react'
+import { Users, CalendarPlus, X, Search, StickyNote, Tag, Globe, ChevronRight } from 'lucide-react'
 
 interface UnassignedNote {
   id: string
@@ -16,6 +16,13 @@ interface UnassignedNote {
 
 interface TagStat {
   name: string
+  count: number
+}
+
+interface CountryStat {
+  code: string
+  name: string
+  emoji: string | null
   count: number
 }
 
@@ -34,6 +41,7 @@ export default function DashboardPage() {
   const [monthlyContacts, setMonthlyContacts] = useState<number>(0)
   const [unassignedCount, setUnassignedCount] = useState<number>(0)
   const [tagStats, setTagStats] = useState<TagStat[]>([])
+  const [countryStats, setCountryStats] = useState<CountryStat[]>([])
   const [notes, setNotes] = useState<UnassignedNote[]>([])
   const [assigningNote, setAssigningNote] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -46,6 +54,7 @@ export default function DashboardPage() {
     loadStats()
     loadUnassignedNotes()
     loadTagStats()
+    loadCountryStats()
   }, [])
 
   async function loadStats() {
@@ -83,6 +92,41 @@ export default function DashboardPage() {
       .filter((t) => t.count > 0)
       .sort((a, b) => b.count - a.count)
     setTagStats(stats)
+  }
+
+  async function loadCountryStats() {
+    const { data: contacts } = await supabase
+      .from('contacts')
+      .select('country_code, countries(name_zh, emoji)')
+
+    if (!contacts) return
+
+    const map: Record<string, { name: string; emoji: string | null; count: number }> = {}
+    let otherCount = 0
+
+    contacts.forEach((c) => {
+      const code = c.country_code as string | null
+      if (!code) {
+        otherCount++
+      } else {
+        if (!map[code]) {
+          const country = c.countries as { name_zh: string; emoji: string | null } | null
+          map[code] = { name: country?.name_zh ?? code, emoji: country?.emoji ?? null, count: 0 }
+        }
+        map[code].count++
+      }
+    })
+
+    const stats: CountryStat[] = Object.entries(map)
+      .filter(([, v]) => v.count > 0)
+      .map(([code, v]) => ({ code, ...v }))
+      .sort((a, b) => b.count - a.count)
+
+    if (otherCount > 0) {
+      stats.push({ code: '__other__', name: '', emoji: null, count: otherCount })
+    }
+
+    setCountryStats(stats)
   }
 
   async function loadUnassignedNotes() {
@@ -182,7 +226,11 @@ export default function DashboardPage() {
               const max = tagStats[0]?.count || 1
               const pct = Math.round((tag.count / max) * 100)
               return (
-                <div key={tag.name} className="flex items-center gap-3">
+                <Link
+                  key={tag.name}
+                  href={`/contacts?tag=${encodeURIComponent(tag.name)}`}
+                  className="flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg px-2 -mx-2 cursor-pointer"
+                >
                   <span className="text-sm text-gray-600 dark:text-gray-400 w-28 shrink-0 truncate">{tag.name}</span>
                   <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-2">
                     <div
@@ -191,7 +239,44 @@ export default function DashboardPage() {
                     />
                   </div>
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300 w-6 text-right shrink-0">{tag.count}</span>
-                </div>
+                  <ChevronRight size={14} className="text-gray-300 dark:text-gray-600 shrink-0" />
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 國家分布 */}
+      {countryStats.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <Globe size={16} className="text-gray-400" />
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('countryDistribution')}</h2>
+          </div>
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 max-w-lg space-y-2">
+            {countryStats.map((stat) => {
+              const max = countryStats[0]?.count || 1
+              const pct = Math.round((stat.count / max) * 100)
+              const label = stat.code === '__other__'
+                ? t('countryOther')
+                : `${stat.emoji ?? ''} ${stat.name}`.trim()
+              return (
+                <Link
+                  key={stat.code}
+                  href={`/contacts?country=${stat.code}`}
+                  className="flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg px-2 -mx-2 cursor-pointer"
+                >
+                  <span className="text-sm text-gray-600 dark:text-gray-400 w-28 shrink-0 truncate">{label}</span>
+                  <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-2">
+                    <div
+                      className="bg-green-500 h-2 rounded-full transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300 w-6 text-right shrink-0">{stat.count}</span>
+                  <ChevronRight size={14} className="text-gray-300 dark:text-gray-600 shrink-0" />
+                </Link>
               )
             })}
           </div>
