@@ -7,7 +7,7 @@ import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Sun, Moon, Check, RotateCcw } from 'lucide-react'
 import { SUPPORTED_LOCALES, type Locale } from '@/i18n/config'
-import { SYSTEM_PROMPTS } from '@/lib/prompts'
+import { SYSTEM_PROMPTS } from '@/lib/prompt-constants'
 
 const LOCALE_LABELS: Record<Locale, string> = {
   'zh-TW': '繁體中文',

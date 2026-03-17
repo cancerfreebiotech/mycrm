@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { SYSTEM_PROMPTS, type PromptKey } from '@/lib/prompts'
+import { SYSTEM_PROMPTS, type PromptKey } from '@/lib/prompt-constants'
 import { Check, RotateCcw } from 'lucide-react'
 
 const PROMPT_KEYS: PromptKey[] = ['ocr_card', 'task_parse', 'email_generate', 'docs_generate']
