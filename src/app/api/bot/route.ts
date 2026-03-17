@@ -432,12 +432,21 @@ async function handleWork(
 
     // Telegram notification
     if (au.telegram_id) {
+      const tgExtra: Record<string, unknown> = {
+        reply_markup: {
+          inline_keyboard: [[
+            { text: '✅ 標記完成', callback_data: `task_done_${task.id}` },
+            ...(appUrl ? [{ text: '📋 任務管理', url: `${appUrl}/tasks` }] : []),
+          ]],
+        },
+      }
       await sendMessage(au.telegram_id,
         `📋 <b>新任務指派給你</b>\n\n` +
         `📌 ${parsed.title}\n` +
         (contactLine ? contactLine : '') +
         (parsed.due_at ? `⏰ 截止：${new Date(parsed.due_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}\n` : '') +
-        `\n由 ${user.email} 指派。`
+        `\n由 ${user.email} 指派。`,
+        tgExtra
       )
     }
 

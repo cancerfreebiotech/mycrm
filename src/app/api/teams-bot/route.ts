@@ -191,8 +191,21 @@ export async function POST(req: NextRequest) {
   }
 
   // ── invoke: Adaptive Card button press ───────────────────────────────────
-  if (activityType === 'invoke' && (body.value as Record<string, string>)?.action) {
-    const { action, task_id } = body.value as { action: string; task_id: string }
+  if (activityType === 'invoke') {
+    const value = body.value as Record<string, unknown> | undefined
+    // Support old format: value = { action: "task_done", task_id: "..." }
+    // Support new Teams adaptiveCard/action format: value = { action: { type, data: { action, task_id } } }
+    let action: string | undefined
+    let task_id: string | undefined
+    if (typeof value?.action === 'string') {
+      action = value.action
+      task_id = value.task_id as string | undefined
+    } else if (value?.action && typeof value.action === 'object') {
+      const data = (value.action as Record<string, unknown>)?.data as Record<string, string> | undefined
+      action = data?.action
+      task_id = data?.task_id
+    }
+    console.log('[teams-bot] invoke action:', action, 'task_id:', task_id)
 
     if (action === 'task_done' && task_id) {
       // Look up user by teams_user_id; auto-link if not yet linked
