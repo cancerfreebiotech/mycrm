@@ -283,13 +283,26 @@ async function handlePhoto(
       .single()
     if (pendingError || !pending) throw new Error('暫存失敗')
 
+    let countryDisplay = '—'
+    if (cardData.country_code) {
+      const { data: countryRow } = await supabase
+        .from('countries')
+        .select('emoji, name_zh')
+        .eq('code', cardData.country_code)
+        .single()
+      countryDisplay = countryRow
+        ? `${countryRow.emoji} ${countryRow.name_zh}`
+        : cardData.country_code
+    }
+
     const resultText =
       `📇 辨識結果：\n\n` +
       `👤 姓名：${cardData.name || '—'}\n` +
       `🏢 公司：${cardData.company || '—'}\n` +
       `💼 職稱：${cardData.job_title || '—'}\n` +
       `📧 Email：${cardData.email || '—'}\n` +
-      `📞 電話：${cardData.phone || '—'}` +
+      `📞 電話：${cardData.phone || '—'}\n` +
+      `🌍 國家：${countryDisplay}` +
       dupWarning +
       `\n\n請確認是否存檔？`
 
