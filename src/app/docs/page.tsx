@@ -168,16 +168,8 @@ export default function DocsPage() {
             </div>
           )}
 
-          <div className="mt-12 pt-6 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-400 dark:text-gray-500 flex items-center justify-between">
+          <div className="mt-12 pt-6 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-400 dark:text-gray-500">
             <span>myCRM v{process.env.NEXT_PUBLIC_APP_VERSION} · cancerfree.io</span>
-            <button
-              onClick={handleGenerate}
-              disabled={generating}
-              className="inline-flex items-center gap-1.5 hover:text-gray-600 dark:hover:text-gray-300 transition-colors disabled:opacity-50"
-            >
-              <RefreshCw size={12} className={generating ? 'animate-spin' : ''} />
-              {generating ? '生成中…' : '重新生成'}
-            </button>
           </div>
         </div>
       </div>
