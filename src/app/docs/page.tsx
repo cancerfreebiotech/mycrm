@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useTheme } from 'next-themes'
-import { Sun, Moon, ArrowLeft, RefreshCw, Globe } from 'lucide-react'
+import { Sun, Moon, ArrowLeft, Globe } from 'lucide-react'
 import { marked } from 'marked'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { LOCALE_COOKIE, SUPPORTED_LOCALES } from '@/i18n/config'
@@ -38,7 +38,6 @@ export default function DocsPage() {
   const [content, setContent] = useState<string>('')
   const [html, setHtml] = useState<string>('')
   const [loading, setLoading] = useState(true)
-  const [generating, setGenerating] = useState(false)
 
   const supabase = createBrowserSupabaseClient()
 
@@ -72,21 +71,6 @@ export default function DocsPage() {
       .single()
     setContent(data?.content ?? '')
     setLoading(false)
-  }
-
-  async function handleGenerate() {
-    setGenerating(true)
-    try {
-      const res = await fetch('/api/docs/generate', { method: 'POST' })
-      const json = await res.json()
-      if (!res.ok) {
-        alert(`生成失敗：${json.error ?? res.statusText}`)
-        return
-      }
-      await loadContent(locale, section)
-    } finally {
-      setGenerating(false)
-    }
   }
 
   return (
@@ -180,15 +164,7 @@ export default function DocsPage() {
             />
           ) : (
             <div className="text-center py-12">
-              <p className="text-sm text-gray-400 dark:text-gray-500 mb-4">此語言的文件尚未生成。</p>
-              <button
-                onClick={handleGenerate}
-                disabled={generating}
-                className="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                <RefreshCw size={14} className={generating ? 'animate-spin' : ''} />
-                {generating ? '生成中…' : '立即生成說明書'}
-              </button>
+              <p className="text-sm text-gray-400 dark:text-gray-500">此語言的文件尚未生成。</p>
             </div>
           )}
 

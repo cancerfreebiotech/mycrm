@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v1.3.4 — 說明書改由 Claude Code Skill 生成（2026-03-17）
+
+### 變更項目
+- 說明書改由 `/generate-docs` Claude Code Skill 手動生成，不再依賴 Vercel serverless function
+- 移除 `/api/docs/generate` route 及說明書頁面的生成按鈕
+- 新增 `.claude/commands/generate-docs.md` skill
+
 ## v1.3.3 — 可折疊側邊欄 + 任務去重 + 任務聯絡人連結 + Teams 聯絡人通知（2026-03-17）
 
 ### 變更項目
