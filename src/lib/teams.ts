@@ -3,10 +3,11 @@
 
 const TEAMS_BOT_APP_ID = process.env.TEAMS_BOT_APP_ID
 const TEAMS_BOT_APP_SECRET = process.env.TEAMS_BOT_APP_SECRET
+const TEAMS_TENANT_ID = process.env.TEAMS_TENANT_ID ?? 'botframework.com'
 
 // Get Bot Framework OAuth token
 async function getBotToken(): Promise<string> {
-  const res = await fetch('https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token', {
+  const res = await fetch(`https://login.microsoftonline.com/${TEAMS_TENANT_ID}/oauth2/v2.0/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
