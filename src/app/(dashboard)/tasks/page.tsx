@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
+import Link from 'next/link'
 import { Plus, Check, Clock, X, Pencil, Trash2 } from 'lucide-react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 
@@ -23,6 +24,7 @@ interface Task {
   completed_at: string | null
   created_at: string
   task_assignees: AssigneeInfo[]
+  contacts: { id: string; name: string | null; company: string | null } | null
 }
 
 interface UserOption {
@@ -235,6 +237,14 @@ export default function TasksPage() {
                       )}
                       {assigneeNames && (
                         <span>👤 {assigneeNames}</span>
+                      )}
+                      {task.contacts?.name && (
+                        <Link
+                          href={`/contacts/${task.contacts.id}`}
+                          className="text-blue-500 dark:text-blue-400 hover:underline"
+                        >
+                          🔗 {task.contacts.name}{task.contacts.company ? `（${task.contacts.company}）` : ''}
+                        </Link>
                       )}
                       {task.completed_by && (
                         <span>{t('completedBy', { name: task.completed_by })}</span>

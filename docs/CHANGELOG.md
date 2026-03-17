@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v1.3.3 — 可折疊側邊欄 + 任務去重 + 任務聯絡人連結 + Teams 聯絡人通知（2026-03-17）
+
+### 變更項目
+- 側邊欄：桌面版新增折疊/展開切換按鈕，狀態儲存於 localStorage
+- Telegram Bot：webhook update_id 去重，防止 AI 回應過慢導致重複建立任務
+- 網頁任務列表：顯示關聯聯絡人姓名（可點擊跳至聯絡人頁面）
+- Teams Bot：/w 指派任務時，同步傳送 Adaptive Card 給被指派者（含聯絡人姓名與公司）
+- DB：新增 telegram_dedup 表（防重複）及 tasks.contact_id 欄位
+
 ## v1.3.2 — Dashboard 聯絡人連結 + 個設 Teams 狀態 + 任務聯絡人脈絡 + 全欄排序（2026-03-17）
 
 ### 變更項目

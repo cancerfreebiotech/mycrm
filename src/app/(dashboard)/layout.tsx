@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import React, { useEffect, useRef, useState } from 'react'
-import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon, Globe, BarChart2, ClipboardList, MapPin, Menu, X } from 'lucide-react'
+import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon, Globe, BarChart2, ClipboardList, MapPin, Menu, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
@@ -32,8 +32,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [currentLocale, setCurrentLocale] = useState<Locale>('zh-TW')
   const localeRef = useRef<HTMLDivElement>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
+
+  useEffect(() => {
+    setCollapsed(localStorage.getItem('sidebar-collapsed') === 'true')
+  }, [])
+
+  function toggleCollapsed() {
+    const next = !collapsed
+    setCollapsed(next)
+    localStorage.setItem('sidebar-collapsed', String(next))
+  }
 
   // Close mobile sidebar on navigation
   useEffect(() => { setMobileOpen(false) }, [pathname])
@@ -109,8 +120,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/admin/countries', label: t('countries'), icon: MapPin },
   ] : []
 
-  // Label span shared classes — hidden on tablet, shown on hover & desktop
-  const labelCls = 'overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 max-w-[160px] sm:max-w-0 sm:opacity-0 group-hover/sb:max-w-[160px] group-hover/sb:opacity-100 lg:max-w-[160px] lg:opacity-100'
+  // Label span shared classes — hidden on tablet, shown on hover & desktop (unless collapsed)
+  const labelCls = collapsed
+    ? 'overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 max-w-[160px] sm:max-w-0 sm:opacity-0 group-hover/sb:max-w-[160px] group-hover/sb:opacity-100 lg:max-w-0 lg:opacity-0 lg:group-hover/sb:max-w-0 lg:group-hover/sb:opacity-0'
+    : 'overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 max-w-[160px] sm:max-w-0 sm:opacity-0 group-hover/sb:max-w-[160px] group-hover/sb:opacity-100 lg:max-w-[160px] lg:opacity-100'
 
   return (
     <div className="h-screen bg-gray-50 dark:bg-gray-950">
@@ -125,7 +138,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Sidebar */}
       <aside
         className={`group/sb fixed inset-y-0 left-0 z-50 flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-[width,transform] duration-200 overflow-hidden
-          w-56 sm:w-16 sm:hover:w-56 lg:w-56
+          w-56 sm:w-16 sm:hover:w-56 ${collapsed ? 'lg:w-16 lg:hover:w-16' : 'lg:w-56'}
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} sm:translate-x-0`}
       >
         {/* Logo */}
@@ -173,6 +186,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </nav>
 
+        {/* Collapse toggle (desktop only) */}
+        <button
+          onClick={toggleCollapsed}
+          className="hidden lg:flex items-center justify-center h-8 mx-2 mb-1 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0"
+          title={collapsed ? '展開側邊欄' : '收合側邊欄'}
+        >
+          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
+
         {/* Version footer */}
         <div className="px-3 py-3 border-t border-gray-100 dark:border-gray-800 shrink-0">
           <div className={labelCls}>
@@ -189,7 +211,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main (offset by sidebar width) */}
-      <div className="h-full flex flex-col ml-0 sm:ml-16 lg:ml-56">
+      <div className={`h-full flex flex-col ml-0 sm:ml-16 transition-[margin] duration-200 ${collapsed ? 'lg:ml-16' : 'lg:ml-56'}`}>
         {/* Header */}
         <header className="h-14 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 sm:px-6 shrink-0">
           {/* Hamburger (mobile only) */}

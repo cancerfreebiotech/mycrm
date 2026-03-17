@@ -26,6 +26,8 @@ export interface TeamsTaskCard {
   due_at?: string | null
   task_id: string
   app_url: string
+  contact_name?: string
+  contact_company?: string
 }
 
 // Send an Adaptive Card for a task notification to a Teams conversation
@@ -66,6 +68,11 @@ export async function sendTeamsTaskNotification(
               text: card.description,
               wrap: true,
               color: 'Default',
+              isSubtle: true,
+            }] : []),
+            ...(card.contact_name ? [{
+              type: 'TextBlock',
+              text: `🔗 ${card.contact_name}${card.contact_company ? `（${card.contact_company}）` : ''}`,
               isSubtle: true,
             }] : []),
             ...(card.due_at ? [{

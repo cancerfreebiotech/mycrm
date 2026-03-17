@@ -4,6 +4,7 @@ import { analyzeBusinessCard, generateEmailContent, parseTaskCommand } from '@/l
 import { processCardImage, generateCardFilename } from '@/lib/imageProcessor'
 import { checkDuplicates } from '@/lib/duplicate'
 import { sendMail } from '@/lib/graph'
+import { sendTeamsTaskNotification } from '@/lib/teams'
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`
@@ -335,6 +336,8 @@ async function handleWork(
 
   // Fetch related contact info if available
   let contactLine = ''
+  let contactName: string | undefined
+  let contactCompany: string | undefined
   if (lastContactId) {
     const { data: contact } = await supabase
       .from('contacts')
@@ -342,6 +345,8 @@ async function handleWork(
       .eq('id', lastContactId)
       .single()
     if (contact?.name) {
+      contactName = contact.name
+      contactCompany = contact.company ?? undefined
       contactLine = `🔗 聯絡人：${contact.name}${contact.company ? `（${contact.company}）` : ''}\n`
     }
   }
@@ -377,13 +382,14 @@ async function handleWork(
     assigneeNames.push('自己')
   }
 
-  // Create task
+  // Create task (include contact_id if available)
   const { data: task, error } = await supabase
     .from('tasks')
     .insert({
       title: parsed.title,
       due_at: parsed.due_at ?? null,
       created_by: user.email,
+      contact_id: lastContactId ?? null,
     })
     .select('id')
     .single()
@@ -398,21 +404,39 @@ async function handleWork(
     await supabase.from('task_assignees').insert({ task_id: task.id, assignee_email: email })
   }
 
-  // Notify assignees via Telegram (fetch their telegram_id)
-  const { data: assigneeUsers } = await supabase
+  // Notify assignees via Telegram + Teams
+  const { data: notifyUsers } = await supabase
     .from('users')
-    .select('email, display_name, telegram_id')
+    .select('email, display_name, telegram_id, teams_conversation_id, teams_service_url')
     .in('email', assigneeEmails)
 
-  for (const au of assigneeUsers ?? []) {
-    if (!au.telegram_id || au.email === user.email) continue
-    await sendMessage(au.telegram_id,
-      `📋 <b>新任務指派給你</b>\n\n` +
-      `📌 ${parsed.title}\n` +
-      (contactLine ? contactLine : '') +
-      (parsed.due_at ? `⏰ 截止：${new Date(parsed.due_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}\n` : '') +
-      `\n由 ${user.email} 指派。`
-    )
+  const appUrl = process.env.NEXTAUTH_URL ?? ''
+
+  for (const au of notifyUsers ?? []) {
+    if (au.email === user.email) continue
+
+    // Telegram notification
+    if (au.telegram_id) {
+      await sendMessage(au.telegram_id,
+        `📋 <b>新任務指派給你</b>\n\n` +
+        `📌 ${parsed.title}\n` +
+        (contactLine ? contactLine : '') +
+        (parsed.due_at ? `⏰ 截止：${new Date(parsed.due_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}\n` : '') +
+        `\n由 ${user.email} 指派。`
+      )
+    }
+
+    // Teams notification
+    if (au.teams_conversation_id && au.teams_service_url) {
+      sendTeamsTaskNotification(au.teams_service_url, au.teams_conversation_id, {
+        title: parsed.title,
+        due_at: parsed.due_at ?? null,
+        task_id: task.id,
+        app_url: appUrl,
+        contact_name: contactName,
+        contact_company: contactCompany ?? undefined,
+      }).catch(() => { /* non-blocking */ })
+    }
   }
 
   const dueStr = parsed.due_at
@@ -785,6 +809,18 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const supabase = createServiceClient()
+
+    // --- Deduplication: skip already-processed updates ---
+    const updateId = body.update_id as number | undefined
+    if (updateId) {
+      const { error: dedupError } = await supabase
+        .from('telegram_dedup')
+        .insert({ update_id: updateId })
+      if (dedupError) {
+        // Unique constraint violation = duplicate, return immediately
+        return NextResponse.json({ ok: true })
+      }
+    }
 
     // --- Callback Query ---
     if (body.callback_query) {
