@@ -73,14 +73,12 @@ export default function DashboardPage() {
   async function loadTagStats() {
     const { data } = await supabase
       .from('tags')
-      .select('name, contact_tags(count)')
+      .select('name, contact_tags(tag_id)')
     if (!data) return
     const stats = data
       .map((t) => ({
         name: t.name,
-        count: Array.isArray(t.contact_tags) && t.contact_tags.length > 0
-          ? Number((t.contact_tags[0] as { count: string }).count)
-          : 0,
+        count: Array.isArray(t.contact_tags) ? t.contact_tags.length : 0,
       }))
       .filter((t) => t.count > 0)
       .sort((a, b) => b.count - a.count)
