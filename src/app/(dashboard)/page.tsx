@@ -78,8 +78,11 @@ export default function DashboardPage() {
     const stats = data
       .map((t) => ({
         name: t.name,
-        count: Array.isArray(t.contact_tags) ? t.contact_tags.length : 0,
+        count: Array.isArray(t.contact_tags) && t.contact_tags.length > 0
+          ? Number((t.contact_tags[0] as { count: string }).count)
+          : 0,
       }))
+      .filter((t) => t.count > 0)
       .sort((a, b) => b.count - a.count)
     setTagStats(stats)
   }
