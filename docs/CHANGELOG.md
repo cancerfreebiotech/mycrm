@@ -15,6 +15,17 @@
 ---
 
 
+## v1.2.3 — 文件更新與 Dashboard 修復（2026-03-17）
+
+### 變更項目
+- **修復 Dashboard Tag 計數錯誤**：Tag 人數一律顯示 1 的 bug（`contact_tags(count)` 回傳值誤用陣列長度）已修正
+- **Dashboard 隱藏零人 Tag**：count = 0 的 Tag 不再顯示於首頁統計區塊
+- **修復外部 Telegram 使用者錯誤訊息**：改為「此 Bot 為 CancerFree Biotech 內部專用」
+- **文件：第一次登入補充 Teams Bot 綁定說明**
+- **文件：Telegram 綁定步驟改用 `@userinfobot`，補充 Bot 名稱 `@CF_CRMBot`**
+
+---
+
 ## v1.2.2 — Bot 修復與強化（2026-03-17）
 
 ### 變更項目

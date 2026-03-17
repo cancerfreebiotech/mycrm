@@ -44,7 +44,7 @@ Telegram Bot ──→ Webhook (Next.js API Route)
 
 ## 版本資訊
 
-目前版本：**v1.2.2**（2026-03-17）
+目前版本：**v1.2.3**（2026-03-17）
 
 > 詳細版本紀錄請見 [CHANGELOG](CHANGELOG.md)
 
