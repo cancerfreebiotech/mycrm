@@ -10,6 +10,7 @@ interface CrmUser {
   email: string
   display_name: string | null
   telegram_id: number | null
+  teams_user_id: string | null
   role: string
   last_login_at: string | null
   created_at: string
@@ -42,7 +43,7 @@ export default function AdminUsersPage() {
 
       const { data } = await supabase
         .from('users')
-        .select('id, email, display_name, telegram_id, role, last_login_at, created_at')
+        .select('id, email, display_name, telegram_id, teams_user_id, role, last_login_at, created_at')
         .order('created_at', { ascending: true })
 
       setUsers(data ?? [])
@@ -70,7 +71,7 @@ export default function AdminUsersPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <tr>
-              {[t('colName'), t('colEmail'), t('colTelegram'), t('colRole'), t('colLastLogin'), t('colActions')].map((h) => (
+              {[t('colName'), t('colEmail'), t('colTelegram'), t('colTeams'), t('colRole'), t('colLastLogin'), t('colActions')].map((h) => (
                 <th key={h} className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">{h}</th>
               ))}
             </tr>
@@ -78,11 +79,11 @@ export default function AdminUsersPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">{tc('loading')}</td>
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">{tc('loading')}</td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">{t('noUsers')}</td>
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">{t('noUsers')}</td>
               </tr>
             ) : (
               users.map((u) => (
@@ -94,6 +95,13 @@ export default function AdminUsersPage() {
                       <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 rounded-full">{t('telegramBound')}</span>
                     ) : (
                       <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-full">{t('telegramUnbound')}</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {u.teams_user_id ? (
+                      <span className="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-400 rounded-full">{t('teamsBound')}</span>
+                    ) : (
+                      <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-full">{t('teamsUnbound')}</span>
                     )}
                   </td>
                   <td className="px-4 py-3">

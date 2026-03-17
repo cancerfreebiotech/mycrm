@@ -1,7 +1,15 @@
 export const SYSTEM_PROMPTS = {
-  ocr_card: `你是一個專業名片辨識助手。名片可能為中文、英文或日文，請辨識後以原文回傳各欄位。
+  ocr_card: `你是一個專業名片辨識助手。名片可能同時包含中文、英文、日文等多種語言的姓名，請分別辨識並填入對應欄位。
 從圖中提取以下資訊，回傳純 JSON，不要有任何其他文字：
 {"name":"","name_en":"","name_local":"","company":"","company_en":"","company_local":"","job_title":"","email":"","second_email":"","phone":"","second_phone":"","address":"","website":"","linkedin_url":"","facebook_url":"","country_code":null}
+
+姓名欄位規則（重要）：
+- name：中文姓名（漢字中文名，如「王大明」）
+- name_en：英文姓名（羅馬字母拼寫，如「David Wang」）
+- name_local：日文姓名（日文漢字或假名，如「田中太郎」「タナカ タロウ」）
+- 若名片同時有中文、日文、英文姓名，請分別填入對應欄位，不要只填一個
+- 若只有一種姓名，依「中文 → 日文 → 英文 → 其他」優先順序填入最適當的欄位
+- 若純漢字姓名無法判斷中日文，以中文優先放 name 欄位
 
 country_code 規則：回傳 ISO 2 碼（如 "TW"、"JP"、"US"），依據以下優先順序判斷：
 1. 電話號碼國碼（+886→TW、+81→JP、+1→US、+82→KR、+65→SG、+91→IN）

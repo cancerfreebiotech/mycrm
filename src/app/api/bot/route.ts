@@ -134,7 +134,7 @@ async function handleUser(chatId: number) {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('users')
-    .select('display_name, email, telegram_id')
+    .select('display_name, email, telegram_id, teams_user_id')
     .order('created_at', { ascending: true })
 
   if (!data || data.length === 0) {
@@ -144,8 +144,9 @@ async function handleUser(chatId: number) {
 
   const lines = data.map((u, i) => {
     const name = u.display_name || u.email
-    const tg = u.telegram_id ? `📱 Telegram ID：${u.telegram_id}` : `📱 Telegram ID：未設定`
-    return `${i + 1}. <b>${name}</b>\n   📧 ${u.email}\n   ${tg}`
+    const tg = u.telegram_id ? `✅ Telegram` : `⬜ Telegram`
+    const teams = u.teams_user_id ? `✅ Teams` : `⬜ Teams`
+    return `${i + 1}. <b>${name}</b>\n   📧 ${u.email}\n   ${tg} · ${teams}`
   })
 
   await sendMessage(chatId, `👥 <b>組織成員列表（共 ${data.length} 人）</b>\n\n` + lines.join('\n\n'))

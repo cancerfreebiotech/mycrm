@@ -95,9 +95,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/contacts', label: t('contacts'), icon: Users },
     { href: '/notes', label: t('notes'), icon: Search },
     { href: '/tasks', label: t('tasks'), icon: ClipboardList },
+    { href: '/admin/reports', label: t('reports'), icon: BarChart2 },
     { href: '/settings', label: t('settings'), icon: Settings },
     { href: docsUrl, label: t('docs'), icon: BookOpen, external: docsUrl.startsWith('http') },
-    { href: '/admin/reports', label: t('reports'), icon: BarChart2 },
   ]
   const adminItems: NavItem[] = isSuperAdmin ? [
     { href: '/admin/tags', label: t('tags'), icon: Tag },

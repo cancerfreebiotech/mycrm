@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useTheme } from 'next-themes'
-import { Sun, Moon, ArrowLeft, RefreshCw } from 'lucide-react'
+import { Sun, Moon, ArrowLeft, RefreshCw, Globe } from 'lucide-react'
 import { marked } from 'marked'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { LOCALE_COOKIE, SUPPORTED_LOCALES } from '@/i18n/config'
@@ -102,7 +102,8 @@ export default function DocsPage() {
         </div>
         <div className="flex items-center gap-3">
           {/* Locale switcher */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 border border-gray-200 dark:border-gray-700 rounded-lg px-1 py-0.5">
+            <Globe size={13} className="text-gray-400 ml-1 shrink-0" />
             {SUPPORTED_LOCALES.map((l) => (
               <button
                 key={l}

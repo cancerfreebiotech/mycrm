@@ -165,11 +165,11 @@ export default function ContactsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm text-gray-500 dark:text-gray-400">{tc('total', { count: sorted.length })}</span>
-          <span className="text-sm text-gray-400 dark:text-gray-500">{tc('page', { page, total: totalPages })}</span>
+          <span className="hidden sm:inline text-sm text-gray-400 dark:text-gray-500">{tc('page', { page, total: totalPages })}</span>
           <button
             onClick={() => exportData('xlsx')}
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
@@ -178,13 +178,13 @@ export default function ContactsPage() {
           </button>
           <button
             onClick={() => exportData('csv')}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+            className="hidden sm:flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
           >
             <Download size={14} /> CSV
           </button>
           <Link
             href="/contacts/batch-upload"
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+            className="hidden sm:flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
           >
             <Plus size={14} /> {t('batchUpload')}
           </Link>
@@ -304,8 +304,53 @@ export default function ContactsPage() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+      {/* Mobile card list */}
+      <div className="sm:hidden">
+        {loading ? (
+          <p className="text-center text-sm text-gray-400 py-10">{tc('loading')}</p>
+        ) : sorted.length === 0 ? (
+          <p className="text-center text-sm text-gray-400 py-10">{t('noResults')}</p>
+        ) : (
+          <div className="space-y-3">
+            {paginated.map((c) => (
+              <div key={c.id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <Link href={`/contacts/${c.id}`} className="text-blue-600 dark:text-blue-400 font-semibold text-base hover:underline">
+                      {c.name || '—'}
+                    </Link>
+                    {c.company && <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{c.company}</p>}
+                    {c.job_title && <p className="text-xs text-gray-500 dark:text-gray-500">{c.job_title}</p>}
+                  </div>
+                  {c.contact_tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 justify-end shrink-0">
+                      {c.contact_tags.map((ct) => ct.tags && (
+                        <span key={ct.tags.id} className="text-xs bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                          {ct.tags.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3 space-y-1">
+                  {c.email && (
+                    <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                      <span className="truncate">{c.email}</span>
+                      <button onClick={() => copyEmail(c.email!)} className="text-gray-400 hover:text-blue-500 shrink-0">
+                        {copiedEmail === c.email ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
+                      </button>
+                    </div>
+                  )}
+                  {c.phone && <p className="text-sm text-gray-700 dark:text-gray-300">{c.phone}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Table (desktop) */}
+      <div className="hidden sm:block bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <tr>
@@ -380,7 +425,7 @@ export default function ContactsPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </div>{/* end desktop table */}
 
       {/* Pagination */}
       {totalPages > 1 && (
