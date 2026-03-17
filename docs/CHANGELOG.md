@@ -1,29 +1,25 @@
 # CHANGELOG
 
-## v1.3 補充 — Dashboard 統計互動 + 聯絡人排序（待實作）
+## v1.3 — 說明書多語言 + Prompt 自訂 + 報表權限 + 聯絡人篩選 + Dashboard 統計互動（待實作）
 
-### 變更項目
-- **Dashboard 國家統計區塊**：新增長條圖顯示各國聯絡人數量，`country_code IS NULL` 歸入「其他 / 未設定」；每行可點擊跳轉 `/contacts?country={code}`
-- **Dashboard Tag 分布可點擊**：每行包入 `<Link>` 跳轉至 `/contacts?tag={tagName}`，加 `›` 箭頭提示
-- **聯絡人列表 URL query 篩選**：`?tag={name}` / `?country={code}` 可從 Dashboard 直接跳轉並自動套用篩選
-- **聯絡人列表新增國家篩選 dropdown**：與 Tag 篩選並列，可同時使用，支援「其他 / 未設定」選項
-- **職稱欄三段式排序**：點擊 header 循環切換 asc → desc → 無排序，null 值排最後；其他欄位不受影響
-- **i18n**：`dashboard` namespace 新增 `countryDistribution`、`countryOther`；`contacts` namespace 新增 `countryFilter`
+### 已完成
+- ✅ **Task 74**：`/contacts/new` 表單新增國家欄位（dropdown）
+- ✅ **`/admin/countries`** 頁面（國家管理）
 
----
-
-
-## v1.3 — 說明書多語言 + Prompt 自訂 + 報表權限 + 聯絡人篩選（待實作）
-
-### 變更項目
-- **說明書多國語言**：預先生成 zh-TW / en / ja 三版，存 `docs_content` 表，部署時自動觸發，頁面加語言切換
-- **Prompt 自訂系統**：新增 `prompts`（組織）、`user_prompts`（個人）表；三層優先順序（個人 → 組織 → 系統 hardcode）；super admin 管理 4 個 prompt，個人可改 email_generate；兩層都有「還原預設」按鈕
-- **新增 `src/lib/prompts.ts`**：SYSTEM_PROMPTS 常數 + getPrompt() 依層級取值
-- **新增 Prompt 管理頁 `/admin/prompts`**（僅 super_admin）
-- **報表權限調整**：一般使用者只看自己的規則、只查自己的資料；super admin 看全部；`report_schedules` 新增 `owner_id`
-- **新增聯絡人補國家欄位**：`/contacts/new` 表單加國家 dropdown
-- **聯絡人列表加國家篩選**：可與 Tag 篩選同時使用
-- **新增資料表**：`docs_content`、`prompts`、`user_prompts`
+### 待實作（Task 66–73, 75–78）
+- **[Task 66]** Migration SQL：`docs_content`、`prompts`、`user_prompts` 表；`report_schedules.owner_id` 欄位
+- **[Task 67]** 新增 `src/lib/prompts.ts`：`SYSTEM_PROMPTS` 常數 + `getPrompt()` 三層取值
+- **[Task 68]** 新增 `/api/docs/generate` route：讀 PRD → AI 生成 6 份說明書內容 → upsert `docs_content`；設定 Vercel build hook
+- **[Task 69]** 更新 `/docs` 頁面：語言切換按鈕（繁中/EN/日），內容從 `docs_content` 撈取
+- **[Task 70]** 新增 `/admin/prompts` 頁面（super_admin）：4 個 prompt 編輯 + 還原系統預設
+- **[Task 71]** 更新 `/settings`：新增 `email_generate` prompt 編輯區塊 + 還原組織預設
+- **[Task 72]** 更新所有 AI 呼叫（OCR、email 生成、任務解析、說明書生成）改用 `getPrompt()`
+- **[Task 73]** 更新 `/admin/reports`：依角色過濾規則（owner_id），資料範圍依角色限縮
+- **[Task 75]** 聯絡人列表新增國家篩選 dropdown（可與 Tag 篩選同時使用）
+- **[Task 76]** Dashboard 新增國家統計長條圖，每行可點擊跳轉 `/contacts?country={code}`
+- **[Task 77]** Dashboard Tag 分布改為可點擊，跳轉 `/contacts?tag={name}`，加 `›` 箭頭
+- **[Task 78]** 聯絡人列表：URL query 初始化篩選（`?tag` / `?country`）+ 職稱欄三段式排序
+- **i18n**：三份語言檔補 `dashboard.countryDistribution`、`dashboard.countryOther`、`contacts.countryFilter`
 
 ---
 
