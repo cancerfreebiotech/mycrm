@@ -15,6 +15,14 @@
 ---
 
 
+## v1.2.2 — Bot 修復與強化（2026-03-17）
+
+### 變更項目
+- **修復 Telegram 重複 callback 錯誤**：`answerCallbackQuery` 移到 DB 操作之前，避免 Telegram retry 觸發「找不到暫存資料」錯誤；已處理的 callback 靜默回傳 ok（冪等）
+- **Telegram OCR 結果顯示國家**：辨識結果新增 `🌍 國家` 欄位，顯示 emoji + 中文名稱（如 `🇹🇼 台灣`）
+
+---
+
 ## v1.2.1 — Teams Bot 修復（2026-03-16）
 
 ### 變更項目
