@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## v1.3 補充 — Dashboard 統計互動 + 聯絡人排序（待實作）
+
+### 變更項目
+- **Dashboard 國家統計區塊**：新增長條圖顯示各國聯絡人數量，`country_code IS NULL` 歸入「其他 / 未設定」；每行可點擊跳轉 `/contacts?country={code}`
+- **Dashboard Tag 分布可點擊**：每行包入 `<Link>` 跳轉至 `/contacts?tag={tagName}`，加 `›` 箭頭提示
+- **聯絡人列表 URL query 篩選**：`?tag={name}` / `?country={code}` 可從 Dashboard 直接跳轉並自動套用篩選
+- **聯絡人列表新增國家篩選 dropdown**：與 Tag 篩選並列，可同時使用，支援「其他 / 未設定」選項
+- **職稱欄三段式排序**：點擊 header 循環切換 asc → desc → 無排序，null 值排最後；其他欄位不受影響
+- **i18n**：`dashboard` namespace 新增 `countryDistribution`、`countryOther`；`contacts` namespace 新增 `countryFilter`
+
+---
+
+
 ## v1.3 — 說明書多語言 + Prompt 自訂 + 報表權限 + 聯絡人篩選（待實作）
 
 ### 變更項目
