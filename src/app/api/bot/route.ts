@@ -443,14 +443,18 @@ async function handleWork(
 
     // Teams notification
     if (au.teams_conversation_id && au.teams_service_url) {
-      sendTeamsTaskNotification(au.teams_service_url, au.teams_conversation_id, {
-        title: parsed.title,
-        due_at: parsed.due_at ?? null,
-        task_id: task.id,
-        app_url: appUrl,
-        contact_name: contactName,
-        contact_company: contactCompany ?? undefined,
-      }).catch((e) => console.error('[Teams] notification failed:', e))
+      try {
+        await sendTeamsTaskNotification(au.teams_service_url, au.teams_conversation_id, {
+          title: parsed.title,
+          due_at: parsed.due_at ?? null,
+          task_id: task.id,
+          app_url: appUrl,
+          contact_name: contactName,
+          contact_company: contactCompany ?? undefined,
+        })
+      } catch (e) {
+        console.error('[Teams] notification failed:', e)
+      }
     }
   }
 
