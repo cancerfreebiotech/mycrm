@@ -17,6 +17,9 @@ async function getBotToken(): Promise<string> {
     }),
   })
   const data = await res.json()
+  if (!res.ok || !data.access_token) {
+    throw new Error(`[teams] getBotToken failed: ${res.status} ${JSON.stringify(data)}`)
+  }
   return data.access_token as string
 }
 
@@ -102,7 +105,7 @@ export async function sendTeamsTaskNotification(
     ? `${serviceUrl}v3/conversations/${conversationId}/activities`
     : `${serviceUrl}/v3/conversations/${conversationId}/activities`
 
-  await fetch(endpoint, {
+  const msgRes = await fetch(endpoint, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -110,4 +113,8 @@ export async function sendTeamsTaskNotification(
     },
     body: JSON.stringify(adaptiveCard),
   })
+  if (!msgRes.ok) {
+    const body = await msgRes.text()
+    throw new Error(`[teams] send failed: ${msgRes.status} ${body}`)
+  }
 }
