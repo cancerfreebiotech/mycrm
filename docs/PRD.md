@@ -2031,3 +2031,148 @@ update report_schedules set owner_id = created_by where owner_id is null;
 - [ ] **Task 73** `[修改]` — 更新報表頁 `/admin/reports`（依角色過濾規則，資料範圍加入 owner_id 判斷）
 - [ ] **Task 74** `[修改]` — 更新新增聯絡人頁 `/contacts/new`（補國家欄位）
 - [ ] **Task 75** `[修改]` — 更新聯絡人列表 `/contacts`（新增國家篩選 dropdown）
+
+---
+
+## 二十六、v1.3 補充功能規格（Dashboard 統計互動 + 聯絡人排序）
+
+### 26.1 Dashboard 國家統計區塊
+
+#### 新增 `CountryStat` interface
+```ts
+interface CountryStat {
+  code: string    // ISO 國碼，或 '__other__' 代表未設定
+  name: string    // 依目前 locale 顯示 name_zh / name_en / name_ja
+  emoji: string | null
+  count: number
+}
+```
+
+#### 資料載入
+新增 `loadCountryStats()` 函式，流程：
+1. 查詢 `contacts` 的 `country_code`，join `countries` 取 `name_zh`/`name_en`/`name_ja`/`emoji`
+2. Group by 國家，依 count 降序排列
+3. `country_code IS NULL` 的聯絡人歸入「其他 / 未設定」（`code: '__other__'`）
+4. count = 0 的國家不顯示
+
+#### UI 位置
+放在 Tag 分布區塊正下方，樣式與 Tag 分布長條圖一致。
+
+#### 可點擊行為
+每一行包在 `<Link href="/contacts?country={code}">` 內：
+- 一般國碼：`/contacts?country=TW`
+- 未設定：`/contacts?country=__other__`
+- hover 效果：底色加深（`hover:bg-gray-50 dark:hover:bg-gray-800`）+ 右側顯示 `›` 箭頭
+
+#### i18n 新增 key（`dashboard` namespace，三份語言檔都要加）
+```json
+"countryDistribution": "國家分布",
+"countryOther": "其他 / 未設定"
+```
+
+---
+
+### 26.2 Dashboard Tag 統計可點擊跳轉
+
+#### 修改範圍
+`src/app/(dashboard)/page.tsx` 的 Tag 分布區塊。
+
+現有每一行的外層 `<div key={tag.name}>` 改為：
+```tsx
+<Link
+  href={`/contacts?tag=${encodeURIComponent(tag.name)}`}
+  className="flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg px-2 -mx-2 cursor-pointer"
+>
+  {/* 原有內容不變 */}
+  <ChevronRight size={14} className="text-gray-300 dark:text-gray-600 shrink-0" />
+</Link>
+```
+
+> 使用 `tag.name` 作為 query 參數（contacts page 會自動比對 name → id）。
+
+---
+
+### 26.3 聯絡人列表：URL query 篩選 + 欄位排序
+
+#### A. URL query 參數初始化（支援 Dashboard 跳轉）
+
+在 `ContactsPage` 頂部加入 `useSearchParams()`，讀取以下參數並設定初始 state：
+
+| 參數 | 行為 |
+|------|------|
+| `?tag={tagName}` | 自動比對 `allTags.find(t => t.name === tagName)`，找到則設入 `selectedTags` |
+| `?country={code}` | 設入 `selectedCountries`（含 `__other__`） |
+
+> `useSearchParams()` 需包在 `<Suspense>` 內，或直接在現有 `'use client'` 頁面使用（Next.js App Router client component 可直接呼叫）。
+
+#### B. 國家篩選 UI
+
+在 Tag 篩選 dropdown 旁新增「國家篩選」dropdown，邏輯與 Tag 篩選完全相同。
+
+新增 state：
+```ts
+const [selectedCountries, setSelectedCountries] = useState<string[]>([])
+const [countryDropdownOpen, setCountryDropdownOpen] = useState(false)
+const [allCountries, setAllCountries] = useState<{ code: string; name: string; emoji: string | null }[]>([])
+```
+
+資料載入：從 `countries` 表撈 `is_active=true`，依 `name_zh`/`name_en`/`name_ja`（依 locale）排序，最後附加「其他 / 未設定」選項（`code: '__other__'`）。
+
+`contacts` select query 補上 `country_code`。
+
+篩選邏輯（加入現有的 `filtered` 計算中）：
+```ts
+const matchCountry =
+  selectedCountries.length === 0 ||
+  selectedCountries.some((code) =>
+    code === '__other__' ? !c.country_code : c.country_code === code
+  )
+```
+
+#### C. `job_title` 欄排序
+
+新增 state：
+```ts
+const [sortField, setSortField] = useState<'job_title' | null>(null)
+const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+```
+
+「職稱」header 點擊行為（三段式循環）：
+1. `sortField === null` → 設 `sortField = 'job_title'`, `sortDir = 'asc'`
+2. `sortField === 'job_title'` && `sortDir === 'asc'` → 設 `sortDir = 'desc'`
+3. `sortField === 'job_title'` && `sortDir === 'desc'` → 設 `sortField = null`
+
+排序在 `filtered` 陣列之後、`paginated` 切割之前套用（client-side）：
+```ts
+const sorted = sortField
+  ? [...filtered].sort((a, b) => {
+      const va = a.job_title ?? ''
+      const vb = b.job_title ?? ''
+      if (!va && !vb) return 0
+      if (!va) return 1   // null 排最後
+      if (!vb) return -1
+      return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+    })
+  : filtered
+const paginated = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+```
+
+Header 顯示排序圖示（使用已有的 `lucide-react`）：
+- 無排序：`<ChevronsUpDown size={12} className="text-gray-400" />`
+- asc：`<ChevronUp size={12} className="text-blue-500" />`
+- desc：`<ChevronDown size={12} className="text-blue-500" />`
+
+只有「職稱」欄有此行為，其餘欄位 header 不變。
+
+#### i18n 新增 key（`contacts` namespace，三份語言檔都要加）
+```json
+"countryFilter": "國家篩選"
+```
+
+---
+
+## 二十七、v1.3 補充任務清單
+
+- [ ] **Task 76** `[修改]` — Dashboard 新增國家統計區塊（`loadCountryStats()`，長條圖，每行可點擊跳轉 `/contacts?country={code}`）；修改檔案：`src/app/(dashboard)/page.tsx`、`messages/zh-TW.json`、`messages/en.json`、`messages/ja.json`
+- [ ] **Task 77** `[修改]` — Dashboard Tag 分布區塊改為可點擊（每行包 `<Link href="/contacts?tag={name}">`，加 `›` 箭頭）；修改檔案：`src/app/(dashboard)/page.tsx`
+- [ ] **Task 78** `[修改]` — 聯絡人列表新增：(A) `useSearchParams()` 讀取 `?tag` / `?country` 初始化篩選、(B) 國家篩選 dropdown、(C) 職稱欄三段式排序（asc/desc/無）；修改檔案：`src/app/(dashboard)/contacts/page.tsx`、`messages/zh-TW.json`、`messages/en.json`、`messages/ja.json`
