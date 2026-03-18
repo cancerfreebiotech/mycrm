@@ -62,6 +62,11 @@ export default function TasksPage() {
 
   const supabase = createBrowserSupabaseClient()
 
+  const getUserLabel = (email: string) => {
+    const u = users.find(u => u.email === email)
+    return u?.display_name ?? email.split('@')[0]
+  }
+
   const loadTasks = useCallback(async () => {
     setLoading(true)
     const res = await fetch(`/api/tasks?tab=${tab}`)
@@ -257,7 +262,7 @@ export default function TasksPage() {
                     <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-400 dark:text-gray-500">
                       {/* Assigned time & by */}
                       <span title="指派時間">📅 {formatDate(task.created_at)}</span>
-                      <span title="指派人">🧑‍💼 {task.created_by}</span>
+                      <span title="指派人">🧑‍💼 {getUserLabel(task.created_by)}</span>
                       {task.due_at && (
                         <span>⏰ {new Date(task.due_at).toLocaleString()}</span>
                       )}
@@ -274,7 +279,7 @@ export default function TasksPage() {
                       )}
                       {task.completed_by && (
                         <span className="text-green-600 dark:text-green-400">
-                          ✅ {task.completed_by}{task.completed_at ? ` · ${formatDate(task.completed_at)}` : ''}
+                          ✅ {getUserLabel(task.completed_by!)}{task.completed_at ? ` · ${formatDate(task.completed_at)}` : ''}
                         </span>
                       )}
                     </div>
