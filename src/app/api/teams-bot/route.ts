@@ -222,30 +222,34 @@ export async function POST(req: NextRequest) {
       }
 
       if (userRow?.email) {
-        const { error: updateErr } = await supabase
+        const { data: taskRow, error: updateErr } = await supabase
           .from('tasks')
           .update({ status: 'done', completed_by: userRow.email, completed_at: new Date().toISOString() })
           .eq('id', task_id)
+          .select('title')
+          .single()
         if (updateErr) {
           console.error('[teams-bot] task_done update error:', updateErr.message)
-          return NextResponse.json({
-            type: 'invokeResponse',
-            value: { status: 200, body: { type: 'message', text: '❌ 更新失敗，請至 Web 介面手動標記完成。' } },
-          })
+          if (conversationId && serviceUrl) {
+            await sendToTeams(serviceUrl, conversationId, '❌ 更新失敗，請至 Web 介面手動標記完成。')
+          }
+          return NextResponse.json({ type: 'invokeResponse', value: { status: 200 } })
         }
         console.log('[teams-bot] task_done: updated task %s as done by %s', task_id, userRow.email)
+        // Send visible confirmation message (invokeResponse alone is not visible in Teams)
+        if (conversationId && serviceUrl) {
+          const title = taskRow?.title ?? ''
+          await sendToTeams(serviceUrl, conversationId, `✅ 任務已標記完成：${title}`)
+        }
       } else {
         console.error('[teams-bot] task_done: could not identify user, aadId=%s', aadId)
-        return NextResponse.json({
-          type: 'invokeResponse',
-          value: { status: 200, body: { type: 'message', text: '⚠️ 無法識別帳號，請至 Web 介面手動標記完成。' } },
-        })
+        if (conversationId && serviceUrl) {
+          await sendToTeams(serviceUrl, conversationId, '⚠️ 無法識別帳號，請至 Web 介面手動標記完成。')
+        }
+        return NextResponse.json({ type: 'invokeResponse', value: { status: 200 } })
       }
 
-      return NextResponse.json({
-        type: 'invokeResponse',
-        value: { status: 200, body: { type: 'message', text: '✅ 任務已標記完成！' } },
-      })
+      return NextResponse.json({ type: 'invokeResponse', value: { status: 200 } })
     }
   }
 

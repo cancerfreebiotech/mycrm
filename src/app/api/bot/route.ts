@@ -108,10 +108,10 @@ async function getAuthorizedUser(telegramId: number) {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('users')
-    .select('id, email, ai_model_id, provider_token')
+    .select('id, email, display_name, ai_model_id, provider_token')
     .eq('telegram_id', telegramId)
     .single()
-  return data as { id: string; email: string; ai_model_id: string | null; provider_token: string | null } | null
+  return data as { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null } | null
 }
 
 // ── Download photo from Telegram ──────────────────────────────────────────────
@@ -239,7 +239,7 @@ async function handleSearch(chatId: number, keyword: string) {
 async function handlePhoto(
   chatId: number,
   fromId: number,
-  user: { id: string; ai_model_id: string | null; provider_token: string | null },
+  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null },
   photo: { file_id: string },
   session: { state: string; context: Record<string, unknown> } | null
 ) {
@@ -389,7 +389,7 @@ async function handlePhoto(
 
 async function handleWork(
   chatId: number,
-  user: { id: string; email: string; ai_model_id: string | null; provider_token: string | null },
+  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null },
   naturalText: string,
   lastContactId?: string | null
 ) {
@@ -507,7 +507,7 @@ async function handleWork(
         `📌 ${parsed.title}\n` +
         (contactLine ? contactLine : '') +
         (parsed.due_at ? `⏰ 截止：${new Date(parsed.due_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}\n` : '') +
-        `\n由 ${user.email} 指派。`,
+        `\n由 ${user.display_name ?? user.email.split('@')[0]} 指派。`,
         tgExtra
       )
     }
@@ -543,7 +543,7 @@ async function handleWork(
 
 async function handleTasks(
   chatId: number,
-  user: { id: string; email: string; ai_model_id: string | null; provider_token: string | null }
+  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null }
 ) {
   const supabase = createServiceClient()
 
@@ -596,7 +596,7 @@ async function handleTasks(
 async function handleText(
   chatId: number,
   fromId: number,
-  user: { id: string; ai_model_id: string | null; provider_token: string | null },
+  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null },
   text: string,
   session: { state: string; context: Record<string, unknown>; last_contact_id: string | null } | null
 ) {
@@ -1304,7 +1304,11 @@ export async function POST(req: NextRequest) {
         // ── /tasks: mark done ─────────────────────────────────────────────────
         else if (data?.startsWith('task_done_')) {
           const taskId = data.replace('task_done_', '')
-          const { data: task } = await supabase.from('tasks').select('title').eq('id', taskId).single()
+          const { data: task } = await supabase
+            .from('tasks')
+            .select('title, created_by, task_assignees(assignee_email)')
+            .eq('id', taskId)
+            .single()
           await supabase.from('tasks').update({
             status: 'done',
             completed_by: user.email,
@@ -1313,6 +1317,37 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId, '✅ 已完成')
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await sendMessage(from.id, `✅ 任務已完成：${task?.title ?? ''}`)
+
+          // Notify task creator + other assignees via Teams
+          if (task) {
+            const completedBy = user.display_name ?? user.email.split('@')[0]
+            const assigneeEmails = ((task.task_assignees ?? []) as Array<{ assignee_email: string }>)
+              .map(a => a.assignee_email)
+            const notifyEmails = [...new Set([task.created_by, ...assigneeEmails])]
+              .filter(e => e !== user.email)
+
+            if (notifyEmails.length > 0) {
+              const { data: notifyUsers } = await supabase
+                .from('users')
+                .select('teams_conversation_id, teams_service_url')
+                .in('email', notifyEmails)
+                .not('teams_conversation_id', 'is', null)
+
+              for (const au of notifyUsers ?? []) {
+                if (!au.teams_conversation_id || !au.teams_service_url) continue
+                try {
+                  await sendTeamsTaskNotification(au.teams_service_url, au.teams_conversation_id, {
+                    title: `✅ 任務已完成：${task.title}`,
+                    task_id: taskId,
+                    app_url: process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? '',
+                    description: `由 ${completedBy} 標記完成`,
+                  })
+                } catch (e) {
+                  console.error('[Teams] task done notification failed:', e)
+                }
+              }
+            }
+          }
         }
 
         // ── /tasks: postpone ──────────────────────────────────────────────────
