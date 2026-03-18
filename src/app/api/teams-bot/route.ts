@@ -213,16 +213,33 @@ export async function POST(req: NextRequest) {
         ? (await supabase.from('users').select('email').eq('teams_user_id', aadId).single()).data
         : null
 
+      console.log('[teams-bot] task_done: aadId=%s userRow=%s task_id=%s', aadId, userRow?.email ?? 'null', task_id)
+
       if (!userRow && aadId && conversationId && serviceUrl) {
         const email = await linkUser(supabase, aadId, conversationId, serviceUrl)
         if (email) userRow = { email }
+        console.log('[teams-bot] task_done: auto-linked email=%s', email ?? 'null')
       }
 
       if (userRow?.email) {
-        await supabase
+        const { error: updateErr } = await supabase
           .from('tasks')
           .update({ status: 'done', completed_by: userRow.email, completed_at: new Date().toISOString() })
           .eq('id', task_id)
+        if (updateErr) {
+          console.error('[teams-bot] task_done update error:', updateErr.message)
+          return NextResponse.json({
+            type: 'invokeResponse',
+            value: { status: 200, body: { type: 'message', text: '❌ 更新失敗，請至 Web 介面手動標記完成。' } },
+          })
+        }
+        console.log('[teams-bot] task_done: updated task %s as done by %s', task_id, userRow.email)
+      } else {
+        console.error('[teams-bot] task_done: could not identify user, aadId=%s', aadId)
+        return NextResponse.json({
+          type: 'invokeResponse',
+          value: { status: 200, body: { type: 'message', text: '⚠️ 無法識別帳號，請至 Web 介面手動標記完成。' } },
+        })
       }
 
       return NextResponse.json({

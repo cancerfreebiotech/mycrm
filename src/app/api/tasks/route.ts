@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     // Tasks I created where I'm the sole assignee (self-reminders)
     const { data } = await service
       .from('tasks')
-      .select(`*, task_assignees(assignee_email, users(display_name)), contacts(id, name, company)`)
+      .select(`id, task_number, title, description, due_at, status, created_by, completed_by, completed_at, created_at, contact_id, task_assignees(assignee_email, users(display_name)), contacts(id, name, company)`)
       .eq('created_by', user.email!)
       .order('due_at', { ascending: true, nullsFirst: false })
     tasks = (data ?? []).filter((t) => {
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     // Tasks I created with other assignees
     const { data } = await service
       .from('tasks')
-      .select(`*, task_assignees(assignee_email, users(display_name)), contacts(id, name, company)`)
+      .select(`id, task_number, title, description, due_at, status, created_by, completed_by, completed_at, created_at, contact_id, task_assignees(assignee_email, users(display_name)), contacts(id, name, company)`)
       .eq('created_by', user.email!)
       .order('due_at', { ascending: true, nullsFirst: false })
     tasks = (data ?? []).filter((t) => {
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
     }
     const { data } = await service
       .from('tasks')
-      .select(`*, task_assignees(assignee_email, users(display_name)), contacts(id, name, company)`)
+      .select(`id, task_number, title, description, due_at, status, created_by, completed_by, completed_at, created_at, contact_id, task_assignees(assignee_email, users(display_name)), contacts(id, name, company)`)
       .in('id', ids)
       .neq('created_by', user.email!)
       .order('due_at', { ascending: true, nullsFirst: false })

@@ -53,7 +53,7 @@ export default function SettingsPage() {
   const [selectedModelId, setSelectedModelId] = useState<string>('')  // ai_models.id (UUID)
 
   const [assistants, setAssistants] = useState<Array<{ id: string; assistant_email: string; users: { display_name: string | null } | null }>>([])
-  const [newAssistantEmail, setNewAssistantEmail] = useState('')
+  const [allUsers, setAllUsers] = useState<Array<{ email: string; display_name: string | null }>>([])
   const [assistantError, setAssistantError] = useState<string | null>(null)
 
   const [emailPrompt, setEmailPrompt] = useState('')
@@ -121,6 +121,7 @@ export default function SettingsPage() {
     load()
     loadAssistants()
     loadEmailPrompt()
+    loadAllUsers()
   }, [])
 
   async function loadEmailPrompt() {
@@ -156,6 +157,17 @@ export default function SettingsPage() {
     setTimeout(() => setSavedEmailPromptFlag(false), 2000)
   }
 
+  async function loadAllUsers() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user?.email) return
+    const { data } = await supabase
+      .from('users')
+      .select('email, display_name')
+      .neq('email', user.email)
+      .order('display_name')
+    setAllUsers(data ?? [])
+  }
+
   async function loadAssistants() {
     const res = await fetch('/api/assistants')
     if (res.ok) {
@@ -164,28 +176,27 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleAddAssistant() {
+  async function handleToggleAssistant(assistantEmail: string) {
     setAssistantError(null)
-    const res = await fetch('/api/assistants', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ assistant_email: newAssistantEmail.trim() }),
-    })
-    if (res.ok) {
-      setNewAssistantEmail('')
-      loadAssistants()
+    const isCurrently = assistants.some(a => a.assistant_email === assistantEmail)
+    if (isCurrently) {
+      await fetch('/api/assistants', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assistant_email: assistantEmail }),
+      })
     } else {
-      const data = await res.json()
-      setAssistantError(data.error ?? '新增失敗')
+      const res = await fetch('/api/assistants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assistant_email: assistantEmail }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setAssistantError(data.error ?? '新增失敗')
+        return
+      }
     }
-  }
-
-  async function handleRemoveAssistant(email: string) {
-    await fetch('/api/assistants', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ assistant_email: email }),
-    })
     loadAssistants()
   }
 
@@ -397,42 +408,33 @@ export default function SettingsPage() {
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             {t('assistants')}
           </label>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">{t('assistantsHint')}</p>
-          <div className="space-y-1 mb-2">
-            {assistants.length === 0 ? (
-              <p className="text-xs text-gray-400">{t('noAssistants')}</p>
-            ) : (
-              assistants.map(a => (
-                <div key={a.id} className="flex items-center justify-between text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 px-3 py-1.5 rounded-lg">
-                  <span>{a.users?.display_name ?? a.assistant_email}</span>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">{t('assistantsHint')}</p>
+          {allUsers.length === 0 ? (
+            <p className="text-xs text-gray-400">{t('noAssistants')}</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {allUsers.map(u => {
+                const isSelected = assistants.some(a => a.assistant_email === u.email)
+                return (
                   <button
-                    onClick={() => handleRemoveAssistant(a.assistant_email)}
-                    className="text-gray-400 hover:text-red-500 transition-colors ml-2"
+                    key={u.email}
+                    type="button"
+                    onClick={() => handleToggleAssistant(u.email)}
+                    title={u.email}
+                    className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full border transition-colors ${
+                      isSelected
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-medium'
+                        : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600'
+                    }`}
                   >
-                    ×
+                    {isSelected && <Check size={12} />}
+                    {u.display_name ?? u.email}
                   </button>
-                </div>
-              ))
-            )}
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="email"
-              value={newAssistantEmail}
-              onChange={e => { setNewAssistantEmail(e.target.value); setAssistantError(null) }}
-              placeholder={t('assistantEmailPlaceholder')}
-              onKeyDown={e => { if (e.key === 'Enter') handleAddAssistant() }}
-              className="flex-1 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              onClick={handleAddAssistant}
-              disabled={!newAssistantEmail.trim()}
-              className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
-            >
-              {t('addAssistant')}
-            </button>
-          </div>
-          {assistantError && <p className="mt-1 text-xs text-red-500">{assistantError}</p>}
+                )
+              })}
+            </div>
+          )}
+          {assistantError && <p className="mt-2 text-xs text-red-500">{assistantError}</p>}
         </div>
 
         {/* Email Generate Prompt */}

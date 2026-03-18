@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Pencil, Trash2, Plus, X, Upload, Paperclip, Loader2, Sparkles } from 'lucide-react'
 
-const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 
 interface Attachment {
   id: string

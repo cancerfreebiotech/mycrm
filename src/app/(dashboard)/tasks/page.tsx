@@ -15,6 +15,7 @@ interface AssigneeInfo {
 
 interface Task {
   id: string
+  task_number: number | null
   title: string
   description: string | null
   due_at: string | null
@@ -34,6 +35,13 @@ interface UserOption {
 
 type Tab = 'mine' | 'assigned' | 'to_me'
 
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleString('zh-TW', {
+    month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
 export default function TasksPage() {
   const t = useTranslations('tasks')
   const tc = useTranslations('common')
@@ -44,13 +52,11 @@ export default function TasksPage() {
   const [search, setSearch] = useState('')
   const [users, setUsers] = useState<UserOption[]>([])
 
-  // Modal
   const [showModal, setShowModal] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [form, setForm] = useState({ title: '', description: '', due_at: '', assignee_emails: [] as string[] })
   const [saving, setSaving] = useState(false)
 
-  // Postpone modal
   const [postponeId, setPostponeId] = useState<string | null>(null)
   const [postponeDate, setPostponeDate] = useState('')
 
@@ -67,6 +73,18 @@ export default function TasksPage() {
   }, [tab])
 
   useEffect(() => { loadTasks() }, [loadTasks])
+
+  // Realtime: refresh when tasks table changes
+  useEffect(() => {
+    const channel = supabase
+      .channel('tasks-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
+        loadTasks()
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
 
   useEffect(() => {
     async function loadUsers() {
@@ -223,6 +241,11 @@ export default function TasksPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
+                      {task.task_number && (
+                        <span className="text-xs font-mono text-gray-400 dark:text-gray-500 shrink-0">
+                          #{task.task_number}
+                        </span>
+                      )}
                       <span className="font-medium text-gray-900 dark:text-gray-100">{task.title}</span>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor[task.status]}`}>
                         {t(`status.${task.status}`)}
@@ -232,6 +255,9 @@ export default function TasksPage() {
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{task.description}</p>
                     )}
                     <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-400 dark:text-gray-500">
+                      {/* Assigned time & by */}
+                      <span title="指派時間">📅 {formatDate(task.created_at)}</span>
+                      <span title="指派人">🧑‍💼 {task.created_by}</span>
                       {task.due_at && (
                         <span>⏰ {new Date(task.due_at).toLocaleString()}</span>
                       )}
@@ -247,7 +273,9 @@ export default function TasksPage() {
                         </Link>
                       )}
                       {task.completed_by && (
-                        <span>{t('completedBy', { name: task.completed_by })}</span>
+                        <span className="text-green-600 dark:text-green-400">
+                          ✅ {task.completed_by}{task.completed_at ? ` · ${formatDate(task.completed_at)}` : ''}
+                        </span>
                       )}
                     </div>
                   </div>

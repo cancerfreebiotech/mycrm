@@ -1,0 +1,46 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "version": "1.0.0",
+  "id": "1c7e5469-d37c-42f6-900f-ba8fbe90ae8a",
+  "packageName": "com.cancerfree.mycrm",
+  "developer": {
+    "name": "CancerFree Biotech",
+    "websiteUrl": "https://mycrm.vercel.app",
+    "privacyUrl": "https://mycrm.vercel.app",
+    "termsOfUseUrl": "https://mycrm.vercel.app"
+  },
+  "name": {
+    "short": "myCRM Bot",
+    "full": "myCRM Bot — 任務管理與通知"
+  },
+  "description": {
+    "short": "任務指派、提醒與 CRM 通知",
+    "full": "myCRM Bot 提供任務指派、截止提醒、以及 CRM 聯絡人管理通知功能。"
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#2563EB",
+  "bots": [
+    {
+      "botId": "1c7e5469-d37c-42f6-900f-ba8fbe90ae8a",
+      "scopes": ["personal", "team"],
+      "isNotificationOnly": false,
+      "commandLists": [
+        {
+          "scopes": ["personal"],
+          "commands": [
+            {
+              "title": "help",
+              "description": "顯示可用指令"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": ["mycrm.vercel.app"]
+}

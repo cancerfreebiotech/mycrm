@@ -1237,7 +1237,7 @@ export async function POST(req: NextRequest) {
           const { data: task } = await supabase.from('tasks').select('title').eq('id', taskId).single()
           await supabase.from('tasks').update({
             status: 'done',
-            completed_by: user.id,
+            completed_by: user.email,
             completed_at: new Date().toISOString(),
           }).eq('id', taskId)
           await answerCallbackQuery(callbackQueryId, '✅ 已完成')

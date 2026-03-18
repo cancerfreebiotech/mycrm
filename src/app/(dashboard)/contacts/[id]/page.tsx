@@ -477,11 +477,11 @@ export default function ContactDetailPage() {
   async function handleAddTempAttach(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
     if (files.length === 0) return
-    const MAX = 2 * 1024 * 1024
+    const MAX = 5 * 1024 * 1024
     setMailError(null)
     for (const file of files) {
       if (file.size > MAX) {
-        setMailError(`「${file.name}」超過 2MB 限制`)
+        setMailError(`「${file.name}」超過 5MB 限制`)
         continue
       }
       const base64 = await new Promise<string>((resolve) => {
@@ -1053,7 +1053,7 @@ export default function ContactDetailPage() {
               {/* Temp attachments */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-medium text-gray-500">額外附件（最大 2MB）</label>
+                  <label className="text-xs font-medium text-gray-500">額外附件（最大 5MB）</label>
                   <button
                     onClick={() => tempAttachRef.current?.click()}
                     className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"

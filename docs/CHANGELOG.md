@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v1.3.8 — 任務管理強化 + 檔案限制 + 助理選擇（2026-03-18）
+
+### 變更項目
+- **任務管理**：新增任務編號（#N）、顯示指派時間與指派人、Supabase Realtime 即時更新狀態
+- **Bot bug fix**：Telegram 按完成後 `completed_by` 改寫 email（之前誤寫 UUID）
+- **Teams bot**：task_done 加入詳細 log + 若帳號未綁定給予明確錯誤訊息
+- **檔案大小**：附件上傳限制從 2MB 改為 5MB（Email 附件、範本附件）
+- **個人設定 → 助理**：從 email 輸入框改為 tag 式選人（從系統使用者清單中點選）
+- **DB migration**：tasks 表新增 `task_number` SERIAL 欄位
+
 ## v1.3.7 — /docs TOC 移至左側 + Mermaid 流程圖（2026-03-18）
 
 ### 變更項目
