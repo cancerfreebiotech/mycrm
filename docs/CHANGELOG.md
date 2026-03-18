@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v1.3.6 — /docs 頁面排版大幅改善（2026-03-18）
+
+### 變更項目
+- `/docs` 改為三欄式佈局：左側章節導覽 | 中間內容 | 右側目錄（TOC）
+- 右側 TOC 自動從 markdown 標題（h1~h3）產生，含 IntersectionObserver 高亮目前段落
+- 標題層級大幅改善：h1=1.875rem + 底線、h2=1.375rem + 底線、h3=1.125rem
+- 表格、code block、blockquote 樣式全面優化（含深色模式）
+- 標題加 anchor id，支援 TOC 錨點跳轉
+- `marked` 自訂 renderer 以產生 slug id
+
 ## v1.3.5 — /n alias + /w 自動偵測聯絡人 + Teams 通知診斷（2026-03-17）
 
 ### 變更項目
