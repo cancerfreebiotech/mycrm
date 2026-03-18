@@ -31,6 +31,7 @@
     "tasks": "タスク管理",
     "reports": "レポート管理",
     "countries": "国管理",
+    "failedScans": "認識失敗審査",
     "prompts": "プロンプト管理",
     "logout": "ログアウト"
   },

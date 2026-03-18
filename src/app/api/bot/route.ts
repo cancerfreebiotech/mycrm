@@ -12,11 +12,33 @@ const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`
 // ── Telegram helpers ──────────────────────────────────────────────────────────
 
 async function sendMessage(chatId: number, text: string, extra?: object) {
-  await fetch(`${TELEGRAM_API}/sendMessage`, {
+  const payload = JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', ...extra })
+  const res = await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', ...extra }),
+    body: payload,
   })
+  if (res.status === 503) {
+    // Notify user we're retrying (best-effort)
+    await fetch(`${TELEGRAM_API}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: '⏳ Telegram 暫時繁忙，3 秒後自動重試...', parse_mode: 'HTML' }),
+    }).catch(() => {})
+    await new Promise(r => setTimeout(r, 3000))
+    const retry = await fetch(`${TELEGRAM_API}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+    }).catch(() => null)
+    if (!retry?.ok) {
+      await fetch(`${TELEGRAM_API}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: '❌ 傳送失敗，請稍後再試。', parse_mode: 'HTML' }),
+      }).catch(() => {})
+    }
+  }
 }
 
 async function sendPhoto(chatId: number, photoUrl: string, caption?: string) {
@@ -102,6 +124,32 @@ async function downloadTelegramPhoto(fileId: string): Promise<Buffer> {
   return Buffer.from(await imgRes.arrayBuffer())
 }
 
+// ── Handle /AI ────────────────────────────────────────────────────────────────
+
+async function handleAI(chatId: number, aiModelId: string | null) {
+  const supabase = createServiceClient()
+  if (!aiModelId) {
+    await sendMessage(chatId, '🤖 目前使用預設模型：<b>gemini-2.5-flash</b>')
+    return
+  }
+  const { data: model } = await supabase
+    .from('ai_models')
+    .select('display_name, model_id, ai_endpoints(name)')
+    .eq('id', aiModelId)
+    .single()
+  if (!model) {
+    await sendMessage(chatId, '🤖 目前使用預設模型：<b>gemini-2.5-flash</b>')
+    return
+  }
+  const endpointName = (model.ai_endpoints as { name: string } | null)?.name ?? ''
+  await sendMessage(chatId,
+    `🤖 目前使用的 AI 模型：\n\n` +
+    `<b>${model.display_name}</b>\n` +
+    `模型 ID：<code>${model.model_id}</code>` +
+    (endpointName ? `\n端點：${endpointName}` : '')
+  )
+}
+
 // ── Search contacts ───────────────────────────────────────────────────────────
 
 async function searchContacts(query: string) {
@@ -127,6 +175,7 @@ async function handleHelp(chatId: number) {
     `/work [描述]　/w — AI 解析任務，指派給他人或提醒自己\n` +
     `/tasks　/t — 列出我的待處理任務\n` +
     `/user　/u — 列出組織成員\n` +
+    `/AI — 顯示目前使用的 AI 模型\n` +
     `/help　/h — 顯示此說明`
   await sendMessage(chatId, text)
 }
@@ -268,6 +317,19 @@ async function handlePhoto(
     const cardImgUrl = publicUrlData.publicUrl
 
     const cardData = await analyzeBusinessCard(compressed, user.ai_model_id)
+
+    // If no name detected, save as failed scan and notify user
+    if (!cardData.name) {
+      await supabase.from('failed_scans').insert({
+        user_id: user.id,
+        storage_path: storagePath,
+        card_img_url: cardImgUrl,
+      })
+      await sendMessage(chatId,
+        '❌ 辨識失敗：無法識別姓名。\n\n照片已保留，已通知管理員查看。\n若需要，管理員可至後台手動建立聯絡人。'
+      )
+      return
+    }
 
     const { exact, similar } = await checkDuplicates(cardData.email, cardData.name)
     let dupWarning = ''
@@ -551,6 +613,12 @@ async function handleText(
   // ── /user /u ───────────────────────────────────────────────────────────────
   if (cmd === '/user' || cmd === '/u') {
     await handleUser(chatId)
+    return
+  }
+
+  // ── /AI ────────────────────────────────────────────────────────────────────
+  if (cmd.toLowerCase() === '/ai') {
+    await handleAI(chatId, user.ai_model_id)
     return
   }
 
@@ -895,7 +963,9 @@ export async function POST(req: NextRequest) {
           await supabase.from('pending_contacts').delete().eq('id', pendingId)
           await updateLastContact(from.id, inserted.id)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, '✅ 已成功存檔！')
+          const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+          const contactLink = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">查看聯絡人頁面</a>` : ''
+          await sendMessage(from.id, `✅ 已成功存檔！${contactLink}`)
         }
 
         // ── Cancel card ───────────────────────────────────────────────────────

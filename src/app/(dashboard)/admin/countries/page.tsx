@@ -16,6 +16,63 @@ interface Country {
 
 const EMPTY_FORM = { code: '', name_zh: '', name_en: '', name_ja: '', emoji: '' }
 
+// ISO 3166-1 alpha-2 lookup table for auto-fill
+const ISO_LOOKUP: Record<string, { name_zh: string; name_en: string; name_ja: string; emoji: string }> = {
+  TW: { name_zh: '台灣', name_en: 'Taiwan', name_ja: '台湾', emoji: '🇹🇼' },
+  US: { name_zh: '美國', name_en: 'United States', name_ja: 'アメリカ', emoji: '🇺🇸' },
+  JP: { name_zh: '日本', name_en: 'Japan', name_ja: '日本', emoji: '🇯🇵' },
+  CN: { name_zh: '中國', name_en: 'China', name_ja: '中国', emoji: '🇨🇳' },
+  KR: { name_zh: '韓國', name_en: 'South Korea', name_ja: '韓国', emoji: '🇰🇷' },
+  HK: { name_zh: '香港', name_en: 'Hong Kong', name_ja: '香港', emoji: '🇭🇰' },
+  SG: { name_zh: '新加坡', name_en: 'Singapore', name_ja: 'シンガポール', emoji: '🇸🇬' },
+  GB: { name_zh: '英國', name_en: 'United Kingdom', name_ja: 'イギリス', emoji: '🇬🇧' },
+  DE: { name_zh: '德國', name_en: 'Germany', name_ja: 'ドイツ', emoji: '🇩🇪' },
+  FR: { name_zh: '法國', name_en: 'France', name_ja: 'フランス', emoji: '🇫🇷' },
+  CA: { name_zh: '加拿大', name_en: 'Canada', name_ja: 'カナダ', emoji: '🇨🇦' },
+  AU: { name_zh: '澳洲', name_en: 'Australia', name_ja: 'オーストラリア', emoji: '🇦🇺' },
+  NZ: { name_zh: '紐西蘭', name_en: 'New Zealand', name_ja: 'ニュージーランド', emoji: '🇳🇿' },
+  IN: { name_zh: '印度', name_en: 'India', name_ja: 'インド', emoji: '🇮🇳' },
+  TH: { name_zh: '泰國', name_en: 'Thailand', name_ja: 'タイ', emoji: '🇹🇭' },
+  VN: { name_zh: '越南', name_en: 'Vietnam', name_ja: 'ベトナム', emoji: '🇻🇳' },
+  PH: { name_zh: '菲律賓', name_en: 'Philippines', name_ja: 'フィリピン', emoji: '🇵🇭' },
+  MY: { name_zh: '馬來西亞', name_en: 'Malaysia', name_ja: 'マレーシア', emoji: '🇲🇾' },
+  ID: { name_zh: '印尼', name_en: 'Indonesia', name_ja: 'インドネシア', emoji: '🇮🇩' },
+  MX: { name_zh: '墨西哥', name_en: 'Mexico', name_ja: 'メキシコ', emoji: '🇲🇽' },
+  BR: { name_zh: '巴西', name_en: 'Brazil', name_ja: 'ブラジル', emoji: '🇧🇷' },
+  IT: { name_zh: '義大利', name_en: 'Italy', name_ja: 'イタリア', emoji: '🇮🇹' },
+  ES: { name_zh: '西班牙', name_en: 'Spain', name_ja: 'スペイン', emoji: '🇪🇸' },
+  NL: { name_zh: '荷蘭', name_en: 'Netherlands', name_ja: 'オランダ', emoji: '🇳🇱' },
+  SE: { name_zh: '瑞典', name_en: 'Sweden', name_ja: 'スウェーデン', emoji: '🇸🇪' },
+  CH: { name_zh: '瑞士', name_en: 'Switzerland', name_ja: 'スイス', emoji: '🇨🇭' },
+  NO: { name_zh: '挪威', name_en: 'Norway', name_ja: 'ノルウェー', emoji: '🇳🇴' },
+  DK: { name_zh: '丹麥', name_en: 'Denmark', name_ja: 'デンマーク', emoji: '🇩🇰' },
+  FI: { name_zh: '芬蘭', name_en: 'Finland', name_ja: 'フィンランド', emoji: '🇫🇮' },
+  PL: { name_zh: '波蘭', name_en: 'Poland', name_ja: 'ポーランド', emoji: '🇵🇱' },
+  RU: { name_zh: '俄羅斯', name_en: 'Russia', name_ja: 'ロシア', emoji: '🇷🇺' },
+  ZA: { name_zh: '南非', name_en: 'South Africa', name_ja: '南アフリカ', emoji: '🇿🇦' },
+  AE: { name_zh: '阿聯', name_en: 'United Arab Emirates', name_ja: 'アラブ首長国連邦', emoji: '🇦🇪' },
+  SA: { name_zh: '沙烏地阿拉伯', name_en: 'Saudi Arabia', name_ja: 'サウジアラビア', emoji: '🇸🇦' },
+  IL: { name_zh: '以色列', name_en: 'Israel', name_ja: 'イスラエル', emoji: '🇮🇱' },
+  PT: { name_zh: '葡萄牙', name_en: 'Portugal', name_ja: 'ポルトガル', emoji: '🇵🇹' },
+  TR: { name_zh: '土耳其', name_en: 'Turkey', name_ja: 'トルコ', emoji: '🇹🇷' },
+  AR: { name_zh: '阿根廷', name_en: 'Argentina', name_ja: 'アルゼンチン', emoji: '🇦🇷' },
+  CL: { name_zh: '智利', name_en: 'Chile', name_ja: 'チリ', emoji: '🇨🇱' },
+  CO: { name_zh: '哥倫比亞', name_en: 'Colombia', name_ja: 'コロンビア', emoji: '🇨🇴' },
+  EG: { name_zh: '埃及', name_en: 'Egypt', name_ja: 'エジプト', emoji: '🇪🇬' },
+  NG: { name_zh: '奈及利亞', name_en: 'Nigeria', name_ja: 'ナイジェリア', emoji: '🇳🇬' },
+  PK: { name_zh: '巴基斯坦', name_en: 'Pakistan', name_ja: 'パキスタン', emoji: '🇵🇰' },
+  BD: { name_zh: '孟加拉', name_en: 'Bangladesh', name_ja: 'バングラデシュ', emoji: '🇧🇩' },
+  MM: { name_zh: '緬甸', name_en: 'Myanmar', name_ja: 'ミャンマー', emoji: '🇲🇲' },
+  KH: { name_zh: '柬埔寨', name_en: 'Cambodia', name_ja: 'カンボジア', emoji: '🇰🇭' },
+  UA: { name_zh: '烏克蘭', name_en: 'Ukraine', name_ja: 'ウクライナ', emoji: '🇺🇦' },
+  CZ: { name_zh: '捷克', name_en: 'Czech Republic', name_ja: 'チェコ', emoji: '🇨🇿' },
+  AT: { name_zh: '奧地利', name_en: 'Austria', name_ja: 'オーストリア', emoji: '🇦🇹' },
+  BE: { name_zh: '比利時', name_en: 'Belgium', name_ja: 'ベルギー', emoji: '🇧🇪' },
+  GR: { name_zh: '希臘', name_en: 'Greece', name_ja: 'ギリシャ', emoji: '🇬🇷' },
+  HU: { name_zh: '匈牙利', name_en: 'Hungary', name_ja: 'ハンガリー', emoji: '🇭🇺' },
+  RO: { name_zh: '羅馬尼亞', name_en: 'Romania', name_ja: 'ルーマニア', emoji: '🇷🇴' },
+}
+
 export default function AdminCountriesPage() {
   const supabase = createBrowserSupabaseClient()
   const t = useTranslations('countries')
@@ -36,6 +93,23 @@ export default function AdminCountriesPage() {
     const { data } = await supabase.from('countries').select('code, name_zh, name_en, name_ja, emoji, is_active').order('code')
     setCountries(data ?? [])
     setLoading(false)
+  }
+
+  function handleCodeChange(raw: string) {
+    const code = raw.toUpperCase()
+    setForm(prev => {
+      const lookup = code.length === 2 ? ISO_LOOKUP[code] : null
+      if (lookup) {
+        return {
+          code,
+          name_zh: prev.name_zh || lookup.name_zh,
+          name_en: prev.name_en || lookup.name_en,
+          name_ja: prev.name_ja || lookup.name_ja,
+          emoji: prev.emoji || lookup.emoji,
+        }
+      }
+      return { ...prev, code }
+    })
   }
 
   function openNew() {
@@ -219,7 +293,7 @@ export default function AdminCountriesPage() {
                   <input
                     type="text"
                     value={form.code}
-                    onChange={(e) => setForm((p) => ({ ...p, code: e.target.value.toUpperCase() }))}
+                    onChange={(e) => handleCodeChange(e.target.value)}
                     disabled={!!editing}
                     maxLength={2}
                     placeholder={t('codePlaceholder')}

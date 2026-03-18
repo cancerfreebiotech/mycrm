@@ -268,9 +268,32 @@ export async function POST(req: NextRequest) {
 
     if (text.toLowerCase() === '/help' || text.toLowerCase() === 'help') {
       const msg = userRow
-        ? `📋 myCRM Bot（已綁定：${userRow.email}）\n\n任務通知會自動傳送到這裡。點擊卡片上的「✅ 標記完成」即可完成任務。`
+        ? `📋 myCRM Bot（已綁定：${userRow.email}）\n\n任務通知會自動傳送到這裡。點擊卡片上的「✅ 標記完成」即可完成任務。\n\n指令：/help、/AI`
         : `📋 myCRM Bot\n\n⚠️ 無法自動綁定帳號，請聯絡管理員確認 Azure AD 應用程式已授予 User.ReadBasic.All 權限。`
       await sendToTeams(serviceUrl, conversationId, msg, body.id as string)
+    } else if (text.toLowerCase() === '/ai') {
+      if (!userRow?.email) {
+        await sendToTeams(serviceUrl, conversationId, '⚠️ 帳號未綁定，無法查詢 AI 模型。', body.id as string)
+      } else {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('ai_model_id')
+          .eq('email', userRow.email)
+          .single()
+        if (!userData?.ai_model_id) {
+          await sendToTeams(serviceUrl, conversationId, '🤖 目前使用預設模型：gemini-2.5-flash', body.id as string)
+        } else {
+          const { data: model } = await supabase
+            .from('ai_models')
+            .select('display_name, model_id')
+            .eq('id', userData.ai_model_id)
+            .single()
+          const msg = model
+            ? `🤖 目前使用的 AI 模型：${model.display_name}（${model.model_id}）`
+            : '🤖 目前使用預設模型：gemini-2.5-flash'
+          await sendToTeams(serviceUrl, conversationId, msg, body.id as string)
+        }
+      }
     }
   }
 

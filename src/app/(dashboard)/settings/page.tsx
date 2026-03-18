@@ -5,7 +5,7 @@ import { useTheme } from 'next-themes'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Sun, Moon, Check, RotateCcw } from 'lucide-react'
+import { Sun, Moon, Check, RotateCcw, X, Plus, ChevronDown } from 'lucide-react'
 import { SUPPORTED_LOCALES, type Locale } from '@/i18n/config'
 import { SYSTEM_PROMPTS } from '@/lib/prompt-constants'
 
@@ -55,6 +55,7 @@ export default function SettingsPage() {
   const [assistants, setAssistants] = useState<Array<{ id: string; assistant_email: string; users: { display_name: string | null } | null }>>([])
   const [allUsers, setAllUsers] = useState<Array<{ email: string; display_name: string | null }>>([])
   const [assistantError, setAssistantError] = useState<string | null>(null)
+  const [showAssistantPicker, setShowAssistantPicker] = useState(false)
 
   const [emailPrompt, setEmailPrompt] = useState('')
   const [savedEmailPrompt, setSavedEmailPrompt] = useState('')
@@ -409,31 +410,61 @@ export default function SettingsPage() {
             {t('assistants')}
           </label>
           <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">{t('assistantsHint')}</p>
-          {allUsers.length === 0 ? (
-            <p className="text-xs text-gray-400">{t('noAssistants')}</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {allUsers.map(u => {
-                const isSelected = assistants.some(a => a.assistant_email === u.email)
-                return (
-                  <button
-                    key={u.email}
-                    type="button"
-                    onClick={() => handleToggleAssistant(u.email)}
-                    title={u.email}
-                    className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full border transition-colors ${
-                      isSelected
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-medium'
-                        : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600'
-                    }`}
-                  >
-                    {isSelected && <Check size={12} />}
-                    {u.display_name ?? u.email}
-                  </button>
-                )
-              })}
-            </div>
-          )}
+          <div className="flex flex-wrap gap-2 items-center">
+            {/* Selected assistants as removable tags */}
+            {assistants.map(a => (
+              <span
+                key={a.assistant_email}
+                className="inline-flex items-center gap-1 text-sm px-3 py-1.5 rounded-full border border-blue-500 bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-medium"
+              >
+                {a.users?.display_name ?? a.assistant_email.split('@')[0]}
+                <button
+                  type="button"
+                  onClick={() => handleToggleAssistant(a.assistant_email)}
+                  className="ml-0.5 hover:text-blue-900 dark:hover:text-blue-100"
+                  title="移除"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+
+            {/* Add button */}
+            {allUsers.filter(u => !assistants.some(a => a.assistant_email === u.email)).length > 0 && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowAssistantPicker(v => !v)}
+                  className="inline-flex items-center gap-1 text-sm px-3 py-1.5 rounded-full border border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                >
+                  <Plus size={12} /> 新增助理
+                  <ChevronDown size={12} className={`transition-transform ${showAssistantPicker ? 'rotate-180' : ''}`} />
+                </button>
+                {showAssistantPicker && (
+                  <div className="absolute left-0 top-full mt-1 w-52 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-10 py-1">
+                    {allUsers
+                      .filter(u => !assistants.some(a => a.assistant_email === u.email))
+                      .map(u => (
+                        <button
+                          key={u.email}
+                          type="button"
+                          onClick={() => { handleToggleAssistant(u.email); setShowAssistantPicker(false) }}
+                          title={u.email}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          {u.display_name ?? u.email.split('@')[0]}
+                          <span className="block text-xs text-gray-400 truncate">{u.email}</span>
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {assistants.length === 0 && allUsers.length === 0 && (
+              <p className="text-xs text-gray-400">{t('noAssistants')}</p>
+            )}
+          </div>
           {assistantError && <p className="mt-2 text-xs text-red-500">{assistantError}</p>}
         </div>
 

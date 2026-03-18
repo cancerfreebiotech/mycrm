@@ -233,7 +233,7 @@ export default function TasksPage() {
         <div className="space-y-2">
           {filtered.map((task) => {
             const assigneeNames = task.task_assignees.map(a =>
-              a.users?.display_name ?? a.assignee_email
+              a.users?.display_name ?? a.assignee_email.split('@')[0]
             ).join(', ')
 
             return (

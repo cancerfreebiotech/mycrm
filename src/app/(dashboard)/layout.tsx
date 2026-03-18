@@ -118,6 +118,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/admin/users', label: t('users'), icon: ShieldCheck },
     { href: '/admin/prompts', label: t('prompts'), icon: ShieldCheck },
     { href: '/admin/countries', label: t('countries'), icon: MapPin },
+    { href: '/admin/failed-scans', label: t('failedScans'), icon: ShieldCheck },
   ] : []
 
   // Label span shared classes — hidden on tablet, shown on hover & desktop (unless collapsed)
