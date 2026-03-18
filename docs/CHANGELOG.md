@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v1.3.7 — /docs TOC 移至左側 + Mermaid 流程圖（2026-03-18）
+
+### 變更項目
+- TOC（本頁目錄）從右欄移至左側導覽列（與 GitHub Pages Just the Docs 相同位置）
+- 整合 mermaid.js，文件中的 mermaid code block 自動渲染為流程圖
+- 更新 zh-TW 使用者文件：加入系統運作流程、名片辨識、任務指派等示意圖
+- 更新 zh-TW Super Admin 文件：加入系統架構、Teams 綁定、RLS 權限流程圖
+- 行動版新增可折疊的 TOC 面板
+
 ## v1.3.6 — /docs 頁面排版大幅改善（2026-03-18）
 
 ### 變更項目
