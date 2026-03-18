@@ -4,7 +4,7 @@ import { analyzeBusinessCard, generateEmailContent, parseTaskCommand } from '@/l
 import { processCardImage, generateCardFilename } from '@/lib/imageProcessor'
 import { checkDuplicates } from '@/lib/duplicate'
 import { sendMail } from '@/lib/graph'
-import { sendTeamsTaskNotification } from '@/lib/teams'
+import { sendTeamsTaskNotification, sendTeamsMessage } from '@/lib/teams'
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`
@@ -1336,12 +1336,8 @@ export async function POST(req: NextRequest) {
               for (const au of notifyUsers ?? []) {
                 if (!au.teams_conversation_id || !au.teams_service_url) continue
                 try {
-                  await sendTeamsTaskNotification(au.teams_service_url, au.teams_conversation_id, {
-                    title: `✅ 任務已完成：${task.title}`,
-                    task_id: taskId,
-                    app_url: process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? '',
-                    description: `由 ${completedBy} 標記完成`,
-                  })
+                  await sendTeamsMessage(au.teams_service_url, au.teams_conversation_id,
+                    `✅ 任務已完成：${task.title}\n由 ${completedBy} 標記完成`)
                 } catch (e) {
                   console.error('[Teams] task done notification failed:', e)
                 }

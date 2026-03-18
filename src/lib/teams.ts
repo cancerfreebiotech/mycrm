@@ -34,6 +34,24 @@ export interface TeamsTaskCard {
   contact_company?: string
 }
 
+// Send a plain text message to a Teams conversation
+export async function sendTeamsMessage(
+  serviceUrl: string,
+  conversationId: string,
+  text: string,
+): Promise<void> {
+  if (!TEAMS_BOT_APP_ID || !TEAMS_BOT_APP_SECRET) return
+  const token = await getBotToken()
+  const endpoint = serviceUrl.endsWith('/')
+    ? `${serviceUrl}v3/conversations/${conversationId}/activities`
+    : `${serviceUrl}/v3/conversations/${conversationId}/activities`
+  await fetch(endpoint, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'message', text }),
+  })
+}
+
 // Send an Adaptive Card for a task notification to a Teams conversation
 export async function sendTeamsTaskNotification(
   serviceUrl: string,

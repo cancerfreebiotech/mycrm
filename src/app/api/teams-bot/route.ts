@@ -208,13 +208,20 @@ export async function POST(req: NextRequest) {
     console.log('[teams-bot] invoke action:', action, 'task_id:', task_id)
 
     if (action === 'task_done' && task_id) {
-      // Look up user by teams_user_id; auto-link if not yet linked
+      // 1. Look up by aadObjectId
       let userRow = aadId
         ? (await supabase.from('users').select('email').eq('teams_user_id', aadId).single()).data
         : null
 
+      // 2. Fallback: look up by conversationId (aadObjectId may be absent in invoke activities)
+      if (!userRow && conversationId) {
+        userRow = (await supabase.from('users').select('email').eq('teams_conversation_id', conversationId).single()).data
+        if (userRow) console.log('[teams-bot] task_done: found user via conversationId:', userRow.email)
+      }
+
       console.log('[teams-bot] task_done: aadId=%s userRow=%s task_id=%s', aadId, userRow?.email ?? 'null', task_id)
 
+      // 3. Last resort: try auto-link via Graph
       if (!userRow && aadId && conversationId && serviceUrl) {
         const email = await linkUser(supabase, aadId, conversationId, serviceUrl)
         if (email) userRow = { email }
