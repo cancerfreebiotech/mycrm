@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v1.5.2 — Bot 錯誤診斷日誌強化（2026-03-19）
+
+### 變更項目
+- 加強 Telegram bot 名片處理錯誤的 console.error 日誌，完整序列化錯誤物件以便診斷 `[object Object]` 問題
+- 修正 catch block 錯誤訊息提取：非 Error 物件改用 JSON.stringify 顯示，避免輸出 `[object Object]`
+
 ## v1.5.1 — Provider token 自動刷新、刪除聯絡人、新增聯絡人修正（2026-03-19）
 
 ### 變更項目

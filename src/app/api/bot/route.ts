@@ -402,8 +402,11 @@ async function handlePhoto(
       await clearSession(fromId)
       await sendMessage(chatId, '✅ 已更新名片反面資訊')
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      console.error('[bot] back card error:', msg)
+      const msg = err instanceof Error
+        ? err.message
+        : (typeof err === 'object' && err !== null ? JSON.stringify(err) : String(err))
+      console.error('[bot] back card error JSON:', JSON.stringify(err))
+      console.error('[bot] back card error msg:', msg)
       await sendMessage(chatId, `❌ 處理失敗：${msg}`)
     }
     return
@@ -508,16 +511,22 @@ async function handlePhoto(
       },
     })
   } catch (err) {
-    const e = err as { message?: string }
-    const msg = e?.message ?? String(err)
-    console.error('[bot] photo processing error:', msg, err)
+    const msg = err instanceof Error
+      ? err.message
+      : (typeof err === 'object' && err !== null ? JSON.stringify(err) : String(err))
+    console.error('[bot] photo processing error type:', typeof err, err instanceof Error ? 'Error' : 'non-Error')
+    console.error('[bot] photo processing error JSON:', JSON.stringify(err))
+    console.error('[bot] photo processing error msg:', msg)
     // Save to failed_scans if image was already uploaded
     if (storagePath && cardImgUrl) {
-      await supabase.from('failed_scans').insert({
+      const { error: fsErr } = await supabase.from('failed_scans').insert({
         user_id: user.id,
         storage_path: storagePath,
         card_img_url: cardImgUrl,
-      }).catch((e2) => console.error('[bot] failed_scans insert error:', e2))
+      })
+      if (fsErr) console.error('[bot] failed_scans insert error:', fsErr.message)
+    } else {
+      console.error('[bot] no storagePath/cardImgUrl — skipping failed_scans insert. storagePath:', storagePath, 'cardImgUrl:', cardImgUrl)
     }
     await sendMessage(chatId, `❌ 處理失敗：${msg}`)
   }
