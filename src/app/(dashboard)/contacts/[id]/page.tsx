@@ -196,6 +196,8 @@ export default function ContactDetailPage() {
   const [mailOpen, setMailOpen] = useState(false)
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
   const [mailTo, setMailTo] = useState('')
+  const [mailCc, setMailCc] = useState('')
+  const [mailBcc, setMailBcc] = useState('')
   const [mailSubject, setMailSubject] = useState('')
   const [mailBody, setMailBody] = useState('')
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
@@ -493,6 +495,8 @@ export default function ContactDetailPage() {
     }))
     setTemplates(tplList)
     setMailTo(contact?.email ?? '')
+    setMailCc('')
+    setMailBcc('')
     setMailSubject('')
     setMailBody('')
     setSelectedTemplateId('')
@@ -595,7 +599,7 @@ export default function ContactDetailPage() {
         attachments.push({ name: a.name, contentType: a.contentType, contentBytes: a.base64 })
       }
 
-      await sendMail({ accessToken, to: mailTo, subject: mailSubject, body: mailBody, attachments: attachments.length > 0 ? attachments : undefined })
+      await sendMail({ accessToken, to: mailTo, cc: mailCc || undefined, bcc: mailBcc || undefined, subject: mailSubject, body: mailBody, attachments: attachments.length > 0 ? attachments : undefined })
       const { data } = await supabase.from('interaction_logs')
         .insert({ contact_id: id, content: `寄送郵件：${mailSubject}`, type: 'email', created_by: currentUserId })
         .select('id, content, type, meeting_date, created_at, users(display_name)').single()
@@ -1102,15 +1106,40 @@ export default function ContactDetailPage() {
               <button onClick={() => setMailOpen(false)} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"><X size={18} /></button>
             </div>
             <div className="px-6 py-5 space-y-4 overflow-y-auto">
-              {/* To */}
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">{tm('recipient')}</label>
-                <input
-                  type="email"
-                  value={mailTo}
-                  onChange={(e) => setMailTo(e.target.value)}
-                  className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+              {/* To / CC / BCC */}
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">{tm('recipient')} <span className="text-gray-400 font-normal">（多位請用逗號分隔，如：a@co.com, b@co.com）</span></label>
+                  <input
+                    type="text"
+                    value={mailTo}
+                    onChange={(e) => setMailTo(e.target.value)}
+                    placeholder="收件人，例：john@example.com, mary@example.com"
+                    className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">CC <span className="text-gray-400 font-normal">（副本）</span></label>
+                    <input
+                      type="text"
+                      value={mailCc}
+                      onChange={(e) => setMailCc(e.target.value)}
+                      placeholder="cc@example.com, cc2@example.com"
+                      className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">BCC <span className="text-gray-400 font-normal">（密件副本）</span></label>
+                    <input
+                      type="text"
+                      value={mailBcc}
+                      onChange={(e) => setMailBcc(e.target.value)}
+                      placeholder="bcc@example.com"
+                      className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Template */}

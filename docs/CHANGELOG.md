@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v1.4.2 — 寄信支援 CC / BCC 與多收件人（2026-03-19）
+
+### 變更項目
+- **CC / BCC 欄位**：寄信 Modal 新增副本、密件副本輸入框
+- **多收件人**：To / CC / BCC 均支援逗號分隔多個地址（例：`a@co.com, b@co.com`）
+- **`graph.ts`**：`sendMail` 函式新增 `cc` / `bcc` 參數，自動解析並填入 `ccRecipients` / `bccRecipients`
+- 版本 1.4.1 → 1.4.2
+
 ## v1.4.1 — 名片圖片放大 Lightbox（2026-03-19）
 
 ### 變更項目
