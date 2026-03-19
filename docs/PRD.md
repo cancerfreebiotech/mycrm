@@ -2176,3 +2176,112 @@ Header 顯示排序圖示（使用已有的 `lucide-react`）：
 - [ ] **Task 76** `[修改]` — Dashboard 新增國家統計區塊（`loadCountryStats()`，長條圖，每行可點擊跳轉 `/contacts?country={code}`）；修改檔案：`src/app/(dashboard)/page.tsx`、`messages/zh-TW.json`、`messages/en.json`、`messages/ja.json`
 - [ ] **Task 77** `[修改]` — Dashboard Tag 分布區塊改為可點擊（每行包 `<Link href="/contacts?tag={name}">`，加 `›` 箭頭）；修改檔案：`src/app/(dashboard)/page.tsx`
 - [ ] **Task 78** `[修改]` — 聯絡人列表新增：(A) `useSearchParams()` 讀取 `?tag` / `?country` 初始化篩選、(B) 國家篩選 dropdown、(C) 職稱欄三段式排序（asc/desc/無）；修改檔案：`src/app/(dashboard)/contacts/page.tsx`、`messages/zh-TW.json`、`messages/en.json`、`messages/ja.json`
+
+---
+
+## 二十八、v1.4 功能規格（✅ 已完成）
+
+> 主軸：寄信功能完整化、名片瀏覽體驗、文件自動化
+
+### 28.1 寄信功能強化
+
+#### CC / BCC 多收件人
+- 寄信 Modal 新增「副本（CC）」與「密件副本（BCC）」欄位
+- To / CC / BCC 均支援逗號分隔多個地址
+- `graph.ts` `sendMail()` 新增 `cc` / `bcc` 參數，解析後填入 Graph API `ccRecipients` / `bccRecipients`
+
+#### 收件人 Chip 選擇器
+- To / CC / BCC 改為 chip 輸入元件（`RecipientChipInput`）
+- 輸入名字或 email 可即時搜尋 CRM 聯絡人，點選加入；按 Enter 或逗號確認任意 email
+- 輸入框失去焦點（`onBlur`）自動確認已輸入的 email，避免遺漏
+
+#### AI 同時生成主旨
+- AI 生成信件時一次回傳 `{ subject, text }`，自動填入主旨欄與內文
+- `gemini.ts` `generateEmailContent()` 新增 `generateSubject` 參數
+- 語言以使用者描述（prompt）為準，不受範本語言影響
+- 內文改為純文字（無 HTML 標籤），以 `\n` 換行
+
+#### 多聯絡人互動紀錄
+- 寄信後，所有被選到的 CRM 聯絡人均自動新增 `email` 類型互動紀錄
+- 紀錄含：信件主旨（`email_subject`）、純文字內文（`email_body`）、附件檔名清單（`email_attachments`）
+- `interaction_logs` 表新增 `email_subject text`、`email_body text`、`email_attachments text[]` 欄位
+- 聯絡人頁面互動紀錄列表：email 類型可展開查看主旨、內文、附件
+
+### 28.2 名片圖片 Lightbox
+
+- 聯絡人詳情頁名片縮圖：hover 顯示放大鏡，點擊開啟全螢幕 Lightbox
+- Lightbox 支援：滾輪縮放、拖曳平移、雙指捏合（mobile）
+- 關閉方式：點擊背景遮罩、右上角 ✕、或 Escape 鍵
+
+### 28.3 Vercel Cron 自動文件生成
+
+- 新增 `vercel.json` 排程：每日凌晨 2:00（台北時間）觸發 `/api/docs/cron`
+- Cron 呼叫 `/generate-docs` 邏輯，重新生成 6 份說明書（zh-TW / en / ja × user / super_admin）並 upsert 進 Supabase `docs_content` 表
+
+### 28.4 Microsoft Token 管理
+
+- `graph-server.ts`（新增，server-only）：`getValidProviderToken(userId)` 檢查 token 到期時間，自動呼叫 Microsoft 刷新
+- 登入時加入 `offline_access` scope，取得並儲存 `refresh_token`
+- 新增 `/api/provider-token` GET 端點：前端寄信前呼叫，確保取得最新 access token
+- Bot（Telegram / Teams）寄信、建立行程統一改用 `getValidProviderToken()`
+
+---
+
+## 二十九、v1.5 功能規格（✅ 已完成）
+
+> 主軸：行程排程指令、聯絡人管理補強、Bot 穩定性
+
+### 29.1 /meet 行程排程指令
+
+#### 支援平台
+- Telegram Bot：`/meet` / `/m`
+- Teams Bot：`/meet` / `/m`
+
+#### AI 解析
+- 使用 Gemini 解析自然語言描述，提取：
+  - 標題、開始時間（ISO UTC）、時長（30 / 60 / 90 / 120 分鐘）
+  - 參與者（僅組織內成員，從 `users` 表比對）
+  - 地點（選填）
+- 解析結果暫存至 `meeting_drafts` 資料表
+
+#### 確認流程
+- Telegram：inline keyboard 顯示「確認建立 ✅」與「取消 ❌」
+- Teams：Adaptive Card 含確認與取消按鈕
+- 確認後呼叫 Microsoft Graph `POST /me/events`，自動發送 Outlook 日曆邀請給所有被點名的成員
+- 確認或取消後刪除 `meeting_drafts` 記錄
+
+#### 新增 DB 表：`meeting_drafts`
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | |
+| user_id | uuid | 建立者 |
+| title | text | 會議標題 |
+| start_at | timestamptz | 開始時間 |
+| duration_minutes | int | 30 / 60 / 90 / 120 |
+| attendee_ids | uuid[] | 參與者 user id |
+| location | text | 地點（可為 null）|
+| created_at | timestamptz | |
+
+### 29.2 聯絡人管理補強
+
+#### 刪除聯絡人
+- `super_admin` 可刪除任何聯絡人
+- 一般使用者可刪除自己上傳的聯絡人
+- 刪除前確認 Modal，刪除後跳轉聯絡人列表
+
+#### 新增聯絡人照片上傳
+- Web 新增聯絡人頁面支援上傳正面、反面名片照
+- 改用 `/api/upload-card`（server route，使用 service client）繞過 RLS 限制
+- 任一上傳失敗則 rollback 刪除剛建立的聯絡人
+
+### 29.3 Bot 穩定性
+
+#### 名片辨識失敗改進
+- 重構為「先上傳圖片、再 OCR」：OCR 失敗時圖片已存在 Storage，可存入 `failed_scans`
+- catch block 錯誤序列化：非 Error 物件改用 `JSON.stringify` 避免輸出 `[object Object]`
+- 確認存檔時過濾 `rotation` 欄位（OCR 專用，contacts 表無此欄）
+
+#### `contact_cards` 欄位修正
+- 實際欄位為 `card_img_url`（非 `url`），相關查詢、插入、顯示全數修正
+- 新增 `storage_path` 欄位用於 Storage 路徑記錄
+
