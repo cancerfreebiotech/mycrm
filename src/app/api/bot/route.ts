@@ -3,7 +3,7 @@ import { createServiceClient } from '@/lib/supabase'
 import { analyzeBusinessCard, generateEmailContent, parseTaskCommand, parseMeetingCommand } from '@/lib/gemini'
 import { processCardImage, generateCardFilename } from '@/lib/imageProcessor'
 import { checkDuplicates } from '@/lib/duplicate'
-import { sendMail, createCalendarEvent } from '@/lib/graph'
+import { sendMail, createCalendarEvent, getValidProviderToken } from '@/lib/graph'
 import { sendTeamsTaskNotification, sendTeamsMessage } from '@/lib/teams'
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
@@ -1131,13 +1131,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ ok: true })
           }
 
-          if (!user.provider_token) {
-            await answerCallbackQuery(callbackQueryId, '❌ 無 Microsoft 存取權限')
-            await sendMessage(from.id, '⚠️ 無法建立行程：找不到 Microsoft 存取憑證，請至 myCRM 網頁重新登入。')
-            return NextResponse.json({ ok: true })
-          }
-
           try {
+            const accessToken = await getValidProviderToken(user.id)
             const endIso = new Date(new Date(draft.start_at).getTime() + draft.duration_minutes * 60000).toISOString()
             // Resolve attendee emails
             const attendeeEmails: string[] = []
@@ -1147,7 +1142,7 @@ export async function POST(req: NextRequest) {
               attendeeEmails.push(...(members ?? []).map((m: { email: string }) => m.email))
             }
             const webLink = await createCalendarEvent({
-              accessToken: user.provider_token,
+              accessToken,
               title: draft.title,
               startIso: draft.start_at,
               endIso,
@@ -1359,20 +1354,11 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ ok: true })
           }
 
-          if (!user.provider_token) {
-            await answerCallbackQuery(callbackQueryId)
-            await editMessageReplyMarkup(message.chat.id, message.message_id)
-            await sendMessage(from.id,
-              '⚠️ 無法取得 Microsoft 存取憑證。\n\n請至 myCRM 網頁重新登入後，再使用 Bot 發信功能。'
-            )
-            await clearSession(from.id)
-            return NextResponse.json({ ok: true })
-          }
-
           await sendMessage(from.id, '⏳ 發送中...')
           try {
+            const accessToken = await getValidProviderToken(user.id)
             await sendMail({
-              accessToken: user.provider_token,
+              accessToken,
               to: contactEmail,
               subject,
               body: bodyHtml,

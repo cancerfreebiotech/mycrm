@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
       display_name: data.user.user_metadata?.full_name ?? data.user.user_metadata?.name ?? null,
       last_login_at: new Date().toISOString(),
       ...(data.session?.provider_token ? { provider_token: data.session.provider_token } : {}),
+      ...(data.session?.provider_refresh_token ? { provider_refresh_token: data.session.provider_refresh_token } : {}),
     },
     { onConflict: 'email' }
   )

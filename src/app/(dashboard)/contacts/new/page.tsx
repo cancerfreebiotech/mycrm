@@ -207,16 +207,25 @@ export default function NewContactPage() {
           files.map(async (file, i) => {
             try {
               const base64 = await compressImage(file)
-              const uint8 = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+              const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+              const blob = new Blob([bytes], { type: 'image/jpeg' })
               const filename = `cards/${inserted.id}_${Date.now()}_${i}.jpg`
-              const { error: uploadErr } = await supabase.storage.from('cards').upload(filename, uint8, { contentType: 'image/jpeg' })
-              if (uploadErr) return
+              const { error: uploadErr } = await supabase.storage.from('cards').upload(filename, blob, { contentType: 'image/jpeg' })
+              if (uploadErr) { console.error('upload error:', uploadErr.message); return }
               const { data: urlData } = supabase.storage.from('cards').getPublicUrl(filename)
-              await supabase.from('contact_cards').insert({ contact_id: inserted.id, url: urlData.publicUrl, storage_path: filename, label: null })
-            } catch { /* skip individual upload failures */ }
+              await supabase.from('contact_cards').insert({ contact_id: inserted.id, url: urlData.publicUrl, storage_path: filename, label: i === 0 ? '正面' : `第 ${i + 1} 張` })
+            } catch (e) { console.error('card upload failed:', e) }
           })
         )
       }
+
+      // Interaction log
+      await supabase.from('interaction_logs').insert({
+        contact_id: inserted.id,
+        type: 'note',
+        content: '透過網頁手動新增聯絡人',
+        created_by: profile.id,
+      })
 
       router.push(`/contacts/${inserted.id}`)
     } catch (err) {

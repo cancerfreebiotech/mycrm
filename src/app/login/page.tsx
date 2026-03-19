@@ -63,7 +63,7 @@ function LoginContent() {
     await supabase.auth.signInWithOAuth({
       provider: 'azure',
       options: {
-        scopes: 'email profile Mail.Send Calendars.ReadWrite',
+        scopes: 'email profile Mail.Send Calendars.ReadWrite offline_access',
         redirectTo: `${window.location.origin}/api/auth/callback`,
       },
     })

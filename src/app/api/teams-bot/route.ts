@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { parseMeetingCommand } from '@/lib/gemini'
-import { createCalendarEvent } from '@/lib/graph'
+import { createCalendarEvent, getValidProviderToken } from '@/lib/graph'
 import { sendTeamsMeetingConfirmCard } from '@/lib/teams'
 
 async function verifyTeamsRequest(req: NextRequest): Promise<boolean> {
@@ -301,10 +301,10 @@ export async function POST(req: NextRequest) {
         ?? (value as Record<string, Record<string, Record<string, string>>>)?.action?.data?.draft_id
 
       let userRow = aadId
-        ? (await supabase.from('users').select('email, provider_token').eq('teams_user_id', aadId).single()).data
+        ? (await supabase.from('users').select('id, email').eq('teams_user_id', aadId).single()).data
         : null
       if (!userRow && conversationId) {
-        userRow = (await supabase.from('users').select('email, provider_token').eq('teams_conversation_id', conversationId).single()).data
+        userRow = (await supabase.from('users').select('id, email').eq('teams_conversation_id', conversationId).single()).data
       }
 
       if (action === 'meet_cancel') {
@@ -320,11 +320,12 @@ export async function POST(req: NextRequest) {
         if (conversationId && serviceUrl) await sendToTeams(serviceUrl, conversationId, '⚠️ 行程草稿已過期。')
         return NextResponse.json({ type: 'invokeResponse', value: { status: 200 } })
       }
-      if (!userRow?.provider_token) {
+      if (!userRow?.id) {
         if (conversationId && serviceUrl) await sendToTeams(serviceUrl, conversationId, '⚠️ 無法建立行程：請至 myCRM 網頁重新登入以取得 Microsoft 存取權限。')
         return NextResponse.json({ type: 'invokeResponse', value: { status: 200 } })
       }
       try {
+        const accessToken = await getValidProviderToken(userRow.id)
         const endIso = new Date(new Date(draft.start_at).getTime() + draft.duration_minutes * 60000).toISOString()
         const attendeeEmails: string[] = []
         if (draft.attendee_ids?.length > 0) {
@@ -332,7 +333,7 @@ export async function POST(req: NextRequest) {
           attendeeEmails.push(...(members ?? []).map((m: { email: string }) => m.email))
         }
         const webLink = await createCalendarEvent({
-          accessToken: userRow.provider_token,
+          accessToken,
           title: draft.title,
           startIso: draft.start_at,
           endIso,

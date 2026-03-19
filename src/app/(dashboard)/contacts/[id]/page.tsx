@@ -32,6 +32,7 @@ interface Contact {
   card_img_url: string | null
   card_img_back_url: string | null
   created_at: string
+  created_by: string | null
   users: { display_name: string | null } | null
   contact_tags: { tags: Tag }[]
 }
@@ -190,8 +191,10 @@ export default function ContactDetailPage() {
   const logsOffsetRef = useRef(0)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
   const [aiModelId, setAiModelId] = useState<string | null>(null)
   const [msProviderToken, setMsProviderToken] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const [lbScale, setLbScale] = useState(1)
   const [lbOffset, setLbOffset] = useState({ x: 0, y: 0 })
@@ -310,8 +313,8 @@ export default function ContactDetailPage() {
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
     if (user?.email) {
-      const { data: profile } = await supabase.from('users').select('id, ai_model_id, provider_token').eq('email', user.email).single()
-      if (profile) { setCurrentUserId(profile.id); setAiModelId(profile.ai_model_id ?? null); setMsProviderToken(profile.provider_token ?? null) }
+      const { data: profile } = await supabase.from('users').select('id, ai_model_id, provider_token, role').eq('email', user.email).single()
+      if (profile) { setCurrentUserId(profile.id); setAiModelId(profile.ai_model_id ?? null); setMsProviderToken(profile.provider_token ?? null); setCurrentUserRole(profile.role ?? null) }
     }
     const [{ data: c }, { data: l }, { data: tags }, { data: cards }, { data: countries }] = await Promise.all([
       supabase.from('contacts').select('*, users(display_name), contact_tags(tags(id, name))').eq('id', id).single(),
@@ -676,8 +679,12 @@ export default function ContactDetailPage() {
     if (mailToList.length === 0 || !mailSubject.trim()) return
     setMailSending(true); setMailError(null)
     try {
-      const accessToken = msProviderToken
-      if (!accessToken) throw new Error('找不到 Microsoft 存取權限，請重新登入（登出後重新以 Microsoft 帳號登入）')
+      const tokenRes = await fetch('/api/provider-token')
+      if (!tokenRes.ok) {
+        const err = await tokenRes.json().catch(() => ({}))
+        throw new Error(err?.error ?? '找不到 Microsoft 存取權限，請重新登入')
+      }
+      const { token: accessToken } = await tokenRes.json()
 
       const attachments: { name: string; contentType: string; contentBytes: string }[] = []
 
@@ -723,6 +730,25 @@ export default function ContactDetailPage() {
       setMailError(e instanceof Error ? e.message : '寄送失敗，請稍後再試')
     } finally { setMailSending(false) }
   }
+
+  async function handleDelete() {
+    if (!confirm(`確定要刪除「${contact?.name || contact?.name_en || '此聯絡人'}」？此操作無法復原。`)) return
+    setDeleting(true)
+    try {
+      // Delete storage files
+      const { data: cards } = await supabase.from('contact_cards').select('storage_path').eq('contact_id', id)
+      const paths = (cards ?? []).map((c: { storage_path: string }) => c.storage_path).filter(Boolean)
+      if (paths.length > 0) await supabase.storage.from('cards').remove(paths)
+      // Delete contact (cascades to contact_cards, contact_tags, interaction_logs)
+      await supabase.from('contacts').delete().eq('id', id)
+      router.push('/contacts')
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '刪除失敗')
+      setDeleting(false)
+    }
+  }
+
+  const canDelete = currentUserRole === 'super_admin' || contact?.created_by === currentUserId
 
   if (!contact) return <div className="text-gray-400 text-sm">{tc('loading')}</div>
 
@@ -830,13 +856,23 @@ export default function ContactDetailPage() {
         </div>
 
         {/* Actions */}
-        <div className="flex gap-2 pt-4 border-t border-gray-100 dark:border-gray-800">
+        <div className="flex gap-2 pt-4 border-t border-gray-100 dark:border-gray-800 flex-wrap">
           <button onClick={openEdit} className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
             <Pencil size={14} /> {tc('edit')}
           </button>
           {contact.email && (
             <button onClick={openMailModal} className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
               <Mail size={14} /> {t('sendMail')}
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50 ml-auto"
+            >
+              {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              {tc('delete')}
             </button>
           )}
         </div>

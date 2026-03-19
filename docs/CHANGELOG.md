@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v1.5.1 — Provider token 自動刷新、刪除聯絡人、新增聯絡人修正（2026-03-19）
+
+### 變更項目
+- **Microsoft token 自動刷新**：登入時加入 `offline_access` scope，儲存 refresh token；存取憑證快到期時自動透過 Microsoft 刷新，最長可維持 ~90 天免重新登入
+- **新 API `/api/provider-token`**：前端寄信前呼叫此端點，確保取得最新 token
+- **`getValidProviderToken(userId)`**：Bot（Telegram/Teams）確認行程、寄信時統一使用此函數取得有效 token
+- **刪除聯絡人**：`super_admin` 可刪除所有聯絡人；上傳者可刪除自己上傳的聯絡人
+- **新增聯絡人修正**：修正照片未儲存（`Uint8Array` → `Blob`）、互動紀錄未寫入的問題
+- **CC / BCC 多收件人**：寄信支援 CC、BCC，以逗號分隔
+- **Lightbox 縮放**：聯絡人名片圖片支援滾輪縮放、拖曳平移、雙指捏合
+- 版本 1.5.0 → 1.5.1
+
 ## v1.5.0 — /meet 行程排程指令（Telegram + Teams）（2026-03-19）
 
 ### 變更項目
