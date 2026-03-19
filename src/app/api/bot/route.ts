@@ -251,7 +251,23 @@ async function handlePhoto(
     await sendMessage(chatId, '⏳ 處理中，請稍候...')
     try {
       const imgBuffer = await downloadTelegramPhoto(photo.file_id)
-      const compressed = await processCardImage(imgBuffer)
+      let compressed = await processCardImage(imgBuffer)
+
+      // OCR first to get rotation hint
+      const { data: existing } = await supabase
+        .from('contacts')
+        .select('name, company, job_title, email, phone')
+        .eq('id', contactId)
+        .single()
+
+      const cardData = await analyzeBusinessCard(compressed, user.ai_model_id)
+
+      // Rotate if Gemini detected non-zero rotation
+      if (cardData.rotation && cardData.rotation !== 0) {
+        const sharp = (await import('sharp')).default
+        compressed = await sharp(compressed).rotate(cardData.rotation).jpeg({ quality: 85 }).toBuffer()
+      }
+
       const filename = await generateCardFilename()
       const storagePath = `cards/back_${filename}`
 
@@ -262,14 +278,6 @@ async function handlePhoto(
 
       const { data: publicUrlData } = supabase.storage.from('cards').getPublicUrl(storagePath)
       const backUrl = publicUrlData.publicUrl
-
-      const { data: existing } = await supabase
-        .from('contacts')
-        .select('name, company, job_title, email, phone')
-        .eq('id', contactId)
-        .single()
-
-      const cardData = await analyzeBusinessCard(compressed, user.ai_model_id)
 
       const updates: Record<string, string> = { card_img_back_url: backUrl }
       if (existing) {
@@ -304,7 +312,16 @@ async function handlePhoto(
   await sendMessage(chatId, '⏳ 處理中，請稍候...')
   try {
     const imgBuffer = await downloadTelegramPhoto(photo.file_id)
-    const compressed = await processCardImage(imgBuffer)
+    let compressed = await processCardImage(imgBuffer)
+
+    // OCR first to get rotation hint, then rotate before uploading
+    const cardData = await analyzeBusinessCard(compressed, user.ai_model_id)
+
+    if (cardData.rotation && cardData.rotation !== 0) {
+      const sharp = (await import('sharp')).default
+      compressed = await sharp(compressed).rotate(cardData.rotation).jpeg({ quality: 85 }).toBuffer()
+    }
+
     const filename = await generateCardFilename()
     const storagePath = `cards/${filename}`
 
@@ -315,8 +332,6 @@ async function handlePhoto(
 
     const { data: publicUrlData } = supabase.storage.from('cards').getPublicUrl(storagePath)
     const cardImgUrl = publicUrlData.publicUrl
-
-    const cardData = await analyzeBusinessCard(compressed, user.ai_model_id)
 
     // If no name detected, save as failed scan and notify user
     if (!cardData.name) {

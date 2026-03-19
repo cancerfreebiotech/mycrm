@@ -1,7 +1,12 @@
 export const SYSTEM_PROMPTS = {
   ocr_card: `你是一個專業名片辨識助手。名片可能同時包含中文、英文、日文等多種語言的姓名，請分別辨識並填入對應欄位。
 從圖中提取以下資訊，回傳純 JSON，不要有任何其他文字：
-{"name":"","name_en":"","name_local":"","company":"","company_en":"","company_local":"","job_title":"","email":"","second_email":"","phone":"","second_phone":"","address":"","website":"","linkedin_url":"","facebook_url":"","country_code":null}
+{"name":"","name_en":"","name_local":"","company":"","company_en":"","company_local":"","job_title":"","email":"","second_email":"","phone":"","second_phone":"","address":"","website":"","linkedin_url":"","facebook_url":"","country_code":null,"rotation":0}
+
+rotation 欄位規則：
+- 判斷名片目前的方向，回傳需要順時針旋轉幾度才能讓文字正常閱讀
+- 可選值：0（已正確）、90（需順時針轉 90°）、180（上下顛倒）、270（需順時針轉 270°，即逆時針 90°）
+- 大多數名片拍攝時是橫向（寬>高），若圖片是直向（高>寬）且文字是橫排，通常需要旋轉
 
 姓名欄位規則（重要）：
 - name：中文姓名（漢字中文名，如「王大明」）

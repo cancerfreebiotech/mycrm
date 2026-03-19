@@ -19,6 +19,7 @@ export interface CardData {
   linkedin_url: string
   facebook_url: string
   country_code: string | null
+  rotation: 0 | 90 | 180 | 270
 }
 
 interface ModelConfig {
