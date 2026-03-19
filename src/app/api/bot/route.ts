@@ -986,18 +986,18 @@ async function handleText(
     return
   }
 
-  // ── /meet /m ───────────────────────────────────────────────────────────────
-  const meetMatch = text.match(/^\/(?:meet|m)(?:@\S+)?\s*([\s\S]*)$/i)
-  if (meetMatch) {
-    await handleMeet(chatId, user, meetMatch[1].trim())
-    return
-  }
-
-  // ── /met ───────────────────────────────────────────────────────────────────
+  // ── /met (must be before /meet to avoid /m catching /met) ─────────────────
   const metMatch = cmd.match(/^\/met\s+(\d+)\s+([\s\S]+)/)
   if (metMatch) {
     const count = Math.min(parseInt(metMatch[1], 10), 20)
     await handleMet(chatId, user, count, metMatch[2].trim())
+    return
+  }
+
+  // ── /meet /m ───────────────────────────────────────────────────────────────
+  const meetMatch = text.match(/^\/(?:meet|m)(?:@\S+)?\s*([\s\S]*)$/i)
+  if (meetMatch) {
+    await handleMeet(chatId, user, meetMatch[1].trim())
     return
   }
 
