@@ -699,10 +699,13 @@ async function handleMet(
   const supabase = createServiceClient()
   const nowIso = new Date().toISOString()
 
+  console.log('[bot] handleMet called:', { chatId, count, description })
   let parsed
   try {
     parsed = await parseMetCommand(description, nowIso, user.ai_model_id)
-  } catch {
+    console.log('[bot] parseMetCommand result:', parsed)
+  } catch (e) {
+    console.error('[bot] parseMetCommand error:', e)
     await sendMessage(chatId, '❌ AI 解析失敗，請再試一次')
     return
   }
@@ -989,6 +992,7 @@ async function handleText(
 
   // ── /met (must be before /meet to avoid /m catching /met) ─────────────────
   const metMatch = cmd.match(/^\/met\s+(\d+)\s+([\s\S]+)/)
+  console.log('[bot] /met check:', { cmd: cmd.slice(0, 60), matched: !!metMatch })
   if (metMatch) {
     const count = Math.min(parseInt(metMatch[1], 10), 20)
     await handleMet(chatId, user, count, metMatch[2].trim())
