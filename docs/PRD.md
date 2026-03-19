@@ -2285,3 +2285,287 @@ Header 顯示排序圖示（使用已有的 `lucide-react`）：
 - 實際欄位為 `card_img_url`（非 `url`），相關查詢、插入、顯示全數修正
 - 新增 `storage_path` 欄位用於 Storage 路徑記錄
 
+
+---
+
+## 二十六、v1.6 — Newsletter 功能
+
+### 26.1 架構概覽
+
+```
+Super Admin 建立 Campaign
+  → 選收件人（Tag 聯集 + 手動勾選）- 退訂者 - 黑名單
+  → 編輯內容（富文字編輯器）
+  → 設定排程（開始時間、每天幾封、幾點寄）
+  → 系統分批寄送（pg_cron 觸發 Supabase Edge Function）
+  → SendGrid API 發送
+  → SendGrid Event Webhook 回傳事件
+  → 同步開信/點擊/退訂到資料庫
+  → 每個收件人寫一筆 interaction_log
+```
+
+---
+
+### 26.2 資料表
+
+#### `newsletter_campaigns`
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | 主鍵 |
+| title | text (NOT NULL) | Campaign 名稱（內部用） |
+| subject | text (NOT NULL) | 郵件主旨 |
+| preview_text | text | 預覽文字（inbox 顯示的摘要） |
+| content_html | text | 郵件內文 HTML |
+| content_json | jsonb | 編輯器原始資料（供再編輯） |
+| tag_ids | uuid[] | 選取的 Tag ID 陣列 |
+| extra_contact_ids | uuid[] | 手動加選的聯絡人 ID 陣列 |
+| status | text (default 'draft') | `draft` / `scheduled` / `sending` / `paused` / `sent` |
+| scheduled_at | timestamptz | 開始寄送時間 |
+| daily_limit | int (default 500) | 每天寄幾封 |
+| send_hour | int (default 9) | 每天幾點寄（UTC+8，0-23） |
+| total_recipients | int | 預計寄送總人數 |
+| sent_count | int (default 0) | 已寄送數量 |
+| created_by | uuid (FK → users.id) | 建立者 |
+| created_at | timestamptz (default now()) | 建立時間 |
+| sent_at | timestamptz | 全部寄完時間 |
+
+#### `newsletter_recipients`
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | 主鍵 |
+| campaign_id | uuid (FK → newsletter_campaigns.id, ON DELETE CASCADE) | 所屬 Campaign |
+| contact_id | uuid (FK → contacts.id) | 聯絡人 |
+| email | text (NOT NULL) | 寄送 email（快照，避免聯絡人 email 變更影響） |
+| status | text (default 'pending') | `pending` / `sent` / `failed` |
+| sent_at | timestamptz | 實際寄出時間 |
+| opened_at | timestamptz | 開信時間（SendGrid webhook 更新） |
+| clicked_at | timestamptz | 首次點擊時間 |
+| sendgrid_message_id | text | SendGrid message ID（用於對應 webhook 事件） |
+
+#### `newsletter_unsubscribes`
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | 主鍵 |
+| email | text (UNIQUE, NOT NULL) | 退訂 email |
+| contact_id | uuid (FK → contacts.id, nullable) | 對應聯絡人（若有） |
+| reason | text (nullable) | 退訂原因（退訂頁面選填） |
+| unsubscribed_at | timestamptz (default now()) | 退訂時間 |
+| source | text | `webhook`（SendGrid 回傳）/ `manual`（手動加入）|
+
+#### `newsletter_blacklist`
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | 主鍵 |
+| email | text (UNIQUE, NOT NULL) | 黑名單 email |
+| contact_id | uuid (FK → contacts.id, nullable) | 對應聯絡人 |
+| reason | text | 原因（hard bounce / spam / 手動）|
+| created_by | uuid (FK → users.id, nullable) | 手動加入者 |
+| created_at | timestamptz (default now()) | 建立時間 |
+
+---
+
+### 26.3 收件人邏輯
+
+**計算公式：**
+```
+收件人 = (選取 Tag 的聯絡人 ∪ 手動勾選的聯絡人)
+         - newsletter_unsubscribes
+         - newsletter_blacklist
+         - email 為空的聯絡人
+```
+
+**寄送前鎖定名單：**
+Campaign 確認排程時，將計算後的收件人快照寫入 `newsletter_recipients` 表（含 email 快照），之後名單不再變動。
+
+---
+
+### 26.4 編輯器
+
+使用 **TipTap**（open source 富文字編輯器，Next.js 友好）：
+- 支援：標題、粗體、斜體、連結、圖片插入、無序清單、有序清單、分隔線
+- 支援插入變數：`{{name}}`、`{{company}}`、`{{job_title}}`（寄送時自動替換）
+- 預覽模式：可即時預覽渲染後的 HTML
+- 支援上傳附件（至 Supabase Storage `newsletter-attachments` bucket）
+- 底部自動插入退訂連結（不可移除）：`取消訂閱 | Unsubscribe`
+
+---
+
+### 26.5 分批寄送機制
+
+**排程設定：**
+- 開始日期時間（台灣時間 UTC+8）
+- 每天寄幾封（1–500，預設 500）
+- 每天幾點寄（0–23，預設 9）
+- 系統自動顯示「預計 X 天完成，預計完成日：YYYY-MM-DD」
+
+**觸發流程：**
+1. pg_cron 每天指定時間觸發
+2. 呼叫 Supabase Edge Function `send-newsletter`
+3. Edge Function 查詢當天需要寄送的 campaign（status=`sending` 或到達 `scheduled_at`）
+4. 每個 campaign 取 `daily_limit` 筆 `pending` 的 recipients
+5. 呼叫 SendGrid API 逐一發送
+6. 更新 `newsletter_recipients.status = 'sent'`、`sent_at`
+7. 更新 `newsletter_campaigns.sent_count`
+8. 若全部寄完：status = `sent`、`sent_at = now()`
+
+**暫停 / 繼續：**
+- Super admin 可隨時將 status 改為 `paused`，pg_cron 跳過 `paused` 的 campaign
+- 繼續時改回 `sending`，從剩餘 `pending` 的 recipients 繼續
+
+---
+
+### 26.6 SendGrid 設定
+
+**API 呼叫：**
+- 使用 SendGrid v3 API：`POST https://api.sendgrid.com/v3/mail/send`
+- 每封信帶入自訂 header `X-Campaign-Id` 和 `X-Recipient-Id`（供 webhook 對應）
+- 開啟 Open Tracking 和 Click Tracking
+
+**Event Webhook（`/api/sendgrid/webhook`）：**
+- 接收事件：`open`、`click`、`unsubscribe`、`bounce`、`spam_report`
+- 驗證 SendGrid Webhook Signature（`SENDGRID_WEBHOOK_SECRET`）
+- 事件處理：
+  - `open`：更新 `newsletter_recipients.opened_at`
+  - `click`：更新 `newsletter_recipients.clicked_at`
+  - `unsubscribe`：加入 `newsletter_unsubscribes`，同步 contact 標記
+  - `bounce`（hard）：加入 `newsletter_blacklist`，reason = `hard_bounce`
+  - `spam_report`：加入 `newsletter_blacklist`，reason = `spam`
+
+---
+
+### 26.7 退訂頁面（`/unsubscribe`）
+
+- 公開頁面，不需登入
+- URL 格式：`/unsubscribe?token={jwt_token}`（token 含 email + campaign_id，有效期 90 天）
+- 頁面顯示：「您即將取消訂閱來自 cancerfree.io 的電子報」
+- 選填退訂原因（radio）：太多信 / 內容不相關 / 不記得訂閱 / 其他
+- 可選「降低寄送頻率」替代退訂（記錄偏好，暫不實作限流）
+- 確認退訂後：加入 `newsletter_unsubscribes`，顯示「已成功取消訂閱」
+
+---
+
+### 26.8 互動紀錄
+
+每封寄出的 newsletter，對應聯絡人寫一筆 `interaction_logs`：
+- `type` = `email`
+- `email_subject` = newsletter 主旨
+- `content` = `寄送 Newsletter：{campaign title}`
+- `created_by` = campaign 建立者
+
+---
+
+### 26.9 網頁管理頁面（`/admin/newsletter`，僅 super_admin）
+
+**Campaign 列表**
+- 列出所有 campaigns（標題、狀態 badge、收件人數、已寄/總數進度條、建立時間）
+- 可複製 campaign（複製內容和設定，狀態重置為 draft）
+- 可刪除 draft 狀態的 campaign
+
+**新增 / 編輯 Campaign**
+四個步驟的 Wizard：
+
+1. **基本設定**：Campaign 名稱、郵件主旨、預覽文字
+2. **編輯內容**：TipTap 富文字編輯器 + 預覽模式 + 附件上傳 + 寄送測試信（填入 email 立即寄一封）
+3. **選擇收件人**：Tag 多選 + 手動勾選聯絡人 + 顯示「預計寄送 X 人」+ 收件人預覽列表（可確認名單）
+4. **排程設定**：開始時間、每天封數、每天幾點 + 顯示預計完成日 + 確認送出
+
+**Campaign 詳情頁**
+- 基本資訊 + 狀態
+- 進度：已寄 X / 總計 Y（進度條）
+- 統計：開信率、點擊率（從 newsletter_recipients 計算）
+- 暫停 / 繼續按鈕（status = sending / paused 時顯示）
+- 收件人列表（可搜尋，顯示每人狀態：待寄/已寄/已開信/已點擊）
+
+**退訂管理**
+- 列出 `newsletter_unsubscribes`（email、退訂原因、時間）
+- 可手動移除退訂（重新加回寄送名單）
+
+**黑名單管理**
+- 列出 `newsletter_blacklist`
+- 可手動新增 email 到黑名單
+- 可手動移除黑名單
+
+---
+
+### 26.10 環境變數新增
+
+```env
+SENDGRID_API_KEY=
+SENDGRID_FROM_EMAIL=
+SENDGRID_FROM_NAME=
+SENDGRID_WEBHOOK_SECRET=
+NEXT_PUBLIC_APP_URL=  # 已有，用於退訂連結
+```
+
+---
+
+### 26.11 Migration SQL
+
+```sql
+-- Newsletter campaign
+create table if not exists newsletter_campaigns (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  subject text not null,
+  preview_text text,
+  content_html text,
+  content_json jsonb,
+  tag_ids uuid[] default '{}',
+  extra_contact_ids uuid[] default '{}',
+  status text not null default 'draft',
+  scheduled_at timestamptz,
+  daily_limit int not null default 500,
+  send_hour int not null default 9,
+  total_recipients int default 0,
+  sent_count int default 0,
+  created_by uuid references users(id),
+  created_at timestamptz default now(),
+  sent_at timestamptz
+);
+
+-- Newsletter recipients（快照）
+create table if not exists newsletter_recipients (
+  id uuid primary key default gen_random_uuid(),
+  campaign_id uuid references newsletter_campaigns(id) on delete cascade,
+  contact_id uuid references contacts(id),
+  email text not null,
+  status text not null default 'pending',
+  sent_at timestamptz,
+  opened_at timestamptz,
+  clicked_at timestamptz,
+  sendgrid_message_id text
+);
+
+-- 退訂名單
+create table if not exists newsletter_unsubscribes (
+  id uuid primary key default gen_random_uuid(),
+  email text unique not null,
+  contact_id uuid references contacts(id),
+  reason text,
+  unsubscribed_at timestamptz default now(),
+  source text not null default 'webhook'
+);
+
+-- 黑名單
+create table if not exists newsletter_blacklist (
+  id uuid primary key default gen_random_uuid(),
+  email text unique not null,
+  contact_id uuid references contacts(id),
+  reason text,
+  created_by uuid references users(id),
+  created_at timestamptz default now()
+);
+```
+
+---
+
+## 二十七、v1.6 開發任務清單
+
+- [ ] **Task 76** `[修改]` — 執行 Migration SQL（newsletter 相關四張表）
+- [ ] **Task 77** `[新增]` — 安裝 TipTap，建立富文字編輯器元件（變數插入、預覽模式、附件上傳）
+- [ ] **Task 78** `[新增]` — 新增 `/api/sendgrid/webhook` route（接收並處理 SendGrid 事件）
+- [ ] **Task 79** `[新增]` — 新增 `/unsubscribe` 公開頁面（退訂流程、原因選擇）
+- [ ] **Task 80** `[新增]` — Supabase Edge Function `send-newsletter`（分批寄送邏輯）
+- [ ] **Task 81** `[修改]` — 設定 pg_cron 每天依 send_hour 觸發 `send-newsletter`
+- [ ] **Task 82** `[新增]` — 新增 Newsletter 管理頁 `/admin/newsletter`（Campaign 列表、Wizard 新增/編輯、詳情、退訂管理、黑名單）
+- [ ] **Task 83** `[修改]` — 更新 Dashboard Layout（Sidebar 新增 Newsletter 項目，僅 super_admin）

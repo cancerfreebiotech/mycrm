@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## v1.6 — Newsletter 功能（待實作）
+
+### 變更項目
+- **新增 Newsletter 管理頁 `/admin/newsletter`**（僅 super_admin）：Campaign Wizard（基本設定/編輯內容/收件人/排程）、列表、詳情、複製、暫停/繼續
+- **SendGrid Email API 整合**：分批寄送（每天上限 500 封、自訂時間）、Open/Click Tracking
+- **SendGrid Event Webhook**：同步開信、點擊、退訂、bounce、spam 事件到資料庫
+- **TipTap 富文字編輯器**：支援變數（`{{name}}`）、附件上傳、預覽模式、測試信
+- **收件人邏輯**：Tag 聯集 + 手動勾選，自動排除退訂者和黑名單，寄送前鎖定名單快照
+- **退訂頁面 `/unsubscribe`**：公開頁面，JWT token 驗證，選填退訂原因
+- **黑名單管理**：hard bounce 和 spam 自動加入，可手動管理
+- **互動紀錄**：每位收件人各寫一筆 interaction_log（type=email）
+- **Supabase Edge Function `send-newsletter`**：pg_cron 每天觸發分批寄送
+- **新增資料表**：`newsletter_campaigns`、`newsletter_recipients`、`newsletter_unsubscribes`、`newsletter_blacklist`
+- **新增環境變數**：`SENDGRID_API_KEY`、`SENDGRID_FROM_EMAIL`、`SENDGRID_FROM_NAME`、`SENDGRID_WEBHOOK_SECRET`
+
+---
+
+
 ## v1.5.5 — AI 生成信件參考現有內文、修正語言偵測（2026-03-19）
 
 ### 變更項目
