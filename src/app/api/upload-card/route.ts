@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
     const { error: insertErr } = await supabase.from('contact_cards').insert({
       contact_id: contactId,
       url: urlData.publicUrl,
+      storage_path: filename,
       label,
     })
     if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 })

@@ -202,23 +202,28 @@ export default function NewContactPage() {
       }
 
       // Upload images via server API (uses service client to bypass RLS)
+      // If any upload fails, delete the contact and abort
       if (files.length > 0) {
-        const uploadResults = await Promise.all(
-          files.map(async (file, i) => {
-            const base64 = await compressImage(file)
-            const res = await fetch('/api/upload-card', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ contactId: inserted.id, base64, index: i }),
+        try {
+          await Promise.all(
+            files.map(async (file, i) => {
+              const base64 = await compressImage(file)
+              const res = await fetch('/api/upload-card', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contactId: inserted.id, base64, index: i }),
+              })
+              if (!res.ok) {
+                const err = await res.json().catch(() => ({}))
+                throw new Error(`照片 ${i + 1} 上傳失敗：${err.error ?? res.status}`)
+              }
             })
-            if (!res.ok) {
-              const err = await res.json().catch(() => ({}))
-              throw new Error(`照片 ${i + 1} 上傳失敗：${err.error ?? res.status}`)
-            }
-            return res.json()
-          })
-        )
-        console.log('uploaded cards:', uploadResults.length)
+          )
+        } catch (uploadErr) {
+          // Rollback: delete the contact (cascades to contact_cards, tags, logs)
+          await supabase.from('contacts').delete().eq('id', inserted.id)
+          throw uploadErr
+        }
       }
 
       // Interaction log
