@@ -1100,13 +1100,14 @@ export async function POST(req: NextRequest) {
 
           await answerCallbackQuery(callbackQueryId, '✅ 已成功存檔！')
 
-          const contact = pending.data
+          // Strip rotation field (OCR-only, no contacts column)
+          const { rotation: _r, ...contactFields } = pending.data as Record<string, unknown>
           const { data: inserted, error } = await supabase
             .from('contacts')
-            .insert({ ...contact, created_by: user.id })
+            .insert({ ...contactFields, created_by: user.id })
             .select('id')
             .single()
-          if (error || !inserted) throw error
+          if (error || !inserted) throw new Error(error?.message ?? '存檔失敗')
 
           await supabase.from('interaction_logs').insert({
             contact_id: inserted.id,
@@ -1565,7 +1566,9 @@ export async function POST(req: NextRequest) {
         }
 
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
+        const msg = err instanceof Error
+          ? err.message
+          : (typeof err === 'object' && err !== null ? JSON.stringify(err) : String(err))
         console.error('[bot] callback error:', msg)
         await answerCallbackQuery(callbackQueryId, '❌ 操作失敗')
         await sendMessage(from.id, `❌ 處理失敗：${msg}`)

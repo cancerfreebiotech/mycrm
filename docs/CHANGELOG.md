@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v1.5.3 — 修正 Bot 確認存檔失敗（2026-03-19）
+
+### 變更項目
+- 修正按「✅ 確認存檔」時失敗的根本原因：`pending.data` 含有 `rotation` 欄位，但 contacts 表無此欄位，導致 insert 失敗
+- 修正 `throw error` 拋出非標準 PostgrestError 導致錯誤訊息顯示 `[object Object]`
+- 統一 callback catch block 的錯誤序列化方式
+
 ## v1.5.2 — Bot 錯誤診斷日誌強化（2026-03-19）
 
 ### 變更項目
