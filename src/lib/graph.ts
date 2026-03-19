@@ -1,3 +1,40 @@
+export interface CalendarEventParams {
+  accessToken: string
+  title: string
+  startIso: string
+  endIso: string
+  attendeeEmails?: string[]
+  location?: string
+}
+
+export async function createCalendarEvent(params: CalendarEventParams): Promise<string> {
+  const { accessToken, title, startIso, endIso, attendeeEmails = [], location } = params
+  const event: Record<string, unknown> = {
+    subject: title,
+    start: { dateTime: startIso, timeZone: 'UTC' },
+    end: { dateTime: endIso, timeZone: 'UTC' },
+  }
+  if (location) event.location = { displayName: location }
+  if (attendeeEmails.length > 0) {
+    event.attendees = attendeeEmails.map(email => ({
+      emailAddress: { address: email },
+      type: 'required',
+    }))
+  }
+
+  const res = await fetch('https://graph.microsoft.com/v1.0/me/events', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(event),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message ?? `Graph API error: ${res.status}`)
+  }
+  const data = await res.json()
+  return (data.webLink as string) ?? ''
+}
+
 interface Attachment {
   name: string
   contentType: string

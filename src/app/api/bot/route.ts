@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
-import { analyzeBusinessCard, generateEmailContent, parseTaskCommand } from '@/lib/gemini'
+import { analyzeBusinessCard, generateEmailContent, parseTaskCommand, parseMeetingCommand } from '@/lib/gemini'
 import { processCardImage, generateCardFilename } from '@/lib/imageProcessor'
 import { checkDuplicates } from '@/lib/duplicate'
-import { sendMail } from '@/lib/graph'
+import { sendMail, createCalendarEvent } from '@/lib/graph'
 import { sendTeamsTaskNotification, sendTeamsMessage } from '@/lib/teams'
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
@@ -162,6 +162,114 @@ async function searchContacts(query: string) {
   return data ?? []
 }
 
+// ── Meeting helpers ────────────────────────────────────────────────────────────
+
+function formatTaipeiRange(startIso: string, durationMinutes: number): string {
+  const start = new Date(startIso)
+  const end = new Date(start.getTime() + durationMinutes * 60000)
+  const fmt = (d: Date) => d.toLocaleString('zh-TW', {
+    timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric',
+    weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
+  })
+  const endTime = end.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false })
+  return `${fmt(start)} – ${endTime}（台北）`
+}
+
+function durationLabel(minutes: number): string {
+  if (minutes === 30) return '30 分鐘'
+  if (minutes === 60) return '1 小時'
+  if (minutes === 90) return '1.5 小時'
+  return '2 小時'
+}
+
+async function handleMeet(
+  chatId: number,
+  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null },
+  text: string,
+) {
+  const supabase = createServiceClient()
+  if (!text.trim()) {
+    await sendMessage(chatId, '請提供會議資訊，例如：\n<code>/meet 3/25 下午1點 參訪 九州大學實驗室</code>\n<code>/meet 明天下午3點 和 Luna 開產品會議</code>')
+    return
+  }
+
+  await sendMessage(chatId, '⏳ AI 解析中...')
+
+  let parsed
+  try {
+    parsed = await parseMeetingCommand(text, new Date().toISOString(), user.ai_model_id)
+  } catch {
+    await sendMessage(chatId, '❌ AI 解析失敗，請確認格式後再試。')
+    return
+  }
+
+  // Resolve attendees (org members only)
+  const attendeeEmails: string[] = []
+  const attendeeNames: string[] = []
+  if (parsed.attendees.length > 0) {
+    const { data: members } = await supabase
+      .from('users')
+      .select('id, email, display_name')
+      .or(parsed.attendees.map((a: string) => `display_name.ilike.%${a}%,email.ilike.%${a}%`).join(','))
+    for (const m of members ?? []) {
+      if (m.email !== user.email) {
+        attendeeEmails.push(m.email)
+        attendeeNames.push(m.display_name || m.email)
+      }
+    }
+  }
+
+  const attendeeIds: string[] = []
+  if (attendeeNames.length > 0) {
+    const { data: members } = await supabase
+      .from('users')
+      .select('id, email')
+      .in('email', attendeeEmails)
+    attendeeIds.push(...(members ?? []).map((m: { id: string }) => m.id))
+  }
+
+  // Insert draft
+  const endIso = new Date(new Date(parsed.start_iso).getTime() + parsed.duration_minutes * 60000).toISOString()
+  const { data: draft, error: draftErr } = await supabase
+    .from('meeting_drafts')
+    .insert({
+      created_by: user.id,
+      title: parsed.title,
+      start_at: parsed.start_iso,
+      duration_minutes: parsed.duration_minutes,
+      attendee_ids: attendeeIds,
+      location: parsed.location,
+      raw_text: text,
+    })
+    .select('id')
+    .single()
+
+  if (draftErr || !draft) {
+    await sendMessage(chatId, '❌ 暫存行程失敗，請稍後再試。')
+    return
+  }
+
+  const timeLabel = formatTaipeiRange(parsed.start_iso, parsed.duration_minutes)
+  const allAttendees = ['你', ...attendeeNames]
+  const confirmText =
+    `📅 <b>確認建立行程</b>\n\n` +
+    `<b>標題：</b>${parsed.title}\n` +
+    `<b>時間：</b>${timeLabel}\n` +
+    `<b>時長：</b>${durationLabel(parsed.duration_minutes)}\n` +
+    `<b>參與者：</b>${allAttendees.join('、')}\n` +
+    (parsed.location ? `<b>地點：</b>${parsed.location}\n` : '') +
+    `\n請確認後按下方按鈕。`
+
+  await sendMessage(chatId, confirmText, {
+    reply_markup: {
+      inline_keyboard: [[
+        { text: '✅ 確認建立', callback_data: `meet_confirm_${draft.id}` },
+        { text: '❌ 取消', callback_data: `meet_cancel_${draft.id}` },
+      ]],
+    },
+  })
+}
+
 // ── Handle /help ──────────────────────────────────────────────────────────────
 
 async function handleHelp(chatId: number) {
@@ -173,6 +281,7 @@ async function handleHelp(chatId: number) {
     `/email　/e — 發送郵件給聯絡人\n` +
     `/add_back @姓名　/ab @姓名 — 補充名片反面\n` +
     `/work [描述]　/w — AI 解析任務，指派給他人或提醒自己\n` +
+    `/meet [描述]　/m — AI 安排會議行程，確認後建立 Outlook 邀請\n` +
     `/tasks　/t — 列出我的待處理任務\n` +
     `/user　/u — 列出組織成員\n` +
     `/AI — 顯示目前使用的 AI 模型\n` +
@@ -792,6 +901,13 @@ async function handleText(
     return
   }
 
+  // ── /meet /m ───────────────────────────────────────────────────────────────
+  const meetMatch = text.match(/^\/(?:meet|m)(?:@\S+)?\s*([\s\S]*)$/i)
+  if (meetMatch) {
+    await handleMeet(chatId, user, meetMatch[1].trim())
+    return
+  }
+
   // ── /tasks /t ──────────────────────────────────────────────────────────────
   if (cmd === '/tasks' || cmd === '/t') {
     await handleTasks(chatId, user)
@@ -998,6 +1114,65 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId, '已取消')
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await sendMessage(from.id, '已取消，名片未存檔。')
+        }
+
+        // ── Meet confirm ──────────────────────────────────────────────────────
+        else if (data?.startsWith('meet_confirm_')) {
+          const draftId = data.replace('meet_confirm_', '')
+          const { data: draft } = await supabase
+            .from('meeting_drafts')
+            .select('*')
+            .eq('id', draftId)
+            .single()
+
+          if (!draft) {
+            await answerCallbackQuery(callbackQueryId, '已過期或不存在')
+            await editMessageReplyMarkup(message.chat.id, message.message_id)
+            return NextResponse.json({ ok: true })
+          }
+
+          if (!user.provider_token) {
+            await answerCallbackQuery(callbackQueryId, '❌ 無 Microsoft 存取權限')
+            await sendMessage(from.id, '⚠️ 無法建立行程：找不到 Microsoft 存取憑證，請至 myCRM 網頁重新登入。')
+            return NextResponse.json({ ok: true })
+          }
+
+          try {
+            const endIso = new Date(new Date(draft.start_at).getTime() + draft.duration_minutes * 60000).toISOString()
+            // Resolve attendee emails
+            const attendeeEmails: string[] = []
+            if (draft.attendee_ids?.length > 0) {
+              const { data: members } = await supabase
+                .from('users').select('email').in('id', draft.attendee_ids)
+              attendeeEmails.push(...(members ?? []).map((m: { email: string }) => m.email))
+            }
+            const webLink = await createCalendarEvent({
+              accessToken: user.provider_token,
+              title: draft.title,
+              startIso: draft.start_at,
+              endIso,
+              attendeeEmails,
+              location: draft.location ?? undefined,
+            })
+            await supabase.from('meeting_drafts').delete().eq('id', draftId)
+            await answerCallbackQuery(callbackQueryId, '✅ 行程已建立！')
+            await editMessageReplyMarkup(message.chat.id, message.message_id)
+            const timeLabel = formatTaipeiRange(draft.start_at, draft.duration_minutes)
+            const linkText = webLink ? `\n\n🔗 <a href="${webLink}">在 Outlook 開啟</a>` : ''
+            await sendMessage(from.id, `✅ <b>行程已建立！</b>\n\n📅 ${draft.title}\n🕐 ${timeLabel}${linkText}`)
+          } catch (e) {
+            await answerCallbackQuery(callbackQueryId, '❌ 建立失敗')
+            await sendMessage(from.id, `❌ 建立行程失敗：${e instanceof Error ? e.message : '請稍後再試'}`)
+          }
+        }
+
+        // ── Meet cancel ───────────────────────────────────────────────────────
+        else if (data?.startsWith('meet_cancel_')) {
+          const draftId = data.replace('meet_cancel_', '')
+          await supabase.from('meeting_drafts').delete().eq('id', draftId)
+          await answerCallbackQuery(callbackQueryId, '已取消')
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, '已取消，行程未建立。')
         }
 
         // ── Select contact for note ───────────────────────────────────────────

@@ -34,6 +34,61 @@ export interface TeamsTaskCard {
   contact_company?: string
 }
 
+export interface TeamsMeetingDraftCard {
+  draft_id: string
+  title: string
+  time_label: string   // e.g. "2026-03-25（三）13:00 – 14:00 (台北)"
+  duration_label: string
+  attendees_label: string
+  location: string | null
+}
+
+export async function sendTeamsMeetingConfirmCard(
+  serviceUrl: string,
+  conversationId: string,
+  card: TeamsMeetingDraftCard,
+): Promise<void> {
+  if (!TEAMS_BOT_APP_ID || !TEAMS_BOT_APP_SECRET) return
+  const token = await getBotToken()
+
+  const facts = [
+    { title: '標題', value: card.title },
+    { title: '時間', value: card.time_label },
+    { title: '時長', value: card.duration_label },
+    { title: '參與者', value: card.attendees_label },
+    ...(card.location ? [{ title: '地點', value: card.location }] : []),
+  ]
+
+  const body = {
+    type: 'message',
+    attachments: [{
+      contentType: 'application/vnd.microsoft.card.adaptive',
+      content: {
+        type: 'AdaptiveCard',
+        version: '1.4',
+        body: [
+          { type: 'TextBlock', text: '📅 確認建立行程', weight: 'Bolder', size: 'Medium' },
+          { type: 'FactSet', facts },
+        ],
+        actions: [
+          { type: 'Action.Submit', title: '✅ 確認建立', data: { action: 'meet_confirm', draft_id: card.draft_id } },
+          { type: 'Action.Submit', title: '❌ 取消', data: { action: 'meet_cancel', draft_id: card.draft_id } },
+        ],
+      },
+    }],
+  }
+
+  const endpoint = serviceUrl.endsWith('/')
+    ? `${serviceUrl}v3/conversations/${conversationId}/activities`
+    : `${serviceUrl}/v3/conversations/${conversationId}/activities`
+
+  await fetch(endpoint, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
 // Send a plain text message to a Teams conversation
 export async function sendTeamsMessage(
   serviceUrl: string,

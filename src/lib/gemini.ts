@@ -104,6 +104,31 @@ export async function parseTaskCommand(
   return JSON.parse(raw) as TaskParsed
 }
 
+export interface MeetingParsed {
+  title: string
+  start_iso: string
+  duration_minutes: 30 | 60 | 90 | 120
+  attendees: string[]
+  location: string | null
+}
+
+export async function parseMeetingCommand(
+  text: string,
+  nowIso: string,
+  aiModelId: string | null = null
+): Promise<MeetingParsed> {
+  const { modelId, apiKey } = await resolveModelConfig(aiModelId)
+  const genAI = new GoogleGenerativeAI(apiKey)
+  const geminiModel = genAI.getGenerativeModel({ model: modelId })
+
+  const basePrompt = await getPrompt('meeting_parse')
+  const prompt = `現在時間（UTC）：${nowIso}\n${basePrompt}\n\n會議描述：${text}`
+
+  const result = await geminiModel.generateContent(prompt)
+  const raw = result.response.text().trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
+  return JSON.parse(raw) as MeetingParsed
+}
+
 export async function generateEmailContent(
   description: string,
   templateContent?: string,

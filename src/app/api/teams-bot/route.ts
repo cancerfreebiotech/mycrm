@@ -11,6 +11,9 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { parseMeetingCommand } from '@/lib/gemini'
+import { createCalendarEvent } from '@/lib/graph'
+import { sendTeamsMeetingConfirmCard } from '@/lib/teams'
 
 async function verifyTeamsRequest(req: NextRequest): Promise<boolean> {
   const appId = process.env.TEAMS_BOT_APP_ID
@@ -126,6 +129,24 @@ async function sendToTeams(serviceUrl: string, conversationId: string, text: str
   } catch (e) {
     console.error('[teams-bot] sendToTeams exception:', e)
   }
+}
+
+function formatTaipeiRange(startIso: string, durationMinutes: number): string {
+  const start = new Date(startIso)
+  const end = new Date(start.getTime() + durationMinutes * 60000)
+  const fmt = (d: Date) => d.toLocaleString('zh-TW', {
+    timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric',
+    weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
+  })
+  const endTime = end.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false })
+  return `${fmt(start)} – ${endTime}（台北）`
+}
+
+function durationLabel(minutes: number): string {
+  if (minutes === 30) return '30 分鐘'
+  if (minutes === 60) return '1 小時'
+  if (minutes === 90) return '1.5 小時'
+  return '2 小時'
 }
 
 async function linkUser(
@@ -274,6 +295,60 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ type: 'invokeResponse', value: { status: 200 } })
     }
 
+    if (action === 'meet_confirm' || action === 'meet_cancel') {
+      const draft_id = (value as Record<string, unknown>)?.draft_id as string
+        ?? (value as Record<string, Record<string, string>>)?.data?.draft_id
+        ?? (value as Record<string, Record<string, Record<string, string>>>)?.action?.data?.draft_id
+
+      let userRow = aadId
+        ? (await supabase.from('users').select('email, provider_token').eq('teams_user_id', aadId).single()).data
+        : null
+      if (!userRow && conversationId) {
+        userRow = (await supabase.from('users').select('email, provider_token').eq('teams_conversation_id', conversationId).single()).data
+      }
+
+      if (action === 'meet_cancel') {
+        if (draft_id) await supabase.from('meeting_drafts').delete().eq('id', draft_id)
+        if (conversationId && serviceUrl) await sendToTeams(serviceUrl, conversationId, '已取消，行程未建立。')
+        return NextResponse.json({ type: 'invokeResponse', value: { status: 200 } })
+      }
+
+      // meet_confirm
+      if (!draft_id) return NextResponse.json({ type: 'invokeResponse', value: { status: 200 } })
+      const { data: draft } = await supabase.from('meeting_drafts').select('*').eq('id', draft_id).single()
+      if (!draft) {
+        if (conversationId && serviceUrl) await sendToTeams(serviceUrl, conversationId, '⚠️ 行程草稿已過期。')
+        return NextResponse.json({ type: 'invokeResponse', value: { status: 200 } })
+      }
+      if (!userRow?.provider_token) {
+        if (conversationId && serviceUrl) await sendToTeams(serviceUrl, conversationId, '⚠️ 無法建立行程：請至 myCRM 網頁重新登入以取得 Microsoft 存取權限。')
+        return NextResponse.json({ type: 'invokeResponse', value: { status: 200 } })
+      }
+      try {
+        const endIso = new Date(new Date(draft.start_at).getTime() + draft.duration_minutes * 60000).toISOString()
+        const attendeeEmails: string[] = []
+        if (draft.attendee_ids?.length > 0) {
+          const { data: members } = await supabase.from('users').select('email').in('id', draft.attendee_ids)
+          attendeeEmails.push(...(members ?? []).map((m: { email: string }) => m.email))
+        }
+        const webLink = await createCalendarEvent({
+          accessToken: userRow.provider_token,
+          title: draft.title,
+          startIso: draft.start_at,
+          endIso,
+          attendeeEmails,
+          location: draft.location ?? undefined,
+        })
+        await supabase.from('meeting_drafts').delete().eq('id', draft_id)
+        const timeLabel = formatTaipeiRange(draft.start_at, draft.duration_minutes)
+        const msg = `✅ 行程已建立！\n📅 ${draft.title}\n🕐 ${timeLabel}${webLink ? `\n🔗 ${webLink}` : ''}`
+        if (conversationId && serviceUrl) await sendToTeams(serviceUrl, conversationId, msg)
+      } catch (e) {
+        if (conversationId && serviceUrl) await sendToTeams(serviceUrl, conversationId, `❌ 建立失敗：${e instanceof Error ? e.message : '請稍後再試'}`)
+      }
+      return NextResponse.json({ type: 'invokeResponse', value: { status: 200 } })
+    }
+
     // Catch-all: always return invokeResponse for invoke activities
     return NextResponse.json({ type: 'invokeResponse', value: { status: 200 } })
   }
@@ -295,9 +370,65 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const meetMatch = text.match(/^\/(?:meet|m)\s*([\s\S]*)$/i)
+    if (meetMatch) {
+      const meetText = meetMatch[1].trim()
+      if (!meetText) {
+        await sendToTeams(serviceUrl, conversationId, '請提供會議資訊，例如：\n/meet 3/25 下午1點 參訪 九州大學實驗室\n/meet 明天下午3點 和 Luna 開產品會議', body.id as string)
+      } else if (!userRow?.email) {
+        await sendToTeams(serviceUrl, conversationId, '⚠️ 帳號未綁定，無法建立行程。', body.id as string)
+      } else {
+        await sendToTeams(serviceUrl, conversationId, '⏳ AI 解析中...', body.id as string)
+        const { data: userData } = await supabase.from('users').select('id, ai_model_id').eq('email', userRow.email).single()
+        let parsed
+        try {
+          parsed = await parseMeetingCommand(meetText, new Date().toISOString(), userData?.ai_model_id ?? null)
+        } catch {
+          await sendToTeams(serviceUrl, conversationId, '❌ AI 解析失敗，請確認格式後再試。')
+          return NextResponse.json({ ok: true })
+        }
+        const attendeeEmails: string[] = []
+        const attendeeNames: string[] = []
+        const attendeeIds: string[] = []
+        if (parsed.attendees.length > 0) {
+          const { data: members } = await supabase.from('users').select('id, email, display_name')
+            .or(parsed.attendees.map((a: string) => `display_name.ilike.%${a}%,email.ilike.%${a}%`).join(','))
+          for (const m of members ?? []) {
+            if (m.email !== userRow.email) {
+              attendeeEmails.push(m.email)
+              attendeeNames.push(m.display_name || m.email)
+              attendeeIds.push(m.id)
+            }
+          }
+        }
+        const { data: draft } = await supabase.from('meeting_drafts').insert({
+          created_by: userData?.id,
+          title: parsed.title,
+          start_at: parsed.start_iso,
+          duration_minutes: parsed.duration_minutes,
+          attendee_ids: attendeeIds,
+          location: parsed.location,
+          raw_text: meetText,
+        }).select('id').single()
+
+        if (draft) {
+          const timeLabel = formatTaipeiRange(parsed.start_iso, parsed.duration_minutes)
+          await sendTeamsMeetingConfirmCard(serviceUrl, conversationId, {
+            draft_id: draft.id,
+            title: parsed.title,
+            time_label: timeLabel,
+            duration_label: durationLabel(parsed.duration_minutes),
+            attendees_label: ['你', ...attendeeNames].join('、'),
+            location: parsed.location,
+          })
+        }
+      }
+      return NextResponse.json({ ok: true })
+    }
+
     if (text.toLowerCase() === '/help' || text.toLowerCase() === 'help') {
       const msg = userRow
-        ? `📋 myCRM Bot（已綁定：${userRow.email}）\n\n任務通知會自動傳送到這裡。點擊卡片上的「✅ 標記完成」即可完成任務。\n\n指令：/help、/AI`
+        ? `📋 myCRM Bot（已綁定：${userRow.email}）\n\n任務通知會自動傳送到這裡。點擊卡片上的「✅ 標記完成」即可完成任務。\n\n指令：/help、/AI、/meet [描述]、/m [描述]`
         : `📋 myCRM Bot\n\n⚠️ 無法自動綁定帳號，請聯絡管理員確認 Azure AD 應用程式已授予 User.ReadBasic.All 權限。`
       await sendToTeams(serviceUrl, conversationId, msg, body.id as string)
     } else if (text.toLowerCase() === '/ai') {

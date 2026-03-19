@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## v1.5.0 — /meet 行程排程指令（Telegram + Teams）（2026-03-19）
+
+### 變更項目
+- **新指令 `/meet` / `/m`**：Telegram Bot 與 Teams Bot 均支援，AI 解析會議描述後顯示確認訊息，使用者確認後建立 Outlook 行事曆邀請
+- **AI 解析**：自動識別時間、時長（30/60/90/120 分鐘）、參與者（僅組織成員）、地點
+- **確認流程**：Telegram inline keyboard、Teams Adaptive Card，均含「確認建立」與「取消」按鈕
+- **Outlook 行程**：確認後呼叫 Microsoft Graph `POST /me/events`，自動傳送會議邀請給被點名的組織成員
+- **`meeting_drafts` 資料表**：暫存 AI 解析結果，確認或取消後自動刪除
+- **登入 scope 加入 `Calendars.ReadWrite`**：使用者需重新登入一次
+- 版本 1.4.4 → 1.5.0
+
 ## v1.4.4 — 寄信聯絡人選擇器、AI 生成主旨、多語言（2026-03-19）
 
 ### 變更項目
