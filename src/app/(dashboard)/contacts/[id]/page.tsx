@@ -36,7 +36,7 @@ interface Contact {
   users: { display_name: string | null } | null
   contact_tags: { tags: Tag }[]
 }
-interface ContactCard { id: string; url: string; label: string | null; created_at: string }
+interface ContactCard { id: string; card_img_url: string; label: string | null; created_at: string }
 interface Log {
   id: string
   content: string | null
@@ -320,7 +320,7 @@ export default function ContactDetailPage() {
       supabase.from('contacts').select('*, users(display_name), contact_tags(tags(id, name))').eq('id', id).single(),
       supabase.from('interaction_logs').select('id, content, type, meeting_date, created_at, users(display_name)').eq('contact_id', id).order('created_at', { ascending: false }).range(0, LOG_PAGE - 1),
       supabase.from('tags').select('id, name').order('name'),
-      supabase.from('contact_cards').select('id, url, label, created_at').eq('contact_id', id).order('created_at', { ascending: true }),
+      supabase.from('contact_cards').select('id, card_img_url, label, created_at').eq('contact_id', id).order('created_at', { ascending: true }),
       supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),
     ])
     setContact(c as unknown as Contact)
@@ -507,7 +507,7 @@ export default function ContactDetailPage() {
           const { error: uploadErr } = await supabase.storage.from('cards').upload(filename, uint8, { contentType: 'image/jpeg' })
           if (uploadErr) throw uploadErr
           const { data: urlData } = supabase.storage.from('cards').getPublicUrl(filename)
-          await supabase.from('contact_cards').insert({ contact_id: id, url: urlData.publicUrl, storage_path: filename, label: null })
+          await supabase.from('contact_cards').insert({ contact_id: id, card_img_url: urlData.publicUrl, storage_path: filename, label: null })
         })
       )
       if (cardOcrDiff && Object.keys(cardOcrDiff).length > 0) {
@@ -887,8 +887,8 @@ export default function ContactDetailPage() {
           <div className="flex flex-wrap gap-3 mb-4">
             {allCards.map((card) => (
               <div key={card.id} className="relative group">
-                <div className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative" onClick={() => openLightbox(card.url)}>
-                  <Image src={card.url} alt={card.label ?? '名片'} width={144} height={96} className="object-cover w-full h-full" />
+                <div className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative" onClick={() => openLightbox(card.card_img_url)}>
+                  <Image src={card.card_img_url} alt={card.label ?? '名片'} width={144} height={96} className="object-cover w-full h-full" />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
                     <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
                   </div>

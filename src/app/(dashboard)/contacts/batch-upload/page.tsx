@@ -184,7 +184,7 @@ export default function BatchUploadPage() {
       if (inserted) {
         // Add to contact_cards
         if (row.storagePath && row.imgUrl) {
-          await supabase.from('contact_cards').insert({ contact_id: inserted.id, url: row.imgUrl, storage_path: row.storagePath, label: '正面' })
+          await supabase.from('contact_cards').insert({ contact_id: inserted.id, card_img_url: row.imgUrl, storage_path: row.storagePath, label: '正面' })
         }
         await supabase.from('interaction_logs').insert({ contact_id: inserted.id, type: 'note', content: '透過批次上傳新增名片', created_by: userId })
         saved++

@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
 
     const { error: insertErr } = await supabase.from('contact_cards').insert({
       contact_id: contactId,
-      url: urlData.publicUrl,
+      card_img_url: urlData.publicUrl,
       storage_path: filename,
       label,
     })
