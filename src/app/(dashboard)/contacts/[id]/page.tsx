@@ -46,6 +46,8 @@ interface Log {
 }
 interface TemplateAttachment { id: string; file_name: string; file_url: string; file_size: number }
 interface EmailTemplate { id: string; title: string; subject: string | null; body_content: string | null; attachments: TemplateAttachment[] }
+interface Recipient { email: string; label: string; contactId: string | null }
+interface ContactOption { id: string; name: string; email: string }
 
 const TYPE_COLOR: Record<string, string> = {
   note: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
@@ -80,6 +82,91 @@ function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes}B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
   return `${(bytes / 1024 / 1024).toFixed(1)}MB`
+}
+
+function RecipientChipInput({
+  recipients,
+  onChange,
+  contacts,
+  placeholder,
+}: {
+  recipients: Recipient[]
+  onChange: (r: Recipient[]) => void
+  contacts: ContactOption[]
+  placeholder: string
+}) {
+  const [input, setInput] = useState('')
+  const [open, setOpen] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const filtered = input.trim().length >= 1
+    ? contacts.filter(c =>
+        (c.name.toLowerCase().includes(input.toLowerCase()) ||
+         c.email.toLowerCase().includes(input.toLowerCase())) &&
+        !recipients.some(r => r.email === c.email)
+      ).slice(0, 8)
+    : []
+
+  function add(email: string, label: string, contactId: string | null) {
+    const trimmed = email.trim()
+    if (!trimmed || recipients.some(r => r.email === trimmed)) return
+    onChange([...recipients, { email: trimmed, label: label || trimmed, contactId }])
+    setInput('')
+    setOpen(false)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if ((e.key === 'Enter' || e.key === ',') && input.trim()) {
+      e.preventDefault()
+      const email = input.trim().replace(/,+$/, '')
+      if (email.includes('@')) add(email, email, null)
+    }
+    if (e.key === 'Backspace' && !input && recipients.length > 0) {
+      onChange(recipients.slice(0, -1))
+    }
+    if (e.key === 'Escape') setOpen(false)
+  }
+
+  return (
+    <div
+      className="flex flex-wrap gap-1.5 min-h-[38px] px-2 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 cursor-text focus-within:ring-2 focus-within:ring-blue-500 relative"
+      onClick={() => inputRef.current?.focus()}
+    >
+      {recipients.map(r => (
+        <span key={r.email} className="flex items-center gap-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-0.5 rounded-full">
+          {r.label !== r.email ? r.label : r.email}
+          <button type="button" onClick={(e) => { e.stopPropagation(); onChange(recipients.filter(x => x.email !== r.email)) }} className="hover:text-red-500">
+            <X size={10} />
+          </button>
+        </span>
+      ))}
+      <input
+        ref={inputRef}
+        value={input}
+        onChange={e => { setInput(e.target.value); setOpen(true) }}
+        onKeyDown={handleKeyDown}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={recipients.length === 0 ? placeholder : ''}
+        className="flex-1 min-w-[140px] text-sm bg-transparent outline-none text-gray-900 dark:text-gray-100 placeholder-gray-400"
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute left-0 top-full mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
+          {filtered.map(c => (
+            <button
+              key={c.id}
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => add(c.email, c.name, c.id)}
+              className="flex items-center justify-between w-full px-3 py-2 text-sm hover:bg-blue-50 dark:hover:bg-blue-900/30 text-left"
+            >
+              <span className="font-medium text-gray-900 dark:text-gray-100">{c.name}</span>
+              <span className="text-gray-400 text-xs ml-2">{c.email}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function ContactDetailPage() {
@@ -196,9 +283,10 @@ export default function ContactDetailPage() {
   // Mail modal
   const [mailOpen, setMailOpen] = useState(false)
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
-  const [mailTo, setMailTo] = useState('')
-  const [mailCc, setMailCc] = useState('')
-  const [mailBcc, setMailBcc] = useState('')
+  const [contactOptions, setContactOptions] = useState<ContactOption[]>([])
+  const [mailToList, setMailToList] = useState<Recipient[]>([])
+  const [mailCcList, setMailCcList] = useState<Recipient[]>([])
+  const [mailBccList, setMailBccList] = useState<Recipient[]>([])
   const [mailSubject, setMailSubject] = useState('')
   const [mailBody, setMailBody] = useState('')
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
@@ -483,11 +571,11 @@ export default function ContactDetailPage() {
   // ── Mail ─────────────────────────────────────────────────────────────────────
 
   async function openMailModal() {
-    const { data } = await supabase
-      .from('email_templates')
-      .select('id, title, subject, body_content, template_attachments(id, file_name, file_url, file_size)')
-      .order('title')
-    const tplList = (data ?? []).map((t: Record<string, unknown>) => ({
+    const [{ data: tplData }, { data: cData }] = await Promise.all([
+      supabase.from('email_templates').select('id, title, subject, body_content, template_attachments(id, file_name, file_url, file_size)').order('title'),
+      supabase.from('contacts').select('id, name, name_en, email').not('email', 'is', null).order('name'),
+    ])
+    const tplList = (tplData ?? []).map((t: Record<string, unknown>) => ({
       id: t.id as string,
       title: t.title as string,
       subject: t.subject as string | null,
@@ -495,9 +583,17 @@ export default function ContactDetailPage() {
       attachments: (t.template_attachments as TemplateAttachment[]) ?? [],
     }))
     setTemplates(tplList)
-    setMailTo(contact?.email ?? '')
-    setMailCc('')
-    setMailBcc('')
+    setContactOptions((cData ?? []).map((c: Record<string, unknown>) => ({
+      id: c.id as string,
+      name: (c.name || c.name_en || c.email) as string,
+      email: c.email as string,
+    })))
+    const defaultTo: Recipient[] = contact?.email
+      ? [{ email: contact.email, label: contact.name || contact.name_en || contact.email, contactId: id as string }]
+      : []
+    setMailToList(defaultTo)
+    setMailCcList([])
+    setMailBccList([])
     setMailSubject('')
     setMailBody('')
     setSelectedTemplateId('')
@@ -527,17 +623,19 @@ export default function ContactDetailPage() {
     setMailAiGenerating(true)
     setMailError(null)
     try {
-      const lastLog = logs[0]?.content ?? ''
+      // Ignore Telegram scan logs ("透過 Telegram Bot 新增名片")
+      const lastLog = logs.find(l => l.type !== 'scan' && !l.content?.includes('新增名片'))?.content ?? ''
       const description = lastLog ? `${mailAiDesc}\n\n最近互動：${lastLog}` : mailAiDesc
       const tpl = selectedTemplateId ? templates.find((t) => t.id === selectedTemplateId) : null
       const res = await fetch('/api/ai-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description, templateContent: tpl?.body_content ?? undefined, model: aiModelId }),
+        body: JSON.stringify({ description, templateContent: tpl?.body_content ?? undefined, model: aiModelId, generateSubject: true }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setMailBody(data.html)
+      if (data.subject) setMailSubject(data.subject)
     } catch (e) {
       setMailError(e instanceof Error ? e.message : 'AI 生成失敗')
     } finally {
@@ -575,7 +673,7 @@ export default function ContactDetailPage() {
   }
 
   async function handleSendMail() {
-    if (!mailTo.trim() || !mailSubject.trim()) return
+    if (mailToList.length === 0 || !mailSubject.trim()) return
     setMailSending(true); setMailError(null)
     try {
       const accessToken = msProviderToken
@@ -599,11 +697,27 @@ export default function ContactDetailPage() {
         attachments.push({ name: a.name, contentType: a.contentType, contentBytes: a.base64 })
       }
 
-      await sendMail({ accessToken, to: mailTo, cc: mailCc || undefined, bcc: mailBcc || undefined, subject: mailSubject, body: mailBody, attachments: attachments.length > 0 ? attachments : undefined })
-      const { data } = await supabase.from('interaction_logs')
-        .insert({ contact_id: id, content: `寄送郵件：${mailSubject}`, type: 'email', created_by: currentUserId })
-        .select('id, content, type, meeting_date, created_at, users(display_name)').single()
-      if (data) setLogs((prev) => [data as unknown as Log, ...prev])
+      const toStr = mailToList.map(r => r.email).join(', ')
+      const ccStr = mailCcList.map(r => r.email).join(', ')
+      const bccStr = mailBccList.map(r => r.email).join(', ')
+
+      await sendMail({ accessToken, to: toStr, cc: ccStr || undefined, bcc: bccStr || undefined, subject: mailSubject, body: mailBody, attachments: attachments.length > 0 ? attachments : undefined })
+
+      // Add interaction log for every selected CRM contact
+      const allRecipients = [...mailToList, ...mailCcList, ...mailBccList]
+      const uniqueContactIds = [...new Set(allRecipients.filter(r => r.contactId).map(r => r.contactId!))]
+      const logContent = `寄送郵件：${mailSubject}`
+      if (uniqueContactIds.length > 0) {
+        const inserts = uniqueContactIds.map(cid => ({ contact_id: cid, content: logContent, type: 'email', created_by: currentUserId }))
+        const { data: logRows } = await supabase.from('interaction_logs')
+          .insert(inserts)
+          .select('id, content, type, meeting_date, created_at, users(display_name)')
+        // Update UI only for the current contact's log
+        const currentLog = (logRows ?? []).find((r: Record<string, unknown>) => r.contact_id === id || uniqueContactIds[0] === id)
+        if (currentLog) setLogs((prev) => [currentLog as unknown as Log, ...prev])
+        else if (logRows && logRows.length > 0) setLogs((prev) => [logRows[0] as unknown as Log, ...prev])
+      }
+
       setMailOpen(false)
     } catch (e) {
       setMailError(e instanceof Error ? e.message : '寄送失敗，請稍後再試')
@@ -1109,35 +1223,17 @@ export default function ContactDetailPage() {
               {/* To / CC / BCC */}
               <div className="space-y-2">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">{tm('recipient')} <span className="text-gray-400 font-normal">（多位請用逗號分隔，如：a@co.com, b@co.com）</span></label>
-                  <input
-                    type="text"
-                    value={mailTo}
-                    onChange={(e) => setMailTo(e.target.value)}
-                    placeholder="收件人，例：john@example.com, mary@example.com"
-                    className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <label className="block text-xs font-medium text-gray-500 mb-1">{tm('recipient')} <span className="text-gray-400 font-normal">（打名字或 email 搜尋聯絡人，或直接輸入 email 後按 Enter）</span></label>
+                  <RecipientChipInput recipients={mailToList} onChange={setMailToList} contacts={contactOptions} placeholder="搜尋聯絡人或輸入 email…" />
                 </div>
                 <div className="flex gap-2">
                   <div className="flex-1">
                     <label className="block text-xs font-medium text-gray-500 mb-1">CC <span className="text-gray-400 font-normal">（副本）</span></label>
-                    <input
-                      type="text"
-                      value={mailCc}
-                      onChange={(e) => setMailCc(e.target.value)}
-                      placeholder="cc@example.com, cc2@example.com"
-                      className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    <RecipientChipInput recipients={mailCcList} onChange={setMailCcList} contacts={contactOptions} placeholder="搜尋或輸入 email…" />
                   </div>
                   <div className="flex-1">
                     <label className="block text-xs font-medium text-gray-500 mb-1">BCC <span className="text-gray-400 font-normal">（密件副本）</span></label>
-                    <input
-                      type="text"
-                      value={mailBcc}
-                      onChange={(e) => setMailBcc(e.target.value)}
-                      placeholder="bcc@example.com"
-                      className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    <RecipientChipInput recipients={mailBccList} onChange={setMailBccList} contacts={contactOptions} placeholder="搜尋或輸入 email…" />
                   </div>
                 </div>
               </div>
@@ -1238,7 +1334,7 @@ export default function ContactDetailPage() {
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700 shrink-0">
               <button onClick={() => setMailOpen(false)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900">{tc('cancel')}</button>
-              <button onClick={handleSendMail} disabled={mailSending || !mailTo.trim() || !mailSubject.trim()}
+              <button onClick={handleSendMail} disabled={mailSending || mailToList.length === 0 || !mailSubject.trim()}
                 className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40">
                 <Mail size={14} /> {mailSending ? tm('sending') : tm('send')}
               </button>

@@ -108,17 +108,32 @@ export async function generateEmailContent(
   description: string,
   templateContent?: string,
   aiModelId: string | null = null,
-  userId?: string
-): Promise<string> {
+  userId?: string,
+  generateSubject = false
+): Promise<{ html: string; subject?: string }> {
   const { modelId, apiKey } = await resolveModelConfig(aiModelId)
   const genAI = new GoogleGenerativeAI(apiKey)
   const geminiModel = genAI.getGenerativeModel({ model: modelId })
 
   const systemPrompt = await getPrompt('email_generate', userId)
+
+  const langNote = '請使用與使用者描述相同的語言撰寫郵件。'
+
+  if (generateSubject) {
+    const baseContent = templateContent
+      ? `${systemPrompt}\n\n${langNote}\n\n範本內容：\n${templateContent}\n\n補充說明：\n${description}\n\n請合併範本與補充說明，生成最終郵件。`
+      : `${systemPrompt}\n\n${langNote}\n\n描述：\n${description}`
+    const prompt = `${baseContent}\n\n請回傳純 JSON（不要有任何其他文字）：{"subject":"郵件主旨","html":"HTML 內文（不含 html/head/body 標籤）"}`
+    const result = await geminiModel.generateContent(prompt)
+    const raw = result.response.text().trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
+    const parsed = JSON.parse(raw) as { subject: string; html: string }
+    return { html: parsed.html, subject: parsed.subject }
+  }
+
   const prompt = templateContent
-    ? `${systemPrompt}\n\n範本內容：\n${templateContent}\n\n補充說明：\n${description}\n\n請合併範本與補充說明，生成最終郵件內文。只回傳 HTML 內文，不要包含 <html>、<head>、<body> 標籤，不要有任何其他文字。`
-    : `${systemPrompt}\n\n描述：\n${description}\n\n只回傳 HTML 內文，不要包含 <html>、<head>、<body> 標籤，不要有任何其他文字。`
+    ? `${systemPrompt}\n\n${langNote}\n\n範本內容：\n${templateContent}\n\n補充說明：\n${description}\n\n請合併範本與補充說明，生成最終郵件內文。只回傳 HTML 內文，不要包含 <html>、<head>、<body> 標籤，不要有任何其他文字。`
+    : `${systemPrompt}\n\n${langNote}\n\n描述：\n${description}\n\n只回傳 HTML 內文，不要包含 <html>、<head>、<body> 標籤，不要有任何其他文字。`
 
   const result = await geminiModel.generateContent(prompt)
-  return result.response.text().trim()
+  return { html: result.response.text().trim() }
 }

@@ -10,13 +10,13 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { description, templateContent, model } = await req.json()
+    const { description, templateContent, model, generateSubject } = await req.json()
     if (!description) {
       return NextResponse.json({ error: '缺少 description' }, { status: 400 })
     }
 
-    const html = await generateEmailContent(description, templateContent, model)
-    return NextResponse.json({ html })
+    const result = await generateEmailContent(description, templateContent, model, user.id, !!generateSubject)
+    return NextResponse.json(result)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     return NextResponse.json({ error: message }, { status: 500 })
