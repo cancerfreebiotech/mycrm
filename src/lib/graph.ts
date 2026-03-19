@@ -63,7 +63,7 @@ export async function sendMail({ accessToken, to, cc, bcc, subject, body, attach
   const message: Record<string, unknown> = {
     subject,
     body: {
-      contentType: 'HTML',
+      contentType: /<[a-z][\s\S]*>/i.test(body) ? 'HTML' : 'Text',
       content: body,
     },
     toRecipients: parseAddresses(to),

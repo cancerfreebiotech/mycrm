@@ -637,7 +637,7 @@ export default function ContactDetailPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setMailBody(data.html)
+      setMailBody(data.text ?? data.html ?? '')
       if (data.subject) setMailSubject(data.subject)
     } catch (e) {
       setMailError(e instanceof Error ? e.message : 'AI 生成失敗')
