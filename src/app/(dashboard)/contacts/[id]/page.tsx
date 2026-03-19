@@ -213,6 +213,7 @@ export default function ContactDetailPage() {
   const [editingLogContent, setEditingLogContent] = useState('')
   const [editingLogMeetingDate, setEditingLogMeetingDate] = useState('')
   const [savingLogId, setSavingLogId] = useState<string | null>(null)
+  const [deletingLogId, setDeletingLogId] = useState<string | null>(null)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const [lbScale, setLbScale] = useState(1)
   const [lbOffset, setLbOffset] = useState({ x: 0, y: 0 })
@@ -582,6 +583,15 @@ export default function ContactDetailPage() {
       logsOffsetRef.current += 1
     }
     setLogContent(''); setLogDate(''); setAddingLog(false)
+  }
+
+  async function deleteLog(logId: string) {
+    if (!confirm('確定刪除這筆互動紀錄？')) return
+    setDeletingLogId(logId)
+    await supabase.from('interaction_logs').delete().eq('id', logId)
+    setLogs((prev) => prev.filter((l) => l.id !== logId))
+    logsOffsetRef.current = Math.max(0, logsOffsetRef.current - 1)
+    setDeletingLogId(null)
   }
 
   async function saveLogEdit(logId: string) {
@@ -1181,18 +1191,30 @@ export default function ContactDetailPage() {
                   <div className="flex items-center gap-2 mt-0.5">
                     {log.users?.display_name && <span className="text-xs text-gray-500 dark:text-gray-400">{log.users.display_name}</span>}
                     <time className="text-xs text-gray-400 dark:text-gray-500">{new Date(log.created_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}</time>
-                    {log.type !== 'system' && !isEmailLog && editingLogId !== log.id && (
-                      <button
-                        onClick={() => {
-                          setEditingLogId(log.id)
-                          setEditingLogContent(log.content ?? '')
-                          setEditingLogMeetingDate(log.meeting_date ?? '')
-                        }}
-                        className="text-gray-300 hover:text-gray-500 dark:hover:text-gray-400 ml-1"
-                        title="編輯"
-                      >
-                        <Pencil size={11} />
-                      </button>
+                    {log.type !== 'system' && editingLogId !== log.id && (
+                      <>
+                        {!isEmailLog && (
+                          <button
+                            onClick={() => {
+                              setEditingLogId(log.id)
+                              setEditingLogContent(log.content ?? '')
+                              setEditingLogMeetingDate(log.meeting_date ?? '')
+                            }}
+                            className="text-gray-300 hover:text-gray-500 dark:hover:text-gray-400 ml-1"
+                            title="編輯"
+                          >
+                            <Pencil size={11} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => deleteLog(log.id)}
+                          disabled={deletingLogId === log.id}
+                          className="text-gray-300 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40"
+                          title="刪除"
+                        >
+                          {deletingLogId === log.id ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                        </button>
+                      </>
                     )}
                   </div>
                 </li>
