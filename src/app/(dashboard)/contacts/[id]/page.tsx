@@ -637,11 +637,12 @@ export default function ContactDetailPage() {
       // Ignore Telegram scan logs ("透過 Telegram Bot 新增名片")
       const lastLog = logs.find(l => l.type !== 'scan' && !l.content?.includes('新增名片'))?.content ?? ''
       const description = lastLog ? `${mailAiDesc}\n\n最近互動：${lastLog}` : mailAiDesc
-      const tpl = selectedTemplateId ? templates.find((t) => t.id === selectedTemplateId) : null
+      // Pass current body (template or manually typed) as reference content
+      const existingBody = mailBody.trim() || undefined
       const res = await fetch('/api/ai-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description, templateContent: tpl?.body_content ?? undefined, model: aiModelId, generateSubject: true }),
+        body: JSON.stringify({ description, templateContent: existingBody, model: aiModelId, generateSubject: true }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)

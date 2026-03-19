@@ -142,7 +142,7 @@ export async function generateEmailContent(
 
   const systemPrompt = await getPrompt('email_generate', userId)
 
-  const langNote = '請使用與使用者描述相同的語言撰寫郵件。'
+  const langNote = '請依照使用者的撰寫指示（補充說明或描述）所使用的語言撰寫郵件，不要因範本內容或背景資訊的語言而改變輸出語言。若使用者指示有明確語言要求，則以指示為準。'
   const plainTextNote = '請只回傳純文字內文，不要有任何 HTML 標籤，使用換行（\\n）分段，不要有任何其他說明文字。'
 
   if (generateSubject) {
