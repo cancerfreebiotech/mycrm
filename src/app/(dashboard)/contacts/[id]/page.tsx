@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { sendMail } from '@/lib/graph'
-import { ArrowLeft, ImageIcon, Mail, X, Pencil, Loader2, Plus, Upload, Trash2, Copy, Check, Sparkles, Paperclip, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react'
+import { ArrowLeft, ImageIcon, Mail, X, Pencil, Loader2, Plus, Upload, Trash2, Copy, Check, Sparkles, Paperclip, ZoomIn, ZoomOut, Maximize2, ChevronDown } from 'lucide-react'
 import Image from 'next/image'
 
 interface Tag { id: string; name: string }
@@ -43,6 +43,9 @@ interface Log {
   type: string
   meeting_date: string | null
   created_at: string
+  email_subject: string | null
+  email_body: string | null
+  email_attachments: string[] | null
   users: { display_name: string | null } | null
 }
 interface TemplateAttachment { id: string; file_name: string; file_url: string; file_size: number }
@@ -195,6 +198,7 @@ export default function ContactDetailPage() {
   const [aiModelId, setAiModelId] = useState<string | null>(null)
   const [msProviderToken, setMsProviderToken] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set())
   const [lightbox, setLightbox] = useState<string | null>(null)
   const [lbScale, setLbScale] = useState(1)
   const [lbOffset, setLbOffset] = useState({ x: 0, y: 0 })
@@ -318,7 +322,7 @@ export default function ContactDetailPage() {
     }
     const [{ data: c }, { data: l }, { data: tags }, { data: cards }, { data: countries }] = await Promise.all([
       supabase.from('contacts').select('*, users(display_name), contact_tags(tags(id, name))').eq('id', id).single(),
-      supabase.from('interaction_logs').select('id, content, type, meeting_date, created_at, users(display_name)').eq('contact_id', id).order('created_at', { ascending: false }).range(0, LOG_PAGE - 1),
+      supabase.from('interaction_logs').select('id, content, type, meeting_date, created_at, email_subject, email_body, email_attachments, users(display_name)').eq('contact_id', id).order('created_at', { ascending: false }).range(0, LOG_PAGE - 1),
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('contact_cards').select('id, card_img_url, label, created_at').eq('contact_id', id).order('created_at', { ascending: true }),
       supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),
@@ -339,7 +343,7 @@ export default function ContactDetailPage() {
     const from = logsOffsetRef.current
     const { data } = await supabase
       .from('interaction_logs')
-      .select('id, content, type, meeting_date, created_at, users(display_name)')
+      .select('id, content, type, meeting_date, created_at, email_subject, email_body, email_attachments, users(display_name)')
       .eq('contact_id', id)
       .order('created_at', { ascending: false })
       .range(from, from + LOG_PAGE - 1)
@@ -555,7 +559,7 @@ export default function ContactDetailPage() {
     setAddingLog(true)
     const { data } = await supabase.from('interaction_logs')
       .insert({ contact_id: id, content: logContent.trim(), type: logType, meeting_date: logType === 'meeting' && logDate ? logDate : null, created_by: currentUserId })
-      .select('id, content, type, meeting_date, created_at, users(display_name)').single()
+      .select('id, content, type, meeting_date, created_at, email_subject, email_body, email_attachments, users(display_name)').single()
     if (data) {
       setLogs((prev) => [data as unknown as Log, ...prev])
       logsOffsetRef.current += 1
@@ -713,12 +717,18 @@ export default function ContactDetailPage() {
       // Add interaction log for every selected CRM contact
       const allRecipients = [...mailToList, ...mailCcList, ...mailBccList]
       const uniqueContactIds = [...new Set(allRecipients.filter(r => r.contactId).map(r => r.contactId!))]
+      const attachmentNames = attachments.map(a => a.name)
       const logContent = `寄送郵件：${mailSubject}`
       if (uniqueContactIds.length > 0) {
-        const inserts = uniqueContactIds.map(cid => ({ contact_id: cid, content: logContent, type: 'email', created_by: currentUserId }))
+        const inserts = uniqueContactIds.map(cid => ({
+          contact_id: cid, content: logContent, type: 'email', created_by: currentUserId,
+          email_subject: mailSubject,
+          email_body: mailBody || null,
+          email_attachments: attachmentNames.length > 0 ? attachmentNames : null,
+        }))
         const { data: logRows } = await supabase.from('interaction_logs')
           .insert(inserts)
-          .select('id, content, type, meeting_date, created_at, users(display_name)')
+          .select('id, content, type, meeting_date, created_at, email_subject, email_body, email_attachments, users(display_name)')
         // Update UI only for the current contact's log
         const currentLog = (logRows ?? []).find((r: Record<string, unknown>) => r.contact_id === id || uniqueContactIds[0] === id)
         if (currentLog) setLogs((prev) => [currentLog as unknown as Log, ...prev])
@@ -1038,22 +1048,68 @@ export default function ContactDetailPage() {
           <p className="text-sm text-gray-400 text-center py-4">{t('noLogs')}</p>
         ) : (
           <ol className="relative border-l border-gray-200 dark:border-gray-700 space-y-5 pl-5">
-            {logs.map((log) => (
-              <li key={log.id} className="relative">
-                <div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-white dark:border-gray-900" />
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`text-xs px-2 py-0.5 rounded ${TYPE_COLOR[log.type] ?? TYPE_COLOR.note}`}>
-                    {t(`logTypes.${log.type as 'note' | 'meeting' | 'email' | 'system'}`)}
-                  </span>
-                  {log.meeting_date && <span className="text-xs text-gray-500 dark:text-gray-400">📅 {log.meeting_date}</span>}
-                </div>
-                <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-line">{log.content}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  {log.users?.display_name && <span className="text-xs text-gray-500 dark:text-gray-400">{log.users.display_name}</span>}
-                  <time className="text-xs text-gray-400 dark:text-gray-500">{new Date(log.created_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}</time>
-                </div>
-              </li>
-            ))}
+            {logs.map((log) => {
+              const isEmailLog = log.type === 'email' && (log.email_subject || log.email_body || log.email_attachments?.length)
+              const expanded = expandedLogIds.has(log.id)
+              return (
+                <li key={log.id} className="relative">
+                  <div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-white dark:border-gray-900" />
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`text-xs px-2 py-0.5 rounded ${TYPE_COLOR[log.type] ?? TYPE_COLOR.note}`}>
+                      {t(`logTypes.${log.type as 'note' | 'meeting' | 'email' | 'system'}`)}
+                    </span>
+                    {log.meeting_date && <span className="text-xs text-gray-500 dark:text-gray-400">📅 {log.meeting_date}</span>}
+                    {isEmailLog && (
+                      <button
+                        type="button"
+                        onClick={() => setExpandedLogIds(prev => {
+                          const next = new Set(prev)
+                          expanded ? next.delete(log.id) : next.add(log.id)
+                          return next
+                        })}
+                        className="flex items-center gap-0.5 text-xs text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                      >
+                        <ChevronDown size={13} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                        {expanded ? '收起' : '展開'}
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-line">{log.content}</p>
+                  {isEmailLog && expanded && (
+                    <div className="mt-2 ml-0.5 space-y-2 border-l-2 border-green-200 dark:border-green-800 pl-3">
+                      {log.email_subject && (
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">主旨</span>
+                          <p className="text-sm text-gray-800 dark:text-gray-200">{log.email_subject}</p>
+                        </div>
+                      )}
+                      {log.email_body && (
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">內容</span>
+                          <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">{log.email_body}</p>
+                        </div>
+                      )}
+                      {log.email_attachments && log.email_attachments.length > 0 && (
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">附件</span>
+                          <ul className="mt-0.5 space-y-0.5">
+                            {log.email_attachments.map((name, i) => (
+                              <li key={i} className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
+                                <Paperclip size={11} /> {name}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {log.users?.display_name && <span className="text-xs text-gray-500 dark:text-gray-400">{log.users.display_name}</span>}
+                    <time className="text-xs text-gray-400 dark:text-gray-500">{new Date(log.created_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}</time>
+                  </div>
+                </li>
+              )
+            })}
           </ol>
         )}
         {/* Infinite scroll sentinel */}
