@@ -149,7 +149,11 @@ function RecipientChipInput({
         value={input}
         onChange={e => { setInput(e.target.value); setOpen(true) }}
         onKeyDown={handleKeyDown}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onBlur={(e) => {
+        const val = e.target.value.trim().replace(/,+$/, '')
+        if (val.includes('@')) add(val, val, null)
+        setTimeout(() => setOpen(false), 150)
+      }}
         placeholder={recipients.length === 0 ? placeholder : ''}
         className="flex-1 min-w-[140px] text-sm bg-transparent outline-none text-gray-900 dark:text-gray-100 placeholder-gray-400"
       />
