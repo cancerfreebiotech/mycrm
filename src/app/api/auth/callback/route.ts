@@ -42,13 +42,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login?error=unauthorized_domain`)
   }
 
-  // Upsert user record
+  // Upsert user record (also persist provider_token for Graph API calls)
   const serviceClient = createServiceClient()
   await serviceClient.from('users').upsert(
     {
       email,
       display_name: data.user.user_metadata?.full_name ?? data.user.user_metadata?.name ?? null,
       last_login_at: new Date().toISOString(),
+      ...(data.session?.provider_token ? { provider_token: data.session.provider_token } : {}),
     },
     { onConflict: 'email' }
   )

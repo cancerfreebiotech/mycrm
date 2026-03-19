@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v1.4.3 — 修正寄信 Microsoft 存取權限錯誤（2026-03-19）
+
+### 變更項目
+- **修正寄信 provider_token 問題**：`@supabase/ssr` cookie session 不保留 `provider_token`，改從 `users` 表讀取
+- **auth callback 強化**：登入時將 `provider_token` 寫入 `users.provider_token`（與 Bot 共用同一機制）
+- 頁面 `load()` 一併讀取 `provider_token`，`handleSendMail` 改用 DB token
+- 版本 1.4.2 → 1.4.3
+
 ## v1.4.2 — 寄信支援 CC / BCC 與多收件人（2026-03-19）
 
 ### 變更項目

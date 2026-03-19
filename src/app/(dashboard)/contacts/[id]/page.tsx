@@ -104,6 +104,7 @@ export default function ContactDetailPage() {
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [aiModelId, setAiModelId] = useState<string | null>(null)
+  const [msProviderToken, setMsProviderToken] = useState<string | null>(null)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const [lbScale, setLbScale] = useState(1)
   const [lbOffset, setLbOffset] = useState({ x: 0, y: 0 })
@@ -221,8 +222,8 @@ export default function ContactDetailPage() {
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
     if (user?.email) {
-      const { data: profile } = await supabase.from('users').select('id, ai_model_id').eq('email', user.email).single()
-      if (profile) { setCurrentUserId(profile.id); setAiModelId(profile.ai_model_id ?? null) }
+      const { data: profile } = await supabase.from('users').select('id, ai_model_id, provider_token').eq('email', user.email).single()
+      if (profile) { setCurrentUserId(profile.id); setAiModelId(profile.ai_model_id ?? null); setMsProviderToken(profile.provider_token ?? null) }
     }
     const [{ data: c }, { data: l }, { data: tags }, { data: cards }, { data: countries }] = await Promise.all([
       supabase.from('contacts').select('*, users(display_name), contact_tags(tags(id, name))').eq('id', id).single(),
@@ -577,9 +578,8 @@ export default function ContactDetailPage() {
     if (!mailTo.trim() || !mailSubject.trim()) return
     setMailSending(true); setMailError(null)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const accessToken = session?.provider_token
-      if (!accessToken) throw new Error('找不到 Microsoft 存取權限，請重新登入')
+      const accessToken = msProviderToken
+      if (!accessToken) throw new Error('找不到 Microsoft 存取權限，請重新登入（登出後重新以 Microsoft 帳號登入）')
 
       const attachments: { name: string; contentType: string; contentBytes: string }[] = []
 
