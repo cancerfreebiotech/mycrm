@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { sendMail } from '@/lib/graph'
-import { ArrowLeft, ImageIcon, Mail, X, Pencil, Loader2, Plus, Upload, Trash2, Copy, Check, Sparkles, Paperclip } from 'lucide-react'
+import { ArrowLeft, ImageIcon, Mail, X, Pencil, Loader2, Plus, Upload, Trash2, Copy, Check, Sparkles, Paperclip, ZoomIn } from 'lucide-react'
 import Image from 'next/image'
 
 interface Tag { id: string; name: string }
@@ -149,6 +149,12 @@ export default function ContactDetailPage() {
   const LOG_PAGE = 20
 
   useEffect(() => { load() }, [id])
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightbox(null) }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -667,8 +673,11 @@ export default function ContactDetailPage() {
           <div className="flex flex-wrap gap-3 mb-4">
             {allCards.map((card) => (
               <div key={card.id} className="relative group">
-                <div className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer" onClick={() => setLightbox(card.url)}>
+                <div className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative" onClick={() => setLightbox(card.url)}>
                   <Image src={card.url} alt={card.label ?? '名片'} width={144} height={96} className="object-cover w-full h-full" />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                    <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                  </div>
                 </div>
                 {card.label && <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-1">{card.label}</p>}
                 {!card.id.startsWith('legacy') && (
@@ -847,8 +856,21 @@ export default function ContactDetailPage() {
 
       {/* Lightbox */}
       {lightbox && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setLightbox(null)}>
-          <Image src={lightbox} alt="名片大圖" width={800} height={500} className="max-w-[90vw] max-h-[80vh] object-contain rounded-lg" />
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50" onClick={() => setLightbox(null)}>
+          <button
+            className="absolute top-4 right-4 text-white/80 hover:text-white bg-black/40 rounded-full p-2 transition-colors"
+            onClick={() => setLightbox(null)}
+          >
+            <X size={20} />
+          </button>
+          <Image
+            src={lightbox}
+            alt="名片大圖"
+            width={1200}
+            height={800}
+            className="max-w-[92vw] max-h-[88vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
 
