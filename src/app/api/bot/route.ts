@@ -384,7 +384,7 @@ async function handlePhoto(
       const { error: uploadError } = await supabase.storage
         .from('cards')
         .upload(storagePath, compressed, { contentType: 'image/jpeg', upsert: false })
-      if (uploadError) throw uploadError
+      if (uploadError) throw new Error(uploadError.message ?? String(uploadError))
 
       const { data: publicUrlData } = supabase.storage.from('cards').getPublicUrl(storagePath)
       const backUrl = publicUrlData.publicUrl
@@ -420,6 +420,8 @@ async function handlePhoto(
   }
 
   await sendMessage(chatId, '⏳ 處理中，請稍候...')
+  let uploadedStoragePath: string | null = null
+  let uploadedCardImgUrl: string | null = null
   try {
     const imgBuffer = await downloadTelegramPhoto(photo.file_id)
     let compressed = await processCardImage(imgBuffer)
@@ -438,10 +440,12 @@ async function handlePhoto(
     const { error: uploadError } = await supabase.storage
       .from('cards')
       .upload(storagePath, compressed, { contentType: 'image/jpeg', upsert: false })
-    if (uploadError) throw uploadError
+    if (uploadError) throw new Error(uploadError.message ?? String(uploadError))
 
     const { data: publicUrlData } = supabase.storage.from('cards').getPublicUrl(storagePath)
     const cardImgUrl = publicUrlData.publicUrl
+    uploadedStoragePath = storagePath
+    uploadedCardImgUrl = cardImgUrl
 
     // If no name detected, save as failed scan and notify user
     if (!cardData.name) {
@@ -470,7 +474,7 @@ async function handlePhoto(
       .insert({ data: contactPayload, created_by: user.id, storage_path: storagePath })
       .select('id')
       .single()
-    if (pendingError || !pending) throw new Error('暫存失敗')
+    if (pendingError || !pending) throw new Error(pendingError?.message ?? '暫存失敗')
 
     let countryDisplay = '—'
     if (cardData.country_code) {
@@ -506,6 +510,14 @@ async function handlePhoto(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[bot] photo processing error:', msg)
+    // If image was uploaded but processing failed afterward, save to failed_scans
+    if (uploadedStoragePath && uploadedCardImgUrl) {
+      await supabase.from('failed_scans').insert({
+        user_id: user.id,
+        storage_path: uploadedStoragePath,
+        card_img_url: uploadedCardImgUrl,
+      }).catch(() => {})
+    }
     await sendMessage(chatId, `❌ 處理失敗：${msg}`)
   }
 }
