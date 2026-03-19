@@ -731,7 +731,8 @@ async function handleMet(
     `場合：${metAtStr}\n日期：${metDateStr}${referredStr}\n\n` +
     `${contactList}`
 
-  const contextData = JSON.stringify({
+  // Store context in session (Telegram callback_data has 64-byte limit)
+  await setSession(chatId, 'waiting_met_confirm', {
     contact_ids: contacts.map((c) => c.id),
     met_at: parsed.met_at,
     met_date: metDateStr,
@@ -741,7 +742,7 @@ async function handleMet(
   await sendMessage(chatId, confirmMsg, {
     reply_markup: {
       inline_keyboard: [[
-        { text: '✅ 確認套用', callback_data: `met_confirm_${Buffer.from(contextData).toString('base64url').slice(0, 200)}` },
+        { text: '✅ 確認套用', callback_data: 'met_confirm' },
         { text: '❌ 取消', callback_data: 'met_cancel' },
       ]],
     },
@@ -1572,15 +1573,13 @@ export async function POST(req: NextRequest) {
         }
 
         // ── /met: confirm apply ───────────────────────────────────────────────
-        else if (data?.startsWith('met_confirm_')) {
+        else if (data === 'met_confirm') {
           await answerCallbackQuery(callbackQueryId, '套用中...')
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           try {
-            const b64 = data.replace('met_confirm_', '')
-            const contextData = JSON.parse(Buffer.from(b64, 'base64url').toString())
-            const { contact_ids, met_at, met_date, referred_by } = contextData as {
-              contact_ids: string[]; met_at: string | null; met_date: string; referred_by: string | null
-            }
+            const ctx = session?.context as { contact_ids: string[]; met_at: string | null; met_date: string; referred_by: string | null } | undefined
+            if (!ctx?.contact_ids?.length) throw new Error('找不到待套用資料')
+            const { contact_ids, met_at, met_date, referred_by } = ctx
             await supabase.from('contacts').update({
               met_at: met_at ?? null,
               met_date: met_date ?? null,
@@ -1592,14 +1591,16 @@ export async function POST(req: NextRequest) {
             await supabase.from('interaction_logs').insert(
               contact_ids.map((contact_id) => ({ contact_id, type: 'meeting', content: logContent, created_by: user.id }))
             )
+            await clearSession(from.id)
             await sendMessage(from.id, `✅ 已套用至 ${contact_ids.length} 位聯絡人`)
-          } catch {
-            await sendMessage(from.id, '❌ 套用失敗，請再試一次')
+          } catch (e) {
+            await sendMessage(from.id, `❌ 套用失敗：${e instanceof Error ? e.message : '請再試一次'}`)
           }
         }
 
         // ── /met: cancel ──────────────────────────────────────────────────────
         else if (data === 'met_cancel') {
+          await clearSession(from.id)
           await answerCallbackQuery(callbackQueryId, '已取消')
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await sendMessage(from.id, '已取消。')
