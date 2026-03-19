@@ -157,7 +157,9 @@ async function linkUser(
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await verifyTeamsRequest(req))) {
+  const authOk = await verifyTeamsRequest(req)
+  console.log('[teams-bot] auth ok:', authOk)
+  if (!authOk) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -168,14 +170,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
+  console.log('[teams-bot] RAW body:', JSON.stringify(body))
+
   const activityType = (body.type as string) ?? ''
+  const activityName = (body.name as string) ?? ''
   const serviceUrl = (body.serviceUrl as string) ?? ''
   const conversationId = ((body.conversation as Record<string, string>)?.id) ?? ''
   const from = body.from as Record<string, string> | undefined
   const aadId = from?.aadObjectId ?? ''
   const supabase = createServiceClient()
 
-  console.log('[teams-bot]', { activityType, aadId: aadId || '(none)', conversationId: conversationId.slice(0, 20) })
+  console.log('[teams-bot]', { activityType, activityName, aadId: aadId || '(none)', conversationId: conversationId.slice(0, 20) })
 
   // ── conversationUpdate: user added/messaged the bot for the first time ───
   if (activityType === 'conversationUpdate') {
@@ -193,8 +198,11 @@ export async function POST(req: NextRequest) {
   // ── invoke: Adaptive Card button press ───────────────────────────────────
   if (activityType === 'invoke') {
     const value = body.value as Record<string, unknown> | undefined
-    // Support old format: value = { action: "task_done", task_id: "..." }
-    // Support new Teams adaptiveCard/action format: value = { action: { type, data: { action, task_id } } }
+    console.log('[teams-bot] invoke value:', JSON.stringify(value))
+
+    // Format 1: Action.Submit data directly → value = { action: "task_done", task_id: "..." }
+    // Format 2: adaptiveCard/action invoke → value = { action: { type, data: { action, task_id } } }
+    // Format 3: adaptiveCard/action data at root → value = { data: { action, task_id } }
     let action: string | undefined
     let task_id: string | undefined
     if (typeof value?.action === 'string') {
@@ -204,8 +212,15 @@ export async function POST(req: NextRequest) {
       const data = (value.action as Record<string, unknown>)?.data as Record<string, string> | undefined
       action = data?.action
       task_id = data?.task_id
+    } else if (value?.data && typeof value.data === 'object') {
+      const data = value.data as Record<string, string>
+      action = data?.action
+      task_id = data?.task_id
+    } else if (typeof value?.action === 'undefined' && typeof value?.task_id === 'string') {
+      // Flat format: { action: undefined, task_id: "..." } shouldn't happen, but handle direct data
+      task_id = value.task_id as string
     }
-    console.log('[teams-bot] invoke action:', action, 'task_id:', task_id)
+    console.log('[teams-bot] invoke parsed: action=%s task_id=%s', action ?? '(none)', task_id ?? '(none)')
 
     if (action === 'task_done' && task_id) {
       // 1. Look up by aadObjectId
@@ -258,6 +273,9 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({ type: 'invokeResponse', value: { status: 200 } })
     }
+
+    // Catch-all: always return invokeResponse for invoke activities
+    return NextResponse.json({ type: 'invokeResponse', value: { status: 200 } })
   }
 
   // ── message ───────────────────────────────────────────────────────────────

@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v1.4.0 — Vercel Cron 自動文件生成 + Teams Bot 診斷強化（2026-03-19）
+
+### 變更項目
+- **Vercel Cron**：新增 `vercel.json` 排程，每日凌晨 2:00（台北時間）自動呼叫 `/api/docs/cron` 重新生成 6 份說明書（zh-TW/en/ja × user/super_admin）並 upsert 進 Supabase
+- **Teams Bot invoke 診斷**：新增完整 logging（RAW body、auth result、invoke value）方便查 Vercel Logs 排查問題
+- **Teams Bot invoke 格式相容**：新增第三種 value 格式解析（`value.data.action`），確保所有 Teams invoke payload 格式皆可處理
+- **Teams Bot invoke catch-all**：invoke block 結尾加上保底 `invokeResponse`，防止格式解析失敗時回傳錯誤格式
+
 ## v1.3.9 — 名片辨識失敗審查、/AI 指令、助理 tag picker、多項 UX 改善（2026-03-18）
 
 ### 變更項目
