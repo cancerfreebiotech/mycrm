@@ -3,6 +3,7 @@ import { createServiceClient } from './supabase'
 
 export async function processCardImage(inputBuffer: Buffer): Promise<Buffer> {
   return sharp(inputBuffer)
+    .rotate() // auto-rotate based on EXIF orientation, then strip the tag
     .resize(1024, 1024, {
       fit: 'inside',
       withoutEnlargement: true,
