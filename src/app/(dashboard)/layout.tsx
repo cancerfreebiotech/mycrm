@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import React, { useEffect, useRef, useState } from 'react'
-import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon, Globe, BarChart2, ClipboardList, MapPin, Menu, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon, Globe, BarChart2, ClipboardList, MapPin, Menu, X, ChevronLeft, ChevronRight, Newspaper } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
@@ -118,6 +118,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/admin/users', label: t('users'), icon: ShieldCheck },
     { href: '/admin/prompts', label: t('prompts'), icon: ShieldCheck },
     { href: '/admin/countries', label: t('countries'), icon: MapPin },
+    { href: '/admin/newsletter', label: t('newsletter'), icon: Newspaper },
     { href: '/admin/failed-scans', label: t('failedScans'), icon: ShieldCheck },
   ] : []
 

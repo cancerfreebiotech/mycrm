@@ -9,9 +9,11 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/bot') ||
     pathname.startsWith('/api/teams-bot') ||
     pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/api/sendgrid') ||
     pathname.startsWith('/docs') ||
     pathname === '/api/set-locale' ||
-    pathname.startsWith('/api/admin/')
+    pathname.startsWith('/api/admin/') ||
+    pathname.startsWith('/unsubscribe')
   ) {
     return NextResponse.next()
   }

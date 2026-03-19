@@ -31,6 +31,7 @@
     "tasks": "任務管理",
     "reports": "報表管理",
     "countries": "國家管理",
+    "newsletter": "Newsletter 管理",
     "failedScans": "辨識失敗審查",
     "prompts": "Prompt 管理",
     "logout": "登出"
