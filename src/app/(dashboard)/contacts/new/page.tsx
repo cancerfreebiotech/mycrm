@@ -201,22 +201,24 @@ export default function NewContactPage() {
         )
       }
 
-      // Upload images to contact_cards
+      // Upload images via server API (uses service client to bypass RLS)
       if (files.length > 0) {
-        await Promise.all(
+        const uploadResults = await Promise.all(
           files.map(async (file, i) => {
-            try {
-              const base64 = await compressImage(file)
-              const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
-              const blob = new Blob([bytes], { type: 'image/jpeg' })
-              const filename = `cards/${inserted.id}_${Date.now()}_${i}.jpg`
-              const { error: uploadErr } = await supabase.storage.from('cards').upload(filename, blob, { contentType: 'image/jpeg' })
-              if (uploadErr) { console.error('upload error:', uploadErr.message); return }
-              const { data: urlData } = supabase.storage.from('cards').getPublicUrl(filename)
-              await supabase.from('contact_cards').insert({ contact_id: inserted.id, url: urlData.publicUrl, storage_path: filename, label: i === 0 ? '正面' : `第 ${i + 1} 張` })
-            } catch (e) { console.error('card upload failed:', e) }
+            const base64 = await compressImage(file)
+            const res = await fetch('/api/upload-card', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contactId: inserted.id, base64, index: i }),
+            })
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}))
+              throw new Error(`照片 ${i + 1} 上傳失敗：${err.error ?? res.status}`)
+            }
+            return res.json()
           })
         )
+        console.log('uploaded cards:', uploadResults.length)
       }
 
       // Interaction log
