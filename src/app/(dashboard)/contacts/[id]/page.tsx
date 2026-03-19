@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { sendMail } from '@/lib/graph'
-import { ArrowLeft, ImageIcon, Mail, X, Pencil, Loader2, Plus, Upload, Trash2, Copy, Check, Sparkles, Paperclip, ZoomIn } from 'lucide-react'
+import { ArrowLeft, ImageIcon, Mail, X, Pencil, Loader2, Plus, Upload, Trash2, Copy, Check, Sparkles, Paperclip, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react'
 import Image from 'next/image'
 
 interface Tag { id: string; name: string }
@@ -105,6 +105,66 @@ export default function ContactDetailPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [aiModelId, setAiModelId] = useState<string | null>(null)
   const [lightbox, setLightbox] = useState<string | null>(null)
+  const [lbScale, setLbScale] = useState(1)
+  const [lbOffset, setLbOffset] = useState({ x: 0, y: 0 })
+  const lbDragRef = useRef<{ startX: number; startY: number; ox: number; oy: number } | null>(null)
+  const lbPinchRef = useRef<{ dist: number; scale: number } | null>(null)
+
+  function openLightbox(url: string) { setLightbox(url); setLbScale(1); setLbOffset({ x: 0, y: 0 }) }
+  function closeLightbox() { setLightbox(null); setLbScale(1); setLbOffset({ x: 0, y: 0 }) }
+
+  function lbZoom(delta: number) {
+    setLbScale(s => Math.min(5, Math.max(0.5, s + delta)))
+  }
+
+  function lbReset() { setLbScale(1); setLbOffset({ x: 0, y: 0 }) }
+
+  function lbOnWheel(e: React.WheelEvent) {
+    e.preventDefault()
+    lbZoom(e.deltaY < 0 ? 0.2 : -0.2)
+  }
+
+  function lbOnDoubleClick() {
+    if (lbScale !== 1) { lbReset() } else { setLbScale(2) }
+  }
+
+  function lbOnMouseDown(e: React.MouseEvent) {
+    e.preventDefault()
+    lbDragRef.current = { startX: e.clientX, startY: e.clientY, ox: lbOffset.x, oy: lbOffset.y }
+  }
+
+  function lbOnMouseMove(e: React.MouseEvent) {
+    if (!lbDragRef.current) return
+    const { startX, startY, ox, oy } = lbDragRef.current
+    setLbOffset({ x: ox + e.clientX - startX, y: oy + e.clientY - startY })
+  }
+
+  function lbOnMouseUp() { lbDragRef.current = null }
+
+  function lbOnTouchStart(e: React.TouchEvent) {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      lbPinchRef.current = { dist: Math.hypot(dx, dy), scale: lbScale }
+    } else if (e.touches.length === 1) {
+      lbDragRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, ox: lbOffset.x, oy: lbOffset.y }
+    }
+  }
+
+  function lbOnTouchMove(e: React.TouchEvent) {
+    if (e.touches.length === 2 && lbPinchRef.current) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      const dist = Math.hypot(dx, dy)
+      const newScale = Math.min(5, Math.max(0.5, lbPinchRef.current.scale * (dist / lbPinchRef.current.dist)))
+      setLbScale(newScale)
+    } else if (e.touches.length === 1 && lbDragRef.current) {
+      const { startX, startY, ox, oy } = lbDragRef.current
+      setLbOffset({ x: ox + e.touches[0].clientX - startX, y: oy + e.touches[0].clientY - startY })
+    }
+  }
+
+  function lbOnTouchEnd() { lbDragRef.current = null; lbPinchRef.current = null }
 
   // Add log
   const [logContent, setLogContent] = useState('')
@@ -151,7 +211,7 @@ export default function ContactDetailPage() {
   useEffect(() => { load() }, [id])
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightbox(null) }
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeLightbox() }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [])
@@ -673,7 +733,7 @@ export default function ContactDetailPage() {
           <div className="flex flex-wrap gap-3 mb-4">
             {allCards.map((card) => (
               <div key={card.id} className="relative group">
-                <div className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative" onClick={() => setLightbox(card.url)}>
+                <div className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative" onClick={() => openLightbox(card.url)}>
                   <Image src={card.url} alt={card.label ?? '名片'} width={144} height={96} className="object-cover w-full h-full" />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
                     <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
@@ -856,21 +916,68 @@ export default function ContactDetailPage() {
 
       {/* Lightbox */}
       {lightbox && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50" onClick={() => setLightbox(null)}>
-          <button
-            className="absolute top-4 right-4 text-white/80 hover:text-white bg-black/40 rounded-full p-2 transition-colors"
-            onClick={() => setLightbox(null)}
-          >
-            <X size={20} />
-          </button>
-          <Image
-            src={lightbox}
-            alt="名片大圖"
-            width={1200}
-            height={800}
-            className="max-w-[92vw] max-h-[88vh] object-contain rounded-lg shadow-2xl"
+        <div
+          className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 overflow-hidden"
+          onClick={closeLightbox}
+        >
+          {/* Toolbar */}
+          <div className="absolute top-4 right-4 flex items-center gap-2 z-10" onClick={(e) => e.stopPropagation()}>
+            <button
+              className="text-white/80 hover:text-white bg-black/40 rounded-full p-2 transition-colors"
+              onClick={() => lbZoom(0.25)}
+              title="放大"
+            ><ZoomIn size={18} /></button>
+            <button
+              className="text-white/80 hover:text-white bg-black/40 rounded-full p-2 transition-colors"
+              onClick={() => lbZoom(-0.25)}
+              title="縮小"
+            ><ZoomOut size={18} /></button>
+            <button
+              className="text-white/80 hover:text-white bg-black/40 rounded-full p-2 transition-colors"
+              onClick={lbReset}
+              title="重置"
+            ><Maximize2 size={18} /></button>
+            <button
+              className="text-white/80 hover:text-white bg-black/40 rounded-full p-2 transition-colors"
+              onClick={closeLightbox}
+              title="關閉"
+            ><X size={18} /></button>
+          </div>
+
+          {/* Scale indicator */}
+          <div className="absolute top-4 left-4 text-white/60 text-xs bg-black/40 rounded px-2 py-1 z-10 select-none">
+            {Math.round(lbScale * 100)}%
+          </div>
+
+          {/* Image */}
+          <div
+            className="select-none"
+            style={{
+              transform: `translate(${lbOffset.x}px, ${lbOffset.y}px) scale(${lbScale})`,
+              transformOrigin: 'center center',
+              cursor: lbScale > 1 ? 'grab' : 'default',
+              transition: lbDragRef.current ? 'none' : 'transform 0.1s ease',
+            }}
             onClick={(e) => e.stopPropagation()}
-          />
+            onDoubleClick={lbOnDoubleClick}
+            onWheel={lbOnWheel}
+            onMouseDown={lbOnMouseDown}
+            onMouseMove={lbOnMouseMove}
+            onMouseUp={lbOnMouseUp}
+            onMouseLeave={lbOnMouseUp}
+            onTouchStart={lbOnTouchStart}
+            onTouchMove={lbOnTouchMove}
+            onTouchEnd={lbOnTouchEnd}
+          >
+            <Image
+              src={lightbox}
+              alt="名片大圖"
+              width={1200}
+              height={800}
+              className="max-w-[92vw] max-h-[88vh] object-contain rounded-lg shadow-2xl pointer-events-none"
+              draggable={false}
+            />
+          </div>
         </div>
       )}
 
