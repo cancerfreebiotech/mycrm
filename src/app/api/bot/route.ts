@@ -700,6 +700,7 @@ async function handleMet(
   const nowIso = new Date().toISOString()
 
   console.log('[bot] handleMet called:', { chatId, count, description })
+  await sendMessage(chatId, '🤖 AI 分析中...')
   let parsed
   try {
     parsed = await parseMetCommand(description, nowIso, user.ai_model_id)

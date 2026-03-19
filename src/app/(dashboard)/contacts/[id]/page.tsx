@@ -209,6 +209,10 @@ export default function ContactDetailPage() {
   const [msProviderToken, setMsProviderToken] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set())
+  const [editingLogId, setEditingLogId] = useState<string | null>(null)
+  const [editingLogContent, setEditingLogContent] = useState('')
+  const [editingLogMeetingDate, setEditingLogMeetingDate] = useState('')
+  const [savingLogId, setSavingLogId] = useState<string | null>(null)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const [lbScale, setLbScale] = useState(1)
   const [lbOffset, setLbOffset] = useState({ x: 0, y: 0 })
@@ -578,6 +582,20 @@ export default function ContactDetailPage() {
       logsOffsetRef.current += 1
     }
     setLogContent(''); setLogDate(''); setAddingLog(false)
+  }
+
+  async function saveLogEdit(logId: string) {
+    setSavingLogId(logId)
+    await supabase.from('interaction_logs').update({
+      content: editingLogContent,
+      meeting_date: editingLogMeetingDate || null,
+    }).eq('id', logId)
+    setLogs((prev) => prev.map((l) => l.id === logId
+      ? { ...l, content: editingLogContent, meeting_date: editingLogMeetingDate || null }
+      : l
+    ))
+    setEditingLogId(null)
+    setSavingLogId(null)
   }
 
   // ── Email copy ────────────────────────────────────────────────────────────────
@@ -1096,7 +1114,42 @@ export default function ContactDetailPage() {
                       </button>
                     )}
                   </div>
-                  <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-line">{log.content}</p>
+                  {editingLogId === log.id ? (
+                    <div className="mt-1 space-y-2">
+                      <textarea
+                        value={editingLogContent}
+                        onChange={(e) => setEditingLogContent(e.target.value)}
+                        rows={3}
+                        className="w-full px-3 py-2 text-sm border border-blue-300 dark:border-blue-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                      />
+                      {log.type === 'meeting' && (
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs text-gray-500 dark:text-gray-400 shrink-0">📅 會議日期</label>
+                          <input
+                            type="date"
+                            value={editingLogMeetingDate}
+                            onChange={(e) => setEditingLogMeetingDate(e.target.value)}
+                            className="px-2 py-1 text-sm border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800"
+                          />
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => saveLogEdit(log.id)}
+                          disabled={savingLogId === log.id}
+                          className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          {savingLogId === log.id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                          儲存
+                        </button>
+                        <button onClick={() => setEditingLogId(null)} className="px-3 py-1 text-xs text-gray-500 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
+                          取消
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-line">{log.content}</p>
+                  )}
                   {isEmailLog && expanded && (
                     <div className="mt-2 ml-0.5 space-y-2 border-l-2 border-green-200 dark:border-green-800 pl-3">
                       {log.email_subject && (
@@ -1128,6 +1181,19 @@ export default function ContactDetailPage() {
                   <div className="flex items-center gap-2 mt-0.5">
                     {log.users?.display_name && <span className="text-xs text-gray-500 dark:text-gray-400">{log.users.display_name}</span>}
                     <time className="text-xs text-gray-400 dark:text-gray-500">{new Date(log.created_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}</time>
+                    {log.type !== 'system' && !isEmailLog && editingLogId !== log.id && (
+                      <button
+                        onClick={() => {
+                          setEditingLogId(log.id)
+                          setEditingLogContent(log.content ?? '')
+                          setEditingLogMeetingDate(log.meeting_date ?? '')
+                        }}
+                        className="text-gray-300 hover:text-gray-500 dark:hover:text-gray-400 ml-1"
+                        title="編輯"
+                      >
+                        <Pencil size={11} />
+                      </button>
+                    )}
                   </div>
                 </li>
               )
