@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
-import { analyzeBusinessCard, generateEmailContent, parseTaskCommand, parseMeetingCommand } from '@/lib/gemini'
+import { analyzeBusinessCard, generateEmailContent, parseTaskCommand, parseMeetingCommand, parseMetCommand } from '@/lib/gemini'
 import { processCardImage, generateCardFilename } from '@/lib/imageProcessor'
 import { checkDuplicates } from '@/lib/duplicate'
 import { sendMail, createCalendarEvent } from '@/lib/graph'
@@ -283,6 +283,8 @@ async function handleHelp(chatId: number) {
     `/add_back @姓名　/ab @姓名 — 補充名片反面\n` +
     `/work [描述]　/w — AI 解析任務，指派給他人或提醒自己\n` +
     `/meet [描述]　/m — AI 安排會議行程，確認後建立 Outlook 邀請\n` +
+    `/met {數量} {描述}　— 批次記錄最近 N 位聯絡人的認識場合\n` +
+    `　　例：/met 5 台北生技展 王小明介紹 昨天\n` +
     `/tasks　/t — 列出我的待處理任務\n` +
     `/user　/u — 列出組織成員\n` +
     `/AI — 顯示目前使用的 AI 模型\n` +
@@ -686,6 +688,66 @@ async function handleWork(
   )
 }
 
+// ── Handle /met ───────────────────────────────────────────────────────────────
+
+async function handleMet(
+  chatId: number,
+  user: { id: string; email: string; ai_model_id: string | null },
+  count: number,
+  description: string
+) {
+  const supabase = createServiceClient()
+  const nowIso = new Date().toISOString()
+
+  let parsed
+  try {
+    parsed = await parseMetCommand(description, nowIso, user.ai_model_id)
+  } catch {
+    await sendMessage(chatId, '❌ AI 解析失敗，請再試一次')
+    return
+  }
+
+  // Fetch most recent N contacts created by this user
+  const { data: contacts } = await supabase
+    .from('contacts')
+    .select('id, name, company')
+    .eq('created_by', user.id)
+    .order('created_at', { ascending: false })
+    .limit(count)
+
+  if (!contacts || contacts.length === 0) {
+    await sendMessage(chatId, '找不到最近的聯絡人記錄')
+    return
+  }
+
+  const metDateStr = parsed.met_date
+  const metAtStr = parsed.met_at ?? '（未指定）'
+  const referredStr = parsed.referred_by ? `\n介紹人：${parsed.referred_by}` : ''
+
+  const contactList = contacts.map((c, i) => `${i + 1}. ${c.name ?? '—'}（${c.company ?? '—'}）`).join('\n')
+
+  const confirmMsg =
+    `📍 準備套用到最近 ${contacts.length} 位聯絡人：\n\n` +
+    `場合：${metAtStr}\n日期：${metDateStr}${referredStr}\n\n` +
+    `${contactList}`
+
+  const contextData = JSON.stringify({
+    contact_ids: contacts.map((c) => c.id),
+    met_at: parsed.met_at,
+    met_date: metDateStr,
+    referred_by: parsed.referred_by,
+  })
+
+  await sendMessage(chatId, confirmMsg, {
+    reply_markup: {
+      inline_keyboard: [[
+        { text: '✅ 確認套用', callback_data: `met_confirm_${Buffer.from(contextData).toString('base64url').slice(0, 200)}` },
+        { text: '❌ 取消', callback_data: 'met_cancel' },
+      ]],
+    },
+  })
+}
+
 // ── Handle /tasks ─────────────────────────────────────────────────────────────
 
 async function handleTasks(
@@ -928,6 +990,14 @@ async function handleText(
   const meetMatch = text.match(/^\/(?:meet|m)(?:@\S+)?\s*([\s\S]*)$/i)
   if (meetMatch) {
     await handleMeet(chatId, user, meetMatch[1].trim())
+    return
+  }
+
+  // ── /met ───────────────────────────────────────────────────────────────────
+  const metMatch = cmd.match(/^\/met\s+(\d+)\s+([\s\S]+)/)
+  if (metMatch) {
+    const count = Math.min(parseInt(metMatch[1], 10), 20)
+    await handleMet(chatId, user, count, metMatch[2].trim())
     return
   }
 
@@ -1499,6 +1569,40 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId, '已取消')
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await sendMessage(from.id, '已取消發信。')
+        }
+
+        // ── /met: confirm apply ───────────────────────────────────────────────
+        else if (data?.startsWith('met_confirm_')) {
+          await answerCallbackQuery(callbackQueryId, '套用中...')
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          try {
+            const b64 = data.replace('met_confirm_', '')
+            const contextData = JSON.parse(Buffer.from(b64, 'base64url').toString())
+            const { contact_ids, met_at, met_date, referred_by } = contextData as {
+              contact_ids: string[]; met_at: string | null; met_date: string; referred_by: string | null
+            }
+            await supabase.from('contacts').update({
+              met_at: met_at ?? null,
+              met_date: met_date ?? null,
+              referred_by: referred_by ?? null,
+            }).in('id', contact_ids)
+            const logContent =
+              `認識於：${met_at ?? '—'}（${met_date}）` +
+              (referred_by ? `，介紹人：${referred_by}` : '')
+            await supabase.from('interaction_logs').insert(
+              contact_ids.map((contact_id) => ({ contact_id, type: 'meeting', content: logContent, created_by: user.id }))
+            )
+            await sendMessage(from.id, `✅ 已套用至 ${contact_ids.length} 位聯絡人`)
+          } catch {
+            await sendMessage(from.id, '❌ 套用失敗，請再試一次')
+          }
+        }
+
+        // ── /met: cancel ──────────────────────────────────────────────────────
+        else if (data === 'met_cancel') {
+          await answerCallbackQuery(callbackQueryId, '已取消')
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, '已取消。')
         }
 
         // ── /tasks: mark done ─────────────────────────────────────────────────

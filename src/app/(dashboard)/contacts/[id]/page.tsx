@@ -29,6 +29,9 @@ interface Contact {
   facebook_url: string | null
   notes: string | null
   country_code: string | null
+  met_at: string | null
+  met_date: string | null
+  referred_by: string | null
   card_img_url: string | null
   card_img_back_url: string | null
   created_at: string
@@ -70,6 +73,9 @@ const EMPTY_EDIT = {
   linkedin_url: '', facebook_url: '',
   notes: '',
   country_code: '',
+  met_at: '',
+  met_date: '',
+  referred_by: '',
 }
 
 const OCR_FIELD_LABELS: Record<string, string> = {
@@ -391,6 +397,9 @@ export default function ContactDetailPage() {
       facebook_url: contact.facebook_url ?? '',
       notes: contact.notes ?? '',
       country_code: contact.country_code ?? '',
+      met_at: contact.met_at ?? '',
+      met_date: contact.met_date ?? '',
+      referred_by: contact.referred_by ?? '',
     })
     setEditOpen(true)
   }
@@ -839,6 +848,14 @@ export default function ContactDetailPage() {
               <div className="flex gap-3 text-sm mt-2">
                 <span className="w-24 text-gray-400 dark:text-gray-500 shrink-0">{t('notes')}</span>
                 <span className="text-gray-700 dark:text-gray-300 whitespace-pre-line">{contact.notes}</span>
+              </div>
+            )}
+            {(contact.met_at || contact.met_date || contact.referred_by) && (
+              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">{t('sectionMet')}</p>
+                <InfoRow label={t('metAt')} value={contact.met_at} />
+                <InfoRow label={t('metDate')} value={contact.met_date ? new Date(contact.met_date).toLocaleDateString('zh-TW') : null} />
+                <InfoRow label={t('referredBy')} value={contact.referred_by} />
               </div>
             )}
           </div>
@@ -1295,6 +1312,28 @@ export default function ContactDetailPage() {
                 <label className={labelClass}>{t('notes')}</label>
                 <textarea value={editForm.notes} onChange={(e) => setEditForm((prev) => ({ ...prev, notes: e.target.value }))}
                   rows={3} className={inputClass + ' resize-none'} />
+              </div>
+
+              {/* Met section */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">{t('sectionMet')}</p>
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <label className={labelClass}>{t('metAt')}</label>
+                    <input type="text" value={editForm.met_at} onChange={(e) => setEditForm((prev) => ({ ...prev, met_at: e.target.value }))}
+                      placeholder="e.g. 台北生技展 2026" className={inputClass} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>{t('metDate')}</label>
+                    <input type="date" value={editForm.met_date} onChange={(e) => setEditForm((prev) => ({ ...prev, met_date: e.target.value }))}
+                      className={inputClass} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>{t('referredBy')}</label>
+                    <input type="text" value={editForm.referred_by} onChange={(e) => setEditForm((prev) => ({ ...prev, referred_by: e.target.value }))}
+                      placeholder="e.g. 王小明" className={inputClass} />
+                  </div>
+                </div>
               </div>
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700 sticky bottom-0 bg-white dark:bg-gray-900">

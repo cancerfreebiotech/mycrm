@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Search, Download, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Copy, Check } from 'lucide-react'
+import { Search, Download, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Copy, Check, Loader2, X } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 interface Tag {
@@ -27,6 +27,7 @@ interface Contact {
   email: string | null
   phone: string | null
   country_code: string | null
+  met_at: string | null
   created_at: string
   users: { display_name: string | null } | null
   contact_tags: { tags: Tag }[]
@@ -43,6 +44,7 @@ export default function ContactsPage() {
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [allCountries, setAllCountries] = useState<Country[]>([])
   const [query, setQuery] = useState('')
+  const [metQuery, setMetQuery] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false)
   const [selectedCountries, setSelectedCountries] = useState<string[]>([])
@@ -53,6 +55,10 @@ export default function ContactsPage() {
   type SortField = 'name' | 'company' | 'job_title' | 'email' | 'phone' | 'created_at'
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [batchModalOpen, setBatchModalOpen] = useState(false)
+  const [batchForm, setBatchForm] = useState({ met_at: '', met_date: new Date().toISOString().slice(0, 10), referred_by: '' })
+  const [batchSaving, setBatchSaving] = useState(false)
 
   function copyEmail(email: string) {
     navigator.clipboard.writeText(email)
@@ -69,7 +75,7 @@ export default function ContactsPage() {
     const [{ data: contactData }, { data: tagData }, { data: countryData }] = await Promise.all([
       supabase
         .from('contacts')
-        .select('id, name, company, job_title, email, phone, country_code, created_at, users(display_name), contact_tags(tags(id, name))')
+        .select('id, name, company, job_title, email, phone, country_code, met_at, created_at, users(display_name), contact_tags(tags(id, name))')
         .order('created_at', { ascending: false }),
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),
@@ -123,6 +129,8 @@ export default function ContactsPage() {
       !query ||
       c.name?.toLowerCase().includes(query.toLowerCase()) ||
       c.company?.toLowerCase().includes(query.toLowerCase())
+    const matchMet =
+      !metQuery || c.met_at?.toLowerCase().includes(metQuery.toLowerCase())
     const matchTags =
       selectedTags.length === 0 ||
       selectedTags.every((tid) => c.contact_tags.some((ct) => ct.tags?.id === tid))
@@ -131,7 +139,7 @@ export default function ContactsPage() {
       selectedCountries.some((code) =>
         code === '__other__' ? !c.country_code : c.country_code === code
       )
-    return matchQuery && matchTags && matchCountry
+    return matchQuery && matchMet && matchTags && matchCountry
   })
 
   const sorted = sortField
@@ -147,6 +155,49 @@ export default function ContactsPage() {
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
   const paginated = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === paginated.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(paginated.map((c) => c.id)))
+    }
+  }
+
+  async function handleBatchSave() {
+    setBatchSaving(true)
+    const supabase = createBrowserSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: profile } = await supabase.from('users').select('id').eq('email', user!.email!).single()
+    const ids = Array.from(selectedIds)
+    await supabase.from('contacts').update({
+      met_at: batchForm.met_at || null,
+      met_date: batchForm.met_date || null,
+      referred_by: batchForm.referred_by || null,
+    }).in('id', ids)
+    const logContent =
+      `認識於：${batchForm.met_at || '—'}（${batchForm.met_date}）` +
+      (batchForm.referred_by ? `，介紹人：${batchForm.referred_by}` : '')
+    await supabase.from('interaction_logs').insert(
+      ids.map((contact_id) => ({ contact_id, type: 'meeting', content: logContent, created_by: profile!.id }))
+    )
+    setContacts((prev) => prev.map((c) =>
+      ids.includes(c.id)
+        ? { ...c, met_at: batchForm.met_at || null }
+        : c
+    ))
+    setBatchSaving(false)
+    setBatchModalOpen(false)
+    setSelectedIds(new Set())
+  }
 
   function exportData(format: 'xlsx' | 'csv') {
     const rows = sorted.map((c) => ({
@@ -190,6 +241,14 @@ export default function ContactsPage() {
           >
             <Plus size={14} /> {t('batchUpload')}
           </Link>
+          {selectedIds.size > 0 && (
+            <button
+              onClick={() => setBatchModalOpen(true)}
+              className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600"
+            >
+              <Check size={14} /> 批次編輯（{selectedIds.size}）
+            </button>
+          )}
           <Link
             href="/contacts/new"
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -304,6 +363,15 @@ export default function ContactsPage() {
             </div>
           )}
         </div>
+
+        {/* Met-at filter */}
+        <input
+          type="text"
+          placeholder={t('metFilter')}
+          value={metQuery}
+          onChange={(e) => { setMetQuery(e.target.value); setPage(1) }}
+          className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 w-36"
+        />
       </div>
 
       {/* Mobile card list */}
@@ -356,6 +424,14 @@ export default function ContactsPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <tr>
+              <th className="px-3 py-3 w-8">
+                <input
+                  type="checkbox"
+                  checked={paginated.length > 0 && selectedIds.size === paginated.length}
+                  onChange={toggleSelectAll}
+                  className="rounded"
+                />
+              </th>
               {([
                 [t('name'), 'name'],
                 [t('company'), 'company'],
@@ -393,15 +469,18 @@ export default function ContactsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">{tc('loading')}</td>
+                <td colSpan={9} className="px-4 py-8 text-center text-gray-400">{tc('loading')}</td>
               </tr>
             ) : sorted.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">{t('noResults')}</td>
+                <td colSpan={9} className="px-4 py-8 text-center text-gray-400">{t('noResults')}</td>
               </tr>
             ) : (
               paginated.map((c) => (
-                <tr key={c.id} className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                <tr key={c.id} className={`border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 ${selectedIds.has(c.id) ? 'bg-amber-50 dark:bg-amber-950/20' : ''}`}>
+                  <td className="px-3 py-3">
+                    <input type="checkbox" checked={selectedIds.has(c.id)} onChange={() => toggleSelect(c.id)} className="rounded" />
+                  </td>
                   <td className="px-4 py-3">
                     <Link href={`/contacts/${c.id}`} className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
                       {c.name || '—'}
@@ -499,6 +578,47 @@ export default function ContactsPage() {
           >
             »
           </button>
+        </div>
+      )}
+      {/* Batch Edit Modal */}
+      {batchModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('batchEditTitle')}</h2>
+              <button onClick={() => setBatchModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"><X size={18} /></button>
+            </div>
+            <p className="text-xs text-amber-600 dark:text-amber-400 mb-4">{t('batchEditHint', { count: selectedIds.size })}</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('metAt')}</label>
+                <input type="text" value={batchForm.met_at} onChange={(e) => setBatchForm((p) => ({ ...p, met_at: e.target.value }))}
+                  placeholder="e.g. 台北生技展 2026"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('metDate')}</label>
+                <input type="date" value={batchForm.met_date} onChange={(e) => setBatchForm((p) => ({ ...p, met_date: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('referredBy')}</label>
+                <input type="text" value={batchForm.referred_by} onChange={(e) => setBatchForm((p) => ({ ...p, referred_by: e.target.value }))}
+                  placeholder="e.g. 王小明"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => setBatchModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
+                {tc('cancel')}
+              </button>
+              <button onClick={handleBatchSave} disabled={batchSaving}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                {batchSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                {t('batchEditApply')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

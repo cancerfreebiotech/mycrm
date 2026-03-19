@@ -94,6 +94,14 @@
       "email": "Email",
       "system": "System"
     },
+    "metAt": "Met At",
+    "metDate": "Met Date",
+    "referredBy": "Referred By",
+    "sectionMet": "Meeting Info",
+    "metFilter": "Filter by Event",
+    "batchEditTitle": "Batch Edit Meeting Info",
+    "batchEditHint": "Will apply to {count} selected contacts",
+    "batchEditApply": "Apply",
     "duplicate": {
       "exactEmail": "Email already exists: {name} ({company})",
       "similar": "Similar contact found: {name} ({company})"

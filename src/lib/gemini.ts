@@ -129,6 +129,35 @@ export async function parseMeetingCommand(
   return JSON.parse(raw) as MeetingParsed
 }
 
+export interface MetParsed {
+  met_at: string | null
+  met_date: string  // YYYY-MM-DD
+  referred_by: string | null
+}
+
+export async function parseMetCommand(
+  text: string,
+  nowIso: string,
+  aiModelId: string | null = null
+): Promise<MetParsed> {
+  const { modelId, apiKey } = await resolveModelConfig(aiModelId)
+  const genAI = new GoogleGenerativeAI(apiKey)
+  const geminiModel = genAI.getGenerativeModel({ model: modelId })
+
+  const todayDate = nowIso.slice(0, 10)
+  const prompt =
+    `現在日期（UTC+8）：${todayDate}\n\n` +
+    `從以下描述中解析三個欄位，回傳 JSON（無 markdown wrapper）：\n` +
+    `- met_at：認識場合（活動名稱/地點），沒提到則 null\n` +
+    `- met_date：認識日期（YYYY-MM-DD），沒提到則今天（${todayDate}）；支援「昨天」「上週五」等自然語言\n` +
+    `- referred_by：介紹人姓名，沒提到則 null\n\n` +
+    `描述：${text}`
+
+  const result = await geminiModel.generateContent(prompt)
+  const raw = result.response.text().trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
+  return JSON.parse(raw) as MetParsed
+}
+
 export async function generateEmailContent(
   description: string,
   templateContent?: string,

@@ -94,6 +94,14 @@
       "email": "メール",
       "system": "システム"
     },
+    "metAt": "出会いの場所",
+    "metDate": "出会いの日付",
+    "referredBy": "紹介者",
+    "sectionMet": "出会い情報",
+    "metFilter": "イベントで絞り込み",
+    "batchEditTitle": "出会い情報を一括編集",
+    "batchEditHint": "選択した {count} 件の連絡先に適用します",
+    "batchEditApply": "適用する",
     "duplicate": {
       "exactEmail": "このメールアドレスは既に登録されています：{name}（{company}）",
       "similar": "類似した連絡先が見つかりました：{name}（{company}）"

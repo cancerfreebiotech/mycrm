@@ -19,7 +19,7 @@ type OcrFields = {
   website: string; linkedin_url: string; facebook_url: string
 }
 
-const EMPTY_FORM: OcrFields & { notes: string; country_code: string } = {
+const EMPTY_FORM: OcrFields & { notes: string; country_code: string; met_at: string; met_date: string; referred_by: string } = {
   name: '', name_en: '', name_local: '',
   company: '', company_en: '', company_local: '',
   job_title: '',
@@ -29,6 +29,9 @@ const EMPTY_FORM: OcrFields & { notes: string; country_code: string } = {
   linkedin_url: '', facebook_url: '',
   notes: '',
   country_code: '',
+  met_at: '',
+  met_date: '',
+  referred_by: '',
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -560,6 +563,17 @@ export default function NewContactPage() {
               className={inputClass + ' resize-none'}
             />
           </div>
+        </section>
+
+        {/* Met section */}
+        <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('sectionMet')}</h2>
+          <Field label={t('metAt')} field="met_at" />
+          <div>
+            <label className={labelClass}>{t('metDate')}</label>
+            <input type="date" value={form.met_date} onChange={(e) => set('met_date', e.target.value)} className={inputClass} />
+          </div>
+          <Field label={t('referredBy')} field="referred_by" />
         </section>
 
         {/* Tags */}

@@ -94,6 +94,14 @@
       "email": "郵件",
       "system": "系統"
     },
+    "metAt": "認識場合",
+    "metDate": "認識日期",
+    "referredBy": "介紹人",
+    "sectionMet": "認識資訊",
+    "metFilter": "場合篩選",
+    "batchEditTitle": "批次編輯認識資訊",
+    "batchEditHint": "將套用至已選取的 {count} 位聯絡人",
+    "batchEditApply": "確認套用",
     "duplicate": {
       "exactEmail": "此 email 已有聯絡人：{name}（{company}）",
       "similar": "系統有相似聯絡人：{name}（{company}）"
