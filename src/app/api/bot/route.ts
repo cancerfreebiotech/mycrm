@@ -420,32 +420,32 @@ async function handlePhoto(
   }
 
   await sendMessage(chatId, '⏳ 處理中，請稍候...')
-  let uploadedStoragePath: string | null = null
-  let uploadedCardImgUrl: string | null = null
+  let storagePath: string | null = null
+  let cardImgUrl: string | null = null
   try {
     const imgBuffer = await downloadTelegramPhoto(photo.file_id)
-    let compressed = await processCardImage(imgBuffer)
+    const compressed = await processCardImage(imgBuffer)
 
-    // OCR first to get rotation hint, then rotate before uploading
-    const cardData = await analyzeBusinessCard(compressed, user.ai_model_id)
-
-    if (cardData.rotation && cardData.rotation !== 0) {
-      const sharp = (await import('sharp')).default
-      compressed = await sharp(compressed).rotate(cardData.rotation).jpeg({ quality: 85 }).toBuffer()
-    }
-
+    // Upload first so we always have the image available for failed_scans
     const filename = await generateCardFilename()
-    const storagePath = `cards/${filename}`
-
+    storagePath = `cards/${filename}`
     const { error: uploadError } = await supabase.storage
       .from('cards')
       .upload(storagePath, compressed, { contentType: 'image/jpeg', upsert: false })
     if (uploadError) throw new Error(uploadError.message ?? String(uploadError))
 
     const { data: publicUrlData } = supabase.storage.from('cards').getPublicUrl(storagePath)
-    const cardImgUrl = publicUrlData.publicUrl
-    uploadedStoragePath = storagePath
-    uploadedCardImgUrl = cardImgUrl
+    cardImgUrl = publicUrlData.publicUrl
+
+    // OCR after upload
+    const cardData = await analyzeBusinessCard(compressed, user.ai_model_id)
+
+    // Rotate and re-upload if Gemini detected non-zero rotation
+    if (cardData.rotation && cardData.rotation !== 0) {
+      const sharp = (await import('sharp')).default
+      const rotated = await sharp(compressed).rotate(cardData.rotation).jpeg({ quality: 85 }).toBuffer()
+      await supabase.storage.from('cards').update(storagePath, rotated, { contentType: 'image/jpeg' })
+    }
 
     // If no name detected, save as failed scan and notify user
     if (!cardData.name) {
@@ -508,15 +508,16 @@ async function handlePhoto(
       },
     })
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error('[bot] photo processing error:', msg)
-    // If image was uploaded but processing failed afterward, save to failed_scans
-    if (uploadedStoragePath && uploadedCardImgUrl) {
+    const e = err as { message?: string }
+    const msg = e?.message ?? String(err)
+    console.error('[bot] photo processing error:', msg, err)
+    // Save to failed_scans if image was already uploaded
+    if (storagePath && cardImgUrl) {
       await supabase.from('failed_scans').insert({
         user_id: user.id,
-        storage_path: uploadedStoragePath,
-        card_img_url: uploadedCardImgUrl,
-      }).catch(() => {})
+        storage_path: storagePath,
+        card_img_url: cardImgUrl,
+      }).catch((e2) => console.error('[bot] failed_scans insert error:', e2))
     }
     await sendMessage(chatId, `❌ 處理失敗：${msg}`)
   }
