@@ -2173,9 +2173,9 @@ Header 顯示排序圖示（使用已有的 `lucide-react`）：
 
 ## 二十七、v1.3 補充任務清單
 
-- [ ] **Task 76** `[修改]` — Dashboard 新增國家統計區塊（`loadCountryStats()`，長條圖，每行可點擊跳轉 `/contacts?country={code}`）；修改檔案：`src/app/(dashboard)/page.tsx`、`messages/zh-TW.json`、`messages/en.json`、`messages/ja.json`
-- [ ] **Task 77** `[修改]` — Dashboard Tag 分布區塊改為可點擊（每行包 `<Link href="/contacts?tag={name}">`，加 `›` 箭頭）；修改檔案：`src/app/(dashboard)/page.tsx`
-- [ ] **Task 78** `[修改]` — 聯絡人列表新增：(A) `useSearchParams()` 讀取 `?tag` / `?country` 初始化篩選、(B) 國家篩選 dropdown、(C) 職稱欄三段式排序（asc/desc/無）；修改檔案：`src/app/(dashboard)/contacts/page.tsx`、`messages/zh-TW.json`、`messages/en.json`、`messages/ja.json`
+- [x] **Task 76** `[修改]` — Dashboard 新增國家統計區塊（`loadCountryStats()`，長條圖，每行可點擊跳轉 `/contacts?country={code}`）；修改檔案：`src/app/(dashboard)/page.tsx`、`messages/zh-TW.json`、`messages/en.json`、`messages/ja.json`
+- [x] **Task 77** `[修改]` — Dashboard Tag 分布區塊改為可點擊（每行包 `<Link href="/contacts?tag={name}">`，加 `›` 箭頭）；修改檔案：`src/app/(dashboard)/page.tsx`
+- [x] **Task 78** `[修改]` — 聯絡人列表新增：(A) `useSearchParams()` 讀取 `?tag` / `?country` 初始化篩選、(B) 國家篩選 dropdown、(C) 職稱欄三段式排序（asc/desc/無）；修改檔案：`src/app/(dashboard)/contacts/page.tsx`、`messages/zh-TW.json`、`messages/en.json`、`messages/ja.json`
 
 ---
 
