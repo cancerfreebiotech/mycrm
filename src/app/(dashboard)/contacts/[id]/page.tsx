@@ -793,10 +793,10 @@ export default function ContactDetailPage() {
   // All card images: from contact_cards table + legacy fields
   const legacyCards: ContactCard[] = []
   if (contact.card_img_url && contactCards.length === 0) {
-    legacyCards.push({ id: 'legacy-front', url: contact.card_img_url, label: '正面', created_at: contact.created_at })
+    legacyCards.push({ id: 'legacy-front', card_img_url: contact.card_img_url, label: '正面', created_at: contact.created_at })
   }
   if (contact.card_img_back_url && contactCards.length === 0) {
-    legacyCards.push({ id: 'legacy-back', url: contact.card_img_back_url, label: '反面', created_at: contact.created_at })
+    legacyCards.push({ id: 'legacy-back', card_img_url: contact.card_img_back_url, label: '反面', created_at: contact.created_at })
   }
   const allCards = contactCards.length > 0 ? contactCards : legacyCards
 
