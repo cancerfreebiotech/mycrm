@@ -2569,3 +2569,116 @@ create table if not exists newsletter_blacklist (
 - [ ] **Task 81** `[修改]` — 設定 pg_cron 每天依 send_hour 觸發 `send-newsletter`
 - [ ] **Task 82** `[新增]` — 新增 Newsletter 管理頁 `/admin/newsletter`（Campaign 列表、Wizard 新增/編輯、詳情、退訂管理、黑名單）
 - [ ] **Task 83** `[修改]` — 更新 Dashboard Layout（Sidebar 新增 Newsletter 項目，僅 super_admin）
+
+---
+
+## 二十八、v1.6.1 — 認識場合記錄
+
+### 28.1 `contacts` 新增欄位
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| met_at | text (nullable) | 認識場合，如「台北生技展 2026」 |
+| met_date | date (nullable) | 認識日期，預設今天 |
+| referred_by | text (nullable) | 介紹人（自由文字） |
+
+### 28.2 網頁批次編輯
+
+聯絡人列表新增多選功能：
+- 勾選多筆聯絡人後，出現「批次編輯」按鈕
+- 開啟 Modal，填入：認識場合、認識日期（預設今天）、介紹人
+- 確認後批次更新選取聯絡人的三個欄位
+- 同時每個聯絡人各寫一筆 interaction_log：
+  - type = `meeting`
+  - content = `認識於：{met_at}（{met_date}）{referred_by 若有則加「，介紹人：{referred_by}」}`
+
+### 28.3 聯絡人列表新增篩選
+
+- 新增 `met_at` 關鍵字篩選（文字 contains）
+- 可與 Tag、國家篩選同時使用
+
+### 28.4 Migration SQL
+
+```sql
+alter table contacts add column if not exists met_at text;
+alter table contacts add column if not exists met_date date;
+alter table contacts add column if not exists referred_by text;
+```
+
+---
+
+## 二十九、v1.6.2 — Bot `/met` 批次套用
+
+### 29.1 指令設計
+
+**格式：**
+```
+/met {數量} {自然語言描述}
+```
+
+**範例：**
+```
+/met 5 台北生技展 王小明 昨天
+/met 5 上週的生技展
+/met 3 在王小明公司的會議 他介紹的 上週五
+/met 10 今天的醫療論壇 無介紹人
+```
+
+### 29.2 AI 解析流程
+
+1. 收到 `/met` 指令後，將數量後的文字送給 Gemini 解析
+2. Gemini 回傳 JSON：
+```json
+{
+  "met_at": "台北生技展",
+  "met_date": "2026-03-18",
+  "referred_by": "王小明"
+}
+```
+- `met_date` 沒提到日期 → 預設今天
+- `referred_by` 沒提到介紹人 → null
+- 日期自然語言（昨天、上週五）自動換算成實際日期
+
+3. Bot 顯示確認訊息：
+```
+📍 準備套用到最近 5 位聯絡人：
+
+場合：台北生技展
+日期：2026-03-18
+介紹人：王小明
+
+最近 5 位聯絡人：
+1. 陳大華（ABC 公司）
+2. 林美玲（XYZ 公司）
+3. ...
+
+[✅ 確認套用] [❌ 取消]
+```
+
+4. 確認後：
+   - 批次更新這 N 筆聯絡人的 `met_at`、`met_date`、`referred_by`
+   - 每筆各寫一筆 interaction_log（type=`meeting`）
+   - Bot 回覆「✅ 已套用至 5 位聯絡人」
+
+### 29.3 `/help` 更新
+
+新增 `/met` 指令說明：
+```
+/met {數量} {描述} — 批次記錄最近 N 位聯絡人的認識場合
+例：/met 5 台北生技展 王小明介紹 昨天
+```
+
+### 29.4 Migration SQL
+
+無需新增（欄位已在 v1.6.1 新增）
+
+---
+
+## 三十、v1.6.1 + v1.6.2 開發任務清單
+
+- [ ] **Task 84** `[修改]` — 執行 Migration SQL（contacts 新增 met_at、met_date、referred_by）
+- [ ] **Task 85** `[修改]` — 更新聯絡人列表（多選功能、批次編輯 Modal、met_at 篩選）
+- [ ] **Task 86** `[修改]` — 更新聯絡人詳情（顯示 met_at、met_date、referred_by 欄位）
+- [ ] **Task 87** `[修改]` — 更新新增/編輯聯絡人表單（新增三個欄位）
+- [ ] **Task 88** `[修改]` — 更新 Bot Webhook（新增 `/met` 指令，AI 解析場合/日期/介紹人，批次確認套用）
+- [ ] **Task 89** `[修改]` — 更新 `/help` 指令（新增 `/met` 說明）
