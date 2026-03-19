@@ -1581,6 +1581,7 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId, '套用中...')
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           try {
+            const session = await getSession(from.id)
             const ctx = session?.context as { contact_ids: string[]; met_at: string | null; met_date: string; referred_by: string | null } | undefined
             if (!ctx?.contact_ids?.length) throw new Error('找不到待套用資料')
             const { contact_ids, met_at, met_date, referred_by } = ctx
