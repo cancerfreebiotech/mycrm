@@ -12,7 +12,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { parseMeetingCommand } from '@/lib/gemini'
-import { createCalendarEvent, getValidProviderToken } from '@/lib/graph'
+import { createCalendarEvent } from '@/lib/graph'
+import { getValidProviderToken } from '@/lib/graph-server'
 import { sendTeamsMeetingConfirmCard } from '@/lib/teams'
 
 async function verifyTeamsRequest(req: NextRequest): Promise<boolean> {

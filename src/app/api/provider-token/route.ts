@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
-import { getValidProviderToken } from '@/lib/graph'
+import { getValidProviderToken } from '@/lib/graph-server'
 
 export async function GET() {
   const cookieStore = await cookies()

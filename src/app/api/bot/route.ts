@@ -3,7 +3,8 @@ import { createServiceClient } from '@/lib/supabase'
 import { analyzeBusinessCard, generateEmailContent, parseTaskCommand, parseMeetingCommand } from '@/lib/gemini'
 import { processCardImage, generateCardFilename } from '@/lib/imageProcessor'
 import { checkDuplicates } from '@/lib/duplicate'
-import { sendMail, createCalendarEvent, getValidProviderToken } from '@/lib/graph'
+import { sendMail, createCalendarEvent } from '@/lib/graph'
+import { getValidProviderToken } from '@/lib/graph-server'
 import { sendTeamsTaskNotification, sendTeamsMessage } from '@/lib/teams'
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
