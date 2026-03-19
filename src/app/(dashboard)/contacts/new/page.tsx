@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
+import Image from 'next/image'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Upload, Loader2, AlertTriangle, X, Sparkles, Check } from 'lucide-react'
 
@@ -40,10 +41,16 @@ const FIELD_LABELS: Record<string, string> = {
 
 export default function NewContactPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const t = useTranslations('contacts')
   const tc = useTranslations('common')
   const supabase = createBrowserSupabaseClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Preloaded image from failed scan redirect
+  const preloadedCardUrl = searchParams.get('card_img_url') ?? null
+  const preloadedStoragePath = searchParams.get('storage_path') ?? null
+  const failedScanId = searchParams.get('failed_scan_id') ?? null
 
   const [form, setForm] = useState(EMPTY_FORM)
   const [allTags, setAllTags] = useState<Tag[]>([])
@@ -160,6 +167,35 @@ export default function NewContactPage() {
     }
   }
 
+  async function handleOcrPreloaded() {
+    if (!preloadedCardUrl) return
+    setOcring(true)
+    setError(null)
+    try {
+      // Fetch the remote image and convert to base64
+      const resp = await fetch(preloadedCardUrl)
+      const blob = await resp.blob()
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve((reader.result as string).split(',')[1])
+        reader.onerror = reject
+        reader.readAsDataURL(blob)
+      })
+      const res = await fetch('/api/ocr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ images: [base64], model: aiModelId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setOcrResult(data as Partial<OcrFields>)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '辨識失敗')
+    } finally {
+      setOcring(false)
+    }
+  }
+
   function applyOcr() {
     if (!ocrResult) return
     setForm((prev) => {
@@ -226,6 +262,20 @@ export default function NewContactPage() {
         }
       }
 
+      // Link preloaded failed-scan image to contact
+      if (preloadedCardUrl) {
+        await fetch('/api/link-card', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contactId: inserted.id,
+            card_img_url: preloadedCardUrl,
+            storage_path: preloadedStoragePath,
+            failed_scan_id: failedScanId,
+          }),
+        })
+      }
+
       // Interaction log
       await supabase.from('interaction_logs').insert({
         contact_id: inserted.id,
@@ -290,6 +340,29 @@ export default function NewContactPage() {
             )}
           </div>
 
+          {/* Preloaded image from failed scan */}
+          {preloadedCardUrl && (
+            <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <p className="text-xs text-amber-700 dark:text-amber-400 mb-2 font-medium">
+                📎 來自辨識失敗審查的名片圖片（儲存後自動關聯）
+              </p>
+              <div className="flex items-start gap-3">
+                <div className="relative w-40 h-24 rounded-lg overflow-hidden border border-amber-200 dark:border-amber-700 shrink-0">
+                  <Image src={preloadedCardUrl} alt="名片" fill className="object-cover" unoptimized />
+                </div>
+                {!ocring && ocrResult === null && (
+                  <button
+                    type="button"
+                    onClick={handleOcrPreloaded}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    <Sparkles size={14} /> OCR 辨識此圖
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFilesChange} />
 
           {files.length === 0 ? (
@@ -323,7 +396,7 @@ export default function NewContactPage() {
             </div>
           )}
 
-          {/* OCR button */}
+          {/* OCR button for manually selected files */}
           {files.length > 0 && !ocring && ocrResult === null && (
             <button
               type="button"

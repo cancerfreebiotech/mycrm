@@ -141,7 +141,7 @@ export default function FailedScansPage() {
                       <ExternalLink size={11} /> 開原圖
                     </a>
                     <a
-                      href="/contacts/new"
+                      href={`/contacts/new?card_img_url=${encodeURIComponent(scan.card_img_url)}&storage_path=${encodeURIComponent(scan.storage_path)}&failed_scan_id=${scan.id}`}
                       className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
                     >
                       → 手動建立聯絡人
