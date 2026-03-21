@@ -2682,3 +2682,338 @@ alter table contacts add column if not exists referred_by text;
 - [ ] **Task 87** `[修改]` — 更新新增/編輯聯絡人表單（新增三個欄位）
 - [ ] **Task 88** `[修改]` — 更新 Bot Webhook（新增 `/met` 指令，AI 解析場合/日期/介紹人，批次確認套用）
 - [ ] **Task 89** `[修改]` — 更新 `/help` 指令（新增 `/met` 說明）
+
+---
+
+## 三十一、v1.7 功能規格
+
+> 主軸：合併聯絡人、名片王匯入、API Health Check、文件權限、SendGrid 歷史資料整合
+
+---
+
+### 31.1 合併聯絡人
+
+#### 入口一：聯絡人詳情頁（手動）
+
+- 所有人可用
+- 「合併聯絡人」按鈕 → 開啟搜尋 Modal，搜尋要被合併的聯絡人（來源）
+- 確認畫面：
+  - 左欄：當前聯絡人（**保留**）的主要資料
+  - 右欄：來源聯絡人的資料
+  - 說明：「將以左側資料為主，右側空白欄位補入左側，名片、互動紀錄、Tag 全部合併」
+- 欄位合併規則（選項 A）：
+  - 保留筆的欄位有值 → 保留，不覆蓋
+  - 保留筆的欄位為空、來源筆有值 → 補入
+  - `contact_cards`：來源的全部移到保留筆
+  - `interaction_logs`：來源的全部移到保留筆
+  - `contact_tags`：取聯集（去重複）
+  - 自動新增一筆 `interaction_log`：
+    - type = `system`
+    - content = `合併聯絡人：{來源姓名}（{來源公司}）`
+    - created_by = 執行者
+  - 刪除來源聯絡人
+
+#### 入口二：重複聯絡人審查頁 `/admin/duplicates`（super admin only）
+
+- Sidebar 新增「重複審查」項目（僅 super_admin 可見）
+- 頁面頂部：「立即掃描」按鈕 + 「上次掃描時間：YYYY-MM-DD HH:mm」
+- 掃描邏輯（點按鈕後執行，非排程）：
+  - Email 完全相符（`email` 欄位相同且非空）→ 標為「完全重複」
+  - 姓名 similarity >= 0.6（pg_trgm）→ 標為「疑似重複」
+  - 結果寫入 `duplicate_pairs` 表（見下方 DB 結構）
+- 掃描結果列表：
+  - 每組顯示兩筆聯絡人的姓名、公司、Email、建立時間、來源（source）
+  - 操作按鈕：「合併（保留左）」「合併（保留右）」「不是重複（忽略）」
+  - 忽略後該組不再出現（`is_ignored = true`）
+- 合併邏輯與入口一相同
+
+#### 新增 DB 表：`duplicate_pairs`
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | 主鍵 |
+| contact_id_a | uuid (FK → contacts.id) | 聯絡人 A |
+| contact_id_b | uuid (FK → contacts.id) | 聯絡人 B |
+| match_type | text | `exact_email` / `similar_name` |
+| similarity_score | float | pg_trgm similarity 分數 |
+| is_ignored | boolean (default false) | 使用者標記「不是重複」 |
+| scanned_at | timestamptz | 掃描時間 |
+
+#### Migration SQL
+
+```sql
+-- 重複配對記錄表
+create table if not exists duplicate_pairs (
+  id uuid primary key default gen_random_uuid(),
+  contact_id_a uuid references contacts(id) on delete cascade,
+  contact_id_b uuid references contacts(id) on delete cascade,
+  match_type text not null,
+  similarity_score float,
+  is_ignored boolean not null default false,
+  scanned_at timestamptz default now()
+);
+
+-- contacts 新增 source 欄位
+alter table contacts add column if not exists source text not null default 'web';
+-- source 值：'web' / 'telegram' / 'camcard' / 'batch'
+
+-- contacts 新增 imported_at 欄位（名片王匯入用）
+alter table contacts add column if not exists imported_at timestamptz;
+```
+
+---
+
+### 31.2 名片王匯入（本機 Claude Code Script）
+
+#### 概覽
+
+不走系統 UI，由 Claude Code 在本機執行獨立 script，直接讀取圖片資料夾，呼叫 Claude API 做 OCR，結果寫入 Supabase 暫存區，再透過系統 UI 人工確認後移入正式聯絡人。
+
+#### Script 位置
+
+`scripts/camcard-import/`
+- `import.ts` — 主程式
+- `progress.json` — 斷點記錄（自動產生）
+- `failed.txt` — 失敗圖檔清單（自動產生）
+- `README.md` — 使用說明
+
+#### Script 功能
+
+**執行模式**
+```bash
+npx ts-node scripts/camcard-import/import.ts --dir /path/to/photos --dry-run 10
+npx ts-node scripts/camcard-import/import.ts --dir /path/to/photos
+npx ts-node scripts/camcard-import/import.ts --dir /path/to/photos --resume
+```
+
+- `--dry-run N`：只處理前 N 張，不寫 DB，確認格式正確
+- `--resume`：讀取 `progress.json`，跳過已處理的圖檔，斷點續跑
+- 無額外參數：全跑
+
+**處理流程（每張圖）**
+1. 讀取圖片 → 壓縮（1024px / JPEG Q85，與全站一致）
+2. 上傳壓縮後圖片至 Supabase Storage `cards` bucket
+3. 呼叫 Claude API（`claude-sonnet-4-5` 或更新版），使用與現有系統相同欄位的 OCR prompt
+4. 解析 JSON 回傳
+5. 寫入 `camcard_pending` 暫存表（見下方）
+6. 更新 `progress.json`
+
+**進度顯示**
+```
+[進度] 1523 / 5000 張 | ✅ 1498 成功 | ⚠️ 25 失敗 | 預計剩餘 23 分鐘
+```
+
+**斷點機制**
+- 每張處理完後更新 `progress.json`：`{ "processed": ["img001.jpg", ...], "failed": [...] }`
+- `--resume` 時跳過 `processed` 清單內的圖檔
+- 失敗的圖檔寫入 `failed.txt`，不阻擋後續處理
+
+**OCR Prompt**
+使用 Claude vision，與現有系統 `ocr_card` prompt 一致，回傳相同 JSON 欄位結構（name, name_en, name_local, company, company_en, company_local, job_title, email, second_email, phone, second_phone, address, website, linkedin_url, facebook_url, country_code）
+
+#### 新增 DB 表：`camcard_pending`
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | 主鍵 |
+| image_filename | text | 原始圖檔名 |
+| card_img_url | text | Storage URL |
+| storage_path | text | Storage 路徑（供刪除用）|
+| ocr_data | jsonb | Claude OCR 回傳的完整 JSON |
+| status | text (default 'pending') | `pending` / `confirmed` / `merged` / `skipped` |
+| duplicate_contact_id | uuid (FK → contacts.id, nullable) | 偵測到的重複聯絡人 |
+| match_type | text (nullable) | `exact_email` / `similar_name` |
+| confirmed_by | uuid (FK → users.id, nullable) | 確認者 |
+| confirmed_at | timestamptz | 確認時間 |
+| imported_at | timestamptz (default now()) | 真實匯入時間 |
+| created_at | timestamptz (default now()) | 記錄建立時間 |
+
+#### 系統 UI：`/admin/camcard` 暫存區審查頁（super admin only）
+
+**頁面功能**
+- 顯示統計：待審查 X 筆 / 已確認 Y 筆 / 已合併 Z 筆 / 已略過 W 筆
+- 按公司名稱分組顯示（`ocr_data->>'company'` group by）
+- 每組可展開，顯示該公司所有待審查名片
+
+**每筆顯示**
+- 名片縮圖（可點擊放大）
+- OCR 辨識結果（所有欄位）
+- 重複偵測結果：
+  - 「⚠️ 疑似與現有聯絡人重複：{姓名}（{公司}）」
+  - 或「✅ 無重複」
+
+**操作按鈕**
+- 「✅ 確認新增」→ 建立新 contact，`source='camcard'`，`created_at='2020-01-01'`，`imported_at=now()`，寫 interaction_log（`來自名片王匯入，匯入時間：{imported_at}`）
+- 「🔀 合併至現有」（有重複時顯示）→ 進入合併流程（保留現有聯絡人，補入空白欄位，合併名片）
+- 「⏭ 略過」→ status = `skipped`
+
+**批次操作**
+- 勾選多筆 → 「批次確認新增」（無重複者）
+- 「略過全部無重複者」一鍵略過
+
+---
+
+### 31.3 API Health Check
+
+#### 位置
+
+`/admin/health`（super admin only），Sidebar 新增「系統狀態」項目
+
+#### 監控項目
+
+| 服務 | 檢查方式 | 顯示 |
+|------|---------|------|
+| SendGrid | `GET https://api.sendgrid.com/v3/user/profile`（驗證 API key 是否有效） | ✅ / ❌ + 最後檢查時間 |
+| AI Endpoints | 對每個 `ai_endpoints` 表中 is_active=true 的 endpoint 送一個極短的 test prompt | ✅ / ❌ + latency(ms) + 最後檢查時間 |
+
+#### 行為
+
+- 頁面載入時自動執行一次 health check（呼叫 `/api/health-check`）
+- 「重新檢查」按鈕可手動觸發
+- 結果不存 DB，每次即時查詢
+- AI endpoint 測試 prompt：`"Reply with OK"` — 只確認有回應，不計費
+
+#### API Route
+
+`/api/health-check`（POST，super admin only）
+- 並行呼叫所有服務
+- 回傳：`{ sendgrid: { ok, latency, checkedAt }, aiEndpoints: [{ id, name, ok, latency, checkedAt }] }`
+
+---
+
+### 31.4 文件權限 + Quick Start
+
+#### 存取控制
+
+| 狀態 | 可看內容 |
+|------|---------|
+| 未登入 | Quick Start 僅此一節 |
+| 登入一般用戶 | Quick Start + 使用者文件（user section） |
+| Super Admin | 全部（Quick Start + 使用者 + Super Admin section） |
+
+#### `/docs` 頁面更新
+
+- Server component 讀取 session，判斷角色，只渲染對應 section
+- 未登入者看到 Quick Start 後，顯示「登入後查看完整文件」按鈕
+- section 選單（左側導覽）依角色顯示對應項目
+
+#### Quick Start 內容（AI 生成，存入 `docs_content` 表）
+
+新增 `section = 'quick_start'`，三個語言版本（zh-TW / en / ja），AI 根據以下大綱生成：
+
+1. **登入系統**：Microsoft SSO，限 @cancerfree.io 帳號，步驟圖示
+2. **綁定 Telegram Bot**：找到 `@CF_CRMBot`，取得自己的 Telegram ID（傳訊給 @userinfobot），填入個人設定
+3. **綁定 Teams Bot**：系統自動比對 Microsoft 帳號，第一次傳訊給 Teams Bot 即完成綁定
+4. **掃描第一張名片**：在 Telegram 直接傳名片照片，Bot 自動辨識，確認後存入 CRM
+
+#### `docs_content` 表新增記錄
+
+```sql
+-- Quick Start 新增為獨立 section
+-- section 值新增 'quick_start'（原有 'user' / 'super_admin' 不變）
+```
+
+---
+
+### 31.5 SendGrid 歷史資料整合
+
+#### 一次性匯入流程
+
+入口：`/admin/newsletter` → 新增「SendGrid 歷史資料」分頁
+
+**步驟**
+1. 點「從 SendGrid 匯入歷史抑制名單」按鈕
+2. 呼叫 `/api/sendgrid/import-suppressions`
+3. API 呼叫 SendGrid Suppressions API 三個端點：
+   - `GET /v3/suppression/bounces`（hard bounce）
+   - `GET /v3/suppression/unsubscribes`
+   - `GET /v3/suppression/spam_reports`
+4. 寫入 `newsletter_blacklist`（bounce / spam）和 `newsletter_unsubscribes`（unsubscribe）
+5. 比對 `contacts.email`，找到匹配的聯絡人
+6. 每筆匹配的聯絡人寫一筆 `interaction_log`：
+   - type = `email`
+   - email_subject = `SendGrid 歷史紀錄`
+   - content = `來自 SendGrid 歷史紀錄｜狀態：{hard bounce / unsubscribe / spam report}｜SendGrid 記錄時間：{YYYY-MM-DD}`
+   - created_by = 執行匯入的 super_admin user_id
+7. 回傳匯入摘要：bounce X 筆 / unsubscribe Y 筆 / spam Z 筆 / 比對到聯絡人 W 筆
+
+**重複處理**
+- 已存在於 blacklist / unsubscribes 的 email 用 `ON CONFLICT DO NOTHING` 跳過
+- 同一聯絡人不重複寫 interaction_log（以 email_subject='SendGrid 歷史紀錄' 檢查是否已存在）
+
+#### 聯絡人詳情頁黑名單標記
+
+- 若聯絡人 email 存在於 `newsletter_blacklist` 或 `newsletter_unsubscribes`，在 Email 欄位旁顯示：
+  - 🚫 `硬退信（Hard Bounce）`
+  - 🔕 `已退訂`
+  - ⚠️ `Spam 檢舉`
+- 點擊 badge 可查看詳細原因和時間
+
+#### `/admin/newsletter` 新增分頁
+
+**Blacklist 分頁**
+- 列出 `newsletter_blacklist`（email、原因、來源、時間）
+- 可手動新增 email 到黑名單
+- 可手動移除（有確認 modal）
+- 搜尋框
+
+**Unsubscribes 分頁**
+- 列出 `newsletter_unsubscribes`（email、退訂原因、來源、時間）
+- 可手動移除（重新加回寄送名單，有確認 modal）
+- 搜尋框
+
+---
+
+### 31.6 Migration SQL
+
+```sql
+-- 重複配對記錄
+create table if not exists duplicate_pairs (
+  id uuid primary key default gen_random_uuid(),
+  contact_id_a uuid references contacts(id) on delete cascade,
+  contact_id_b uuid references contacts(id) on delete cascade,
+  match_type text not null,
+  similarity_score float,
+  is_ignored boolean not null default false,
+  scanned_at timestamptz default now()
+);
+
+-- contacts 新增欄位
+alter table contacts add column if not exists source text not null default 'web';
+alter table contacts add column if not exists imported_at timestamptz;
+
+-- 名片王暫存表
+create table if not exists camcard_pending (
+  id uuid primary key default gen_random_uuid(),
+  image_filename text,
+  card_img_url text,
+  storage_path text,
+  ocr_data jsonb,
+  status text not null default 'pending',
+  duplicate_contact_id uuid references contacts(id),
+  match_type text,
+  confirmed_by uuid references users(id),
+  confirmed_at timestamptz,
+  imported_at timestamptz default now(),
+  created_at timestamptz default now()
+);
+
+-- docs_content 支援 quick_start section（無需改表，新增資料即可）
+```
+
+---
+
+## 三十二、v1.7 開發任務清單
+
+- [ ] **Task 90** `[修改]` — 執行 Migration SQL（duplicate_pairs、contacts 新增 source/imported_at、camcard_pending）
+- [ ] **Task 91** `[修改]` — 聯絡人詳情頁新增「合併聯絡人」按鈕與合併流程（搜尋 Modal、確認畫面、欄位聯集邏輯、system log）
+- [ ] **Task 92** `[新增]` — 新增 `/admin/duplicates` 頁面（手動觸發掃描、配對列表、合併/忽略操作）；新增 `/api/contacts/scan-duplicates` route
+- [ ] **Task 93** `[新增]` — 新增 `scripts/camcard-import/` 目錄與 `import.ts` script（dry-run、resume、進度顯示、Claude API OCR、寫入 camcard_pending）
+- [ ] **Task 94** `[新增]` — 新增 `/admin/camcard` 暫存區審查頁（按公司分組、重複偵測顯示、確認新增/合併/略過、批次操作）
+- [ ] **Task 95** `[新增]` — 新增 `/admin/health` Health Check 頁面與 `/api/health-check` route（SendGrid ping、AI endpoint test）
+- [ ] **Task 96** `[修改]` — 更新 `/docs` 頁面（access control 依登入狀態與角色、Quick Start section）；新增 `/api/docs/generate` 支援 `quick_start` section 生成
+- [ ] **Task 97** `[新增]` — 新增 `/api/sendgrid/import-suppressions` route（拉取三種歷史抑制名單、寫 blacklist/unsubscribes、比對聯絡人寫 interaction_log）
+- [ ] **Task 98** `[修改]` — 更新聯絡人詳情頁（Email 旁顯示黑名單 badge：硬退信 / 已退訂 / Spam）
+- [ ] **Task 99** `[修改]` — 更新 `/admin/newsletter`（新增 Blacklist 分頁、Unsubscribes 分頁，各含搜尋、手動新增/移除）
+- [ ] **Task 100** `[修改]` — 更新 Dashboard Layout（Sidebar 新增「重複審查」、「名片王匯入」、「系統狀態」項目，均僅 super_admin 可見）
+- [ ] **Task 101** `[修改]` — i18n 三份語言檔新增 v1.7 相關 key（duplicates、camcard、health、docs quick_start）
