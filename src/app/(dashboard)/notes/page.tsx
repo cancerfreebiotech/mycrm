@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Search, FileText, Users, Mail, Calendar } from 'lucide-react'
+import { Search, FileText, Users, Mail, Calendar, Trash2 } from 'lucide-react'
 
 type LogType = 'all' | 'note' | 'meeting' | 'email'
 
@@ -47,6 +47,7 @@ export default function NotesPage() {
   const [dateTo, setDateTo] = useState('')
   const [typeFilter, setTypeFilter] = useState<LogType>('all')
   const [page, setPage] = useState(1)
+  const [deleting, setDeleting] = useState<string | null>(null)
 
   useEffect(() => { setPage(1) }, [keyword, dateFrom, dateTo, typeFilter])
   useEffect(() => { fetchLogs() }, [keyword, dateFrom, dateTo, typeFilter, page])
@@ -77,6 +78,15 @@ export default function NotesPage() {
 
   function formatDate(str: string) {
     return new Date(str).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+  }
+
+  async function handleDelete(logId: string) {
+    if (!confirm(t('confirmDelete'))) return
+    setDeleting(logId)
+    await supabase.from('interaction_logs').delete().eq('id', logId)
+    setLogs((prev) => prev.filter((l) => l.id !== logId))
+    setTotal((n) => n - 1)
+    setDeleting(null)
   }
 
   function snippet(text: string | null, max = 120) {
@@ -170,7 +180,7 @@ export default function NotesPage() {
             return (
               <div
                 key={log.id}
-                className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4"
+                className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 group"
               >
                 <div className="flex items-start gap-3">
                   <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium shrink-0 mt-0.5 ${color}`}>
@@ -206,6 +216,14 @@ export default function NotesPage() {
                       <span>{formatDate(log.created_at)}</span>
                     </div>
                   </div>
+                  <button
+                    onClick={() => handleDelete(log.id)}
+                    disabled={deleting === log.id}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-gray-300 hover:text-red-500 dark:text-gray-600 dark:hover:text-red-400 rounded shrink-0"
+                    title={tc('delete')}
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
             )

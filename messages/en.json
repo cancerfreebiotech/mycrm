@@ -33,6 +33,9 @@
     "countries": "Countries",
     "newsletter": "Newsletter",
     "failedScans": "Failed Scans",
+    "duplicates": "Duplicate Review",
+    "camcard": "CamCard Import",
+    "health": "System Health",
     "prompts": "Prompt Management",
     "logout": "Logout"
   },
@@ -151,6 +154,7 @@
     "noResults": "No matching records",
     "unassigned": "Unassigned",
     "meetingDate": "Meeting date: {date}",
+    "confirmDelete": "Delete this note? This cannot be undone.",
     "types": {
       "note": "Note",
       "meeting": "Meeting",

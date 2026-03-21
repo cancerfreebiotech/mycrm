@@ -33,6 +33,9 @@
     "countries": "國家管理",
     "newsletter": "Newsletter 管理",
     "failedScans": "辨識失敗審查",
+    "duplicates": "重複審查",
+    "camcard": "名片王匯入",
+    "health": "系統狀態",
     "prompts": "Prompt 管理",
     "logout": "登出"
   },
@@ -151,6 +154,7 @@
     "noResults": "無符合條件的紀錄",
     "unassigned": "未歸類",
     "meetingDate": "會議日期：{date}",
+    "confirmDelete": "確認刪除此筆記？此操作無法復原。",
     "types": {
       "note": "筆記",
       "meeting": "會議",

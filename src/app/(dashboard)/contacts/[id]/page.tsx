@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { sendMail } from '@/lib/graph'
-import { ArrowLeft, ImageIcon, Mail, X, Pencil, Loader2, Plus, Upload, Trash2, Copy, Check, Sparkles, Paperclip, ZoomIn, ZoomOut, Maximize2, ChevronDown } from 'lucide-react'
+import { ArrowLeft, ImageIcon, Mail, X, Pencil, Loader2, Plus, Upload, Trash2, Copy, Check, Sparkles, Paperclip, ZoomIn, ZoomOut, Maximize2, ChevronDown, Merge, Search } from 'lucide-react'
 import Image from 'next/image'
 
 interface Tag { id: string; name: string }
@@ -208,6 +208,14 @@ export default function ContactDetailPage() {
   const [aiModelId, setAiModelId] = useState<string | null>(null)
   const [msProviderToken, setMsProviderToken] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  // Merge modal
+  const [mergeSearchOpen, setMergeSearchOpen] = useState(false)
+  const [mergeQuery, setMergeQuery] = useState('')
+  const [mergeResults, setMergeResults] = useState<Array<{ id: string; name: string | null; name_en: string | null; company: string | null; email: string | null }>>([])
+  const [mergeSearching, setMergeSearching] = useState(false)
+  const [mergeTarget, setMergeTarget] = useState<{ id: string; name: string | null; name_en: string | null; company: string | null; company_en: string | null; email: string | null } | null>(null)
+  const [mergeSaving, setMergeSaving] = useState(false)
   const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set())
   const [editingLogId, setEditingLogId] = useState<string | null>(null)
   const [editingLogContent, setEditingLogContent] = useState('')
@@ -302,6 +310,10 @@ export default function ContactDetailPage() {
   // Email copy
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null)
 
+  // Newsletter suppression status per email
+  const [emailSuppressions, setEmailSuppressions] = useState<Record<string, { blacklisted: boolean; unsubscribed: boolean }>>({})
+
+
   // Mail modal
   const [mailOpen, setMailOpen] = useState(false)
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
@@ -343,6 +355,25 @@ export default function ContactDetailPage() {
       supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),
     ])
     setContact(c as unknown as Contact)
+
+    // Check newsletter suppression status for email fields
+    const contact_ = c as unknown as Contact
+    const emails = [contact_?.email, contact_?.second_email].filter(Boolean) as string[]
+    if (emails.length > 0) {
+      const [{ data: bl }, { data: unsub }] = await Promise.all([
+        supabase.from('newsletter_blacklist').select('email').in('email', emails),
+        supabase.from('newsletter_unsubscribes').select('email').in('email', emails),
+      ])
+      const sups: Record<string, { blacklisted: boolean; unsubscribed: boolean }> = {}
+      for (const e of emails) {
+        sups[e] = {
+          blacklisted: (bl ?? []).some((r: { email: string }) => r.email === e),
+          unsubscribed: (unsub ?? []).some((r: { email: string }) => r.email === e),
+        }
+      }
+      setEmailSuppressions(sups)
+    }
+
     const initialLogs = (l as unknown as Log[]) ?? []
     setLogs(initialLogs)
     logsOffsetRef.current = initialLogs.length
@@ -783,6 +814,45 @@ export default function ContactDetailPage() {
     } finally { setMailSending(false) }
   }
 
+  // ── Merge ─────────────────────────────────────────────────────────────────
+
+  async function searchMergeContacts(q: string) {
+    setMergeQuery(q)
+    if (q.trim().length < 1) { setMergeResults([]); return }
+    setMergeSearching(true)
+    const { data } = await supabase
+      .from('contacts')
+      .select('id, name, name_en, company, email')
+      .neq('id', id)
+      .or(`name.ilike.%${q}%,name_en.ilike.%${q}%,company.ilike.%${q}%,email.ilike.%${q}%`)
+      .limit(8)
+    setMergeResults(data ?? [])
+    setMergeSearching(false)
+  }
+
+  async function handleMerge() {
+    if (!mergeTarget) return
+    if (!confirm(`確定要將「${mergeTarget.name || mergeTarget.name_en}」合併進「${contact?.name || contact?.name_en}」？\n\n來源聯絡人將被刪除，此操作無法復原。`)) return
+    setMergeSaving(true)
+    try {
+      const res = await fetch(`/api/contacts/${id}/merge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceId: mergeTarget.id }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error)
+      setMergeSearchOpen(false)
+      setMergeTarget(null)
+      setMergeQuery('')
+      setMergeResults([])
+      load()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '合併失敗')
+    } finally {
+      setMergeSaving(false)
+    }
+  }
+
   async function handleDelete() {
     if (!confirm(`確定要刪除「${contact?.name || contact?.name_en || '此聯絡人'}」？此操作無法復原。`)) return
     setDeleting(true)
@@ -807,12 +877,12 @@ export default function ContactDetailPage() {
   const inputClass = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
   const labelClass = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1'
 
-  function InfoRow({ label, value, href, copyable }: { label: string; value: string | null | undefined; href?: string; copyable?: boolean }) {
+  function InfoRow({ label, value, href, copyable, suffix }: { label: string; value: string | null | undefined; href?: string; copyable?: boolean; suffix?: React.ReactNode }) {
     if (!value) return null
     return (
       <div className="flex gap-3 text-sm">
         <span className="w-24 text-gray-400 dark:text-gray-500 shrink-0">{label}</span>
-        <span className="flex items-center gap-1.5 min-w-0">
+        <span className="flex items-center gap-1.5 min-w-0 flex-wrap">
           {href ? (
             <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline truncate">{value}</a>
           ) : (
@@ -827,8 +897,29 @@ export default function ContactDetailPage() {
               {copiedEmail === value ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
             </button>
           )}
+          {suffix}
         </span>
       </div>
+    )
+  }
+
+  function EmailSuppressionBadges({ email }: { email: string | null | undefined }) {
+    if (!email) return null
+    const sup = emailSuppressions[email]
+    if (!sup) return null
+    return (
+      <>
+        {sup.blacklisted && (
+          <span className="inline-flex items-center text-xs font-medium px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800" title="此 Email 在黑名單中（hard bounce 或手動加入）">
+            黑名單
+          </span>
+        )}
+        {sup.unsubscribed && (
+          <span className="inline-flex items-center text-xs font-medium px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800" title="此 Email 已退訂 Newsletter">
+            已退訂
+          </span>
+        )}
+      </>
     )
   }
 
@@ -859,8 +950,8 @@ export default function ContactDetailPage() {
             <InfoRow label={t('companyEn')} value={contact.company_en} />
             <InfoRow label={t('companyLocal')} value={contact.company_local} />
             <InfoRow label={t('jobTitle')} value={contact.job_title} />
-            <InfoRow label="Email" value={contact.email} href={contact.email ? `mailto:${contact.email}` : undefined} copyable />
-            <InfoRow label={t('secondEmail')} value={contact.second_email} href={contact.second_email ? `mailto:${contact.second_email}` : undefined} copyable />
+            <InfoRow label="Email" value={contact.email} href={contact.email ? `mailto:${contact.email}` : undefined} copyable suffix={<EmailSuppressionBadges email={contact.email} />} />
+            <InfoRow label={t('secondEmail')} value={contact.second_email} href={contact.second_email ? `mailto:${contact.second_email}` : undefined} copyable suffix={<EmailSuppressionBadges email={contact.second_email} />} />
             <InfoRow label={t('phone')} value={contact.phone} href={contact.phone ? `tel:${contact.phone}` : undefined} />
             <InfoRow label={t('secondPhone')} value={contact.second_phone} href={contact.second_phone ? `tel:${contact.second_phone}` : undefined} />
             <InfoRow label={t('address')} value={contact.address} />
@@ -925,6 +1016,12 @@ export default function ContactDetailPage() {
               <Mail size={14} /> {t('sendMail')}
             </button>
           )}
+          <button
+            onClick={() => { setMergeSearchOpen(true); setMergeQuery(''); setMergeResults([]); setMergeTarget(null) }}
+            className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+          >
+            <Merge size={14} /> 合併聯絡人
+          </button>
           {canDelete && (
             <button
               onClick={handleDelete}
@@ -1561,6 +1658,102 @@ export default function ContactDetailPage() {
               <button onClick={handleSendMail} disabled={mailSending || mailToList.length === 0 || !mailSubject.trim()}
                 className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40">
                 <Mail size={14} /> {mailSending ? tm('sending') : tm('send')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Merge Search Modal */}
+      {mergeSearchOpen && !mergeTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <Merge size={16} /> 選擇要合併的聯絡人
+              </h2>
+              <button onClick={() => setMergeSearchOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={18} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                搜尋要被合併（刪除）的聯絡人。目前聯絡人「<strong>{contact?.name || contact?.name_en}</strong>」將保留。
+              </p>
+              <div className="relative">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  autoFocus
+                  type="text"
+                  value={mergeQuery}
+                  onChange={(e) => searchMergeContacts(e.target.value)}
+                  placeholder="搜尋姓名、公司、Email..."
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              {mergeSearching && <p className="text-sm text-gray-400 text-center py-2">{tc('loading')}</p>}
+              {!mergeSearching && mergeResults.length > 0 && (
+                <div className="space-y-1 max-h-64 overflow-y-auto">
+                  {mergeResults.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => setMergeTarget({ id: r.id, name: r.name, name_en: r.name_en, company: r.company, company_en: null, email: r.email })}
+                      className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-gray-100 dark:border-gray-800 transition-colors"
+                    >
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{r.name || r.name_en || '（無姓名）'}</p>
+                      <p className="text-xs text-gray-400">{[r.company, r.email].filter(Boolean).join(' · ')}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!mergeSearching && mergeQuery.length > 0 && mergeResults.length === 0 && (
+                <p className="text-sm text-gray-400 text-center py-2">找不到符合的聯絡人</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Merge Confirm Modal */}
+      {mergeTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <Merge size={16} /> 確認合併
+              </h2>
+              <button onClick={() => setMergeTarget(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={18} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                  <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-2 uppercase tracking-wide">✅ 保留</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{contact?.name || contact?.name_en || '（無姓名）'}</p>
+                  <p className="text-sm text-gray-500">{contact?.company}</p>
+                  <p className="text-xs text-gray-400">{contact?.email}</p>
+                </div>
+                <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                  <p className="text-xs font-semibold text-red-700 dark:text-red-400 mb-2 uppercase tracking-wide">🗑 刪除</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{mergeTarget.name || mergeTarget.name_en || '（無姓名）'}</p>
+                  <p className="text-sm text-gray-500">{mergeTarget.company}</p>
+                  <p className="text-xs text-gray-400">{mergeTarget.email}</p>
+                </div>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                <p>• 保留聯絡人的欄位優先，右側空白欄位才補入</p>
+                <p>• 名片、互動紀錄、Tag 全部合併到保留聯絡人</p>
+                <p>• 來源聯絡人刪除後無法復原</p>
+              </div>
+            </div>
+            <div className="flex justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+              <button onClick={() => setMergeTarget(null)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900">
+                ← 重新選擇
+              </button>
+              <button
+                onClick={handleMerge}
+                disabled={mergeSaving}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
+              >
+                {mergeSaving ? <Loader2 size={14} className="animate-spin" /> : <Merge size={14} />}
+                確認合併
               </button>
             </div>
           </div>

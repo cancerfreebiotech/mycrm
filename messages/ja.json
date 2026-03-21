@@ -33,6 +33,9 @@
     "countries": "国管理",
     "newsletter": "ニュースレター管理",
     "failedScans": "認識失敗審査",
+    "duplicates": "重複審査",
+    "camcard": "名刺王インポート",
+    "health": "システム状態",
     "prompts": "プロンプト管理",
     "logout": "ログアウト"
   },
@@ -151,6 +154,7 @@
     "noResults": "該当するレコードなし",
     "unassigned": "未分類",
     "meetingDate": "会議日：{date}",
+    "confirmDelete": "このメモを削除しますか？この操作は元に戻せません。",
     "types": {
       "note": "メモ",
       "meeting": "会議",

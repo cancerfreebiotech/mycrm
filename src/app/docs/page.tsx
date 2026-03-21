@@ -9,7 +9,7 @@ import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { LOCALE_COOKIE, SUPPORTED_LOCALES } from '@/i18n/config'
 
 type Locale = 'zh-TW' | 'en' | 'ja'
-type Section = 'user' | 'super_admin'
+type Section = 'quick_start' | 'user' | 'super_admin'
 
 const LOCALE_LABELS: Record<Locale, string> = {
   'zh-TW': '繁中',
@@ -18,9 +18,15 @@ const LOCALE_LABELS: Record<Locale, string> = {
 }
 
 const SECTION_LABELS: Record<Locale, Record<Section, string>> = {
-  'zh-TW': { user: '一般使用者', super_admin: 'Super Admin' },
-  'en': { user: 'User Guide', super_admin: 'Super Admin' },
-  'ja': { user: '一般ユーザー', super_admin: 'Super Admin' },
+  'zh-TW': { quick_start: '快速開始', user: '一般使用者', super_admin: 'Super Admin' },
+  'en': { quick_start: 'Quick Start', user: 'User Guide', super_admin: 'Super Admin' },
+  'ja': { quick_start: 'クイックスタート', user: '一般ユーザー', super_admin: 'Super Admin' },
+}
+
+const LOGGED_OUT_HINT: Record<Locale, string> = {
+  'zh-TW': '登入後可查看完整使用說明',
+  'en': 'Sign in to view the full documentation',
+  'ja': 'ログインすると完全なドキュメントを閲覧できます',
 }
 
 const TOC_LABEL: Record<Locale, string> = {
@@ -106,7 +112,8 @@ export default function DocsPage() {
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const [locale, setLocale] = useState<Locale>('zh-TW')
-  const [section, setSection] = useState<Section>('user')
+  const [section, setSection] = useState<Section>('quick_start')
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [content, setContent] = useState<string>('')
   const [html, setHtml] = useState<string>('')
   const [toc, setToc] = useState<TocItem[]>([])
@@ -120,7 +127,13 @@ export default function DocsPage() {
   useEffect(() => {
     setMounted(true)
     setLocale(getCookieLocale())
-  }, [])
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const loggedIn = !!session
+      setIsLoggedIn(loggedIn)
+      // Default to user section if logged in
+      if (loggedIn) setSection('user')
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!mounted) return
@@ -224,7 +237,7 @@ export default function DocsPage() {
             {/* Section nav */}
             <div>
               <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3 px-2">章節</p>
-              {(['user', 'super_admin'] as Section[]).map((s) => (
+              {(['quick_start', ...(isLoggedIn ? ['user', 'super_admin'] : [])] as Section[]).map((s) => (
                 <button
                   key={s}
                   onClick={() => { setSection(s); setToc([]); setActiveId('') }}
@@ -237,6 +250,12 @@ export default function DocsPage() {
                   {SECTION_LABELS[locale][s]}
                 </button>
               ))}
+              {!isLoggedIn && (
+                <div className="mt-3 px-3 py-2 text-xs text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                  <Link href="/login" className="text-blue-500 hover:underline font-medium">登入</Link>
+                  {' '}後可查看完整說明
+                </div>
+              )}
             </div>
 
             {/* TOC */}
@@ -275,8 +294,8 @@ export default function DocsPage() {
         <main className="flex-1 min-w-0 px-8 lg:px-12 py-10 max-w-4xl">
           {/* Mobile: section switcher + TOC toggle */}
           <div className="lg:hidden mb-6 space-y-3">
-            <div className="flex gap-2">
-              {(['user', 'super_admin'] as Section[]).map((s) => (
+            <div className="flex flex-wrap gap-2">
+              {(['quick_start', ...(isLoggedIn ? ['user', 'super_admin'] : [])] as Section[]).map((s) => (
                 <button
                   key={s}
                   onClick={() => setSection(s)}
@@ -289,6 +308,14 @@ export default function DocsPage() {
                   {SECTION_LABELS[locale][s]}
                 </button>
               ))}
+              {!isLoggedIn && (
+                <Link
+                  href="/login"
+                  className="text-sm px-3 py-1.5 rounded-lg border border-dashed border-blue-300 dark:border-blue-700 text-blue-500 dark:text-blue-400"
+                >
+                  {LOGGED_OUT_HINT[locale]} →
+                </Link>
+              )}
             </div>
             {toc.length > 0 && (
               <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">

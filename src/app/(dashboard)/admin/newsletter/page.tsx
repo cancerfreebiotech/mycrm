@@ -737,26 +737,67 @@ function DetailView({
 
 // ── Unsubscribes ──────────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 50
+
 function UnsubscribesView({ supabase, onBack }: { supabase: ReturnType<typeof createBrowserSupabaseClient>; onBack: () => void }) {
   const [rows, setRows] = useState<Unsubscribe[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(0)
+  const [search, setSearch] = useState('')
+  const [query, setQuery] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    supabase.from('newsletter_unsubscribes').select('*').order('unsubscribed_at', { ascending: false })
-      .then(({ data }) => setRows((data ?? []) as Unsubscribe[]))
+  const fetchRows = useCallback(async (q: string, p: number) => {
+    setLoading(true)
+    let req = supabase
+      .from('newsletter_unsubscribes')
+      .select('*', { count: 'exact' })
+      .order('unsubscribed_at', { ascending: false })
+      .range(p * PAGE_SIZE, p * PAGE_SIZE + PAGE_SIZE - 1)
+    if (q) req = req.ilike('email', `%${q}%`)
+    const { data, count } = await req
+    setRows((data ?? []) as Unsubscribe[])
+    setTotal(count ?? 0)
+    setLoading(false)
   }, [supabase])
+
+  useEffect(() => { fetchRows(query, page) }, [fetchRows, query, page])
+
+  function handleSearch() { setPage(0); setQuery(search) }
 
   async function remove(id: string) {
     await supabase.from('newsletter_unsubscribes').delete().eq('id', id)
     setRows(prev => prev.filter(r => r.id !== id))
+    setTotal(t => t - 1)
   }
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 mb-4"><ChevronLeft size={15} /> 返回</button>
-      <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">退訂管理</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">退訂管理</h2>
+        <span className="text-sm text-gray-400">共 {total} 筆</span>
+      </div>
+      <div className="flex gap-2 mb-4">
+        <div className="flex-1 relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            placeholder="搜尋 email..."
+            className="w-full pl-8 pr-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <button onClick={handleSearch} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-200 dark:hover:bg-gray-600">搜尋</button>
+      </div>
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
-        {rows.length === 0 ? (
-          <div className="py-10 text-center text-gray-400 text-sm">暫無退訂紀錄</div>
+        {loading ? (
+          <div className="py-10 text-center text-gray-400 text-sm">載入中...</div>
+        ) : rows.length === 0 ? (
+          <div className="py-10 text-center text-gray-400 text-sm">{query ? '無符合結果' : '暫無退訂紀錄'}</div>
         ) : (
           <div className="divide-y divide-gray-100 dark:divide-gray-700">
             {rows.map(r => (
@@ -771,6 +812,13 @@ function UnsubscribesView({ supabase, onBack }: { supabase: ReturnType<typeof cr
           </div>
         )}
       </div>
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 text-sm text-gray-500">
+          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800">← 上一頁</button>
+          <span>第 {page + 1} / {totalPages} 頁</span>
+          <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800">下一頁 →</button>
+        </div>
+      )}
     </div>
   )
 }
@@ -779,13 +827,50 @@ function UnsubscribesView({ supabase, onBack }: { supabase: ReturnType<typeof cr
 
 function BlacklistView({ supabase, onBack }: { supabase: ReturnType<typeof createBrowserSupabaseClient>; onBack: () => void }) {
   const [rows, setRows] = useState<Blacklist[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(0)
+  const [search, setSearch] = useState('')
+  const [query, setQuery] = useState('')
+  const [loading, setLoading] = useState(false)
   const [newEmail, setNewEmail] = useState('')
   const [adding, setAdding] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<string | null>(null)
 
-  useEffect(() => {
-    supabase.from('newsletter_blacklist').select('*').order('created_at', { ascending: false })
-      .then(({ data }) => setRows((data ?? []) as Blacklist[]))
+  const fetchRows = useCallback(async (q: string, p: number) => {
+    setLoading(true)
+    let req = supabase
+      .from('newsletter_blacklist')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(p * PAGE_SIZE, p * PAGE_SIZE + PAGE_SIZE - 1)
+    if (q) req = req.ilike('email', `%${q}%`)
+    const { data, count } = await req
+    setRows((data ?? []) as Blacklist[])
+    setTotal(count ?? 0)
+    setLoading(false)
   }, [supabase])
+
+  useEffect(() => { fetchRows(query, page) }, [fetchRows, query, page])
+
+  function handleSearch() { setPage(0); setQuery(search) }
+
+  async function importSuppressions() {
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const res = await fetch('/api/sendgrid/import-suppressions', { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? '匯入失敗')
+      setImportResult(`✅ 匯入完成：hard bounce ${json.bounces} 筆、invalid email ${json.invalidEmails} 筆、退訂 ${json.unsubscribes} 筆`)
+      setPage(0); setQuery(''); setSearch('')
+      fetchRows('', 0)
+    } catch (e) {
+      setImportResult(`❌ ${e instanceof Error ? e.message : '匯入失敗'}`)
+    } finally {
+      setImporting(false)
+    }
+  }
 
   async function add() {
     if (!newEmail.trim()) return
@@ -793,7 +878,10 @@ function BlacklistView({ supabase, onBack }: { supabase: ReturnType<typeof creat
     const { data } = await supabase.from('newsletter_blacklist')
       .upsert({ email: newEmail.trim(), reason: 'manual' }, { onConflict: 'email' })
       .select('*').single()
-    if (data) setRows(prev => [data as Blacklist, ...prev])
+    if (data) {
+      setRows(prev => [data as Blacklist, ...prev])
+      setTotal(t => t + 1)
+    }
     setNewEmail('')
     setAdding(false)
   }
@@ -801,19 +889,55 @@ function BlacklistView({ supabase, onBack }: { supabase: ReturnType<typeof creat
   async function remove(id: string) {
     await supabase.from('newsletter_blacklist').delete().eq('id', id)
     setRows(prev => prev.filter(r => r.id !== id))
+    setTotal(t => t - 1)
   }
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 mb-4"><ChevronLeft size={15} /> 返回</button>
-      <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">黑名單管理</h2>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">黑名單管理</h2>
+          <p className="text-sm text-gray-400 mt-0.5">共 {total} 筆</p>
+        </div>
+        <button
+          onClick={importSuppressions}
+          disabled={importing}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 disabled:opacity-50"
+          title="從 SendGrid 匯入 hard bounce、invalid email、全域退訂名單"
+        >
+          {importing ? <><AlertCircle size={13} className="animate-pulse" /> 匯入中...</> : '↓ 從 SendGrid 匯入抑制名單'}
+        </button>
+      </div>
+      {importResult && (
+        <div className={`mb-4 text-sm px-3 py-2 rounded-lg ${importResult.startsWith('✅') ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400'}`}>
+          {importResult}
+        </div>
+      )}
+      <div className="flex gap-2 mb-3">
+        <div className="flex-1 relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            placeholder="搜尋 email..."
+            className="w-full pl-8 pr-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <button onClick={handleSearch} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-200 dark:hover:bg-gray-600">搜尋</button>
+      </div>
       <div className="flex gap-2 mb-4">
         <input value={newEmail} onChange={e => setNewEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} placeholder="新增 email 到黑名單..." className="flex-1 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
         <button onClick={add} disabled={adding || !newEmail.trim()} className="px-4 py-2 bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900 rounded-lg text-sm hover:opacity-90 disabled:opacity-50">新增</button>
       </div>
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
-        {rows.length === 0 ? (
-          <div className="py-10 text-center text-gray-400 text-sm">黑名單為空</div>
+        {loading ? (
+          <div className="py-10 text-center text-gray-400 text-sm">載入中...</div>
+        ) : rows.length === 0 ? (
+          <div className="py-10 text-center text-gray-400 text-sm">{query ? '無符合結果' : '黑名單為空'}</div>
         ) : (
           <div className="divide-y divide-gray-100 dark:divide-gray-700">
             {rows.map(r => (
@@ -828,6 +952,13 @@ function BlacklistView({ supabase, onBack }: { supabase: ReturnType<typeof creat
           </div>
         )}
       </div>
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 text-sm text-gray-500">
+          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800">← 上一頁</button>
+          <span>第 {page + 1} / {totalPages} 頁</span>
+          <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800">下一頁 →</button>
+        </div>
+      )}
     </div>
   )
 }

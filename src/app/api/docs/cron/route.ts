@@ -40,7 +40,7 @@ myCRM v1.3.9 功能摘要（供文件生成參考）：
 `
 
 const LOCALES = ['zh-TW', 'en', 'ja'] as const
-const SECTIONS = ['user', 'super_admin'] as const
+const SECTIONS = ['quick_start', 'user', 'super_admin'] as const
 
 type Locale = typeof LOCALES[number]
 type Section = typeof SECTIONS[number]
@@ -53,6 +53,7 @@ function buildPrompt(locale: Locale, section: Section): string {
   }
 
   const sectionDesc: Record<Section, string> = {
+    quick_start: '快速開始（新使用者入門：系統簡介、登入方式、第一步驟、Telegram Bot 綁定、拍第一張名片）',
     user: '一般使用者（Telegram Bot、名片辨識、聯絡人、任務、個人設定、Teams Bot）',
     super_admin: '系統管理員（使用者管理、AI模型、Tag、郵件範本、Prompt、國家管理、辨識失敗審查、報表）',
   }
