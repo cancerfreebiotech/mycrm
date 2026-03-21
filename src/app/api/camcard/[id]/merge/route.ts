@@ -9,16 +9,21 @@ const OCR_TO_CONTACT: Record<string, string> = {
   company_en: 'company_en',
   company_local: 'company_local',
   job_title: 'job_title',
+  department: 'department',
   email: 'email',
   second_email: 'second_email',
   phone: 'phone',
   second_phone: 'second_phone',
+  fax: 'fax',
   address: 'address',
+  address_en: 'address_en',
   website: 'website',
   linkedin_url: 'linkedin_url',
   facebook_url: 'facebook_url',
   country_code: 'country_code',
 }
+
+const KNOWN_CONTACT_KEYS = new Set(Object.values(OCR_TO_CONTACT))
 
 /**
  * POST /api/camcard/[id]/merge
@@ -57,6 +62,13 @@ export async function POST(
       updates[contactKey] = ocr[ocrKey]
     }
   }
+  // Merge extra_data (unknown OCR keys)
+  const extraData: Record<string, string> = { ...(contact.extra_data ?? {}) }
+  for (const [k, v] of Object.entries(ocr)) {
+    if (v && !KNOWN_CONTACT_KEYS.has(k) && !OCR_TO_CONTACT[k] && !extraData[k]) extraData[k] = v
+  }
+  if (Object.keys(extraData).length > 0) updates.extra_data = extraData
+  if (pending.back_img_url && !contact.card_img_back_url) updates.card_img_back_url = pending.back_img_url
 
   if (Object.keys(updates).length > 0) {
     await supabase.from('contacts').update(updates).eq('id', contactId)

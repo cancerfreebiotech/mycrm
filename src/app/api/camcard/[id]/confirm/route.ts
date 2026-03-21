@@ -9,16 +9,21 @@ const OCR_TO_CONTACT: Record<string, string> = {
   company_en: 'company_en',
   company_local: 'company_local',
   job_title: 'job_title',
+  department: 'department',
   email: 'email',
   second_email: 'second_email',
   phone: 'phone',
   second_phone: 'second_phone',
+  fax: 'fax',
   address: 'address',
+  address_en: 'address_en',
   website: 'website',
   linkedin_url: 'linkedin_url',
   facebook_url: 'facebook_url',
   country_code: 'country_code',
 }
+
+const KNOWN_CONTACT_KEYS = new Set(Object.values(OCR_TO_CONTACT))
 
 /**
  * POST /api/camcard/[id]/confirm
@@ -46,10 +51,17 @@ export async function POST(
 
   // Build contact fields from OCR data
   const contactData: Record<string, unknown> = { source: 'camcard', imported_at: new Date().toISOString() }
+  const extraData: Record<string, string> = {}
   for (const [ocrKey, contactKey] of Object.entries(OCR_TO_CONTACT)) {
     if (ocr[ocrKey]) contactData[contactKey] = ocr[ocrKey]
   }
+  // Any OCR keys not mapped to a contact column go into extra_data
+  for (const [k, v] of Object.entries(ocr)) {
+    if (v && !KNOWN_CONTACT_KEYS.has(k) && !OCR_TO_CONTACT[k]) extraData[k] = v
+  }
+  if (Object.keys(extraData).length > 0) contactData.extra_data = extraData
   if (pending.card_img_url) contactData.card_img_url = pending.card_img_url
+  if (pending.back_img_url) contactData.card_img_back_url = pending.back_img_url
 
   const { data: contact, error: insertErr } = await supabase
     .from('contacts')

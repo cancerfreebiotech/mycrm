@@ -24,10 +24,14 @@ interface Contact {
   phone: string | null
   second_phone: string | null
   address: string | null
+  address_en: string | null
+  fax: string | null
+  department: string | null
   website: string | null
   linkedin_url: string | null
   facebook_url: string | null
   notes: string | null
+  extra_data: Record<string, string> | null
   country_code: string | null
   met_at: string | null
   met_date: string | null
@@ -69,7 +73,8 @@ const EMPTY_EDIT = {
   job_title: '',
   email: '', second_email: '',
   phone: '', second_phone: '',
-  address: '', website: '',
+  address: '', address_en: '', fax: '', department: '',
+  website: '',
   linkedin_url: '', facebook_url: '',
   notes: '',
   country_code: '',
@@ -84,7 +89,8 @@ const OCR_FIELD_LABELS: Record<string, string> = {
   job_title: '職稱',
   email: 'Email', second_email: '第二 Email',
   phone: '電話', second_phone: '第二電話',
-  address: '地址', website: '網站',
+  address: '地址', address_en: '英文地址', fax: '傳真', department: '部門',
+  website: '網站',
   linkedin_url: 'LinkedIn', facebook_url: 'Facebook',
 }
 
@@ -428,6 +434,9 @@ export default function ContactDetailPage() {
       phone: contact.phone ?? '',
       second_phone: contact.second_phone ?? '',
       address: contact.address ?? '',
+      address_en: contact.address_en ?? '',
+      fax: contact.fax ?? '',
+      department: contact.department ?? '',
       website: contact.website ?? '',
       linkedin_url: contact.linkedin_url ?? '',
       facebook_url: contact.facebook_url ?? '',
@@ -483,6 +492,9 @@ export default function ContactDetailPage() {
         phone: data.phone || prev.phone,
         second_phone: data.second_phone || prev.second_phone,
         address: data.address || prev.address,
+        address_en: data.address_en || prev.address_en,
+        fax: data.fax || prev.fax,
+        department: data.department || prev.department,
         website: data.website || prev.website,
         linkedin_url: data.linkedin_url || prev.linkedin_url,
         facebook_url: data.facebook_url || prev.facebook_url,
@@ -955,6 +967,9 @@ export default function ContactDetailPage() {
             <InfoRow label={t('phone')} value={contact.phone} href={contact.phone ? `tel:${contact.phone}` : undefined} />
             <InfoRow label={t('secondPhone')} value={contact.second_phone} href={contact.second_phone ? `tel:${contact.second_phone}` : undefined} />
             <InfoRow label={t('address')} value={contact.address} />
+            <InfoRow label={t('addressEn')} value={contact.address_en} />
+            <InfoRow label={t('fax')} value={contact.fax} />
+            <InfoRow label={t('department')} value={contact.department} />
             <InfoRow label={t('website')} value={contact.website} href={contact.website ?? undefined} />
             {contact.country_code && (() => {
               const c = allCountries.find((c) => c.code === contact.country_code)
@@ -967,6 +982,17 @@ export default function ContactDetailPage() {
               <div className="flex gap-3 text-sm mt-2">
                 <span className="w-24 text-gray-400 dark:text-gray-500 shrink-0">{t('notes')}</span>
                 <span className="text-gray-700 dark:text-gray-300 whitespace-pre-line">{contact.notes}</span>
+              </div>
+            )}
+            {contact.extra_data && Object.keys(contact.extra_data).length > 0 && (
+              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">{t('extraData')}</p>
+                {Object.entries(contact.extra_data).map(([k, v]) => v ? (
+                  <div key={k} className="flex gap-3 text-sm mb-1">
+                    <span className="w-24 text-gray-400 dark:text-gray-500 shrink-0 capitalize">{k.replace(/_/g, ' ')}</span>
+                    <span className="text-gray-700 dark:text-gray-300 break-words">{v}</span>
+                  </div>
+                ) : null)}
               </div>
             )}
             {(contact.met_at || contact.met_date || contact.referred_by) && (
@@ -1453,7 +1479,7 @@ export default function ContactDetailPage() {
               <div>
                 <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">{t('sectionContact')}</p>
                 <div className="grid grid-cols-1 gap-3">
-                  {([['Email', 'email', 'email'], [t('secondEmail'), 'second_email', 'email'], [t('phone'), 'phone', 'tel'], [t('secondPhone'), 'second_phone', 'tel'], [t('address'), 'address', 'text'], [t('website'), 'website', 'url']] as [string, string, string][]).map(([label, field, type]) => (
+                  {([['Email', 'email', 'email'], [t('secondEmail'), 'second_email', 'email'], [t('phone'), 'phone', 'tel'], [t('secondPhone'), 'second_phone', 'tel'], [t('fax'), 'fax', 'tel'], [t('address'), 'address', 'text'], [t('addressEn'), 'address_en', 'text'], [t('department'), 'department', 'text'], [t('website'), 'website', 'url']] as [string, string, string][]).map(([label, field, type]) => (
                     <div key={field}>
                       <label className={labelClass}>{label}</label>
                       <input type={type} value={editForm[field as keyof typeof editForm]}

@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## v1.7.1 — 名片王正反面配對 + 擴充聯絡人欄位（2026-03-21）
+
+### 變更項目
+- **名片王 Script 正反面配對**：自動配對 `{Name}-Card Front.jpg` / `{Name}-Card Back.jpg`，兩張圖一起送 Claude OCR（單次 API call），產生一筆 `camcard_pending` 紀錄
+- **`(2)` 重複背面處理**：忽略 `*-Card Back(2).jpg` 重複掃描，以第一張為準
+- **新聯絡人欄位**：`address_en`（英文地址）、`fax`（傳真）、`department`（部門）、`extra_data JSONB`（OCR 溢出資料）
+- **OCR Prompt 更新**：新增傳真、英文地址、部門指示；雙語地址自動分配至 `address` / `address_en`；不認識的欄位存入 `extra_data`
+- **聯絡人詳情頁**：顯示新欄位；有 `extra_data` 時顯示「其他資訊」區塊
+- **編輯表單**：新增傳真、英文地址、部門欄位
+- **i18n**：zh-TW / en / ja 新增 `addressEn`、`fax`、`department`、`extraData` 鍵
+
+---
+
 ## v1.7.0 — 重複審查、名片王匯入、Newsletter 抑制名單、系統狀態（2026-03-21）
 
 ### 變更項目
