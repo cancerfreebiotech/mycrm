@@ -35,7 +35,7 @@ type MergeAction = { pendingId: string; contactId: string; contactName: string }
 type ContactSearchResult = { id: string; name: string | null; name_en: string | null; company: string | null; email: string | null }
 
 export default function CamcardPage() {
-  const supabase = createBrowserSupabaseClient()
+  const supabase = createBrowserSupabaseClient()  // used for contact search only
 
   const [groups, setGroups] = useState<GroupedCards[]>([])
   const [loading, setLoading] = useState(true)
@@ -56,17 +56,8 @@ export default function CamcardPage() {
 
   const fetchPending = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('camcard_pending')
-      .select(`
-        id, image_filename, card_img_url, ocr_data, status,
-        duplicate_contact_id, match_type, created_at,
-        duplicate_contact:contacts!duplicate_contact_id(id, name, name_en, company, email)
-      `)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false })
-
-    const cards = (data ?? []) as unknown as PendingCard[]
+    const res = await fetch('/api/camcard/pending')
+    const cards: PendingCard[] = res.ok ? await res.json() : []
     setTotalPending(cards.length)
 
     // Group by company
