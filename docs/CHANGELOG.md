@@ -1,5 +1,44 @@
 # CHANGELOG
 
+## v1.7 — 合併聯絡人 + 名片王匯入 + API Health Check + 文件權限 + SendGrid 歷史整合（待實作）
+
+### 變更項目
+
+#### 合併聯絡人（Task 91–92）
+- **聯絡人詳情頁「合併聯絡人」按鈕**：選取來源聯絡人，以保留筆欄位為主，來源補空白欄位；名片、互動紀錄、Tag 取聯集；自動寫 system interaction_log
+- **`/admin/duplicates` 重複審查頁**（super admin）：手動觸發掃描（email 完全相符 / 姓名 similarity >= 0.6），配對列表可合併或標記「不是重複」
+- **新增 `duplicate_pairs` 表**：記錄掃描結果與忽略狀態
+- **`contacts` 新增 `source` 欄位**（web / telegram / camcard / batch）與 `imported_at` 欄位
+
+#### 名片王匯入（Task 93–94）
+- **本機 script `scripts/camcard-import/import.ts`**：讀取本機圖片資料夾，壓縮後上傳 Storage，呼叫 Claude API OCR，寫入 `camcard_pending` 暫存表
+- **Script 功能**：`--dry-run N`（先跑 N 張確認）、`--resume`（斷點續跑）、進度顯示、失敗清單輸出
+- **`/admin/camcard` 暫存區審查頁**（super admin）：按公司分組、重複偵測標示、確認新增 / 合併至現有 / 略過、批次操作
+- **匯入聯絡人**：`source='camcard'`、`created_at='2020-01-01'`、`imported_at` 記真實時間，自動寫 interaction_log（來自名片王匯入）
+- **新增 `camcard_pending` 暫存表**
+
+#### API Health Check（Task 95）
+- **`/admin/health` 系統狀態頁**（super admin）：頁面載入自動 ping，可手動重新檢查
+- **監控項目**：SendGrid API key 有效性、所有 active AI endpoints（送極短 test prompt）
+- **顯示**：✅/❌ + latency(ms) + 最後檢查時間
+
+#### 文件權限 + Quick Start（Task 96）
+- **`/docs` access control**：未登入只看 Quick Start；一般用戶看 Quick Start + 使用者文件；super admin 看全部
+- **新增 Quick Start section**（AI 生成，三語言）：登入、綁定 Telegram Bot、綁定 Teams Bot、掃描第一張名片
+
+#### SendGrid 歷史資料整合（Task 97–99）
+- **一次性匯入**：呼叫 SendGrid Suppressions API 拉取 bounce / unsubscribe / spam 歷史紀錄，寫入 `newsletter_blacklist` / `newsletter_unsubscribes`
+- **聯絡人比對**：比對現有聯絡人 email，寫 interaction_log（來自 SendGrid 歷史紀錄，含狀態與時間）
+- **聯絡人詳情頁 badge**：Email 旁顯示 🚫 硬退信 / 🔕 已退訂 / ⚠️ Spam 檢舉
+- **`/admin/newsletter` 新增分頁**：Blacklist（搜尋、手動新增/移除）、Unsubscribes（搜尋、手動移除）
+
+#### 其他（Task 100–101）
+- **Sidebar 新增**（super admin）：重複審查、名片王匯入、系統狀態
+- **i18n**：三份語言檔新增 v1.7 相關 key
+
+---
+
+
 ## v1.6.4 — Bot `/met` 批次套用認識場合（2026-03-19）
 
 ### 變更項目
