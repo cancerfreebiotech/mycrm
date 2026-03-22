@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v1.7.5 — 修正名片王確認後照片消失問題（2026-03-22）
+
+### 變更項目
+- 修正 confirm route 誤帶不存在的 `storage_path` 欄位導致 `card_img_url` 更新失敗，確認後照片顯示破圖
+- 修補已確認 5 筆聯絡人的 `card_img_url`（Allen Chong、Andrew Chen、Chris Kim、Angela Feng、Akiyuki Takaya）
+- 修正 import script `created_at` 固定為 `2020-01-01` 未生效問題
+
 ## v1.7.4 — 名片王 FK 修正 + 建立時間設為掃描時間（2026-03-22）
 
 ### 變更項目

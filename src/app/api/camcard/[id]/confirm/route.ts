@@ -110,7 +110,7 @@ export async function POST(
     const { error: moveErr } = await supabase.storage.from('cards').move(pending.storage_path, frontPath)
     if (!moveErr) {
       const { data: urlData } = supabase.storage.from('cards').getPublicUrl(frontPath)
-      await supabase.from('contacts').update({ card_img_url: urlData.publicUrl, storage_path: frontPath }).eq('id', contact.id)
+      await supabase.from('contacts').update({ card_img_url: urlData.publicUrl }).eq('id', contact.id)
     }
   }
   if (pending.back_storage_path) {
