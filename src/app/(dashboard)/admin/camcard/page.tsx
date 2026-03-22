@@ -93,8 +93,8 @@ export default function CamcardPage() {
     supabase.from('tags').select('id, name').order('name').then(({ data }) => setAllTags(data ?? []))
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return
-      const { data: profile } = await supabase.from('users').select('display_name, name').eq('id', user.id).single()
-      setMyName(profile?.display_name || profile?.name || user.email || '')
+      const { data: profile } = await supabase.from('users').select('display_name').eq('id', user.id).single()
+      setMyName(profile?.display_name || '')
     })
   }, [fetchPending])
 

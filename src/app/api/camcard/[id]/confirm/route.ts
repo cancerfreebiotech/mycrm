@@ -64,8 +64,9 @@ export async function POST(
     if (v && !KNOWN_CONTACT_KEYS.has(k) && !OCR_TO_CONTACT[k]) extraData[k] = v
   }
   if (Object.keys(extraData).length > 0) contactData.extra_data = extraData
-  // Name fallback: use English name if no local language name
+  // Name / company fallback: use English if no local language version
   if (!contactData.name && contactData.name_en) contactData.name = contactData.name_en
+  if (!contactData.company && contactData.company_en) contactData.company = contactData.company_en
   if (pending.card_img_url) contactData.card_img_url = pending.card_img_url
   if (pending.back_img_url) contactData.card_img_back_url = pending.back_img_url
 
