@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v1.7.6 — 修正名片王確認人未記錄問題（2026-03-22）
+
+### 變更項目
+- confirm/merge route 新增 session cookie fallback：前端 myUser 未載入或批次確認未傳 userId 時，自動從 cookie 讀取登入者
+- 修正 handleBatchConfirm 未傳 confirmedByUserId/Name 的問題
+- SQL 補正 Bella Hsu 的 created_by 與互動紀錄
+
 ## v1.7.5 — 修正名片王確認後照片消失問題（2026-03-22）
 
 ### 變更項目

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { createClient, createServiceClient } from '@/lib/supabase'
 import { generateCardFilename } from '@/lib/cardFilename'
 
 const OCR_TO_CONTACT: Record<string, string> = {
@@ -47,11 +47,24 @@ export async function POST(
 
   const supabase = createServiceClient()
 
-  // Validate confirming user via service client (bypasses RLS)
+  // Resolve confirming user — prefer body params, fall back to session cookie
   let confirmedByName: string = body.confirmedByName ?? ''
-  if (body.confirmedByUserId && !confirmedByName) {
-    const { data: profile } = await supabase.from('users').select('display_name').eq('id', body.confirmedByUserId).single()
+  let resolvedUserId: string | null = body.confirmedByUserId ?? null
+  if (resolvedUserId && !confirmedByName) {
+    const { data: profile } = await supabase.from('users').select('display_name').eq('id', resolvedUserId).single()
     if (profile) confirmedByName = profile.display_name || ''
+  }
+  // Fallback: read from session cookie
+  if (!resolvedUserId) {
+    const supabaseUser = await createClient()
+    const { data: { user } } = await supabaseUser.auth.getUser()
+    if (user) {
+      const { data: profile } = await supabase.from('users').select('display_name').eq('id', user.id).single()
+      if (profile) {
+        resolvedUserId = user.id
+        confirmedByName = profile.display_name || ''
+      }
+    }
   }
 
   const [{ data: pending }, { data: contact }] = await Promise.all([

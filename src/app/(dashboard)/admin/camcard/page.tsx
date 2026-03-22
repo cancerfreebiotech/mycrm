@@ -208,7 +208,11 @@ export default function CamcardPage() {
     setBatchConfirming(company)
     try {
       for (const card of toConfirm) {
-        await fetch(`/api/camcard/${card.id}/confirm`, { method: 'POST' })
+        await fetch(`/api/camcard/${card.id}/confirm`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confirmedByUserId: myUser?.id, confirmedByName: myUser?.display_name }),
+        })
         removeCard(card.id)
       }
     } finally {

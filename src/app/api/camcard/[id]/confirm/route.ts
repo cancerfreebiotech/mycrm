@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { createClient, createServiceClient } from '@/lib/supabase'
 import { generateCardFilename } from '@/lib/cardFilename'
 
 const OCR_TO_CONTACT: Record<string, string> = {
@@ -40,7 +40,7 @@ export async function POST(
   const tagIds: string[] = body.tagIds ?? []
   const supabase = createServiceClient()
 
-  // Validate confirming user via service client (bypasses RLS)
+  // Resolve confirming user — prefer body params, fall back to session cookie
   let confirmedByName: string = body.confirmedByName ?? ''
   let confirmedByUserId: string | null = null
   if (body.confirmedByUserId) {
@@ -48,6 +48,18 @@ export async function POST(
     if (profile) {
       confirmedByUserId = body.confirmedByUserId
       if (!confirmedByName) confirmedByName = profile.display_name || ''
+    }
+  }
+  // Fallback: read from session cookie (covers batch confirm and race conditions)
+  if (!confirmedByUserId) {
+    const supabaseUser = await createClient()
+    const { data: { user } } = await supabaseUser.auth.getUser()
+    if (user) {
+      const { data: profile } = await supabase.from('users').select('display_name').eq('id', user.id).single()
+      if (profile) {
+        confirmedByUserId = user.id
+        confirmedByName = profile.display_name || ''
+      }
     }
   }
 
