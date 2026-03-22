@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import {
   FolderInput, Loader2, Check, X, Merge, ExternalLink,
-  ChevronDown, ChevronRight, AlertTriangle, CheckSquare
+  ChevronDown, ChevronRight, AlertTriangle, CheckSquare, ZoomIn
 } from 'lucide-react'
 
 interface Tag { id: string; name: string }
@@ -57,6 +57,9 @@ export default function CamcardPage() {
   // Tags
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [cardTags, setCardTags] = useState<Record<string, string[]>>({})
+
+  // Lightbox
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
   // Batch confirm
   const [batchConfirming, setBatchConfirming] = useState<string | null>(null)
@@ -211,6 +214,35 @@ export default function CamcardPage() {
     setTotalPending((n) => n - 1)
   }
 
+  function CardThumb({ url, alt, onPreview }: { url: string | null; alt: string; onPreview: (u: string) => void }) {
+    const [broken, setBroken] = useState(false)
+    if (!url || broken) {
+      return (
+        <div className="w-28 h-16 bg-gray-100 dark:bg-gray-800 rounded-lg flex flex-col items-center justify-center gap-1">
+          <FolderInput size={16} className="text-gray-300" />
+          {broken && <span className="text-xs text-gray-300">載入失敗</span>}
+        </div>
+      )
+    }
+    return (
+      <button
+        onClick={() => onPreview(url)}
+        className="relative w-28 h-16 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 group shrink-0"
+        title={`點擊放大 (${alt})`}
+      >
+        <img
+          src={url}
+          alt={alt}
+          className="w-full h-full object-cover"
+          onError={() => setBroken(true)}
+        />
+        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <ZoomIn size={16} className="text-white" />
+        </div>
+      </button>
+    )
+  }
+
   function OcrField({ label, value }: { label: string; value: string | null | undefined }) {
     if (!value) return null
     return (
@@ -231,17 +263,11 @@ export default function CamcardPage() {
     return (
       <div className={`bg-white dark:bg-gray-900 rounded-xl border p-4 ${hasDup ? 'border-yellow-300 dark:border-yellow-700' : 'border-gray-200 dark:border-gray-700'}`}>
         <div className="flex gap-4">
-          {/* Card images: front + back stacked */}
+          {/* Card images: front + back stacked, click to enlarge */}
           <div className="flex flex-col gap-1 shrink-0">
-            {card.card_img_url ? (
-              <img src={card.card_img_url} alt="正面" className="w-28 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-700" />
-            ) : (
-              <div className="w-28 h-16 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center">
-                <FolderInput size={20} className="text-gray-300" />
-              </div>
-            )}
+            <CardThumb url={card.card_img_url} alt="正面" onPreview={setPreviewUrl} />
             {card.back_img_url && (
-              <img src={card.back_img_url} alt="背面" className="w-28 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-700" />
+              <CardThumb url={card.back_img_url} alt="背面" onPreview={setPreviewUrl} />
             )}
           </div>
 
@@ -412,6 +438,27 @@ export default function CamcardPage() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {previewUrl && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          onClick={() => setPreviewUrl(null)}
+        >
+          <button
+            className="absolute top-4 right-4 text-white/70 hover:text-white"
+            onClick={() => setPreviewUrl(null)}
+          >
+            <X size={28} />
+          </button>
+          <img
+            src={previewUrl}
+            alt="名片預覽"
+            className="max-w-full max-h-full rounded-xl shadow-2xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
 
