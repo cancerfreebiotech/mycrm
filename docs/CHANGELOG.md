@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v1.7.16 — 修正名片王確認人：改用 session cookie 直接查 email（2026-03-23）
+
+### 變更項目
+- confirm/merge route 改用 `createClient()` 讀 session cookies → `auth.getUser()` → 用 email 查 `users` 表取 `display_name`
+- 移除對 middleware header 和 body param 的依賴（前兩種方式都不可靠）
+- 還原 middleware 移除 v1.7.15 加入的 request header 修法（無效且複雜）
+
 ## v1.7.15 — 修正 middleware x-user-id 改為 request header（2026-03-22）
 
 ### 變更項目

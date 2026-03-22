@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { createClient, createServiceClient } from '@/lib/supabase'
 import { generateCardFilename } from '@/lib/cardFilename'
 
 const OCR_TO_CONTACT: Record<string, string> = {
@@ -40,15 +40,15 @@ export async function POST(
   const tagIds: string[] = body.tagIds ?? []
   const supabase = createServiceClient()
 
-  // Resolve confirming user — prefer middleware header (most reliable), then body param
-  const headerUserId = req.headers.get('x-user-id')
-  const resolvedId = headerUserId || body.confirmedByUserId || null
+  // Resolve confirming user via session cookies (most reliable)
   let confirmedByName: string = ''
   let confirmedByUserId: string | null = null
-  if (resolvedId) {
-    const { data: profile } = await supabase.from('users').select('display_name').eq('id', resolvedId).single()
+  const authClient = await createClient()
+  const { data: { user: authUser } } = await authClient.auth.getUser()
+  if (authUser?.email) {
+    const { data: profile } = await supabase.from('users').select('id, display_name').eq('email', authUser.email).single()
     if (profile) {
-      confirmedByUserId = resolvedId
+      confirmedByUserId = profile.id
       confirmedByName = profile.display_name || ''
     }
   }
