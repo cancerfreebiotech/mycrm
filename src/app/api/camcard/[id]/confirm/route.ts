@@ -40,17 +40,17 @@ export async function POST(
   const tagIds: string[] = body.tagIds ?? []
   const supabase = createServiceClient()
 
-  // Resolve confirming user — prefer body params, fall back to session cookie
-  let confirmedByName: string = body.confirmedByName ?? ''
+  // Resolve confirming user — always look up display_name from DB (don't trust client-provided name)
+  let confirmedByName: string = ''
   let confirmedByUserId: string | null = null
   if (body.confirmedByUserId) {
     const { data: profile } = await supabase.from('users').select('display_name').eq('id', body.confirmedByUserId).single()
     if (profile) {
       confirmedByUserId = body.confirmedByUserId
-      if (!confirmedByName) confirmedByName = profile.display_name || ''
+      confirmedByName = profile.display_name || ''
     }
   }
-  // Fallback: read from session cookie (covers batch confirm and race conditions)
+  // Fallback: read from session cookie
   if (!confirmedByUserId) {
     const supabaseUser = await createClient()
     const { data: { user } } = await supabaseUser.auth.getUser()

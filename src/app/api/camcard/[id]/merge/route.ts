@@ -47,10 +47,10 @@ export async function POST(
 
   const supabase = createServiceClient()
 
-  // Resolve confirming user — prefer body params, fall back to session cookie
-  let confirmedByName: string = body.confirmedByName ?? ''
+  // Resolve confirming user — always look up display_name from DB (don't trust client-provided name)
+  let confirmedByName: string = ''
   let resolvedUserId: string | null = body.confirmedByUserId ?? null
-  if (resolvedUserId && !confirmedByName) {
+  if (resolvedUserId) {
     const { data: profile } = await supabase.from('users').select('display_name').eq('id', resolvedUserId).single()
     if (profile) confirmedByName = profile.display_name || ''
   }

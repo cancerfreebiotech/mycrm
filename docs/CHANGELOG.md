@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v1.7.13 — 修正名片王確認人：server 永遠從 DB 查 display_name（2026-03-22）
+
+### 變更項目
+- confirm/merge route 不再信任前端傳來的 `confirmedByName`，改為永遠用 `confirmedByUserId` 從 `users` 表查正確的 display_name，根本解決 email fallback 被寫入互動紀錄的問題
+
 ## v1.7.12 — 修正名片王確認人 display_name 快取問題（2026-03-22）
 
 ### 變更項目
