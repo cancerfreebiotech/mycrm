@@ -465,7 +465,10 @@ async function handlePhoto(
       }
     }
 
-    // If no name detected, save as failed scan and notify user
+    // Name fallback: use English name if no local language name
+    if (!cardData.name && cardData.name_en) cardData.name = cardData.name_en
+
+    // If no name detected at all, save as failed scan and notify user
     if (!cardData.name) {
       await supabase.from('failed_scans').insert({
         user_id: user.id,

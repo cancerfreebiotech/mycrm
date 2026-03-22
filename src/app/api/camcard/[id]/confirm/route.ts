@@ -38,6 +38,7 @@ export async function POST(
   const { id } = await params
   const body = await req.json().catch(() => ({}))
   const tagIds: string[] = body.tagIds ?? []
+  const confirmedByName: string = body.confirmedByName ?? ''
   const supabase = createServiceClient()
 
   const { data: pending, error: fetchErr } = await supabase
@@ -63,6 +64,8 @@ export async function POST(
     if (v && !KNOWN_CONTACT_KEYS.has(k) && !OCR_TO_CONTACT[k]) extraData[k] = v
   }
   if (Object.keys(extraData).length > 0) contactData.extra_data = extraData
+  // Name fallback: use English name if no local language name
+  if (!contactData.name && contactData.name_en) contactData.name = contactData.name_en
   if (pending.card_img_url) contactData.card_img_url = pending.card_img_url
   if (pending.back_img_url) contactData.card_img_back_url = pending.back_img_url
 
@@ -105,10 +108,11 @@ export async function POST(
   }
 
   // Write system log
+  const confirmedNote = confirmedByName ? `，由 ${confirmedByName} 確認` : ''
   await supabase.from('interaction_logs').insert({
     contact_id: contact.id,
     type: 'system',
-    content: `從名片王匯入（${pending.image_filename ?? ''}）`,
+    content: `從名片王匯入（${pending.image_filename ?? ''}）${confirmedNote}`,
   })
 
   // Mark pending as confirmed

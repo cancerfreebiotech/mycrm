@@ -40,7 +40,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const { contactId } = await req.json()
+  const body = await req.json()
+  const { contactId, confirmedByName = '' } = body
 
   if (!contactId) return NextResponse.json({ error: 'contactId required' }, { status: 400 })
 
@@ -112,10 +113,11 @@ export async function POST(
   }
 
   // Write system log
+  const confirmedNote = confirmedByName ? `，由 ${confirmedByName} 確認` : ''
   await supabase.from('interaction_logs').insert({
     contact_id: contactId,
     type: 'system',
-    content: `名片王名片合併（${pending.image_filename ?? ''}）`,
+    content: `名片王名片合併（${pending.image_filename ?? ''}）${confirmedNote}`,
   })
 
   // Mark pending as confirmed
