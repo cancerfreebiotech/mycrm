@@ -9,5 +9,5 @@ export async function GET() {
   const supabase = createServiceClient()
   const { data } = await supabase.from('users').select('display_name, role').eq('id', user.id).single()
 
-  return NextResponse.json({ display_name: data?.display_name ?? '', role: data?.role ?? '' })
+  return NextResponse.json({ id: user.id, display_name: data?.display_name ?? '', role: data?.role ?? '' })
 }

@@ -54,7 +54,8 @@ export default function CamcardPage() {
   const [mergeSelectedContact, setMergeSelectedContact] = useState<ContactSearchResult | null>(null)
   const [mergeSaving, setMergeSaving] = useState(false)
 
-  // Current user display name (for audit log)
+  // Current user (for audit log)
+  const [myUser, setMyUser] = useState<{ id: string; display_name: string } | null>(null)
 
   // Tags
   const [allTags, setAllTags] = useState<Tag[]>([])
@@ -90,6 +91,9 @@ export default function CamcardPage() {
   useEffect(() => {
     fetchPending()
     supabase.from('tags').select('id, name').order('name').then(({ data }) => setAllTags(data ?? []))
+    fetch('/api/me').then(r => r.ok ? r.json() : null).then(data => {
+      if (data?.display_name) setMyUser({ id: data.id, display_name: data.display_name })
+    })
   }, [fetchPending])
 
   function toggleGroup(company: string) {
@@ -116,7 +120,7 @@ export default function CamcardPage() {
       const res = await fetch(`/api/camcard/${cardId}/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tagIds }),
+        body: JSON.stringify({ tagIds, confirmedByUserId: myUser?.id, confirmedByName: myUser?.display_name }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
       removeCard(cardId)
@@ -177,7 +181,7 @@ export default function CamcardPage() {
       const res = await fetch(`/api/camcard/${mergeAction.pendingId}/merge`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contactId: mergeSelectedContact.id }),
+        body: JSON.stringify({ contactId: mergeSelectedContact.id, confirmedByUserId: myUser?.id, confirmedByName: myUser?.display_name }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
       removeCard(mergeAction.pendingId)

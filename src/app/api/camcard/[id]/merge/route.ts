@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase'
+import { createServiceClient } from '@/lib/supabase'
 import { generateCardFilename } from '@/lib/cardFilename'
 
 const OCR_TO_CONTACT: Record<string, string> = {
@@ -45,14 +45,12 @@ export async function POST(
 
   if (!contactId) return NextResponse.json({ error: 'contactId required' }, { status: 400 })
 
-  // Resolve confirming user server-side (reliable, bypasses RLS)
-  const supabaseAuth = await createClient()
-  const { data: { user } } = await supabaseAuth.auth.getUser()
   const supabase = createServiceClient()
 
-  let confirmedByName = ''
-  if (user) {
-    const { data: profile } = await supabase.from('users').select('display_name').eq('id', user.id).single()
+  // Validate confirming user via service client (bypasses RLS)
+  let confirmedByName: string = body.confirmedByName ?? ''
+  if (body.confirmedByUserId && !confirmedByName) {
+    const { data: profile } = await supabase.from('users').select('display_name').eq('id', body.confirmedByUserId).single()
     if (profile) confirmedByName = profile.display_name || ''
   }
 
