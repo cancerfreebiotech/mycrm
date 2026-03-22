@@ -114,14 +114,26 @@ export default function CamcardPage() {
     })
   }
 
+  async function resolveUser() {
+    if (myUser) return myUser
+    const data = await fetch('/api/me').then(r => r.ok ? r.json() : null)
+    if (data?.id) {
+      const u = { id: data.id, display_name: data.display_name || '' }
+      setMyUser(u)
+      return u
+    }
+    return null
+  }
+
   async function handleConfirm(cardId: string) {
     setActionLoading(cardId)
     const tagIds = cardTags[cardId] ?? []
+    const user = await resolveUser()
     try {
       const res = await fetch(`/api/camcard/${cardId}/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tagIds, confirmedByUserId: myUser?.id, confirmedByName: myUser?.display_name }),
+        body: JSON.stringify({ tagIds, confirmedByUserId: user?.id, confirmedByName: user?.display_name }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
       removeCard(cardId)
@@ -178,11 +190,12 @@ export default function CamcardPage() {
   async function handleMergeConfirm() {
     if (!mergeAction || !mergeSelectedContact) return
     setMergeSaving(true)
+    const user = await resolveUser()
     try {
       const res = await fetch(`/api/camcard/${mergeAction.pendingId}/merge`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contactId: mergeSelectedContact.id, confirmedByUserId: myUser?.id, confirmedByName: myUser?.display_name }),
+        body: JSON.stringify({ contactId: mergeSelectedContact.id, confirmedByUserId: user?.id, confirmedByName: user?.display_name }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
       removeCard(mergeAction.pendingId)
@@ -202,12 +215,13 @@ export default function CamcardPage() {
     if (toConfirm.length === 0) { alert('此群組無可直接確認的名片（重複聯絡人需手動處理）'); return }
 
     setBatchConfirming(company)
+    const user = await resolveUser()
     try {
       for (const card of toConfirm) {
         await fetch(`/api/camcard/${card.id}/confirm`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ confirmedByUserId: myUser?.id, confirmedByName: myUser?.display_name }),
+          body: JSON.stringify({ confirmedByUserId: user?.id, confirmedByName: user?.display_name }),
         })
         removeCard(card.id)
       }
