@@ -332,14 +332,13 @@ async function main() {
         if (dup) { duplicateContactId = dup.contactId; matchType = dup.matchType }
       }
 
-      // 5. Write to DB (use file mtime as created_at so cards sort by original date)
-      const fileMtime = fs.statSync(group.frontPath).mtime.toISOString()
+      // 5. Write to DB (use fixed early date so camcard contacts sort before manual imports)
       await writePending({
         imageFilename: path.basename(group.frontPath),
         cardImgUrl, storagePath,
         backImgUrl, backStoragePath,
         ocrData, dryRun: isDryRun,
-        fileMtime,
+        fileMtime: '2020-01-01T00:00:00.000Z',
       })
 
       // 6. Update duplicate info if found
