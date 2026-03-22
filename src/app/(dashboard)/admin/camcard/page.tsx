@@ -91,10 +91,8 @@ export default function CamcardPage() {
   useEffect(() => {
     fetchPending()
     supabase.from('tags').select('id, name').order('name').then(({ data }) => setAllTags(data ?? []))
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return
-      const { data: profile } = await supabase.from('users').select('display_name').eq('id', user.id).single()
-      setMyName(profile?.display_name || '')
+    fetch('/api/me').then(r => r.ok ? r.json() : null).then(data => {
+      if (data?.display_name) setMyName(data.display_name)
     })
   }, [fetchPending])
 
