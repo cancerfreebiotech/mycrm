@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { generateCardFilename } from '@/lib/imageProcessor'
 
 const OCR_TO_CONTACT: Record<string, string> = {
   name: 'name',
@@ -74,12 +75,38 @@ export async function POST(
     await supabase.from('contacts').update(updates).eq('id', contactId)
   }
 
+  // Move staging images from camcard/ to cards/ with unified naming
+  const personName = (contact.name || contact.name_en || ocr.name || ocr.name_en || '').replace(/[\s,./\\]/g, '')
+  let finalFrontUrl = pending.card_img_url
+  let finalFrontPath = pending.storage_path
+  if (pending.storage_path) {
+    const frontFile = await generateCardFilename({ name: personName || undefined, side: 'front' })
+    const frontPath = `cards/${frontFile}`
+    const { error: moveErr } = await supabase.storage.from('cards').move(pending.storage_path, frontPath)
+    if (!moveErr) {
+      const { data: urlData } = supabase.storage.from('cards').getPublicUrl(frontPath)
+      finalFrontUrl = urlData.publicUrl
+      finalFrontPath = frontPath
+    }
+  }
+  if (pending.back_storage_path) {
+    const backFile = await generateCardFilename({ name: personName || undefined, side: 'back' })
+    const backPath = `cards/${backFile}`
+    const { error: moveErr } = await supabase.storage.from('cards').move(pending.back_storage_path, backPath)
+    if (!moveErr) {
+      const { data: urlData } = supabase.storage.from('cards').getPublicUrl(backPath)
+      if (!contact.card_img_back_url) {
+        await supabase.from('contacts').update({ card_img_back_url: urlData.publicUrl }).eq('id', contactId)
+      }
+    }
+  }
+
   // Add card image to contact_cards if available
-  if (pending.card_img_url) {
+  if (finalFrontUrl) {
     await supabase.from('contact_cards').insert({
       contact_id: contactId,
-      card_img_url: pending.card_img_url,
-      storage_path: pending.storage_path,
+      card_img_url: finalFrontUrl,
+      storage_path: finalFrontPath,
       label: '名片王匯入',
     })
   }

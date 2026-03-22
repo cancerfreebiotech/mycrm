@@ -12,9 +12,9 @@ export async function processCardImage(inputBuffer: Buffer): Promise<Buffer> {
     .toBuffer()
 }
 
-// 命名規則：yymmdd_hhmmss-{流水號}.jpg
+// 命名規則：yymmdd_hhmmss-{流水號}-{姓名}-{front|back}.jpg
 // 流水號每天從 001 開始，從 Supabase 查詢當天已存檔數量 +1
-export async function generateCardFilename(): Promise<string> {
+export async function generateCardFilename(opts?: { name?: string; side?: 'front' | 'back' }): Promise<string> {
   const now = new Date()
 
   const yy = String(now.getFullYear()).slice(2)
@@ -38,5 +38,8 @@ export async function generateCardFilename(): Promise<string> {
 
   const serial = String((count ?? 0) + 1).padStart(3, '0')
 
-  return `${datePrefix}_${hh}${min}${ss}-${serial}.jpg`
+  const namePart = opts?.name ? `-${opts.name.replace(/[\s,./\\<>:"|?*]/g, '')}` : ''
+  const sidePart = opts?.side ? `-${opts.side}` : ''
+
+  return `${datePrefix}_${hh}${min}${ss}-${serial}${namePart}${sidePart}.jpg`
 }

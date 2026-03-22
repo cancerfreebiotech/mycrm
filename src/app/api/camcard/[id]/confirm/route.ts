@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { generateCardFilename } from '@/lib/imageProcessor'
 
 const OCR_TO_CONTACT: Record<string, string> = {
   name: 'name',
@@ -80,6 +81,27 @@ export async function POST(
     await supabase.from('contact_tags').insert(
       tagIds.map((tagId) => ({ contact_id: contact.id, tag_id: tagId }))
     )
+  }
+
+  // Move staging images from camcard/ to cards/ with unified naming
+  const personName = (ocr.name || ocr.name_en || '').replace(/[\s,./\\]/g, '')
+  if (pending.storage_path) {
+    const frontFile = await generateCardFilename({ name: personName || undefined, side: 'front' })
+    const frontPath = `cards/${frontFile}`
+    const { error: moveErr } = await supabase.storage.from('cards').move(pending.storage_path, frontPath)
+    if (!moveErr) {
+      const { data: urlData } = supabase.storage.from('cards').getPublicUrl(frontPath)
+      await supabase.from('contacts').update({ card_img_url: urlData.publicUrl, storage_path: frontPath }).eq('id', contact.id)
+    }
+  }
+  if (pending.back_storage_path) {
+    const backFile = await generateCardFilename({ name: personName || undefined, side: 'back' })
+    const backPath = `cards/${backFile}`
+    const { error: moveErr } = await supabase.storage.from('cards').move(pending.back_storage_path, backPath)
+    if (!moveErr) {
+      const { data: urlData } = supabase.storage.from('cards').getPublicUrl(backPath)
+      await supabase.from('contacts').update({ card_img_back_url: urlData.publicUrl }).eq('id', contact.id)
+    }
   }
 
   // Write system log

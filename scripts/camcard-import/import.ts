@@ -189,8 +189,22 @@ function groupFrontBack(files: string[]): CardGroup[] {
 
 // ── Upload to Supabase Storage ────────────────────────────────────────────────
 
-async function uploadCard(buffer: Buffer, filename: string): Promise<{ url: string; storagePath: string }> {
-  const storagePath = `camcard/${Date.now()}_${path.basename(filename)}.jpg`
+function stagingFilename(baseName: string, side: 'front' | 'back', index: number): string {
+  const now = new Date()
+  const yy = String(now.getFullYear()).slice(2)
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  const hh = String(now.getHours()).padStart(2, '0')
+  const min = String(now.getMinutes()).padStart(2, '0')
+  const ss = String(now.getSeconds()).padStart(2, '0')
+  const serial = String(index + 1).padStart(3, '0')
+  const safeName = baseName.replace(/[\s,./\\<>:"|?*]/g, '')
+  return `${yy}${mm}${dd}_${hh}${min}${ss}-${serial}-${safeName}-${side}.jpg`
+}
+
+async function uploadCard(buffer: Buffer, baseName: string, side: 'front' | 'back', index: number): Promise<{ url: string; storagePath: string }> {
+  const filename = stagingFilename(baseName, side, index)
+  const storagePath = `camcard/${filename}`
   const { error } = await supabase.storage.from('cards').upload(storagePath, buffer, { contentType: 'image/jpeg' })
   if (error) throw new Error(`Storage upload failed: ${error.message}`)
   const { data } = supabase.storage.from('cards').getPublicUrl(storagePath)
@@ -307,11 +321,11 @@ async function main() {
       let backImgUrl: string | undefined
       let backStoragePath: string | undefined
       if (!isDryRun) {
-        const uploaded = await uploadCard(frontBuffer, path.basename(group.frontPath))
+        const uploaded = await uploadCard(frontBuffer, group.baseName, 'front', i)
         cardImgUrl = uploaded.url
         storagePath = uploaded.storagePath
         if (backBuffer && group.backPath) {
-          const uploadedBack = await uploadCard(backBuffer, path.basename(group.backPath))
+          const uploadedBack = await uploadCard(backBuffer, group.baseName, 'back', i)
           backImgUrl = uploadedBack.url
           backStoragePath = uploadedBack.storagePath
         }

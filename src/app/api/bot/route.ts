@@ -380,8 +380,9 @@ async function handlePhoto(
         compressed = await sharp(compressed).rotate(cardData.rotation).jpeg({ quality: 85 }).toBuffer()
       }
 
-      const filename = await generateCardFilename()
-      const storagePath = `cards/back_${filename}`
+      const contactName = (existing?.name || existing?.name_en || cardData.name || cardData.name_en || '').replace(/[\s,./\\]/g, '')
+      const filename = await generateCardFilename({ name: contactName || undefined, side: 'back' })
+      const storagePath = `cards/${filename}`
 
       const { error: uploadError } = await supabase.storage
         .from('cards')
@@ -431,9 +432,9 @@ async function handlePhoto(
     const imgBuffer = await downloadTelegramPhoto(photo.file_id)
     const compressed = await processCardImage(imgBuffer)
 
-    // Upload first so we always have the image available for failed_scans
-    const filename = await generateCardFilename()
-    storagePath = `cards/${filename}`
+    // Upload with temp name first so image is preserved even if OCR fails
+    const tmpFilename = await generateCardFilename()
+    storagePath = `cards/${tmpFilename}`
     const { error: uploadError } = await supabase.storage
       .from('cards')
       .upload(storagePath, compressed, { contentType: 'image/jpeg', upsert: false })
@@ -442,7 +443,7 @@ async function handlePhoto(
     const { data: publicUrlData } = supabase.storage.from('cards').getPublicUrl(storagePath)
     cardImgUrl = publicUrlData.publicUrl
 
-    // OCR after upload
+    // OCR
     const cardData = await analyzeBusinessCard(compressed, user.ai_model_id)
 
     // Rotate and re-upload if Gemini detected non-zero rotation
@@ -450,6 +451,18 @@ async function handlePhoto(
       const sharp = (await import('sharp')).default
       const rotated = await sharp(compressed).rotate(cardData.rotation).jpeg({ quality: 85 }).toBuffer()
       await supabase.storage.from('cards').update(storagePath, rotated, { contentType: 'image/jpeg' })
+    }
+
+    // Rename temp file to unified format with person name
+    const personName = (cardData.name || cardData.name_en || '').replace(/[\s,./\\]/g, '')
+    if (personName) {
+      const namedFile = await generateCardFilename({ name: personName, side: 'front' })
+      const namedPath = `cards/${namedFile}`
+      const { error: moveErr } = await supabase.storage.from('cards').move(storagePath, namedPath)
+      if (!moveErr) {
+        storagePath = namedPath
+        cardImgUrl = supabase.storage.from('cards').getPublicUrl(namedPath).data.publicUrl
+      }
     }
 
     // If no name detected, save as failed scan and notify user
