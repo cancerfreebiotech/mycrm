@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v1.7.11 — 修正聯絡人頁面 extra_data 巢狀物件造成崩潰（2026-03-22）
+
+### 變更項目
+- `extra_data` 值若為物件（非字串）時改用 `JSON.stringify()` 顯示，避免 React 渲染崩潰
+
 ## v1.7.10 — 修正名片王確認人顯示名稱（改用 /api/me 取 display_name）（2026-03-22）
 
 ### 變更項目

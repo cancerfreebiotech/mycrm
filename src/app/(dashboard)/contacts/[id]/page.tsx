@@ -990,7 +990,7 @@ export default function ContactDetailPage() {
                 {Object.entries(contact.extra_data).map(([k, v]) => v ? (
                   <div key={k} className="flex gap-3 text-sm mb-1">
                     <span className="w-24 text-gray-400 dark:text-gray-500 shrink-0 capitalize">{k.replace(/_/g, ' ')}</span>
-                    <span className="text-gray-700 dark:text-gray-300 break-words">{v}</span>
+                    <span className="text-gray-700 dark:text-gray-300 break-words">{typeof v === 'object' ? JSON.stringify(v) : v}</span>
                   </div>
                 ) : null)}
               </div>
