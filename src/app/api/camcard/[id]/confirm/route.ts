@@ -43,10 +43,8 @@ export async function POST(
   // Resolve confirming user — prefer body params, fall back to session cookie
   let confirmedByName: string = body.confirmedByName ?? ''
   let confirmedByUserId: string | null = null
-  console.log('[confirm] body.confirmedByUserId:', body.confirmedByUserId, 'body.confirmedByName:', body.confirmedByName)
   if (body.confirmedByUserId) {
-    const { data: profile, error: profileErr } = await supabase.from('users').select('display_name').eq('id', body.confirmedByUserId).single()
-    console.log('[confirm] profile lookup:', profile, profileErr)
+    const { data: profile } = await supabase.from('users').select('display_name').eq('id', body.confirmedByUserId).single()
     if (profile) {
       confirmedByUserId = body.confirmedByUserId
       if (!confirmedByName) confirmedByName = profile.display_name || ''
@@ -55,8 +53,7 @@ export async function POST(
   // Fallback: read from session cookie (covers batch confirm and race conditions)
   if (!confirmedByUserId) {
     const supabaseUser = await createClient()
-    const { data: { user }, error: authErr } = await supabaseUser.auth.getUser()
-    console.log('[confirm] cookie fallback user:', user?.id, authErr)
+    const { data: { user } } = await supabaseUser.auth.getUser()
     if (user) {
       const { data: profile } = await supabase.from('users').select('display_name').eq('id', user.id).single()
       if (profile) {
@@ -65,7 +62,6 @@ export async function POST(
       }
     }
   }
-  console.log('[confirm] final confirmedByUserId:', confirmedByUserId, 'name:', confirmedByName)
 
   const { data: pending, error: fetchErr } = await supabase
     .from('camcard_pending')
