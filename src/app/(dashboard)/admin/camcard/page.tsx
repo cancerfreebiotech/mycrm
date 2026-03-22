@@ -91,8 +91,13 @@ export default function CamcardPage() {
   useEffect(() => {
     fetchPending()
     supabase.from('tags').select('id, name').order('name').then(({ data }) => setAllTags(data ?? []))
-    fetch('/api/me').then(r => r.ok ? r.json() : null).then(data => {
-      if (data?.display_name) setMyUser({ id: data.id, display_name: data.display_name })
+    // Get user ID instantly from cached session, display_name from /api/me
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const userId = session?.user?.id
+      if (!userId) return
+      fetch('/api/me').then(r => r.ok ? r.json() : null).then(data => {
+        setMyUser({ id: userId, display_name: data?.display_name || '' })
+      })
     })
   }, [fetchPending])
 
