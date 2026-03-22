@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v1.7.15 — 修正 middleware x-user-id 改為 request header（2026-03-22）
+
+### 變更項目
+- middleware 改用 `NextResponse.next({ request: { headers: requestHeaders } })` 將 `x-user-id` 寫入 **request header**，route handler 才能正確讀取（舊版誤設 response header，route handler 讀不到）
+- 保留 Supabase session cookies 以維持 auth 正常運作
+
 ## v1.7.14 — 修正名片王確認人：改用 middleware header 傳遞 user ID（2026-03-22）
 
 ### 變更項目

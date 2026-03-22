@@ -53,9 +53,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  // Pass authenticated user ID to route handlers via header
+  // Pass authenticated user ID to route handlers via request header
+  // (response headers are not readable by route handlers — must modify the request)
   if (user) {
-    supabaseResponse.headers.set('x-user-id', user.id)
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set('x-user-id', user.id)
+    const finalResponse = NextResponse.next({ request: { headers: requestHeaders } })
+    // Preserve Supabase session cookies set during auth.getUser()
+    supabaseResponse.headers.getSetCookie().forEach((cookie) => {
+      finalResponse.headers.append('Set-Cookie', cookie)
+    })
+    return finalResponse
   }
 
   return supabaseResponse
