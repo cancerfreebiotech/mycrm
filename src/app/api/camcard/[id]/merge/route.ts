@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
-import { generateCardFilename } from '@/lib/imageProcessor'
+import { generateCardFilename } from '@/lib/cardFilename'
 
 const OCR_TO_CONTACT: Record<string, string> = {
   name: 'name',
