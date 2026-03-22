@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v1.7.9 — 修正名片王確認人：改回瀏覽器 auth.getUser()（2026-03-22）
+
+### 變更項目
+- 捨棄 `/api/me` fetch 改回使用瀏覽器端 `supabase.auth.getUser()`，與第一版可運作的邏輯一致
+- `resolveUser()` fallback 同樣使用 `auth.getUser()`，徹底消除 race condition
+
 ## v1.7.8 — 修正名片王確認人：action 時即時取 user（2026-03-22）
 
 ### 變更項目

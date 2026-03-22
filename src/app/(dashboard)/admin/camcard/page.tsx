@@ -91,9 +91,10 @@ export default function CamcardPage() {
   useEffect(() => {
     fetchPending()
     supabase.from('tags').select('id, name').order('name').then(({ data }) => setAllTags(data ?? []))
-    // Get user info from /api/me (server-validated, always accurate)
-    fetch('/api/me').then(r => r.ok ? r.json() : null).then(data => {
-      if (data?.id) setMyUser({ id: data.id, display_name: data.display_name || '' })
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return
+      const { data: profile } = await supabase.from('users').select('display_name').eq('id', user.id).single()
+      setMyUser({ id: user.id, display_name: profile?.display_name || user.email || '' })
     })
   }, [fetchPending])
 
@@ -116,13 +117,12 @@ export default function CamcardPage() {
 
   async function resolveUser() {
     if (myUser) return myUser
-    const data = await fetch('/api/me').then(r => r.ok ? r.json() : null)
-    if (data?.id) {
-      const u = { id: data.id, display_name: data.display_name || '' }
-      setMyUser(u)
-      return u
-    }
-    return null
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+    const { data: profile } = await supabase.from('users').select('display_name').eq('id', user.id).single()
+    const u = { id: user.id, display_name: profile?.display_name || user.email || '' }
+    setMyUser(u)
+    return u
   }
 
   async function handleConfirm(cardId: string) {
