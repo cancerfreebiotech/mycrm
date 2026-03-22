@@ -207,6 +207,7 @@ async function writePending(opts: {
   backStoragePath?: string
   ocrData: Record<string, string | null>
   dryRun: boolean
+  fileMtime?: string
 }) {
   if (opts.dryRun) {
     console.log('  [dry-run] OCR:', JSON.stringify(opts.ocrData, null, 2).slice(0, 200))
@@ -220,6 +221,7 @@ async function writePending(opts: {
     back_storage_path: opts.backStoragePath ?? null,
     ocr_data: opts.ocrData,
     status: 'pending',
+    created_at: opts.fileMtime ?? new Date().toISOString(),
   })
   if (error) throw new Error(`DB insert failed: ${error.message}`)
 }
@@ -330,12 +332,14 @@ async function main() {
         if (dup) { duplicateContactId = dup.contactId; matchType = dup.matchType }
       }
 
-      // 5. Write to DB
+      // 5. Write to DB (use file mtime as created_at so cards sort by original date)
+      const fileMtime = fs.statSync(group.frontPath).mtime.toISOString()
       await writePending({
         imageFilename: path.basename(group.frontPath),
         cardImgUrl, storagePath,
         backImgUrl, backStoragePath,
         ocrData, dryRun: isDryRun,
+        fileMtime,
       })
 
       // 6. Update duplicate info if found
