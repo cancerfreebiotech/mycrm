@@ -116,7 +116,8 @@ export default function CamcardPage() {
   }
 
   async function resolveUser() {
-    if (myUser) return myUser
+    // Re-fetch if myUser not set or display_name looks like an email (fallback value)
+    if (myUser && !myUser.display_name.includes('@')) return myUser
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
     const meData = await fetch('/api/me').then(r => r.ok ? r.json() : null)
