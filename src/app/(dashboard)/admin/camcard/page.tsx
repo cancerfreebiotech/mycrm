@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import {
   FolderInput, Loader2, Check, X, Merge, ExternalLink,
-  ChevronDown, ChevronRight, AlertTriangle, CheckSquare, ZoomIn
+  ChevronDown, ChevronRight, AlertTriangle, CheckSquare, ZoomIn,
+  ChevronLeft,
 } from 'lucide-react'
 
 interface Tag { id: string; name: string }
@@ -40,9 +41,12 @@ type ContactSearchResult = { id: string; name: string | null; name_en: string | 
 export default function CamcardPage() {
   const supabase = createBrowserSupabaseClient()  // used for contact search only
 
+  const PAGE_SIZE = 50
+
   const [groups, setGroups] = useState<GroupedCards[]>([])
   const [loading, setLoading] = useState(true)
   const [totalPending, setTotalPending] = useState(0)
+  const [page, setPage] = useState(1)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
@@ -67,11 +71,13 @@ export default function CamcardPage() {
   // Batch confirm
   const [batchConfirming, setBatchConfirming] = useState<string | null>(null)
 
-  const fetchPending = useCallback(async () => {
+  const fetchPending = useCallback(async (targetPage = page) => {
     setLoading(true)
-    const res = await fetch('/api/camcard/pending')
-    const cards: PendingCard[] = res.ok ? await res.json() : []
-    setTotalPending(cards.length)
+    const offset = (targetPage - 1) * PAGE_SIZE
+    const res = await fetch(`/api/camcard/pending?limit=${PAGE_SIZE}&offset=${offset}`)
+    const json = res.ok ? await res.json() : { cards: [], total: 0 }
+    const cards: PendingCard[] = json.cards ?? []
+    setTotalPending(json.total ?? 0)
 
     // Group by company
     const map = new Map<string, PendingCard[]>()
@@ -89,14 +95,18 @@ export default function CamcardPage() {
   }, [supabase])
 
   useEffect(() => {
-    fetchPending()
+    fetchPending(page)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page])
+
+  useEffect(() => {
     supabase.from('tags').select('id, name').order('name').then(({ data }) => setAllTags(data ?? []))
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return
       const meData = await fetch('/api/me').then(r => r.ok ? r.json() : null)
       setMyUser({ id: user.id, display_name: meData?.display_name || user.email || '' })
     })
-  }, [fetchPending])
+  }, [])
 
   function toggleGroup(company: string) {
     setCollapsedGroups((prev) => {
@@ -232,11 +242,19 @@ export default function CamcardPage() {
   }
 
   function removeCard(cardId: string) {
-    setGroups((prev) =>
-      prev
+    setGroups((prev) => {
+      const next = prev
         .map((g) => ({ ...g, cards: g.cards.filter((c) => c.id !== cardId) }))
         .filter((g) => g.cards.length > 0)
-    )
+      // If page is now empty and not the first page, go back one page
+      if (next.length === 0 && page > 1) {
+        setPage((p) => p - 1)
+      } else if (next.length === 0) {
+        // Still on page 1 but empty — re-fetch to load next batch
+        fetchPending(1)
+      }
+      return next
+    })
     setTotalPending((n) => n - 1)
   }
 
@@ -401,6 +419,27 @@ export default function CamcardPage() {
             待審查：{totalPending} 張 · 按公司分組顯示
           </p>
         </div>
+        {totalPending > PAGE_SIZE && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1 || loading}
+              className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="text-sm text-gray-600 dark:text-gray-400 tabular-nums">
+              第 {page} / {Math.ceil(totalPending / PAGE_SIZE)} 頁
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(Math.ceil(totalPending / PAGE_SIZE), p + 1))}
+              disabled={page >= Math.ceil(totalPending / PAGE_SIZE) || loading}
+              className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
       </div>
 
       {loading ? (

@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v1.8.0 — 名片王審查頁面加入分頁（每頁 50 筆）（2026-03-23）
+
+### 變更項目
+- `GET /api/camcard/pending`：新增 `limit` / `offset` query 參數，回傳 `{ cards, total }` 格式（原本回傳陣列）
+- `/admin/camcard` 頁面：加入翻頁按鈕（上一頁 / 下一頁），頭部顯示「第 N / M 頁」
+- 每頁固定 50 筆，當前頁顯示完畢後自動重新載入下一批
+
 ## v1.7.16 — 修正名片王確認人：改用 session cookie 直接查 email（2026-03-23）
 
 ### 變更項目
