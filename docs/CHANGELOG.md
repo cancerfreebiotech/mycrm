@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v1.7.3 — 名片王確認人 server-side 解析 + created_by（2026-03-22）
+
+### 變更項目
+- **confirm/merge route 改為 server-side 讀取確認人**：使用 cookie-based session 取得當前登入者 ID，再以 service role 查 `display_name`，完全不依賴前端傳值，解決 confirmedByName 顯示 email 的問題
+- **`contacts.created_by` 自動填入**：從名片王確認建立的聯絡人，`created_by` 自動設為確認者的 user ID
+- **前端移除 `confirmedByName` 傳遞**：確認人邏輯全移至後端，前端不再需要傳 `confirmedByName`
+
 ## v1.7.2 — 確認人名稱修正（2026-03-22）
 
 ### 變更項目

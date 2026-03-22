@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { createClient, createServiceClient } from '@/lib/supabase'
 import { generateCardFilename } from '@/lib/cardFilename'
 
 const OCR_TO_CONTACT: Record<string, string> = {
@@ -38,8 +38,19 @@ export async function POST(
   const { id } = await params
   const body = await req.json().catch(() => ({}))
   const tagIds: string[] = body.tagIds ?? []
-  const confirmedByName: string = body.confirmedByName ?? ''
+
+  // Resolve confirming user server-side (reliable, bypasses RLS)
+  const supabaseAuth = await createClient()
+  const { data: { user } } = await supabaseAuth.auth.getUser()
   const supabase = createServiceClient()
+
+  let confirmedByName = ''
+  let confirmedByUserId: string | null = null
+  if (user) {
+    confirmedByUserId = user.id
+    const { data: profile } = await supabase.from('users').select('display_name').eq('id', user.id).single()
+    confirmedByName = profile?.display_name || ''
+  }
 
   const { data: pending, error: fetchErr } = await supabase
     .from('camcard_pending')
@@ -55,6 +66,7 @@ export async function POST(
 
   // Build contact fields from OCR data
   const contactData: Record<string, unknown> = { source: 'camcard', imported_at: new Date().toISOString() }
+  if (confirmedByUserId) contactData.created_by = confirmedByUserId
   const extraData: Record<string, string> = {}
   for (const [ocrKey, contactKey] of Object.entries(OCR_TO_CONTACT)) {
     if (ocr[ocrKey]) contactData[contactKey] = ocr[ocrKey]
