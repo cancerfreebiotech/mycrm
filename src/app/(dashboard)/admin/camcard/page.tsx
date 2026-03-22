@@ -8,10 +8,13 @@ import {
   ChevronDown, ChevronRight, AlertTriangle, CheckSquare
 } from 'lucide-react'
 
+interface Tag { id: string; name: string }
+
 interface PendingCard {
   id: string
   image_filename: string | null
   card_img_url: string | null
+  back_img_url: string | null
   ocr_data: Record<string, string | null>
   status: 'pending' | 'confirmed' | 'skipped'
   duplicate_contact_id: string | null
@@ -51,6 +54,10 @@ export default function CamcardPage() {
   const [mergeSelectedContact, setMergeSelectedContact] = useState<ContactSearchResult | null>(null)
   const [mergeSaving, setMergeSaving] = useState(false)
 
+  // Tags
+  const [allTags, setAllTags] = useState<Tag[]>([])
+  const [cardTags, setCardTags] = useState<Record<string, string[]>>({})
+
   // Batch confirm
   const [batchConfirming, setBatchConfirming] = useState<string | null>(null)
 
@@ -75,7 +82,10 @@ export default function CamcardPage() {
     setLoading(false)
   }, [supabase])
 
-  useEffect(() => { fetchPending() }, [fetchPending])
+  useEffect(() => {
+    fetchPending()
+    supabase.from('tags').select('id, name').order('name').then(({ data }) => setAllTags(data ?? []))
+  }, [fetchPending])
 
   function toggleGroup(company: string) {
     setCollapsedGroups((prev) => {
@@ -86,10 +96,23 @@ export default function CamcardPage() {
     })
   }
 
+  function toggleCardTag(cardId: string, tagId: string) {
+    setCardTags((prev) => {
+      const current = prev[cardId] ?? []
+      const next = current.includes(tagId) ? current.filter((t) => t !== tagId) : [...current, tagId]
+      return { ...prev, [cardId]: next }
+    })
+  }
+
   async function handleConfirm(cardId: string) {
     setActionLoading(cardId)
+    const tagIds = cardTags[cardId] ?? []
     try {
-      const res = await fetch(`/api/camcard/${cardId}/confirm`, { method: 'POST' })
+      const res = await fetch(`/api/camcard/${cardId}/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tagIds }),
+      })
       if (!res.ok) throw new Error((await res.json()).error)
       removeCard(cardId)
     } catch (e) {
@@ -208,28 +231,35 @@ export default function CamcardPage() {
     return (
       <div className={`bg-white dark:bg-gray-900 rounded-xl border p-4 ${hasDup ? 'border-yellow-300 dark:border-yellow-700' : 'border-gray-200 dark:border-gray-700'}`}>
         <div className="flex gap-4">
-          {/* Card image */}
-          {card.card_img_url ? (
-            <img
-              src={card.card_img_url}
-              alt="名片"
-              className="w-32 h-20 object-cover rounded-lg border border-gray-200 dark:border-gray-700 shrink-0"
-            />
-          ) : (
-            <div className="w-32 h-20 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center shrink-0">
-              <FolderInput size={20} className="text-gray-300" />
-            </div>
-          )}
+          {/* Card images: front + back stacked */}
+          <div className="flex flex-col gap-1 shrink-0">
+            {card.card_img_url ? (
+              <img src={card.card_img_url} alt="正面" className="w-28 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-700" />
+            ) : (
+              <div className="w-28 h-16 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center">
+                <FolderInput size={20} className="text-gray-300" />
+              </div>
+            )}
+            {card.back_img_url && (
+              <img src={card.back_img_url} alt="背面" className="w-28 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-700" />
+            )}
+          </div>
 
           {/* OCR data */}
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{name}</p>
             {ocr.job_title && <p className="text-xs text-gray-500 mt-0.5">{ocr.job_title}</p>}
             <div className="mt-2 text-xs space-y-0.5">
+              {ocr.name_en && ocr.name_en !== ocr.name && <OcrField label="英文名" value={ocr.name_en} />}
+              <OcrField label="公司" value={ocr.company || ocr.company_en} />
+              <OcrField label="部門" value={ocr.department} />
               <OcrField label="Email" value={ocr.email} />
               <OcrField label="電話" value={ocr.phone} />
+              <OcrField label="傳真" value={ocr.fax} />
               <OcrField label="地址" value={ocr.address} />
+              <OcrField label="英文址" value={ocr.address_en} />
               <OcrField label="網站" value={ocr.website} />
+              {ocr.country_code && <OcrField label="國家" value={ocr.country_code} />}
             </div>
             {card.image_filename && (
               <p className="text-xs text-gray-300 dark:text-gray-600 mt-1.5">{card.image_filename}</p>
@@ -280,6 +310,29 @@ export default function CamcardPage() {
                 <ExternalLink size={10} /> 查看
               </Link>
             </p>
+          </div>
+        )}
+
+        {/* Tag picker */}
+        {allTags.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1 items-center">
+            <span className="text-xs text-gray-400 shrink-0">標籤：</span>
+            {allTags.map((tag) => {
+              const isSelected = (cardTags[card.id] ?? []).includes(tag.id)
+              return (
+                <button
+                  key={tag.id}
+                  onClick={() => toggleCardTag(card.id, tag.id)}
+                  className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${
+                    isSelected
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'text-gray-500 border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500'
+                  }`}
+                >
+                  {tag.name}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>

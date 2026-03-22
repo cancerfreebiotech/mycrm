@@ -31,10 +31,12 @@ const KNOWN_CONTACT_KEYS = new Set(Object.values(OCR_TO_CONTACT))
  * Marks the pending row as confirmed.
  */
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
+  const body = await req.json().catch(() => ({}))
+  const tagIds: string[] = body.tagIds ?? []
   const supabase = createServiceClient()
 
   const { data: pending, error: fetchErr } = await supabase
@@ -71,6 +73,13 @@ export async function POST(
 
   if (insertErr || !contact) {
     return NextResponse.json({ error: insertErr?.message ?? 'Insert failed' }, { status: 500 })
+  }
+
+  // Apply tags
+  if (tagIds.length > 0) {
+    await supabase.from('contact_tags').insert(
+      tagIds.map((tagId) => ({ contact_id: contact.id, tag_id: tagId }))
+    )
   }
 
   // Write system log
