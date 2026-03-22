@@ -53,6 +53,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
+  // Pass authenticated user ID to route handlers via header
+  if (user) {
+    supabaseResponse.headers.set('x-user-id', user.id)
+  }
+
   return supabaseResponse
 }
 

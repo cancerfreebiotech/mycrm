@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v1.7.14 — 修正名片王確認人：改用 middleware header 傳遞 user ID（2026-03-22）
+
+### 變更項目
+- middleware 驗證 session 後將 user ID 寫入 `x-user-id` response header，confirm/merge route 直接讀取，徹底繞開 Route Handler cookie auth 失效問題
+
 ## v1.7.13 — 修正名片王確認人：server 永遠從 DB 查 display_name（2026-03-22）
 
 ### 變更項目

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase'
+import { createServiceClient } from '@/lib/supabase'
 import { generateCardFilename } from '@/lib/cardFilename'
 
 const OCR_TO_CONTACT: Record<string, string> = {
@@ -40,26 +40,16 @@ export async function POST(
   const tagIds: string[] = body.tagIds ?? []
   const supabase = createServiceClient()
 
-  // Resolve confirming user — always look up display_name from DB (don't trust client-provided name)
+  // Resolve confirming user — prefer middleware header (most reliable), then body param
+  const headerUserId = req.headers.get('x-user-id')
+  const resolvedId = headerUserId || body.confirmedByUserId || null
   let confirmedByName: string = ''
   let confirmedByUserId: string | null = null
-  if (body.confirmedByUserId) {
-    const { data: profile } = await supabase.from('users').select('display_name').eq('id', body.confirmedByUserId).single()
+  if (resolvedId) {
+    const { data: profile } = await supabase.from('users').select('display_name').eq('id', resolvedId).single()
     if (profile) {
-      confirmedByUserId = body.confirmedByUserId
+      confirmedByUserId = resolvedId
       confirmedByName = profile.display_name || ''
-    }
-  }
-  // Fallback: read from session cookie
-  if (!confirmedByUserId) {
-    const supabaseUser = await createClient()
-    const { data: { user } } = await supabaseUser.auth.getUser()
-    if (user) {
-      const { data: profile } = await supabase.from('users').select('display_name').eq('id', user.id).single()
-      if (profile) {
-        confirmedByUserId = user.id
-        confirmedByName = profile.display_name || ''
-      }
     }
   }
 
