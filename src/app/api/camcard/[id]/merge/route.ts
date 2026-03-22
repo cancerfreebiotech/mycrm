@@ -53,7 +53,7 @@ export async function POST(
   let confirmedByName = ''
   if (user) {
     const { data: profile } = await supabase.from('users').select('display_name').eq('id', user.id).single()
-    confirmedByName = profile?.display_name || ''
+    if (profile) confirmedByName = profile.display_name || ''
   }
 
   const [{ data: pending }, { data: contact }] = await Promise.all([

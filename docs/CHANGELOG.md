@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v1.7.4 — 名片王 FK 修正 + 建立時間設為掃描時間（2026-03-22）
+
+### 變更項目
+- **FK 違反修正**：`created_by` 只在 `public.users` 查到對應 profile 時才設定，避免 FK constraint 錯誤
+- **`created_at` 設為掃描時間**：從名片王確認的聯絡人 `created_at` 使用 `camcard_pending.created_at`，讓時間序列與實際掃描時間一致，不與手動建立的聯絡人混在一起
+
 ## v1.7.3 — 名片王確認人 server-side 解析 + created_by（2026-03-22）
 
 ### 變更項目

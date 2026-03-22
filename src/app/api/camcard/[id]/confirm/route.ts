@@ -47,9 +47,11 @@ export async function POST(
   let confirmedByName = ''
   let confirmedByUserId: string | null = null
   if (user) {
-    confirmedByUserId = user.id
     const { data: profile } = await supabase.from('users').select('display_name').eq('id', user.id).single()
-    confirmedByName = profile?.display_name || ''
+    if (profile) {
+      confirmedByUserId = user.id
+      confirmedByName = profile.display_name || ''
+    }
   }
 
   const { data: pending, error: fetchErr } = await supabase
@@ -65,7 +67,11 @@ export async function POST(
   const ocr = (pending.ocr_data ?? {}) as Record<string, string | null>
 
   // Build contact fields from OCR data
-  const contactData: Record<string, unknown> = { source: 'camcard', imported_at: new Date().toISOString() }
+  const contactData: Record<string, unknown> = {
+    source: 'camcard',
+    imported_at: new Date().toISOString(),
+    created_at: pending.created_at,  // use scan time so camcard contacts sort earlier
+  }
   if (confirmedByUserId) contactData.created_by = confirmedByUserId
   const extraData: Record<string, string> = {}
   for (const [ocrKey, contactKey] of Object.entries(OCR_TO_CONTACT)) {
