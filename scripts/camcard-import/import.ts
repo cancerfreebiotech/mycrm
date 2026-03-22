@@ -15,8 +15,9 @@
 import fs from 'fs'
 import path from 'path'
 import { createClient } from '@supabase/supabase-js'
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import sharp from 'sharp'
+
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -32,15 +33,15 @@ if (fs.existsSync(envPath)) {
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY!
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !ANTHROPIC_API_KEY) {
-  console.error('❌ 缺少環境變數：NEXT_PUBLIC_SUPABASE_URL、SUPABASE_SERVICE_ROLE_KEY、ANTHROPIC_API_KEY')
+if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !GEMINI_API_KEY) {
+  console.error('❌ 缺少環境變數：NEXT_PUBLIC_SUPABASE_URL、SUPABASE_SERVICE_ROLE_KEY、GEMINI_API_KEY')
   process.exit(1)
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY })
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY)
 
 const SUPPORTED_EXTS = ['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif']
 const MAX_SIDE = 1024
@@ -50,43 +51,38 @@ const FAILED_FILE = path.resolve(process.cwd(), 'scripts/camcard-import/failed.t
 
 // ── OCR Prompt (matches existing system prompt) ───────────────────────────
 
-const OCR_PROMPT = `你是名片辨識 AI。請仔細辨識圖片中的名片（可能有正面和背面兩張），合併提取所有可見資訊並以 JSON 格式回傳。
+const OCR_PROMPT = `你是一個專業名片辨識助手。名片可能同時包含中文、英文、日文等多種語言的姓名，請分別辨識並填入對應欄位。可能有正面和背面兩張圖，請合併提取所有可見資訊。
+從圖中提取以下資訊，回傳純 JSON，不要有任何其他文字：
+{"name":"","name_en":"","name_local":"","company":"","company_en":"","company_local":"","job_title":"","department":"","email":"","second_email":"","phone":"","second_phone":"","fax":"","address":"","address_en":"","website":"","linkedin_url":"","facebook_url":"","country_code":null}
 
-回傳格式（所有欄位，無資料填 null）：
-{
-  "name": "中文姓名",
-  "name_en": "英文姓名",
-  "name_local": "當地語言姓名（非中英文時填入）",
-  "company": "中文公司名",
-  "company_en": "英文公司名",
-  "company_local": "當地語言公司名",
-  "job_title": "職稱",
-  "department": "部門或部署名稱",
-  "email": "主要電子郵件",
-  "second_email": "第二電子郵件",
-  "phone": "主要電話（辦公室或手機）",
-  "second_phone": "第二電話",
-  "fax": "傳真號碼",
-  "address": "主要地址（非英文語言，如中文或日文）",
-  "address_en": "英文地址",
-  "website": "網站",
-  "linkedin_url": "LinkedIn URL",
-  "facebook_url": "Facebook URL",
-  "country_code": "2字母ISO國碼，如TW/JP/US"
-}
+姓名欄位規則（重要）：
+- name：中文姓名（漢字中文名，如「王大明」）
+- name_en：英文姓名（羅馬字母拼寫，如「David Wang」）
+- name_local：日文姓名（日文漢字或假名，如「田中太郎」「タナカ タロウ」）
+- 若名片同時有中文、日文、英文姓名，請分別填入對應欄位，不要只填一個
+- 若只有一種姓名，依「中文 → 日文 → 英文 → 其他」優先順序填入最適當的欄位
+- 若純漢字姓名無法判斷中日文，以中文優先放 name 欄位
 
-若有多個地址，中文/日文地址放 address，英文地址放 address_en。
+地址規則：若有多個地址，中文/日文地址放 address，英文地址放 address_en。
+
+country_code 規則：回傳 ISO 2 碼（如 "TW"、"JP"、"US"），依據以下優先順序判斷：
+1. 電話號碼國碼（+886→TW、+81→JP、+1→US、+82→KR、+65→SG、+91→IN）
+2. 地址內容（含國名、城市、郵遞區號格式）
+3. 公司名稱語言特徵（日文假名→JP、韓文→KR）
+找不到則回傳 null
+
 若有辨識到上述欄位以外的額外資訊（如 QR code 內容、第三電話等），以額外 JSON key 附加在同一物件中。
-只回傳 JSON，不要任何說明文字。`
+無資料的欄位填 null，只回傳 JSON，不要任何說明文字。`
 
 // ── Args ─────────────────────────────────────────────────────────────────────
 
 function parseArgs() {
   const args = process.argv.slice(2)
-  const result = { dir: '', dryRun: 0, resume: false }
+  const result = { dir: '', dryRun: 0, resume: false, limit: 0 }
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--dir') result.dir = args[++i]
     else if (args[i] === '--dry-run') result.dryRun = parseInt(args[++i]) || 10
+    else if (args[i] === '--limit') result.limit = parseInt(args[++i]) || 0
     else if (args[i] === '--resume') result.resume = true
   }
   if (!result.dir) {
@@ -132,25 +128,15 @@ async function compressImage(filePath: string): Promise<Buffer> {
   return pipeline.jpeg({ quality: JPEG_QUALITY }).toBuffer()
 }
 
-// ── OCR via Claude API ────────────────────────────────────────────────────────
+// ── OCR via Gemini API ────────────────────────────────────────────────────────
 
 async function ocrImages(buffers: Buffer[]): Promise<Record<string, string | null>> {
-  const imageContents = buffers.map((buf) => ({
-    type: 'image' as const,
-    source: { type: 'base64' as const, media_type: 'image/jpeg' as const, data: buf.toString('base64') },
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+  const imageParts = buffers.map((buf) => ({
+    inlineData: { mimeType: 'image/jpeg' as const, data: buf.toString('base64') },
   }))
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
-    messages: [
-      {
-        role: 'user',
-        content: [...imageContents, { type: 'text', text: OCR_PROMPT }],
-      },
-    ],
-  })
-
-  const text = response.content[0].type === 'text' ? response.content[0].text : ''
+  const result = await model.generateContent([OCR_PROMPT, ...imageParts])
+  const text = result.response.text().trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
   const jsonMatch = text.match(/\{[\s\S]*\}/)
   if (!jsonMatch) throw new Error('OCR 回傳格式錯誤')
   return JSON.parse(jsonMatch[0])
@@ -256,7 +242,7 @@ async function detectDuplicate(ocrData: Record<string, string | null>): Promise<
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const { dir, dryRun, resume } = parseArgs()
+  const { dir, dryRun, resume, limit } = parseArgs()
   const isDryRun = dryRun > 0
 
   if (!fs.existsSync(dir)) {
@@ -282,9 +268,10 @@ async function main() {
   const processedSet = new Set(progress.processed)
 
   // Filter out already processed groups (keyed by base name)
-  const toProcess = isDryRun
+  let toProcess = isDryRun
     ? allGroups.slice(0, dryRun)
     : allGroups.filter((g) => !processedSet.has(g.baseName))
+  if (!isDryRun && limit > 0) toProcess = toProcess.slice(0, limit)
 
   const total = isDryRun ? toProcess.length : allGroups.length
   let successCount = progress.processed.length
