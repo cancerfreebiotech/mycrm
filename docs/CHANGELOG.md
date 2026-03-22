@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v1.7.10 — 修正名片王確認人顯示名稱（改用 /api/me 取 display_name）（2026-03-22）
+
+### 變更項目
+- `resolveUser()` 改用 `auth.getUser()` 取 user.id + `/api/me` 取 display_name，解決瀏覽器 RLS 限制導致只能拿到 email 的問題
+
 ## v1.7.9 — 修正名片王確認人：改回瀏覽器 auth.getUser()（2026-03-22）
 
 ### 變更項目

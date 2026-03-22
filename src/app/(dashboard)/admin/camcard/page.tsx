@@ -93,8 +93,8 @@ export default function CamcardPage() {
     supabase.from('tags').select('id, name').order('name').then(({ data }) => setAllTags(data ?? []))
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return
-      const { data: profile } = await supabase.from('users').select('display_name').eq('id', user.id).single()
-      setMyUser({ id: user.id, display_name: profile?.display_name || user.email || '' })
+      const meData = await fetch('/api/me').then(r => r.ok ? r.json() : null)
+      setMyUser({ id: user.id, display_name: meData?.display_name || user.email || '' })
     })
   }, [fetchPending])
 
@@ -119,8 +119,8 @@ export default function CamcardPage() {
     if (myUser) return myUser
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
-    const { data: profile } = await supabase.from('users').select('display_name').eq('id', user.id).single()
-    const u = { id: user.id, display_name: profile?.display_name || user.email || '' }
+    const meData = await fetch('/api/me').then(r => r.ok ? r.json() : null)
+    const u = { id: user.id, display_name: meData?.display_name || user.email || '' }
     setMyUser(u)
     return u
   }
