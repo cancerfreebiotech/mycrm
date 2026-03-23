@@ -897,6 +897,10 @@ export default function ContactDetailPage() {
   const inputClass = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
   const labelClass = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1'
 
+  function ensureHttp(url: string) {
+    return /^https?:\/\//i.test(url) ? url : `https://${url}`
+  }
+
   function InfoRow({ label, value, href, copyable, suffix }: { label: string; value: string | null | undefined; href?: string; copyable?: boolean; suffix?: React.ReactNode }) {
     if (!value) return null
     return (
@@ -996,13 +1000,13 @@ export default function ContactDetailPage() {
             <InfoRow label={t('addressEn')} value={contact.address_en} />
             <InfoRow label={t('fax')} value={contact.fax} />
             <InfoRow label={t('department')} value={contact.department} />
-            <InfoRow label={t('website')} value={contact.website} href={contact.website ?? undefined} />
+            <InfoRow label={t('website')} value={contact.website} href={contact.website ? ensureHttp(contact.website) : undefined} />
             {contact.country_code && (() => {
               const c = allCountries.find((c) => c.code === contact.country_code)
               return <InfoRow label={t('country')} value={c ? `${c.emoji} ${c.name_zh}` : contact.country_code} />
             })()}
-            <InfoRow label="LinkedIn" value={contact.linkedin_url} href={contact.linkedin_url ?? undefined} />
-            <InfoRow label="Facebook" value={contact.facebook_url} href={contact.facebook_url ?? undefined} />
+            <InfoRow label="LinkedIn" value={contact.linkedin_url} href={contact.linkedin_url ? ensureHttp(contact.linkedin_url) : undefined} />
+            <InfoRow label="Facebook" value={contact.facebook_url} href={contact.facebook_url ? ensureHttp(contact.facebook_url) : undefined} />
             <InfoRow label={t('creator')} value={contact.users?.display_name} />
             {contact.notes && (
               <div className="flex gap-3 text-sm mt-2">

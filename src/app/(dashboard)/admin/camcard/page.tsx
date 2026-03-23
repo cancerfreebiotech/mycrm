@@ -291,12 +291,20 @@ export default function CamcardPage() {
     )
   }
 
-  function OcrField({ label, value }: { label: string; value: string | null | undefined }) {
+  function ensureHttp(url: string) {
+    return /^https?:\/\//i.test(url) ? url : `https://${url}`
+  }
+
+  function OcrField({ label, value, href }: { label: string; value: string | null | undefined; href?: string }) {
     if (!value) return null
     return (
       <div className="flex gap-1.5">
         <span className="text-gray-400 shrink-0 w-14 text-right">{label}</span>
-        <span className="text-gray-700 dark:text-gray-300 break-all">{value}</span>
+        {href ? (
+          <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline break-all">{value}</a>
+        ) : (
+          <span className="text-gray-700 dark:text-gray-300 break-all">{value}</span>
+        )}
       </div>
     )
   }
@@ -333,7 +341,7 @@ export default function CamcardPage() {
               <OcrField label="傳真" value={ocr.fax} />
               <OcrField label="地址" value={ocr.address} />
               <OcrField label="英文址" value={ocr.address_en} />
-              <OcrField label="網站" value={ocr.website} />
+              <OcrField label="網站" value={ocr.website} href={ocr.website ? ensureHttp(ocr.website) : undefined} />
               {ocr.country_code && <OcrField label="國家" value={ocr.country_code} />}
             </div>
             {card.image_filename && (
