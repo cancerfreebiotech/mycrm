@@ -398,10 +398,10 @@ export default function ContactsPage() {
           {importanceDropdownOpen && (
             <div className="absolute top-full mt-1 left-0 z-10 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-36">
               {[
-                { value: '', label: t('importance.all') },
-                { value: 'high', label: t('importance.high') },
-                { value: 'medium', label: t('importance.medium') },
-                { value: 'low', label: t('importance.low') },
+                { value: '', label: 'ALL' },
+                { value: 'high', label: 'H' },
+                { value: 'medium', label: 'M' },
+                { value: 'low', label: 'L' },
               ].map(({ value, label }) => (
                 <button
                   key={value}

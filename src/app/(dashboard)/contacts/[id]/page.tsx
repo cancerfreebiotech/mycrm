@@ -972,7 +972,7 @@ export default function ContactDetailPage() {
                   const filled = contact.importance === 'high' ? 3 : contact.importance === 'low' ? 1 : 2
                   return <span key={i} className={`w-2 h-2 rounded-full ${i < filled ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-700'}`} />
                 })}
-                <span className="text-xs ml-1">{t(`importance.${contact.importance ?? 'medium'}`)}</span>
+                <span className="text-xs ml-1 text-gray-400">{contact.importance === 'high' ? 'H' : contact.importance === 'low' ? 'L' : 'M'}</span>
               </span>
             </div>
             <InfoRow label="Email" value={contact.email} href={contact.email ? `mailto:${contact.email}` : undefined} copyable suffix={<EmailSuppressionBadges email={contact.email} />} />
@@ -1503,7 +1503,7 @@ export default function ContactDetailPage() {
                           : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
                       }`}
                     >
-                      {t(`importance.${v}`)}
+                      {v === 'high' ? 'H' : v === 'low' ? 'L' : 'M'}
                     </button>
                   ))}
                 </div>

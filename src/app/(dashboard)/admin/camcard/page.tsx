@@ -65,6 +65,9 @@ export default function CamcardPage() {
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [cardTags, setCardTags] = useState<Record<string, string[]>>({})
 
+  // Importance
+  const [cardImportance, setCardImportance] = useState<Record<string, string>>({})
+
   // Lightbox
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
@@ -139,12 +142,13 @@ export default function CamcardPage() {
   async function handleConfirm(cardId: string) {
     setActionLoading(cardId)
     const tagIds = cardTags[cardId] ?? []
+    const importance = cardImportance[cardId] ?? 'medium'
     const user = await resolveUser()
     try {
       const res = await fetch(`/api/camcard/${cardId}/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tagIds, confirmedByUserId: user?.id, confirmedByName: user?.display_name }),
+        body: JSON.stringify({ tagIds, importance, confirmedByUserId: user?.id, confirmedByName: user?.display_name }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
       removeCard(cardId)
@@ -303,6 +307,7 @@ export default function CamcardPage() {
     const hasDup = !!card.duplicate_contact_id
     const dup = card.duplicate_contact
     const isLoading = actionLoading === card.id
+    const importance = cardImportance[card.id] ?? 'medium'
 
     return (
       <div className={`bg-white dark:bg-gray-900 rounded-xl border p-4 ${hasDup ? 'border-yellow-300 dark:border-yellow-700' : 'border-gray-200 dark:border-gray-700'}`}>
@@ -383,28 +388,46 @@ export default function CamcardPage() {
           </div>
         )}
 
-        {/* Tag picker */}
-        {allTags.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1 items-center">
-            <span className="text-xs text-gray-400 shrink-0">標籤：</span>
-            {allTags.map((tag) => {
-              const isSelected = (cardTags[card.id] ?? []).includes(tag.id)
-              return (
-                <button
-                  key={tag.id}
-                  onClick={() => toggleCardTag(card.id, tag.id)}
-                  className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${
-                    isSelected
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'text-gray-500 border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500'
-                  }`}
-                >
-                  {tag.name}
-                </button>
-              )
-            })}
+        {/* Importance + Tag picker */}
+        <div className="mt-3 flex flex-wrap gap-3 items-center">
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-gray-400 shrink-0">重要性：</span>
+            {(['high', 'medium', 'low'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setCardImportance((prev) => ({ ...prev, [card.id]: v }))}
+                className={`w-7 h-6 text-xs rounded border transition-colors ${
+                  importance === v
+                    ? 'bg-green-500 border-green-500 text-white'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-500 hover:border-green-400'
+                }`}
+              >
+                {v === 'high' ? 'H' : v === 'low' ? 'L' : 'M'}
+              </button>
+            ))}
           </div>
-        )}
+          {allTags.length > 0 && (
+            <div className="flex flex-wrap gap-1 items-center">
+              <span className="text-xs text-gray-400 shrink-0">標籤：</span>
+              {allTags.map((tag) => {
+                const isSelected = (cardTags[card.id] ?? []).includes(tag.id)
+                return (
+                  <button
+                    key={tag.id}
+                    onClick={() => toggleCardTag(card.id, tag.id)}
+                    className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${
+                      isSelected
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'text-gray-500 border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500'
+                    }`}
+                  >
+                    {tag.name}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
     )
   }

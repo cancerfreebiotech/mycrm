@@ -38,6 +38,7 @@ export async function POST(
   const { id } = await params
   const body = await req.json().catch(() => ({}))
   const tagIds: string[] = body.tagIds ?? []
+  const importance: string = ['high', 'medium', 'low'].includes(body.importance) ? body.importance : 'medium'
   const supabase = createServiceClient()
 
   // Resolve confirming user via session cookies (most reliable)
@@ -72,6 +73,7 @@ export async function POST(
     created_at: pending.created_at,  // use scan time so camcard contacts sort earlier
   }
   if (confirmedByUserId) contactData.created_by = confirmedByUserId
+  contactData.importance = importance
   const extraData: Record<string, string> = {}
   for (const [ocrKey, contactKey] of Object.entries(OCR_TO_CONTACT)) {
     if (ocr[ocrKey]) contactData[contactKey] = ocr[ocrKey]
