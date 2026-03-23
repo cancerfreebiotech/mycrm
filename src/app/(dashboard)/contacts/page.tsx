@@ -29,8 +29,20 @@ interface Contact {
   country_code: string | null
   met_at: string | null
   created_at: string
+  importance: string
   users: { display_name: string | null } | null
   contact_tags: { tags: Tag }[]
+}
+
+function ImportanceDots({ value }: { value: string }) {
+  const filled = value === 'high' ? 3 : value === 'low' ? 1 : 2
+  return (
+    <span className="flex items-center gap-0.5 shrink-0">
+      {[0, 1, 2].map((i) => (
+        <span key={i} className={`w-2 h-2 rounded-full ${i < filled ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-700'}`} />
+      ))}
+    </span>
+  )
 }
 
 const PAGE_SIZE = 20
@@ -48,6 +60,8 @@ export default function ContactsPage() {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false)
   const [selectedCountries, setSelectedCountries] = useState<string[]>([])
+  const [selectedImportance, setSelectedImportance] = useState<string>('')
+  const [importanceDropdownOpen, setImportanceDropdownOpen] = useState(false)
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
@@ -75,7 +89,7 @@ export default function ContactsPage() {
     const [{ data: contactData }, { data: tagData }, { data: countryData }] = await Promise.all([
       supabase
         .from('contacts')
-        .select('id, name, company, job_title, email, phone, country_code, met_at, created_at, users(display_name), contact_tags(tags(id, name))')
+        .select('id, name, company, job_title, email, phone, country_code, met_at, created_at, importance, users(display_name), contact_tags(tags(id, name))')
         .order('created_at', { ascending: false }),
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),
@@ -95,6 +109,10 @@ export default function ContactsPage() {
     const countryParam = searchParams.get('country')
     if (countryParam) {
       setSelectedCountries([countryParam])
+    }
+    const importanceParam = searchParams.get('importance')
+    if (importanceParam) {
+      setSelectedImportance(importanceParam)
     }
   }
 
@@ -139,7 +157,8 @@ export default function ContactsPage() {
       selectedCountries.some((code) =>
         code === '__other__' ? !c.country_code : c.country_code === code
       )
-    return matchQuery && matchMet && matchTags && matchCountry
+    const matchImportance = !selectedImportance || c.importance === selectedImportance
+    return matchQuery && matchMet && matchTags && matchCountry && matchImportance
   })
 
   const sorted = sortField
@@ -364,6 +383,41 @@ export default function ContactsPage() {
           )}
         </div>
 
+        {/* Importance filter dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => { setImportanceDropdownOpen((v) => !v); setTagDropdownOpen(false); setCountryDropdownOpen(false) }}
+            className="flex items-center gap-2 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            {t('importanceFilter')}
+            {selectedImportance && (
+              <span className="bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 text-xs px-1.5 py-0.5 rounded-full">1</span>
+            )}
+            <ChevronDown size={14} />
+          </button>
+          {importanceDropdownOpen && (
+            <div className="absolute top-full mt-1 left-0 z-10 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-36">
+              {[
+                { value: '', label: t('importance.all') },
+                { value: 'high', label: t('importance.high') },
+                { value: 'medium', label: t('importance.medium') },
+                { value: 'low', label: t('importance.low') },
+              ].map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => { setSelectedImportance(value); setImportanceDropdownOpen(false); setPage(1) }}
+                  className={`w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800 ${
+                    selectedImportance === value ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-700 dark:text-gray-300'
+                  }`}
+                >
+                  {value && <ImportanceDots value={value} />}
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Met-at filter */}
         <input
           type="text"
@@ -386,9 +440,12 @@ export default function ContactsPage() {
               <div key={c.id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <Link href={`/contacts/${c.id}`} className="text-blue-600 dark:text-blue-400 font-semibold text-base hover:underline">
-                      {c.name || '—'}
-                    </Link>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <ImportanceDots value={c.importance} />
+                      <Link href={`/contacts/${c.id}`} className="text-blue-600 dark:text-blue-400 font-semibold text-base hover:underline">
+                        {c.name || '—'}
+                      </Link>
+                    </div>
                     {c.company && <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{c.company}</p>}
                     {c.job_title && <p className="text-xs text-gray-500 dark:text-gray-500">{c.job_title}</p>}
                   </div>
@@ -482,9 +539,12 @@ export default function ContactsPage() {
                     <input type="checkbox" checked={selectedIds.has(c.id)} onChange={() => toggleSelect(c.id)} className="rounded" />
                   </td>
                   <td className="px-4 py-3">
-                    <Link href={`/contacts/${c.id}`} className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
-                      {c.name || '—'}
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <ImportanceDots value={c.importance} />
+                      <Link href={`/contacts/${c.id}`} className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                        {c.name || '—'}
+                      </Link>
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{c.company || '—'}</td>
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{c.job_title || '—'}</td>

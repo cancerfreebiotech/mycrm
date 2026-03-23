@@ -36,6 +36,7 @@ interface Contact {
   met_at: string | null
   met_date: string | null
   referred_by: string | null
+  importance: string
   card_img_url: string | null
   card_img_back_url: string | null
   created_at: string
@@ -81,6 +82,7 @@ const EMPTY_EDIT = {
   met_at: '',
   met_date: '',
   referred_by: '',
+  importance: 'medium',
 }
 
 const OCR_FIELD_LABELS: Record<string, string> = {
@@ -445,6 +447,7 @@ export default function ContactDetailPage() {
       met_at: contact.met_at ?? '',
       met_date: contact.met_date ?? '',
       referred_by: contact.referred_by ?? '',
+      importance: contact.importance ?? 'medium',
     })
     setEditOpen(true)
   }
@@ -962,6 +965,16 @@ export default function ContactDetailPage() {
             <InfoRow label={t('companyEn')} value={contact.company_en} />
             <InfoRow label={t('companyLocal')} value={contact.company_local} />
             <InfoRow label={t('jobTitle')} value={contact.job_title} />
+            <div className="flex gap-3 text-sm">
+              <span className="w-24 text-gray-400 dark:text-gray-500 shrink-0">{t('importance')}</span>
+              <span className="flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
+                {[0,1,2].map((i) => {
+                  const filled = contact.importance === 'high' ? 3 : contact.importance === 'low' ? 1 : 2
+                  return <span key={i} className={`w-2 h-2 rounded-full ${i < filled ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-700'}`} />
+                })}
+                <span className="text-xs ml-1">{t(`importance.${contact.importance ?? 'medium'}`)}</span>
+              </span>
+            </div>
             <InfoRow label="Email" value={contact.email} href={contact.email ? `mailto:${contact.email}` : undefined} copyable suffix={<EmailSuppressionBadges email={contact.email} />} />
             <InfoRow label={t('secondEmail')} value={contact.second_email} href={contact.second_email ? `mailto:${contact.second_email}` : undefined} copyable suffix={<EmailSuppressionBadges email={contact.second_email} />} />
             <InfoRow label={t('phone')} value={contact.phone} href={contact.phone ? `tel:${contact.phone}` : undefined} />
@@ -1471,6 +1484,27 @@ export default function ContactDetailPage() {
                         onChange={(e) => setEditForm((prev) => ({ ...prev, [field]: e.target.value }))}
                         className={inputClass} />
                     </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Importance section */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">{t('importance')}</p>
+                <div className="flex gap-2">
+                  {(['high', 'medium', 'low'] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setEditForm((prev) => ({ ...prev, importance: v }))}
+                      className={`flex-1 py-1.5 text-sm rounded-lg border transition-colors ${
+                        editForm.importance === v
+                          ? 'bg-green-500 border-green-500 text-white'
+                          : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      {t(`importance.${v}`)}
+                    </button>
                   ))}
                 </div>
               </div>

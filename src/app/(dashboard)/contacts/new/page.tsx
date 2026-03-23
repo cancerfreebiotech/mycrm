@@ -19,7 +19,7 @@ type OcrFields = {
   website: string; linkedin_url: string; facebook_url: string
 }
 
-const EMPTY_FORM: OcrFields & { notes: string; country_code: string; met_at: string; met_date: string; referred_by: string } = {
+const EMPTY_FORM: OcrFields & { notes: string; country_code: string; met_at: string; met_date: string; referred_by: string; importance: string } = {
   name: '', name_en: '', name_local: '',
   company: '', company_en: '', company_local: '',
   job_title: '',
@@ -32,6 +32,7 @@ const EMPTY_FORM: OcrFields & { notes: string; country_code: string; met_at: str
   met_at: '',
   met_date: '',
   referred_by: '',
+  importance: 'medium',
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -514,6 +515,25 @@ export default function NewContactPage() {
             <Field label={t('companyLocal')} field="company_local" />
           </div>
           <Field label={t('jobTitle')} field="job_title" />
+          <div>
+            <label className={labelClass}>{t('importance')}</label>
+            <div className="flex gap-2">
+              {(['high', 'medium', 'low'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => set('importance', v)}
+                  className={`flex-1 py-1.5 text-sm rounded-lg border transition-colors ${
+                    form.importance === v
+                      ? 'bg-green-500 border-green-500 text-white'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  {t(`importance.${v}`)}
+                </button>
+              ))}
+            </div>
+          </div>
         </section>
 
         {/* Contact info */}
