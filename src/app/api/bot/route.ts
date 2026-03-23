@@ -1095,13 +1095,8 @@ async function handleText(
     if (lastContactId) {
       const { data: lastContact } = await supabase.from('contacts').select('id, name, company').eq('id', lastContactId).single()
       if (lastContact) {
-        await sendMessage(chatId,
-          `要為上一位聯絡人補充名片反面嗎？\n👤 ${lastContact.name}（${lastContact.company ?? ''}）`,
-          { reply_markup: { inline_keyboard: [[
-            { text: '✅ 是，補充背面', callback_data: `confirm_ab_${lastContactId}` },
-            { text: '🔍 指定其他人', callback_data: 'search_other_ab' },
-          ]] } }
-        )
+        await setSession(fromId, 'waiting_for_back_card', { contact_id: lastContactId, contact_name: lastContact.name })
+        await sendMessage(chatId, `上一位聯絡人：<b>${lastContact.name}</b>（${lastContact.company ?? ''}）\n\n請傳送名片反面照片`)
         return
       }
     }
@@ -1396,23 +1391,6 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await sendMessage(from.id, '已取消。如需掃描新名片，請直接傳送照片；如要補充其他人背面，請重新使用 /ab @姓名。')
-        }
-
-        // ── /ab: search other contact ─────────────────────────────────────────
-        else if (data === 'search_other_ab') {
-          await answerCallbackQuery(callbackQueryId)
-          await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, '請輸入聯絡人姓名，例：\n<code>/ab @王小明</code>')
-        }
-
-        // ── /ab: confirm use last contact ─────────────────────────────────────
-        else if (data?.startsWith('confirm_ab_')) {
-          const contactId = data.replace('confirm_ab_', '')
-          const { data: contact } = await supabase.from('contacts').select('id, name').eq('id', contactId).single()
-          await setSession(from.id, 'waiting_for_back_card', { contact_id: contactId, contact_name: contact?.name })
-          await answerCallbackQuery(callbackQueryId)
-          await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, `找到：${contact?.name}\n\n請傳送名片反面照片`)
         }
 
         // ── /search: quick email from contact ────────────────────────────────
