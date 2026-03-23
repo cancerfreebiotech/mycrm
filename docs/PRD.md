@@ -3017,3 +3017,80 @@ create table if not exists camcard_pending (
 - [ ] **Task 99** `[修改]` — 更新 `/admin/newsletter`（新增 Blacklist 分頁、Unsubscribes 分頁，各含搜尋、手動新增/移除）
 - [ ] **Task 100** `[修改]` — 更新 Dashboard Layout（Sidebar 新增「重複審查」、「名片王匯入」、「系統狀態」項目，均僅 super_admin 可見）
 - [ ] **Task 101** `[修改]` — i18n 三份語言檔新增 v1.7 相關 key（duplicates、camcard、health、docs quick_start）
+
+---
+
+## 三十三、v1.8 功能規格
+
+### 33.1 聯絡人重要性（importance）
+
+#### 概覽
+
+為聯絡人新增「重要性」欄位，供使用者標記每位聯絡人的優先程度，並可在聯絡人列表依此篩選。
+
+#### DB 變更
+
+```sql
+alter table contacts
+  add column if not exists importance text not null default 'medium'
+  check (importance in ('high', 'medium', 'low'));
+```
+
+#### 欄位規格
+
+| 屬性 | 值 |
+|------|-----|
+| 欄位名 | `importance` |
+| 型別 | `text` |
+| 允許值 | `'high'` / `'medium'` / `'low'` |
+| 預設值 | `'medium'` |
+| constraint | CHECK constraint |
+
+#### 聯絡人列表顯示
+
+- 每筆聯絡人列顯示一個顏色圓點 icon，**不顯示文字**：
+  - 🔴 `high`（紅色）
+  - 🟡 `medium`（黃色）
+  - 🔵 `low`（藍色）
+- icon 位置：姓名欄左側或獨立小欄，不佔太多空間
+- `medium` 為預設，所有既有聯絡人顯示黃色點
+
+#### 篩選
+
+- 聯絡人列表頂部 filter bar 新增「重要性」下拉選單
+- 選項：全部 / High / Medium / Low
+- 預設：全部
+- 與現有搜尋、tag 篩選、場合篩選並存，可疊加使用
+- query string 同步：`?importance=high`
+
+#### 編輯入口
+
+1. **聯絡人詳情頁**：「基本資料」區塊顯示重要性欄位，可點擊切換（High / Medium / Low 三選一 segmented control 或 select）
+2. **新增聯絡人表單**：加入「重要性」欄位，預設 Medium
+
+#### API 變更
+
+- `GET /api/contacts`：新增 `importance` query 參數（`high` / `medium` / `low`），傳入時加 WHERE 條件
+- `POST /api/contacts`：接受 `importance` 欄位，未傳入時預設 `'medium'`
+- `PATCH /api/contacts/[id]`：接受 `importance` 欄位更新
+
+#### i18n 新增 key
+
+```
+importance: "重要性" / "Importance" / "重要度"
+importance.high: "高" / "High" / "高"
+importance.medium: "中" / "Medium" / "中"
+importance.low: "低" / "Low" / "低"
+importance.all: "全部" / "All" / "すべて"
+```
+
+---
+
+## 三十四、v1.8 開發任務清單
+
+- [ ] **Task 102** `[修改]` — 執行 Migration SQL（contacts 新增 `importance` 欄位，default 'medium'，CHECK constraint）
+- [ ] **Task 103** `[修改]` — 更新 `GET /api/contacts`（新增 `importance` query 參數過濾）；`POST /api/contacts` 與 `PATCH /api/contacts/[id]` 接受 `importance` 欄位
+- [ ] **Task 104** `[修改]` — 聯絡人列表：每筆新增顏色圓點 icon（高=紅、中=黃、低=藍）；頂部 filter bar 新增「重要性」下拉選單（全部/High/Medium/Low），支援 query string `?importance=`
+- [ ] **Task 105** `[修改]` — 聯絡人詳情頁「基本資料」區塊新增「重要性」欄位（可編輯，segmented control 或 select）
+- [ ] **Task 106** `[修改]` — 新增聯絡人表單加入「重要性」欄位（預設 Medium）
+- [ ] **Task 107** `[修改]` — i18n 三份語言檔新增 `importance` 相關 key（zh-TW / en / ja）
