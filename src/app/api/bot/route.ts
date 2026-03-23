@@ -346,6 +346,70 @@ async function handleSearch(chatId: number, keyword: string) {
   }
 }
 
+// ── Process back card photo (shared by photo handler and confirm callback) ────
+
+async function processBackCardPhoto(
+  chatId: number,
+  fromId: number,
+  user: { id: string; ai_model_id: string | null },
+  contactId: string,
+  fileId: string,
+  contactNameHint?: string
+) {
+  const supabase = createServiceClient()
+  try {
+    const imgBuffer = await downloadTelegramPhoto(fileId)
+    let compressed = await processCardImage(imgBuffer)
+
+    const { data: existing } = await supabase
+      .from('contacts')
+      .select('name, company, job_title, email, phone')
+      .eq('id', contactId)
+      .single()
+
+    const cardData = await analyzeBusinessCard(compressed, user.ai_model_id)
+
+    if (cardData.rotation) {
+      const sharp = (await import('sharp')).default
+      compressed = await sharp(compressed).rotate(cardData.rotation).jpeg({ quality: 85 }).toBuffer()
+    }
+
+    const contactName = (existing?.name || cardData.name || cardData.name_en || '').replace(/[\s,./\\]/g, '')
+    const filename = await generateCardFilename({ name: contactName || undefined, side: 'back' })
+    const storagePath = `cards/${filename}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('cards')
+      .upload(storagePath, compressed, { contentType: 'image/jpeg', upsert: false })
+    if (uploadError) throw new Error(uploadError.message ?? String(uploadError))
+
+    const { data: publicUrlData } = supabase.storage.from('cards').getPublicUrl(storagePath)
+    const backUrl = publicUrlData.publicUrl
+
+    const updates: Record<string, string> = { card_img_back_url: backUrl }
+    if (existing) {
+      if (!existing.name && cardData.name) updates.name = cardData.name
+      if (!existing.company && cardData.company) updates.company = cardData.company
+      if (!existing.job_title && cardData.job_title) updates.job_title = cardData.job_title
+      if (!existing.email && cardData.email) updates.email = cardData.email
+      if (!existing.phone && cardData.phone) updates.phone = cardData.phone
+    }
+
+    await supabase.from('contacts').update(updates).eq('id', contactId)
+    await updateLastContact(fromId, contactId)
+    await clearSession(fromId)
+    const label = existing?.name ?? contactNameHint ?? ''
+    await sendMessage(chatId, `✅ 已更新 ${label} 的名片反面資訊`)
+  } catch (err) {
+    const msg = err instanceof Error
+      ? err.message
+      : (typeof err === 'object' && err !== null ? JSON.stringify(err) : String(err))
+    console.error('[bot] back card error JSON:', JSON.stringify(err))
+    console.error('[bot] back card error msg:', msg)
+    await sendMessage(chatId, `❌ 處理失敗：${msg}`)
+  }
+}
+
 // ── Handle photo (new card or back card) ──────────────────────────────────────
 
 async function handlePhoto(
@@ -357,63 +421,21 @@ async function handlePhoto(
 ) {
   const supabase = createServiceClient()
 
-  // Back card flow
+  // Back card flow — confirmation step (prevents stale session sending to wrong contact)
   if (session?.state === 'waiting_for_back_card') {
     const contactId = session.context.contact_id as string
-    await sendMessage(chatId, '⏳ 處理中，請稍候...')
-    try {
-      const imgBuffer = await downloadTelegramPhoto(photo.file_id)
-      let compressed = await processCardImage(imgBuffer)
-
-      // OCR first to get rotation hint
-      const { data: existing } = await supabase
-        .from('contacts')
-        .select('name, company, job_title, email, phone')
-        .eq('id', contactId)
-        .single()
-
-      const cardData = await analyzeBusinessCard(compressed, user.ai_model_id)
-
-      // Rotate if Gemini detected non-zero rotation
-      if (cardData.rotation && cardData.rotation !== 0) {
-        const sharp = (await import('sharp')).default
-        compressed = await sharp(compressed).rotate(cardData.rotation).jpeg({ quality: 85 }).toBuffer()
-      }
-
-      const contactName = (existing?.name || existing?.name_en || cardData.name || cardData.name_en || '').replace(/[\s,./\\]/g, '')
-      const filename = await generateCardFilename({ name: contactName || undefined, side: 'back' })
-      const storagePath = `cards/${filename}`
-
-      const { error: uploadError } = await supabase.storage
-        .from('cards')
-        .upload(storagePath, compressed, { contentType: 'image/jpeg', upsert: false })
-      if (uploadError) throw new Error(uploadError.message ?? String(uploadError))
-
-      const { data: publicUrlData } = supabase.storage.from('cards').getPublicUrl(storagePath)
-      const backUrl = publicUrlData.publicUrl
-
-      const updates: Record<string, string> = { card_img_back_url: backUrl }
-      if (existing) {
-        if (!existing.name && cardData.name) updates.name = cardData.name
-        if (!existing.company && cardData.company) updates.company = cardData.company
-        if (!existing.job_title && cardData.job_title) updates.job_title = cardData.job_title
-        if (!existing.email && cardData.email) updates.email = cardData.email
-        if (!existing.phone && cardData.phone) updates.phone = cardData.phone
-      }
-
-      await supabase.from('contacts').update(updates).eq('id', contactId)
-      await clearSession(fromId)
-      await sendMessage(chatId, '✅ 已更新名片反面資訊')
-    } catch (err) {
-      const msg = err instanceof Error
-        ? err.message
-        : (typeof err === 'object' && err !== null ? JSON.stringify(err) : String(err))
-      console.error('[bot] back card error JSON:', JSON.stringify(err))
-      console.error('[bot] back card error msg:', msg)
-      await sendMessage(chatId, `❌ 處理失敗：${msg}`)
-    }
+    const contactName = session.context.contact_name as string | undefined
+    await setSession(fromId, 'waiting_for_back_card', { ...session.context, pending_file_id: photo.file_id })
+    await sendMessage(chatId,
+      `收到照片！要儲存為 <b>${contactName ?? '此聯絡人'}</b> 的背面名片嗎？`,
+      { reply_markup: { inline_keyboard: [[
+        { text: '✅ 確認', callback_data: `confirm_back_photo_${contactId}` },
+        { text: '❌ 取消', callback_data: 'cancel_back_photo' },
+      ]] } }
+    )
     return
   }
+
 
   // New card scan — check pending limit
   const { count: pendingCount } = await supabase
@@ -1067,6 +1089,26 @@ async function handleText(
     return
   }
 
+  // ── /add_back /ab (no @name) — use last contact ───────────────────────────
+  if (cmd === '/ab' || cmd === '/add_back') {
+    const lastContactId = session?.last_contact_id
+    if (lastContactId) {
+      const { data: lastContact } = await supabase.from('contacts').select('id, name, company').eq('id', lastContactId).single()
+      if (lastContact) {
+        await sendMessage(chatId,
+          `要為上一位聯絡人補充名片反面嗎？\n👤 ${lastContact.name}（${lastContact.company ?? ''}）`,
+          { reply_markup: { inline_keyboard: [[
+            { text: '✅ 是，補充背面', callback_data: `confirm_ab_${lastContactId}` },
+            { text: '🔍 指定其他人', callback_data: 'search_other_ab' },
+          ]] } }
+        )
+        return
+      }
+    }
+    await sendMessage(chatId, '請指定聯絡人姓名，例：\n<code>/ab @王小明</code>')
+    return
+  }
+
   // ── /add_back /ab @name command ───────────────────────────────────────────
   const addBackMatch = cmd.match(/^\/(?:add_back|ab)\s+@(.+)/)
   if (addBackMatch) {
@@ -1325,6 +1367,48 @@ export async function POST(req: NextRequest) {
             .select('id, name')
             .eq('id', contactId)
             .single()
+          await setSession(from.id, 'waiting_for_back_card', { contact_id: contactId, contact_name: contact?.name })
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, `找到：${contact?.name}\n\n請傳送名片反面照片`)
+        }
+
+        // ── Confirm back card photo ───────────────────────────────────────────
+        else if (data?.startsWith('confirm_back_photo_')) {
+          const contactId = data.replace('confirm_back_photo_', '')
+          const session = await getSession(from.id)
+          const fileId = session?.context?.pending_file_id as string | undefined
+          const contactNameHint = session?.context?.contact_name as string | undefined
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          if (!fileId) {
+            await sendMessage(from.id, '❌ 找不到待處理照片，請重新傳送。')
+            await clearSession(from.id)
+          } else {
+            await sendMessage(from.id, '⏳ 處理中，請稍候...')
+            await processBackCardPhoto(from.id, from.id, user, contactId, fileId, contactNameHint)
+          }
+        }
+
+        // ── Cancel back card photo ────────────────────────────────────────────
+        else if (data === 'cancel_back_photo') {
+          await clearSession(from.id)
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, '已取消。如需掃描新名片，請直接傳送照片；如要補充其他人背面，請重新使用 /ab @姓名。')
+        }
+
+        // ── /ab: search other contact ─────────────────────────────────────────
+        else if (data === 'search_other_ab') {
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, '請輸入聯絡人姓名，例：\n<code>/ab @王小明</code>')
+        }
+
+        // ── /ab: confirm use last contact ─────────────────────────────────────
+        else if (data?.startsWith('confirm_ab_')) {
+          const contactId = data.replace('confirm_ab_', '')
+          const { data: contact } = await supabase.from('contacts').select('id, name').eq('id', contactId).single()
           await setSession(from.id, 'waiting_for_back_card', { contact_id: contactId, contact_name: contact?.name })
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)

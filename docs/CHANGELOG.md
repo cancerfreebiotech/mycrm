@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v1.8.3 — 修復 /ab 背面名片 bug 及聯絡人刪除失敗（2026-03-23）
+
+### 變更項目
+- fix: /ab 照片確認步驟，防止 session 殘留導致照片存到錯誤聯絡人
+- feat: /ab 無參數支援，自動帶入上一位聯絡人（同 /email、/note 行為）
+- fix: 修正 5 個 contacts FK 的 NO ACTION，改為 SET NULL / CASCADE，解決聯絡人無法刪除問題
+- refactor: 抽出 processBackCardPhoto() helper 避免重複邏輯
+
 ## v1.8.2 — 網址可點擊連結（2026-03-23）
 
 ### 變更項目
