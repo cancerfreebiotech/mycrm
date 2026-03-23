@@ -517,6 +517,11 @@ export default function ContactDetailPage() {
     } finally { setEditSaving(false) }
   }
 
+  async function patchImportance(value: string) {
+    await supabase.from('contacts').update({ importance: value }).eq('id', id)
+    load()
+  }
+
   // ── Contact Cards (multi-stage) ────────────────────────────────────────────
 
   function handleCardFilesAdd(e: React.ChangeEvent<HTMLInputElement>) {
@@ -965,15 +970,23 @@ export default function ContactDetailPage() {
             <InfoRow label={t('companyEn')} value={contact.company_en} />
             <InfoRow label={t('companyLocal')} value={contact.company_local} />
             <InfoRow label={t('jobTitle')} value={contact.job_title} />
-            <div className="flex gap-3 text-sm">
+            <div className="flex gap-3 text-sm items-center">
               <span className="w-24 text-gray-400 dark:text-gray-500 shrink-0">{t('importance')}</span>
-              <span className="flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
-                {[0,1,2].map((i) => {
-                  const filled = contact.importance === 'high' ? 3 : contact.importance === 'low' ? 1 : 2
-                  return <span key={i} className={`w-2 h-2 rounded-full ${i < filled ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-700'}`} />
-                })}
-                <span className="text-xs ml-1 text-gray-400">{contact.importance === 'high' ? 'H' : contact.importance === 'low' ? 'L' : 'M'}</span>
-              </span>
+              <div className="flex gap-1">
+                {(['high', 'medium', 'low'] as const).map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => patchImportance(v)}
+                    className={`w-7 h-6 text-xs rounded border transition-colors ${
+                      contact.importance === v
+                        ? 'bg-green-500 border-green-500 text-white'
+                        : 'border-gray-200 dark:border-gray-700 text-gray-400 hover:border-green-400 hover:text-green-500'
+                    }`}
+                  >
+                    {v === 'high' ? 'H' : v === 'low' ? 'L' : 'M'}
+                  </button>
+                ))}
+              </div>
             </div>
             <InfoRow label="Email" value={contact.email} href={contact.email ? `mailto:${contact.email}` : undefined} copyable suffix={<EmailSuppressionBadges email={contact.email} />} />
             <InfoRow label={t('secondEmail')} value={contact.second_email} href={contact.second_email ? `mailto:${contact.second_email}` : undefined} copyable suffix={<EmailSuppressionBadges email={contact.second_email} />} />
