@@ -4,7 +4,7 @@
 
 ### 變更項目
 - **DB**：`contacts` 新增 `importance text not null default 'medium'`，CHECK constraint 限制值為 `high` / `medium` / `low`
-- **聯絡人列表**：每筆顯示顏色圓點 icon（🔴 高 / 🟡 中 / 🔵 低），不顯示文字
+- **聯絡人列表**：每筆顯示三顆橫排綠色圓點 icon，亮起顆數代表重要程度（🟢🟢🟢 高 / 🟢🟢⚪ 中 / 🟢⚪⚪ 低），不顯示文字
 - **聯絡人列表篩選**：頂部 filter bar 新增「重要性」下拉選單（全部 / High / Medium / Low），支援 `?importance=` query string，可與搜尋、tag、場合篩選疊加
 - **聯絡人詳情頁**：「基本資料」區塊新增「重要性」欄位，可編輯（segmented control）
 - **新增聯絡人表單**：新增「重要性」欄位，預設 Medium
