@@ -529,7 +529,7 @@ export default function NewContactPage() {
                       : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
                   }`}
                 >
-                  {t(`importance.${v}`)}
+                  {v === 'high' ? 'H' : v === 'low' ? 'L' : 'M'}
                 </button>
               ))}
             </div>
@@ -546,7 +546,7 @@ export default function NewContactPage() {
             <Field label={t('secondPhone')} field="second_phone" type="tel" />
           </div>
           <Field label={t('address')} field="address" />
-          <Field label={t('website')} field="website" type="url" />
+          <Field label={t('website')} field="website" />
           <div>
             <label className={labelClass}>{t('country')}</label>
             <select
@@ -566,8 +566,8 @@ export default function NewContactPage() {
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
           <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('sectionSocial')}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="LinkedIn" field="linkedin_url" type="url" />
-            <Field label="Facebook" field="facebook_url" type="url" />
+            <Field label="LinkedIn" field="linkedin_url" />
+            <Field label="Facebook" field="facebook_url" />
           </div>
         </section>
 

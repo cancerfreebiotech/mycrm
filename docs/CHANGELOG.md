@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v1.9.2 — 修正新增聯絡人頁面重要性顯示與網址驗證（2026-03-24）
+
+### 變更項目
+- fix: 新增聯絡人頁面重要性按鈕顯示 H/M/L（原本因 i18n key 不存在而顯示錯誤）
+- fix: 網站/LinkedIn/Facebook 欄位改用 `type="text"`，允許 `www.xxx.com` 格式不帶 https://
+
 ## v1.9.1 — 修正名片 Storage 路徑含非 ASCII 字元錯誤（2026-03-24）
 
 ### 變更項目

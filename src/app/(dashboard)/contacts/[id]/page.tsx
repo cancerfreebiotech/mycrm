@@ -1704,7 +1704,7 @@ export default function ContactDetailPage() {
               <div>
                 <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">{t('sectionContact')}</p>
                 <div className="grid grid-cols-1 gap-3">
-                  {([['Email', 'email', 'email'], [t('secondEmail'), 'second_email', 'email'], [t('phone'), 'phone', 'tel'], [t('secondPhone'), 'second_phone', 'tel'], [t('fax'), 'fax', 'tel'], [t('address'), 'address', 'text'], [t('addressEn'), 'address_en', 'text'], [t('department'), 'department', 'text'], [t('website'), 'website', 'url']] as [string, string, string][]).map(([label, field, type]) => (
+                  {([['Email', 'email', 'email'], [t('secondEmail'), 'second_email', 'email'], [t('phone'), 'phone', 'tel'], [t('secondPhone'), 'second_phone', 'tel'], [t('fax'), 'fax', 'tel'], [t('address'), 'address', 'text'], [t('addressEn'), 'address_en', 'text'], [t('department'), 'department', 'text'], [t('website'), 'website', 'text']] as [string, string, string][]).map(([label, field, type]) => (
                     <div key={field}>
                       <label className={labelClass}>{label}</label>
                       <input type={type} value={editForm[field as keyof typeof editForm]}
@@ -1735,7 +1735,7 @@ export default function ContactDetailPage() {
                   {([['LinkedIn', 'linkedin_url'], ['Facebook', 'facebook_url']] as [string, string][]).map(([label, field]) => (
                     <div key={field}>
                       <label className={labelClass}>{label}</label>
-                      <input type="url" value={editForm[field as keyof typeof editForm]}
+                      <input type="text" value={editForm[field as keyof typeof editForm]}
                         onChange={(e) => setEditForm((prev) => ({ ...prev, [field]: e.target.value }))}
                         className={inputClass} />
                     </div>
