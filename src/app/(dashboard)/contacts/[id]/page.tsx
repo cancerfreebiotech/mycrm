@@ -44,7 +44,8 @@ interface Contact {
   users: { display_name: string | null } | null
   contact_tags: { tags: Tag }[]
 }
-interface ContactCard { id: string; card_img_url: string; label: string | null; created_at: string }
+interface ContactCard { id: string; card_img_url: string; card_img_back_url: string | null; label: string | null; created_at: string }
+interface ContactPhoto { id: string; photo_url: string; taken_at: string | null; latitude: number | null; longitude: number | null; location_name: string | null; created_at: string }
 interface Log {
   id: string
   content: string | null
@@ -200,10 +201,12 @@ export default function ContactDetailPage() {
   const supabase = createBrowserSupabaseClient()
   const editFileRef = useRef<HTMLInputElement>(null)
   const cardFilesRef = useRef<HTMLInputElement>(null)
+  const photoFilesRef = useRef<HTMLInputElement>(null)
   const tempAttachRef = useRef<HTMLInputElement>(null)
 
   const [contact, setContact] = useState<Contact | null>(null)
   const [contactCards, setContactCards] = useState<ContactCard[]>([])
+  const [contactPhotos, setContactPhotos] = useState<ContactPhoto[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [allCountries, setAllCountries] = useState<Country[]>([])
   const [logs, setLogs] = useState<Log[]>([])
@@ -309,7 +312,11 @@ export default function ContactDetailPage() {
   const [stagedPreviews, setStagedPreviews] = useState<string[]>([])
   const [cardOcring, setCardOcring] = useState(false)
   const [cardOcrDiff, setCardOcrDiff] = useState<Record<string, string> | null>(null)
+  const [cardOcrConflicts, setCardOcrConflicts] = useState<Record<string, { newVal: string; oldVal: string }>>({})
   const [cardSaving, setCardSaving] = useState(false)
+
+  // Photos
+  const [photoSaving, setPhotoSaving] = useState(false)
 
   // Tags
   const [tagInput, setTagInput] = useState('')
@@ -355,12 +362,13 @@ export default function ContactDetailPage() {
       const { data: profile } = await supabase.from('users').select('id, ai_model_id, provider_token, role').eq('email', user.email).single()
       if (profile) { setCurrentUserId(profile.id); setAiModelId(profile.ai_model_id ?? null); setMsProviderToken(profile.provider_token ?? null); setCurrentUserRole(profile.role ?? null) }
     }
-    const [{ data: c }, { data: l }, { data: tags }, { data: cards }, { data: countries }] = await Promise.all([
+    const [{ data: c }, { data: l }, { data: tags }, { data: cards }, { data: countries }, { data: photos }] = await Promise.all([
       supabase.from('contacts').select('*, users(display_name), contact_tags(tags(id, name))').eq('id', id).single(),
       supabase.from('interaction_logs').select('id, content, type, meeting_date, created_at, email_subject, email_body, email_attachments, users(display_name)').eq('contact_id', id).order('created_at', { ascending: false }).range(0, LOG_PAGE - 1),
       supabase.from('tags').select('id, name').order('name'),
-      supabase.from('contact_cards').select('id, card_img_url, label, created_at').eq('contact_id', id).order('created_at', { ascending: true }),
+      supabase.from('contact_cards').select('id, card_img_url, card_img_back_url, label, created_at').eq('contact_id', id).order('created_at', { ascending: true }),
       supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),
+      supabase.from('contact_photos').select('id, photo_url, taken_at, latitude, longitude, location_name, created_at').eq('contact_id', id).order('created_at', { ascending: false }),
     ])
     setContact(c as unknown as Contact)
 
@@ -388,6 +396,7 @@ export default function ContactDetailPage() {
     setHasMoreLogs(initialLogs.length === LOG_PAGE)
     setAllTags(tags ?? [])
     setContactCards(cards ?? [])
+    setContactPhotos((photos as unknown as ContactPhoto[]) ?? [])
     setAllCountries(countries ?? [])
   }
 
@@ -553,14 +562,18 @@ export default function ContactDetailPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       const diff: Record<string, string> = {}
+      const conflicts: Record<string, { newVal: string; oldVal: string }> = {}
       for (const field of Object.keys(OCR_FIELD_LABELS)) {
         const ocrVal = data[field] as string | undefined
         const contactVal = contact[field as keyof Contact] as string | null
         if (ocrVal && !contactVal) {
           diff[field] = ocrVal
+        } else if (ocrVal && contactVal && ocrVal !== contactVal) {
+          conflicts[field] = { newVal: ocrVal, oldVal: contactVal }
         }
       }
       setCardOcrDiff(diff)
+      setCardOcrConflicts(conflicts)
     } catch {
       setCardOcrDiff({})
     } finally {
@@ -586,6 +599,16 @@ export default function ContactDetailPage() {
       if (cardOcrDiff && Object.keys(cardOcrDiff).length > 0) {
         await supabase.from('contacts').update(cardOcrDiff).eq('id', id)
       }
+      if (cardOcrConflicts && Object.keys(cardOcrConflicts).length > 0) {
+        const noteLines = Object.entries(cardOcrConflicts)
+          .map(([k, v]) => `${OCR_FIELD_LABELS[k] ?? k}：${v.newVal}`)
+          .join('\n')
+        await supabase.from('interaction_logs').insert({
+          contact_id: id,
+          type: 'note',
+          content: `【名片新資料】\n${noteLines}`,
+        })
+      }
       cancelCardUpload()
       load()
     } finally {
@@ -598,6 +621,72 @@ export default function ContactDetailPage() {
     setStagedFiles([])
     setStagedPreviews([])
     setCardOcrDiff(null)
+    setCardOcrConflicts({})
+  }
+
+  // ── Photos ─────────────────────────────────────────────────────────────────
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    if (files.length === 0) return
+    if (e.target) e.target.value = ''
+    setPhotoSaving(true)
+    try {
+      for (const file of files) {
+        let takenAt: string | null = null
+        let latitude: number | null = null
+        let longitude: number | null = null
+        let locationName: string | null = null
+
+        try {
+          const exifr = (await import('exifr')).default
+          const exif = await exifr.parse(file, {
+            pick: ['DateTimeOriginal', 'CreateDate', 'latitude', 'longitude'],
+          })
+          if (exif) {
+            const dt: Date | null = exif.DateTimeOriginal ?? exif.CreateDate ?? null
+            takenAt = dt ? dt.toISOString() : null
+            latitude = exif.latitude ?? null
+            longitude = exif.longitude ?? null
+            if (latitude !== null && longitude !== null) {
+              const geoRes = await fetch(`/api/geocode?lat=${latitude}&lon=${longitude}`)
+              if (geoRes.ok) {
+                const geoData = await geoRes.json() as { location: string | null }
+                locationName = geoData.location
+              }
+            }
+          }
+        } catch { /* EXIF not available */ }
+
+        const base64 = await compressImage(file, 2048, 0.85)
+        const uint8 = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+        const filename = `photos/${id}_${Date.now()}.jpg`
+        const { error: uploadErr } = await supabase.storage.from('cards').upload(filename, uint8, { contentType: 'image/jpeg' })
+        if (uploadErr) throw uploadErr
+        const { data: urlData } = supabase.storage.from('cards').getPublicUrl(filename)
+
+        await supabase.from('contact_photos').insert({
+          contact_id: id,
+          photo_url: urlData.publicUrl,
+          storage_path: filename,
+          taken_at: takenAt,
+          latitude,
+          longitude,
+          location_name: locationName,
+        })
+      }
+      load()
+    } catch (err) {
+      console.error('Photo upload error:', err)
+    } finally {
+      setPhotoSaving(false)
+    }
+  }
+
+  async function deletePhoto(photoId: string) {
+    if (!confirm('確定要刪除此照片？')) return
+    await supabase.from('contact_photos').delete().eq('id', photoId)
+    load()
   }
 
   async function deleteCard(cardId: string) {
@@ -950,10 +1039,7 @@ export default function ContactDetailPage() {
   // All card images: from contact_cards table + legacy fields
   const legacyCards: ContactCard[] = []
   if (contact.card_img_url && contactCards.length === 0) {
-    legacyCards.push({ id: 'legacy-front', card_img_url: contact.card_img_url, label: '正面', created_at: contact.created_at })
-  }
-  if (contact.card_img_back_url && contactCards.length === 0) {
-    legacyCards.push({ id: 'legacy-back', card_img_url: contact.card_img_back_url, label: '反面', created_at: contact.created_at })
+    legacyCards.push({ id: 'legacy-front', card_img_url: contact.card_img_url, card_img_back_url: contact.card_img_back_url ?? null, label: '正面', created_at: contact.created_at })
   }
   const allCards = contactCards.length > 0 ? contactCards : legacyCards
 
@@ -1100,11 +1186,23 @@ export default function ContactDetailPage() {
           <div className="flex flex-wrap gap-3 mb-4">
             {allCards.map((card) => (
               <div key={card.id} className="relative group">
-                <div className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative" onClick={() => openLightbox(card.card_img_url)}>
-                  <Image src={card.card_img_url} alt={card.label ?? '名片'} width={144} height={96} className="object-cover w-full h-full" />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-                    <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                <div className="flex gap-1">
+                  {/* Front */}
+                  <div className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative" onClick={() => openLightbox(card.card_img_url)}>
+                    <Image src={card.card_img_url} alt={card.label ?? '名片正面'} width={144} height={96} className="object-cover w-full h-full" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                      <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                    </div>
                   </div>
+                  {/* Back (if exists) */}
+                  {card.card_img_back_url && (
+                    <div className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative" onClick={() => openLightbox(card.card_img_back_url!)}>
+                      <Image src={card.card_img_back_url} alt={card.label ? `${card.label} 反面` : '名片反面'} width={144} height={96} className="object-cover w-full h-full" />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                        <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                      </div>
+                    </div>
+                  )}
                 </div>
                 {card.label && <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-1">{card.label}</p>}
                 {!card.id.startsWith('legacy') && (
@@ -1171,6 +1269,20 @@ export default function ContactDetailPage() {
                 ) : (
                   <p className="text-xs text-gray-500 dark:text-gray-400">OCR 未找到可補充的空白欄位，仍可儲存名片圖</p>
                 )}
+                {Object.keys(cardOcrConflicts).length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-xs font-medium text-amber-600 dark:text-amber-400 mb-1">⚠️ 與現有資料不同（確認後存入備註）：</p>
+                    <div className="space-y-1">
+                      {Object.entries(cardOcrConflicts).map(([field, v]) => (
+                        <div key={field} className="flex gap-2 text-xs">
+                          <span className="text-gray-500 dark:text-gray-400 w-28 shrink-0">{OCR_FIELD_LABELS[field] ?? field}</span>
+                          <span className="text-amber-700 dark:text-amber-300">{v.newVal}</span>
+                          <span className="text-gray-400">（現有：{v.oldVal}）</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1221,6 +1333,68 @@ export default function ContactDetailPage() {
             <input ref={cardFilesRef} type="file" accept="image/*" multiple className="hidden" onChange={handleCardFilesAdd} />
           </div>
         )}
+      </div>
+
+      {/* Photos */}
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-4">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">合照</h2>
+
+        {/* Photos gallery */}
+        {contactPhotos.length > 0 && (
+          <div className="flex flex-wrap gap-3 mb-4">
+            {contactPhotos.map((photo) => (
+              <div key={photo.id} className="relative group">
+                <div
+                  className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative"
+                  onClick={() => openLightbox(photo.photo_url)}
+                >
+                  <Image src={photo.photo_url} alt="合照" width={144} height={96} className="object-cover w-full h-full" />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                    <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                  </div>
+                </div>
+                <div className="mt-1 max-w-36">
+                  {photo.taken_at && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      📅 {new Date(photo.taken_at).toLocaleDateString('zh-TW')}
+                    </p>
+                  )}
+                  {photo.location_name && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate" title={photo.location_name}>
+                      📍 {photo.location_name}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => deletePhoto(photo.id)}
+                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <Trash2 size={10} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* No photos placeholder */}
+        {contactPhotos.length === 0 && (
+          <div className="flex items-center justify-center w-36 h-24 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 mb-4">
+            <ImageIcon size={24} className="text-gray-300 dark:text-gray-600" />
+          </div>
+        )}
+
+        {/* Upload button */}
+        <div>
+          <button
+            onClick={() => photoFilesRef.current?.click()}
+            disabled={photoSaving}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+          >
+            {photoSaving ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+            {photoSaving ? '上傳中...' : '新增合照'}
+          </button>
+          <input ref={photoFilesRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />
+        </div>
       </div>
 
       {/* Interaction Logs */}

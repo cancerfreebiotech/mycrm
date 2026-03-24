@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## v1.9.0 — 支援多張名片 + 合照功能（2026-03-24）
+
+### 變更項目
+- feat: Bot 掃名片確認後，同步 INSERT 至 `contact_cards` 表
+- feat: 新指令 `/a`（取代 `/ab`）— 新增任意名片，OCR 比對現有資料，確認後填入空白欄位，衝突存備註
+- feat: 新指令 `/p` — 新增合照，壓縮後存入 `contact_photos`，自動讀取 EXIF 時間/GPS 並 reverse geocode 地名
+- feat: 新建 `contact_photos` table（含 taken_at, latitude, longitude, location_name）
+- feat: 新增 `processPhotoWithExif` / `extractExif` / `reverseGeocode` 工具函式
+- feat: 聯絡人詳情頁名片顯示正反面並排
+- refactor: 移除 `/ab` 指令，改以 `/a` 統一處理名片新增
+- feat: 聯絡人詳情頁新增「合照」區塊，顯示日期/地點（EXIF 自動讀取）
+- feat: 新增 `/api/geocode` route（代理 Nominatim reverse geocoding）
+- feat: Web 上傳名片時，OCR 衝突欄位自動存入備註（interaction_logs）
+
 ## v1.8.3 — 修復 /ab 背面名片 bug 及聯絡人刪除失敗（2026-03-23）
 
 ### 變更項目
