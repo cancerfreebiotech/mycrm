@@ -90,7 +90,9 @@ export async function POST(
   }
 
   // Move staging images from camcard/ to cards/ with unified naming
-  const personName = (contact.name || contact.name_en || ocr.name || ocr.name_en || '').replace(/[\s,./\\]/g, '')
+  const personName = (contact.name || contact.name_en || ocr.name || ocr.name_en || '')
+    .replace(/[^\x00-\x7F]/g, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
   let finalFrontUrl = pending.card_img_url
   let finalFrontPath = pending.storage_path
   if (pending.storage_path) {

@@ -28,7 +28,12 @@ export async function generateCardFilename(opts?: { name?: string; side?: 'front
 
   const serial = String((count ?? 0) + 1).padStart(3, '0')
 
-  const namePart = opts?.name ? `-${opts.name.replace(/[\s,./\\<>:"|?*]/g, '')}` : ''
+  const safeName = opts?.name
+    ? opts.name
+        .replace(/[^\x00-\x7F]/g, '')   // strip non-ASCII (CJK, accented chars)
+        .replace(/[^a-zA-Z0-9]/g, '')   // strip remaining special chars
+    : ''
+  const namePart = safeName ? `-${safeName}` : (opts?.name ? '-card' : '')
   const sidePart = opts?.side ? `-${opts.side}` : ''
 
   return `${datePrefix}_${hh}${min}${ss}-${serial}${namePart}${sidePart}.jpg`

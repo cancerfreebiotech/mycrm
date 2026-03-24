@@ -107,7 +107,9 @@ export async function POST(
   }
 
   // Move staging images from camcard/ to cards/ with unified naming
-  const personName = (ocr.name || ocr.name_en || '').replace(/[\s,./\\]/g, '')
+  const personName = (ocr.name || ocr.name_en || '')
+    .replace(/[^\x00-\x7F]/g, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
   if (pending.storage_path) {
     const frontFile = await generateCardFilename({ name: personName || undefined, side: 'front' })
     const frontPath = `cards/${frontFile}`
