@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v1.9.1 — 修正名片 Storage 路徑含非 ASCII 字元錯誤（2026-03-24）
+
+### 變更項目
+- fix: 確認/合併名片時，Storage 檔名自動移除中日文等非 ASCII 字元，避免 Supabase "Invalid key" 錯誤
+- fix: 純中/日文名稱（無英文）的檔名 fallback 為 `card`
+
 ## v1.9.0 — 支援多張名片 + 合照功能（2026-03-24）
 
 ### 變更項目
