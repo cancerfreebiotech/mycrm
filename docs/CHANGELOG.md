@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v1.9.3 — 支援 HEIC/HEIF 照片格式（iPhone 照片）（2026-03-25）
+
+### 變更項目
+- fix: 加入 `heic-convert` 套件，處理前自動偵測並轉換 HEIC/HEIF 為 JPEG，解決 Sharp 不支援 HEIF 壓縮格式的錯誤
+
 ## v1.9.2 — 修正新增聯絡人頁面重要性顯示與網址驗證（2026-03-24）
 
 ### 變更項目
