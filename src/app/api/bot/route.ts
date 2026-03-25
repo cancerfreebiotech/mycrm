@@ -304,6 +304,7 @@ async function handleHelp(chatId: number) {
     `/meet [描述]　/m — AI 安排會議行程，確認後建立 Outlook 邀請\n` +
     `/met {數量} {描述}　— 批次記錄最近 N 位聯絡人的認識場合\n` +
     `　　例：/met 5 台北生技展 王小明介紹 昨天\n` +
+    `/li — LinkedIn 截圖轉聯絡人（傳送截圖後 AI 解析，確認後新增）\n` +
     `/tasks　/t — 列出我的待處理任務\n` +
     `/user　/u — 列出組織成員\n` +
     `/AI — 顯示目前使用的 AI 模型\n` +
@@ -619,6 +620,83 @@ async function handlePhoto(
         { text: '❌ 取消', callback_data: 'cancel_add_card' },
       ]] } }
     )
+    return
+  }
+
+  // /li: LinkedIn screenshot — OCR → confirm → insert contact
+  if (session?.state === 'waiting_for_li') {
+    await sendMessage(chatId, '⏳ AI 解析中，請稍候...')
+    try {
+      const imgBuffer = await downloadTelegramPhoto(photo.file_id)
+      const compressed = await processCardImage(imgBuffer)
+      const base64 = compressed.toString('base64')
+
+      // Reuse linkedin/parse logic inline (avoid HTTP self-call)
+      const { GoogleGenerativeAI } = await import('@google/generative-ai')
+      const { data: profile } = await createServiceClient()
+        .from('users').select('ai_model_id').eq('id', user.id).single()
+
+      let modelId = 'gemini-2.5-flash'
+      let apiKey = process.env.GEMINI_API_KEY!
+      if (profile?.ai_model_id && /^[0-9a-f-]{36}$/i.test(profile.ai_model_id)) {
+        const { data: modelRow } = await createServiceClient()
+          .from('ai_models').select('model_id, ai_endpoints(api_key)').eq('id', profile.ai_model_id).single()
+        if (modelRow) {
+          const ep = modelRow.ai_endpoints as { api_key: string } | null
+          modelId = modelRow.model_id
+          if (ep?.api_key && ep.api_key !== 'placeholder') apiKey = ep.api_key
+        }
+      }
+
+      const LINKEDIN_PROMPT = `你是一個專業的 LinkedIn 截圖解析助手。請從 LinkedIn 個人頁截圖中提取以下資訊，回傳純 JSON，不要有任何其他文字：
+{"name":"","name_en":"","job_title":"","company":"","linkedin_url":"","email":"","notes":""}
+規則：
+- name：中文或日文漢字姓名
+- name_en：英文或羅馬字姓名
+- job_title：目前職位名稱（最新一筆）
+- company：目前任職公司（最新一筆）
+- linkedin_url：重組為 https://linkedin.com/in/{username} 格式，看不到則空字串
+- email：截圖中有則填入，否則空字串
+- notes：About 自我介紹加前綴「[LinkedIn About] 」，否則空字串
+- 所有欄位不可見則輸出空字串`
+
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const geminiModel = genAI.getGenerativeModel({ model: modelId })
+      const result = await geminiModel.generateContent([
+        LINKEDIN_PROMPT,
+        { inlineData: { mimeType: 'image/jpeg', data: base64 } },
+      ])
+      const raw = result.response.text().trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
+      const parsed = JSON.parse(raw) as { name: string; name_en: string; job_title: string; company: string; linkedin_url: string; email: string; notes: string }
+
+      const displayName = parsed.name || parsed.name_en || '（無姓名）'
+      if (!parsed.name && !parsed.name_en) {
+        await clearSession(fromId)
+        await sendMessage(chatId, '❌ 無法識別為 LinkedIn 截圖，請確認截圖內容後重新傳送。')
+        return
+      }
+
+      const summary =
+        `🔗 <b>LinkedIn 解析結果</b>\n\n` +
+        `👤 ${displayName}\n` +
+        (parsed.job_title ? `💼 ${parsed.job_title}\n` : '') +
+        (parsed.company ? `🏢 ${parsed.company}\n` : '') +
+        (parsed.email ? `✉️ ${parsed.email}\n` : '') +
+        (parsed.linkedin_url ? `🔗 ${parsed.linkedin_url}\n` : '') +
+        (parsed.notes ? `\n📝 ${parsed.notes.slice(0, 100)}${parsed.notes.length > 100 ? '...' : ''}` : '')
+
+      await setSession(fromId, 'waiting_for_li_confirm', { parsed })
+      await sendMessage(chatId, summary, {
+        reply_markup: { inline_keyboard: [[
+          { text: '✅ 確認新增', callback_data: 'confirm_li' },
+          { text: '❌ 取消', callback_data: 'cancel_li' },
+        ]] }
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      await clearSession(fromId)
+      await sendMessage(chatId, `❌ 解析失敗：${msg}`)
+    }
     return
   }
 
@@ -1426,6 +1504,13 @@ async function handleText(
     return
   }
 
+  // ── /li: LinkedIn screenshot ───────────────────────────────────────────────
+  if (cmd === '/li' || cmd === '/linkedin') {
+    await setSession(fromId, 'waiting_for_li', {})
+    await sendMessage(chatId, '📸 請傳送 LinkedIn 個人頁截圖，AI 將自動解析聯絡人資料。')
+    return
+  }
+
   // Default
   await sendMessage(chatId, '請傳送名片照片，或輸入 /help（/h）查看可用指令。')
 }
@@ -1746,6 +1831,59 @@ export async function POST(req: NextRequest) {
 
         // ── Cancel /p ─────────────────────────────────────────────────────────
         else if (data === 'cancel_photo') {
+          await clearSession(from.id)
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, '已取消。')
+        }
+
+        // ── Confirm LinkedIn contact ───────────────────────────────────────────
+        else if (data === 'confirm_li') {
+          const session = await getSession(from.id)
+          const parsed = session?.context?.parsed as Record<string, string> | undefined
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          if (!parsed) {
+            await sendMessage(from.id, '❌ 找不到解析資料，請重新傳送截圖。')
+            await clearSession(from.id)
+          } else {
+            const { data: inserted, error } = await supabase
+              .from('contacts')
+              .insert({
+                name: parsed.name || null,
+                name_en: parsed.name_en || null,
+                job_title: parsed.job_title || null,
+                company: parsed.company || null,
+                email: parsed.email || null,
+                linkedin_url: parsed.linkedin_url || null,
+                source: 'linkedin',
+                created_by: user.id,
+              })
+              .select('id')
+              .single()
+            if (error || !inserted) {
+              await sendMessage(from.id, `❌ 新增失敗：${error?.message ?? '未知錯誤'}`)
+            } else {
+              if (parsed.notes) {
+                await supabase.from('interaction_logs').insert({
+                  contact_id: inserted.id,
+                  type: 'note',
+                  content: parsed.notes,
+                  created_by: user.id,
+                })
+              }
+              await updateLastContact(from.id, inserted.id)
+              const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+              const contactLink = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">查看聯絡人頁面</a>` : ''
+              const displayName = parsed.name || parsed.name_en || '聯絡人'
+              await sendMessage(from.id, `✅ 已新增聯絡人：<b>${displayName}</b>${contactLink}`)
+            }
+            await clearSession(from.id)
+          }
+        }
+
+        // ── Cancel LinkedIn ────────────────────────────────────────────────────
+        else if (data === 'cancel_li') {
           await clearSession(from.id)
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
