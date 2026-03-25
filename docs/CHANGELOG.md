@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v1.9.8 — 修正 sidebar 翻譯顯示（2026-03-26）
+
+### 變更項目
+- 補全 nav 命名空間所有缺少的 i18n 鍵（appTitle、logout、tasks、reports、tags、models、users、prompts、countries、newsletter、failedScans、duplicates、camcard、health）
+- 修正 sidebar 顯示「nav.photos」而非「相簿」的問題
+- 修正相簿頁圖片改用 `<img>` 標籤（解決 Supabase signed URL 無法顯示問題）
+- 修正相簿頁照片依聯絡人分組顯示
+
 ## v1.9.7 — 全域相簿搜尋 + LinkedIn 截圖轉聯絡人（2026-03-26）
 
 ### 變更項目
