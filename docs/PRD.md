@@ -3095,3 +3095,122 @@ importance.all: "全部" / "All" / "すべて"
 - [ ] **Task 105** `[修改]` — 聯絡人詳情頁「基本資料」區塊新增「重要性」欄位（可編輯，segmented control 或 select）
 - [ ] **Task 106** `[修改]` — 新增聯絡人表單加入「重要性」欄位（預設 Medium）
 - [ ] **Task 107** `[修改]` — i18n 三份語言檔新增 `importance` 相關 key（zh-TW / en / ja）
+
+---
+
+## 三十五、v1.9.7 功能規格
+
+### 35.1 全域相簿搜尋
+
+#### 概覽
+
+新增跨聯絡人的全域相簿頁，使用者可依附註、拍攝地點或聯絡人姓名搜尋合照，快速定位相關圖片。
+
+#### 頁面位置
+
+- 路由：`/photos`
+- Sidebar 新增「相簿」項目（所有已登入使用者可見）
+
+#### 搜尋欄位
+
+| 搜尋維度 | 對應欄位 |
+|----------|----------|
+| 照片附註 | `contact_photos.note` |
+| 拍攝地點 | `contact_photos.location_name` |
+| 聯絡人姓名 | `contacts.name` / `contacts.name_en` |
+
+- 單一搜尋框，輸入關鍵字後同時比對以上三個維度（OR 邏輯）
+- 搜尋即時觸發（debounce 300ms）或按 Enter 觸發
+- 無關鍵字時顯示所有照片（依拍攝時間倒序）
+
+#### 顯示方式
+
+- 瀑布流或 grid 排列縮圖
+- 每張縮圖下方顯示：聯絡人姓名、拍攝日期、地點（若有）
+- 點擊縮圖展開原圖，旁側顯示附註與聯絡人連結
+- 搜尋結果顯示「共 N 張」
+
+#### API
+
+- `GET /api/photos?q={keyword}` — 聯結 `contact_photos` JOIN `contacts`，依關鍵字過濾，回傳照片清單（含 signed URL、聯絡人資訊）
+- 若無 `q` 參數則回傳全部，按 `taken_at DESC` 排序
+
+#### i18n 新增 key
+
+```
+photos: "相簿" / "Photos" / "アルバム"
+photos.search: "搜尋照片..." / "Search photos..." / "写真を検索..."
+photos.results: "共 {n} 張" / "{n} photos found" / "{n} 枚"
+photos.noResults: "找不到相關照片" / "No photos found" / "写真が見つかりません"
+```
+
+---
+
+### 35.2 LinkedIn 截圖轉聯絡人（/li 指令 + 網頁上傳）
+
+#### 概覽
+
+支援將 LinkedIn 手機截圖（Profile 頁）直接轉為聯絡人，以 Gemini Vision OCR 解析圖片內容，流程與名片掃描一致（直接建立新聯絡人）。
+
+#### 解析欄位對應
+
+| LinkedIn 畫面元素 | 對應 contacts 欄位 |
+|-------------------|--------------------|
+| 姓名 | `name` / `name_en` |
+| 現職職稱 | `title` |
+| 現職公司 | `company` |
+| LinkedIn 網址（含 profile URL） | `linkedin` |
+| Email（若截圖中可見） | `email` |
+| About / 自我介紹文字 | `notes`（前綴 `[LinkedIn About]`） |
+
+- 地點（city/region）**不解析**（本次範圍外）
+- `source` 欄位設為 `'linkedin'`
+
+#### Gemini Prompt 設計重點
+
+- 明確要求只輸出 JSON，欄位同上表
+- 若欄位在截圖中不可見則輸出 `null`
+- LinkedIn URL 若截圖未顯示完整，嘗試從 username 重組為 `https://linkedin.com/in/{username}`
+
+#### Bot 指令：`/li`
+
+- 觸發方式：使用者傳送 `/li` 後傳送一張截圖，或直接傳圖片並帶 caption `/li`
+- 流程：
+  1. 收到圖片 → Gemini OCR 解析
+  2. Bot 回覆解析結果摘要（姓名、職稱、公司、email、LinkedIn）
+  3. 使用者回覆「✅ 確認」或直接傳 `y` → 寫入 contacts
+  4. 成功後回覆「已新增聯絡人：{name}，[查看]({url})」
+  5. 若解析失敗（無法識別為 LinkedIn 截圖）→ 回覆錯誤提示
+
+> 注意：雖決策為「直接建立」，Bot 端因無法在 Telegram 呈現表單，仍需一步確認以防誤觸；網頁端則直接建立（見下）。
+
+#### 網頁上傳
+
+- 入口：聯絡人列表頁頂部「新增」下拉選單新增「LinkedIn 截圖」選項
+- 使用者上傳截圖 → 前端呼叫 `/api/linkedin/parse` → 回傳解析結果
+- 直接 pre-fill 至「新增聯絡人」表單，使用者可修改後送出
+- `source` 自動帶入 `'linkedin'`
+
+#### API
+
+- `POST /api/linkedin/parse` — 接受圖片（base64 或 multipart），呼叫 Gemini Vision，回傳解析 JSON
+
+#### i18n 新增 key
+
+```
+linkedin.import: "LinkedIn 截圖匯入" / "Import from LinkedIn" / "LinkedInからインポート"
+linkedin.parsed: "已解析 LinkedIn 資料" / "LinkedIn data parsed" / "LinkedIn データ解析完了"
+linkedin.source: "LinkedIn" / "LinkedIn" / "LinkedIn"
+```
+
+---
+
+## 三十六、v1.9.7 開發任務清單
+
+- [ ] **Task 108** `[新增]` — 新增 `GET /api/photos` route（JOIN contacts，支援 `q` 關鍵字搜尋 note / location_name / 聯絡人姓名，回傳照片清單含 signed URL）
+- [ ] **Task 109** `[新增]` — 新增 `/photos` 全域相簿頁（grid 縮圖、搜尋框、點擊展開原圖、顯示聯絡人姓名/日期/地點）
+- [ ] **Task 110** `[修改]` — Sidebar 新增「相簿」項目（路由 `/photos`，所有登入使用者可見）
+- [ ] **Task 111** `[新增]` — 新增 `POST /api/linkedin/parse` route（接受圖片，Gemini Vision OCR，回傳解析 JSON：name/title/company/linkedin/email/notes）
+- [ ] **Task 112** `[修改]` — Bot 新增 `/li` 指令（傳圖 → OCR → 摘要確認 → 寫入 contacts，source='linkedin'）
+- [ ] **Task 113** `[修改]` — 網頁新增聯絡人下拉選單加入「LinkedIn 截圖」選項（上傳圖片 → /api/linkedin/parse → pre-fill 表單，source='linkedin'）
+- [ ] **Task 114** `[修改]` — i18n 三份語言檔新增 v1.9.7 相關 key（photos、linkedin）
