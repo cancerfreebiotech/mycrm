@@ -19,7 +19,7 @@ type OcrFields = {
   website: string; linkedin_url: string; facebook_url: string
 }
 
-const EMPTY_FORM: OcrFields & { notes: string; country_code: string; met_at: string; met_date: string; referred_by: string; importance: string } = {
+const EMPTY_FORM: OcrFields & { notes: string; country_code: string; met_at: string; met_date: string; referred_by: string; importance: string; source: string } = {
   name: '', name_en: '', name_local: '',
   company: '', company_en: '', company_local: '',
   job_title: '',
@@ -33,6 +33,7 @@ const EMPTY_FORM: OcrFields & { notes: string; country_code: string; met_at: str
   met_date: '',
   referred_by: '',
   importance: 'medium',
+  source: '',
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -82,6 +83,28 @@ export default function NewContactPage() {
       setAllTags(tags ?? [])
       setAllCountries(countries ?? [])
       if (profile?.ai_model_id) setAiModelId(profile.ai_model_id)
+
+      // LinkedIn prefill
+      if (searchParams.get('source') === 'linkedin') {
+        const raw = sessionStorage.getItem('linkedin_prefill')
+        if (raw) {
+          try {
+            const li = JSON.parse(raw) as { name?: string; name_en?: string; job_title?: string; company?: string; linkedin_url?: string; email?: string; notes?: string }
+            sessionStorage.removeItem('linkedin_prefill')
+            setForm(prev => ({
+              ...prev,
+              name: li.name ?? '',
+              name_en: li.name_en ?? '',
+              job_title: li.job_title ?? '',
+              company: li.company ?? '',
+              linkedin_url: li.linkedin_url ?? '',
+              email: li.email ?? '',
+              notes: li.notes ?? '',
+              source: 'linkedin',
+            }))
+          } catch { /* ignore */ }
+        }
+      }
     }
     init()
   }, [])

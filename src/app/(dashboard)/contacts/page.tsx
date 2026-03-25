@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Search, Download, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Copy, Check, Loader2, X } from 'lucide-react'
+import { Search, Download, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Copy, Check, Loader2, X, Linkedin } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 interface Tag {
@@ -51,6 +51,7 @@ export default function ContactsPage() {
   const t = useTranslations('contacts')
   const tc = useTranslations('common')
   const searchParams = useSearchParams()
+  const router = useRouter()
 
   const [contacts, setContacts] = useState<Contact[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
@@ -64,6 +65,9 @@ export default function ContactsPage() {
   const [importanceDropdownOpen, setImportanceDropdownOpen] = useState(false)
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [addDropOpen, setAddDropOpen] = useState(false)
+  const [liParsing, setLiParsing] = useState(false)
+  const liInputRef = useRef<HTMLInputElement>(null)
   const [page, setPage] = useState(1)
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null)
   type SortField = 'name' | 'company' | 'job_title' | 'email' | 'phone' | 'created_at'
@@ -218,6 +222,38 @@ export default function ContactsPage() {
     setSelectedIds(new Set())
   }
 
+  async function handleLinkedInUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLiParsing(true)
+    setAddDropOpen(false)
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const result = reader.result as string
+          resolve(result.split(',')[1])
+        }
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      const res = await fetch('/api/linkedin/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64 }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error ?? '解析失敗')
+      sessionStorage.setItem('linkedin_prefill', JSON.stringify(data))
+      router.push('/contacts/new?source=linkedin')
+    } catch (err) {
+      alert('LinkedIn 截圖解析失敗：' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setLiParsing(false)
+      if (liInputRef.current) liInputRef.current.value = ''
+    }
+  }
+
   function exportData(format: 'xlsx' | 'csv') {
     const rows = sorted.map((c) => ({
       [t('name')]: c.name ?? '',
@@ -268,12 +304,35 @@ export default function ContactsPage() {
               <Check size={14} /> 批次編輯（{selectedIds.size}）
             </button>
           )}
-          <Link
-            href="/contacts/new"
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <Plus size={14} /> {t('new')}
-          </Link>
+          <div className="relative">
+            <button
+              onClick={() => setAddDropOpen(v => !v)}
+              className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              disabled={liParsing}
+            >
+              {liParsing ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              {liParsing ? '解析中...' : t('new')}
+              <ChevronDown size={12} className={`transition-transform ${addDropOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {addDropOpen && (
+              <div className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-20 py-1">
+                <Link
+                  href="/contacts/new"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  onClick={() => setAddDropOpen(false)}
+                >
+                  <Plus size={14} /> 新增聯絡人
+                </Link>
+                <button
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 w-full text-left"
+                  onClick={() => liInputRef.current?.click()}
+                >
+                  <Linkedin size={14} className="text-blue-600" /> LinkedIn 截圖
+                </button>
+              </div>
+            )}
+            <input ref={liInputRef} type="file" accept="image/*" className="hidden" onChange={handleLinkedInUpload} />
+          </div>
         </div>
       </div>
 
