@@ -352,7 +352,8 @@ async function handleSearch(chatId: number, keyword: string) {
 // ── /a: Add card photo — OCR → show diff → user decides ──────────────────────
 
 const CARD_FIELD_LABELS: Record<string, string> = {
-  name: '姓名', company: '公司', job_title: '職稱',
+  name: '姓名', name_en: '英文姓名', name_local: '日文姓名',
+  company: '公司', job_title: '職稱',
   email: 'Email', phone: '電話', second_phone: '第二電話',
   address: '地址', website: '網站',
 }
@@ -372,7 +373,7 @@ async function processAddCardPhoto(
 
     const { data: existing } = await supabase
       .from('contacts')
-      .select('name, company, job_title, email, phone, second_phone, address, website')
+      .select('name, name_en, name_local, company, job_title, email, phone, second_phone, address, website')
       .eq('id', contactId)
       .single()
 
@@ -397,7 +398,9 @@ async function processAddCardPhoto(
 
     // Compute diff
     const ocrFields: Record<string, string | undefined> = {
-      name: cardData.name || cardData.name_en || undefined,
+      name: cardData.name || undefined,
+      name_en: cardData.name_en || undefined,
+      name_local: cardData.name_local || undefined,
       company: cardData.company || cardData.company_en || undefined,
       job_title: cardData.job_title || undefined,
       email: cardData.email || undefined,
