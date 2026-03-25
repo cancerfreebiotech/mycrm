@@ -242,6 +242,16 @@
     "sectionUser": "User Guide",
     "sectionAdmin": "Super Admin Guide"
   },
+  "photos": {
+    "search": "Search photos (note, location, contact)...",
+    "results": "{n} photos found",
+    "noResults": "No photos found"
+  },
+  "linkedin": {
+    "import": "Import from LinkedIn",
+    "parsed": "LinkedIn data parsed",
+    "source": "LinkedIn"
+  },
   "footer": {
     "version": "v{version}",
     "deployedAt": "Deployed {time}"

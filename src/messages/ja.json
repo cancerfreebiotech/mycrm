@@ -242,6 +242,16 @@
     "sectionUser": "一般ユーザー向け",
     "sectionAdmin": "スーパー管理者向け"
   },
+  "photos": {
+    "search": "写真を検索（メモ・場所・連絡先）...",
+    "results": "{n} 枚",
+    "noResults": "写真が見つかりません"
+  },
+  "linkedin": {
+    "import": "LinkedInからインポート",
+    "parsed": "LinkedIn データ解析完了",
+    "source": "LinkedIn"
+  },
   "footer": {
     "version": "v{version}",
     "deployedAt": "デプロイ日時：{time}"

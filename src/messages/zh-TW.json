@@ -242,6 +242,16 @@
     "sectionUser": "一般使用者",
     "sectionAdmin": "Super Admin"
   },
+  "photos": {
+    "search": "搜尋照片（附註、地點、聯絡人）...",
+    "results": "共 {n} 張",
+    "noResults": "找不到相關照片"
+  },
+  "linkedin": {
+    "import": "LinkedIn 截圖匯入",
+    "parsed": "已解析 LinkedIn 資料",
+    "source": "LinkedIn"
+  },
   "footer": {
     "version": "v{version}",
     "deployedAt": "部署於 {time}"
