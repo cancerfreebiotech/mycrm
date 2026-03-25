@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v1.9.7 — 全域相簿搜尋 + LinkedIn 截圖轉聯絡人（2026-03-26）
+
+### 變更項目
+- **全域相簿搜尋**：新增 `/photos` 頁面，跨所有聯絡人顯示合照；支援以附註、拍攝地點、聯絡人姓名關鍵字搜尋；grid 縮圖排列，點擊展開原圖
+- **API**：新增 `GET /api/photos?q=` route，JOIN contacts，支援關鍵字過濾
+- **Sidebar**：新增「相簿」入口（所有登入使用者可見）
+- **LinkedIn 截圖轉聯絡人**：新增 Bot 指令 `/li`，傳送 LinkedIn Profile 截圖 → Gemini Vision OCR → 確認後寫入聯絡人（source='linkedin'）
+- **LinkedIn 網頁入口**：新增聯絡人下拉選單「LinkedIn 截圖」，解析後 pre-fill 新增表單
+- **API**：新增 `POST /api/linkedin/parse` route（Gemini Vision，回傳 name/title/company/linkedin/email/notes）
+- **i18n**：zh-TW / en / ja 新增 photos、linkedin 相關 key
+
+
 ## v1.9.6 — /p 支援多張照片與共同附註（2026-03-25）
 
 ### 變更項目
