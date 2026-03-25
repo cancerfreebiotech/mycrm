@@ -45,7 +45,7 @@ interface Contact {
   contact_tags: { tags: Tag }[]
 }
 interface ContactCard { id: string; card_img_url: string; card_img_back_url: string | null; label: string | null; created_at: string }
-interface ContactPhoto { id: string; photo_url: string; taken_at: string | null; latitude: number | null; longitude: number | null; location_name: string | null; created_at: string }
+interface ContactPhoto { id: string; photo_url: string; taken_at: string | null; latitude: number | null; longitude: number | null; location_name: string | null; note: string | null; created_at: string }
 interface Log {
   id: string
   content: string | null
@@ -317,6 +317,8 @@ export default function ContactDetailPage() {
 
   // Photos
   const [photoSaving, setPhotoSaving] = useState(false)
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [editingNoteText, setEditingNoteText] = useState('')
 
   // Tags
   const [tagInput, setTagInput] = useState('')
@@ -368,7 +370,7 @@ export default function ContactDetailPage() {
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('contact_cards').select('id, card_img_url, card_img_back_url, label, created_at').eq('contact_id', id).order('created_at', { ascending: true }),
       supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),
-      supabase.from('contact_photos').select('id, photo_url, taken_at, latitude, longitude, location_name, created_at').eq('contact_id', id).order('created_at', { ascending: false }),
+      supabase.from('contact_photos').select('id, photo_url, taken_at, latitude, longitude, location_name, note, created_at').eq('contact_id', id).order('created_at', { ascending: false }),
     ])
     setContact(c as unknown as Contact)
 
@@ -686,6 +688,20 @@ export default function ContactDetailPage() {
   async function deletePhoto(photoId: string) {
     if (!confirm('確定要刪除此照片？')) return
     await supabase.from('contact_photos').delete().eq('id', photoId)
+    load()
+  }
+
+  async function savePhotoNote(photoId: string, note: string) {
+    const trimmed = note.trim()
+    await supabase.from('contact_photos').update({ note: trimmed || null }).eq('id', photoId)
+    if (trimmed) {
+      await supabase.from('interaction_logs').insert({
+        contact_id: id,
+        type: 'note',
+        content: `【合照附註】${trimmed}`,
+      })
+    }
+    setEditingNoteId(null)
     load()
   }
 
@@ -1362,6 +1378,34 @@ export default function ContactDetailPage() {
                   {photo.location_name && (
                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate" title={photo.location_name}>
                       📍 {photo.location_name}
+                    </p>
+                  )}
+                  {editingNoteId === photo.id ? (
+                    <div className="mt-1 flex flex-col gap-1">
+                      <input
+                        autoFocus
+                        type="text"
+                        value={editingNoteText}
+                        onChange={(e) => setEditingNoteText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') savePhotoNote(photo.id, editingNoteText)
+                          if (e.key === 'Escape') setEditingNoteId(null)
+                        }}
+                        className="text-xs px-1.5 py-0.5 border border-blue-400 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 w-full"
+                        placeholder="附註..."
+                      />
+                      <div className="flex gap-1">
+                        <button onClick={() => savePhotoNote(photo.id, editingNoteText)} className="text-xs text-blue-600 hover:underline">儲存</button>
+                        <button onClick={() => setEditingNoteId(null)} className="text-xs text-gray-400 hover:underline">取消</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p
+                      className="text-xs text-gray-500 dark:text-gray-400 mt-1 cursor-pointer hover:text-blue-500 truncate"
+                      title={photo.note ?? '點擊加入附註'}
+                      onClick={() => { setEditingNoteId(photo.id); setEditingNoteText(photo.note ?? '') }}
+                    >
+                      {photo.note ? `📝 ${photo.note}` : <span className="opacity-40">+ 附註</span>}
                     </p>
                   )}
                 </div>

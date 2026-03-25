@@ -529,7 +529,8 @@ async function processPersonalPhoto(
   fromId: number,
   contactId: string,
   fileId: string,
-  contactNameHint?: string
+  contactNameHint?: string,
+  note?: string
 ) {
   const supabase = createServiceClient()
   try {
@@ -554,12 +555,22 @@ async function processPersonalPhoto(
       latitude: exif.latitude ?? null,
       longitude: exif.longitude ?? null,
       location_name: exif.locationName ?? null,
+      note: note ?? null,
     })
+
+    if (note) {
+      await supabase.from('interaction_logs').insert({
+        contact_id: contactId,
+        type: 'note',
+        content: `【合照附註】${note}`,
+      })
+    }
 
     await updateLastContact(fromId, contactId)
     await clearSession(fromId)
     const displayName = contactNameHint ?? '此聯絡人'
-    await sendMessage(chatId, `✅ 合照已存入 <b>${displayName}</b>`)
+    const noteMsg = note ? '，附註已存入互動紀錄' : ''
+    await sendMessage(chatId, `✅ 合照已存入 <b>${displayName}</b>${noteMsg}`)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[bot] personal photo error:', msg)
@@ -1160,6 +1171,16 @@ async function handleText(
     return
   }
 
+  // ── Session: waiting_for_photo_note ───────────────────────────────────────
+  if (session?.state === 'waiting_for_photo_note') {
+    const contactId = session.context.contact_id as string
+    const fileId = session.context.pending_file_id as string
+    const contactNameHint = session.context.contact_name as string | undefined
+    await sendMessage(chatId, '⏳ 上傳中...')
+    await processPersonalPhoto(chatId, fromId, contactId, fileId, contactNameHint, text.trim())
+    return
+  }
+
   // ── Session: waiting_for_note_contact ─────────────────────────────────────
   if (session?.state === 'waiting_for_note_contact') {
     const contacts = await searchContacts(text.trim())
@@ -1641,6 +1662,27 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           if (!fileId) {
+            await sendMessage(from.id, '❌ 找不到待處理照片，請重新傳送。')
+            await clearSession(from.id)
+          } else {
+            await setSession(from.id, 'waiting_for_photo_note', { contact_id: contactId, contact_name: contactNameHint, pending_file_id: fileId })
+            await sendMessage(from.id, '📝 要加附註嗎？直接回覆文字會存入互動紀錄。', {
+              reply_markup: { inline_keyboard: [[
+                { text: '⏭ 跳過，直接存入', callback_data: 'skip_photo_note' },
+              ]] }
+            })
+          }
+        }
+
+        // ── Skip photo note ───────────────────────────────────────────────────
+        else if (data === 'skip_photo_note') {
+          const session = await getSession(from.id)
+          const contactId = session?.context?.contact_id as string | undefined
+          const fileId = session?.context?.pending_file_id as string | undefined
+          const contactNameHint = session?.context?.contact_name as string | undefined
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          if (!contactId || !fileId) {
             await sendMessage(from.id, '❌ 找不到待處理照片，請重新傳送。')
             await clearSession(from.id)
           } else {
