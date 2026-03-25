@@ -12,7 +12,7 @@ const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`
 
 // ── Telegram helpers ──────────────────────────────────────────────────────────
 
-async function sendMessage(chatId: number, text: string, extra?: object) {
+async function sendMessage(chatId: number, text: string, extra?: object): Promise<{ message_id: number } | null> {
   const payload = JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', ...extra })
   const res = await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: 'POST',
@@ -39,7 +39,11 @@ async function sendMessage(chatId: number, text: string, extra?: object) {
         body: JSON.stringify({ chat_id: chatId, text: '❌ 傳送失敗，請稍後再試。', parse_mode: 'HTML' }),
       }).catch(() => {})
     }
+    const retryData = await retry?.json().catch(() => null)
+    return retryData?.result ?? null
   }
+  const data = await res.json().catch(() => null)
+  return data?.result ?? null
 }
 
 async function sendPhoto(chatId: number, photoUrl: string, caption?: string) {
@@ -64,6 +68,20 @@ async function editMessageReplyMarkup(chatId: number, messageId: number) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: [] } }),
   })
+}
+
+async function editMessageText(chatId: number, messageId: number, text: string, inlineKeyboard: object[][]) {
+  await fetch(`${TELEGRAM_API}/editMessageText`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: messageId,
+      text,
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: inlineKeyboard },
+    }),
+  }).catch(() => {})
 }
 
 // ── Session helpers ───────────────────────────────────────────────────────────
@@ -528,35 +546,34 @@ async function processPersonalPhoto(
   chatId: number,
   fromId: number,
   contactId: string,
-  fileId: string,
+  fileIds: string[],
   contactNameHint?: string,
   note?: string
 ) {
   const supabase = createServiceClient()
   try {
-    const imgBuffer = await downloadTelegramPhoto(fileId)
-
-    const compressed = await processPhotoWithExif(imgBuffer)
-    const exif = await extractExif(imgBuffer) // Telegram strips EXIF, will be nulls
-
-    const filename = `photos/${Date.now()}-${contactId.slice(0, 8)}.jpg`
-    const { error: uploadError } = await supabase.storage
-      .from('cards').upload(filename, compressed, { contentType: 'image/jpeg', upsert: false })
-    if (uploadError) throw new Error(uploadError.message)
-
-    const { data: publicUrlData } = supabase.storage.from('cards').getPublicUrl(filename)
-    const photoUrl = publicUrlData.publicUrl
-
-    await supabase.from('contact_photos').insert({
-      contact_id: contactId,
-      photo_url: photoUrl,
-      storage_path: filename,
-      taken_at: exif.takenAt ?? null,
-      latitude: exif.latitude ?? null,
-      longitude: exif.longitude ?? null,
-      location_name: exif.locationName ?? null,
-      note: note ?? null,
-    })
+    let uploaded = 0
+    for (const fileId of fileIds) {
+      const imgBuffer = await downloadTelegramPhoto(fileId)
+      const compressed = await processPhotoWithExif(imgBuffer)
+      const exif = await extractExif(imgBuffer)
+      const filename = `photos/${Date.now()}-${contactId.slice(0, 8)}-${uploaded}.jpg`
+      const { error: uploadError } = await supabase.storage
+        .from('cards').upload(filename, compressed, { contentType: 'image/jpeg', upsert: false })
+      if (uploadError) throw new Error(uploadError.message)
+      const { data: publicUrlData } = supabase.storage.from('cards').getPublicUrl(filename)
+      await supabase.from('contact_photos').insert({
+        contact_id: contactId,
+        photo_url: publicUrlData.publicUrl,
+        storage_path: filename,
+        taken_at: exif.takenAt ?? null,
+        latitude: exif.latitude ?? null,
+        longitude: exif.longitude ?? null,
+        location_name: exif.locationName ?? null,
+        note: (note && fileIds.length === 1) ? note : null,
+      })
+      uploaded++
+    }
 
     if (note) {
       await supabase.from('interaction_logs').insert({
@@ -569,8 +586,9 @@ async function processPersonalPhoto(
     await updateLastContact(fromId, contactId)
     await clearSession(fromId)
     const displayName = contactNameHint ?? '此聯絡人'
+    const countMsg = fileIds.length > 1 ? ` ${fileIds.length} 張` : ''
     const noteMsg = note ? '，附註已存入互動紀錄' : ''
-    await sendMessage(chatId, `✅ 合照已存入 <b>${displayName}</b>${noteMsg}`)
+    await sendMessage(chatId, `✅ 合照${countMsg}已存入 <b>${displayName}</b>${noteMsg}`)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[bot] personal photo error:', msg)
@@ -604,18 +622,32 @@ async function handlePhoto(
     return
   }
 
-  // /p: Personal photo flow — confirmation step
+  // /p: Personal photo flow — accumulate multiple photos
   if (session?.state === 'waiting_for_photo') {
     const contactId = session.context.contact_id as string
     const contactName = session.context.contact_name as string | undefined
-    await setSession(fromId, 'waiting_for_photo', { ...session.context, pending_file_id: photo.file_id })
-    await sendMessage(chatId,
-      `收到照片！要存為 <b>${contactName ?? '此聯絡人'}</b> 的合照嗎？`,
-      { reply_markup: { inline_keyboard: [[
-        { text: '✅ 確認', callback_data: `confirm_photo_${contactId}` },
-        { text: '❌ 取消', callback_data: 'cancel_photo' },
-      ]] } }
-    )
+    const existingIds = (session.context.pending_file_ids as string[] | undefined) ?? []
+    const newIds = [...existingIds, photo.file_id]
+    const countMsgId = session.context.count_message_id as number | undefined
+    const displayName = contactName ?? '此聯絡人'
+    const doneText = `✅ 完成（${newIds.length} 張）`
+    const keyboard = [[
+      { text: doneText, callback_data: `done_photo_${contactId}` },
+      { text: '❌ 取消', callback_data: 'cancel_photo' },
+    ]]
+    if (countMsgId) {
+      await editMessageText(chatId, countMsgId,
+        `📷 已收到 <b>${newIds.length}</b> 張（${displayName}）\n繼續傳送，或按「完成」`,
+        keyboard
+      )
+      await setSession(fromId, 'waiting_for_photo', { ...session.context, pending_file_ids: newIds })
+    } else {
+      const sent = await sendMessage(chatId,
+        `📷 已收到 <b>1</b> 張（${displayName}）\n繼續傳送，或按「完成」`,
+        { reply_markup: { inline_keyboard: keyboard } }
+      )
+      await setSession(fromId, 'waiting_for_photo', { ...session.context, pending_file_ids: newIds, count_message_id: sent?.message_id })
+    }
     return
   }
 
@@ -1174,10 +1206,10 @@ async function handleText(
   // ── Session: waiting_for_photo_note ───────────────────────────────────────
   if (session?.state === 'waiting_for_photo_note') {
     const contactId = session.context.contact_id as string
-    const fileId = session.context.pending_file_id as string
+    const fileIds = (session.context.pending_file_ids as string[] | undefined) ?? []
     const contactNameHint = session.context.contact_name as string | undefined
     await sendMessage(chatId, '⏳ 上傳中...')
-    await processPersonalPhoto(chatId, fromId, contactId, fileId, contactNameHint, text.trim())
+    await processPersonalPhoto(chatId, fromId, contactId, fileIds, contactNameHint, text.trim())
     return
   }
 
@@ -1653,7 +1685,28 @@ export async function POST(req: NextRequest) {
           await sendMessage(from.id, `找到：${contact?.name}\n\n請傳送合照\n\n💡 長按照片 → <b>以檔案傳送</b>，可保留拍攝時間和 GPS 地點`)
         }
 
-        // ── Confirm /p photo ──────────────────────────────────────────────────
+        // ── Done collecting /p photos → ask for note ─────────────────────────
+        else if (data?.startsWith('done_photo_')) {
+          const contactId = data.replace('done_photo_', '')
+          const session = await getSession(from.id)
+          const fileIds = (session?.context?.pending_file_ids as string[] | undefined) ?? []
+          const contactNameHint = session?.context?.contact_name as string | undefined
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          if (fileIds.length === 0) {
+            await sendMessage(from.id, '❌ 找不到待處理照片，請重新傳送。')
+            await clearSession(from.id)
+          } else {
+            await setSession(from.id, 'waiting_for_photo_note', { contact_id: contactId, contact_name: contactNameHint, pending_file_ids: fileIds })
+            await sendMessage(from.id, `📝 要幫這 ${fileIds.length === 1 ? '張' : fileIds.length + ' 張'}照片加共同附註嗎？直接回覆文字，或按「跳過」`, {
+              reply_markup: { inline_keyboard: [[
+                { text: '⏭ 跳過，直接存入', callback_data: 'skip_photo_note' },
+              ]] }
+            })
+          }
+        }
+
+        // ── Confirm /p photo (legacy single-photo path) ───────────────────────
         else if (data?.startsWith('confirm_photo_')) {
           const contactId = data.replace('confirm_photo_', '')
           const session = await getSession(from.id)
@@ -1665,7 +1718,7 @@ export async function POST(req: NextRequest) {
             await sendMessage(from.id, '❌ 找不到待處理照片，請重新傳送。')
             await clearSession(from.id)
           } else {
-            await setSession(from.id, 'waiting_for_photo_note', { contact_id: contactId, contact_name: contactNameHint, pending_file_id: fileId })
+            await setSession(from.id, 'waiting_for_photo_note', { contact_id: contactId, contact_name: contactNameHint, pending_file_ids: [fileId] })
             await sendMessage(from.id, '📝 要加附註嗎？直接回覆文字會存入互動紀錄。', {
               reply_markup: { inline_keyboard: [[
                 { text: '⏭ 跳過，直接存入', callback_data: 'skip_photo_note' },
@@ -1678,16 +1731,16 @@ export async function POST(req: NextRequest) {
         else if (data === 'skip_photo_note') {
           const session = await getSession(from.id)
           const contactId = session?.context?.contact_id as string | undefined
-          const fileId = session?.context?.pending_file_id as string | undefined
+          const fileIds = (session?.context?.pending_file_ids as string[] | undefined) ?? []
           const contactNameHint = session?.context?.contact_name as string | undefined
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          if (!contactId || !fileId) {
+          if (!contactId || fileIds.length === 0) {
             await sendMessage(from.id, '❌ 找不到待處理照片，請重新傳送。')
             await clearSession(from.id)
           } else {
             await sendMessage(from.id, '⏳ 上傳中...')
-            await processPersonalPhoto(from.id, from.id, contactId, fileId, contactNameHint)
+            await processPersonalPhoto(from.id, from.id, contactId, fileIds, contactNameHint)
           }
         }
 
