@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 import { Search, X, ZoomIn, ZoomOut, Maximize2, MapPin, Calendar, StickyNote } from 'lucide-react'
 
@@ -16,6 +15,12 @@ interface PhotoRow {
   created_at: string
   contact_id: string | null
   contact_name: string | null
+}
+
+interface ContactGroup {
+  contact_id: string | null
+  contact_name: string | null
+  photos: PhotoRow[]
 }
 
 interface LightboxPhoto extends PhotoRow {}
@@ -45,9 +50,7 @@ export default function PhotosPage() {
     }
   }, [])
 
-  useEffect(() => {
-    fetchPhotos('')
-  }, [fetchPhotos])
+  useEffect(() => { fetchPhotos('') }, [fetchPhotos])
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -55,17 +58,27 @@ export default function PhotosPage() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
   }, [keyword, fetchPhotos])
 
-  // Keyboard close
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeLightbox() }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
+  // Group photos by contact
+  const groups: ContactGroup[] = []
+  const seen = new Map<string | null, ContactGroup>()
+  for (const p of photos) {
+    const key = p.contact_id ?? '__none__'
+    if (!seen.has(key)) {
+      const g: ContactGroup = { contact_id: p.contact_id, contact_name: p.contact_name, photos: [] }
+      seen.set(key, g)
+      groups.push(g)
+    }
+    seen.get(key)!.photos.push(p)
+  }
+
   function openLightbox(photo: PhotoRow) {
-    setLightbox(photo)
-    setLbScale(1)
-    setLbOffset({ x: 0, y: 0 })
+    setLightbox(photo); setLbScale(1); setLbOffset({ x: 0, y: 0 })
   }
   function closeLightbox() { setLightbox(null) }
   function lbZoom(delta: number) { setLbScale(s => Math.min(5, Math.max(0.5, s + delta))) }
@@ -89,14 +102,12 @@ export default function PhotosPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">相簿</h1>
         {!loading && (
-          <span className="text-sm text-gray-500 dark:text-gray-400">
-            共 {total} 張
-          </span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">共 {total} 張</span>
         )}
       </div>
 
       {/* Search */}
-      <div className="relative mb-6">
+      <div className="relative mb-8">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
           type="text"
@@ -106,16 +117,13 @@ export default function PhotosPage() {
           className="w-full pl-9 pr-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
         />
         {keyword && (
-          <button
-            onClick={() => setKeyword('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-          >
+          <button onClick={() => setKeyword('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
             <X size={14} />
           </button>
         )}
       </div>
 
-      {/* Grid */}
+      {/* Content */}
       {loading ? (
         <div className="flex items-center justify-center py-20 text-gray-400">載入中...</div>
       ) : photos.length === 0 ? (
@@ -124,39 +132,47 @@ export default function PhotosPage() {
           <p>{keyword ? '找不到相關照片' : '尚無合照'}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {photos.map(photo => (
-            <div
-              key={photo.id}
-              className="group cursor-pointer"
-              onClick={() => openLightbox(photo)}
-            >
-              <div className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
-                <Image
-                  src={photo.photo_url}
-                  alt={photo.contact_name ?? '合照'}
-                  fill
-                  sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 20vw"
-                  className="object-cover group-hover:scale-105 transition-transform duration-200"
-                />
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center">
-                  <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
-                </div>
+        <div className="space-y-10">
+          {groups.map(group => (
+            <div key={group.contact_id ?? '__none__'}>
+              {/* Contact heading */}
+              <div className="flex items-center gap-2 mb-3">
+                {group.contact_id ? (
+                  <Link
+                    href={`/contacts/${group.contact_id}`}
+                    className="text-base font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    {group.contact_name ?? '未知聯絡人'}
+                  </Link>
+                ) : (
+                  <span className="text-base font-semibold text-gray-500 dark:text-gray-400">未歸類</span>
+                )}
+                <span className="text-xs text-gray-400">（{group.photos.length} 張）</span>
               </div>
-              <div className="mt-1.5 px-0.5">
-                {photo.contact_name && (
-                  <p className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">{photo.contact_name}</p>
-                )}
-                {photo.taken_at && (
-                  <p className="text-xs text-gray-400 truncate">
-                    {new Date(photo.taken_at).toLocaleDateString('zh-TW')}
-                  </p>
-                )}
-                {photo.location_name && (
-                  <p className="text-xs text-gray-400 truncate" title={photo.location_name}>
-                    📍 {photo.location_name}
-                  </p>
-                )}
+
+              {/* Photo grid */}
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+                {group.photos.map(photo => (
+                  <div key={photo.id} className="group cursor-pointer" onClick={() => openLightbox(photo)}>
+                    <div className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photo.photo_url}
+                        alt={photo.contact_name ?? '合照'}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center">
+                        <ZoomIn size={18} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                      </div>
+                    </div>
+                    {(photo.taken_at || photo.note) && (
+                      <p className="text-xs text-gray-400 truncate mt-0.5 px-0.5">
+                        {photo.taken_at ? new Date(photo.taken_at).toLocaleDateString('zh-TW') : ''}
+                        {photo.note ? ` · ${photo.note}` : ''}
+                      </p>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           ))}
@@ -165,28 +181,22 @@ export default function PhotosPage() {
 
       {/* Lightbox */}
       {lightbox && (
-        <div
-          className="fixed inset-0 bg-black/90 flex z-50"
-          onClick={closeLightbox}
-        >
+        <div className="fixed inset-0 bg-black/90 flex z-50" onClick={closeLightbox}>
           {/* Toolbar */}
           <div className="absolute top-4 right-4 flex items-center gap-2 z-10" onClick={e => e.stopPropagation()}>
-            <button className="text-white/80 hover:text-white bg-black/40 rounded-full p-2" onClick={() => lbZoom(0.25)} title="放大"><ZoomIn size={18} /></button>
-            <button className="text-white/80 hover:text-white bg-black/40 rounded-full p-2" onClick={() => lbZoom(-0.25)} title="縮小"><ZoomOut size={18} /></button>
-            <button className="text-white/80 hover:text-white bg-black/40 rounded-full p-2" onClick={lbReset} title="重置"><Maximize2 size={18} /></button>
-            <button className="text-white/80 hover:text-white bg-black/40 rounded-full p-2" onClick={closeLightbox} title="關閉"><X size={18} /></button>
+            <button className="text-white/80 hover:text-white bg-black/40 rounded-full p-2" onClick={() => lbZoom(0.25)}><ZoomIn size={18} /></button>
+            <button className="text-white/80 hover:text-white bg-black/40 rounded-full p-2" onClick={() => lbZoom(-0.25)}><ZoomOut size={18} /></button>
+            <button className="text-white/80 hover:text-white bg-black/40 rounded-full p-2" onClick={lbReset}><Maximize2 size={18} /></button>
+            <button className="text-white/80 hover:text-white bg-black/40 rounded-full p-2" onClick={closeLightbox}><X size={18} /></button>
           </div>
           <div className="absolute top-4 left-4 text-white/50 text-xs bg-black/40 rounded px-2 py-1 z-10 select-none">
             {Math.round(lbScale * 100)}%
           </div>
 
-          {/* Image area */}
-          <div
-            className="flex-1 flex items-center justify-center overflow-hidden"
-            onClick={closeLightbox}
-          >
+          {/* Image */}
+          <div className="flex-1 flex items-center justify-center overflow-hidden" onClick={closeLightbox}>
             <div
-              className="select-none max-w-full max-h-full"
+              className="select-none"
               style={{
                 transform: `translate(${lbOffset.x}px, ${lbOffset.y}px) scale(${lbScale})`,
                 transformOrigin: 'center center',
@@ -211,18 +221,11 @@ export default function PhotosPage() {
           </div>
 
           {/* Side panel */}
-          <div
-            className="w-64 shrink-0 bg-gray-900/95 border-l border-white/10 flex flex-col p-5 gap-4 overflow-y-auto"
-            onClick={e => e.stopPropagation()}
-          >
+          <div className="w-64 shrink-0 bg-gray-900/95 border-l border-white/10 flex flex-col p-5 gap-4 overflow-y-auto" onClick={e => e.stopPropagation()}>
             {lightbox.contact_name && lightbox.contact_id && (
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">聯絡人</p>
-                <Link
-                  href={`/contacts/${lightbox.contact_id}`}
-                  className="text-blue-400 hover:text-blue-300 font-medium text-sm"
-                  onClick={closeLightbox}
-                >
+                <Link href={`/contacts/${lightbox.contact_id}`} className="text-blue-400 hover:text-blue-300 font-medium text-sm" onClick={closeLightbox}>
                   {lightbox.contact_name}
                 </Link>
               </div>
@@ -255,9 +258,7 @@ export default function PhotosPage() {
               </div>
             )}
             <div className="mt-auto pt-4 border-t border-white/10">
-              <p className="text-xs text-gray-600">
-                {new Date(lightbox.created_at).toLocaleDateString('zh-TW')} 上傳
-              </p>
+              <p className="text-xs text-gray-600">{new Date(lightbox.created_at).toLocaleDateString('zh-TW')} 上傳</p>
             </div>
           </div>
         </div>
