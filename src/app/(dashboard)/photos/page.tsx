@@ -132,50 +132,48 @@ export default function PhotosPage() {
           <p>{keyword ? '找不到相關照片' : '尚無合照'}</p>
         </div>
       ) : (
-        <div className="space-y-10">
-          {groups.map(group => (
-            <div key={group.contact_id ?? '__none__'}>
-              {/* Contact heading */}
-              <div className="flex items-center gap-2 mb-3">
-                {group.contact_id ? (
-                  <Link
-                    href={`/contacts/${group.contact_id}`}
-                    className="text-base font-semibold text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    {group.contact_name ?? '未知聯絡人'}
-                  </Link>
-                ) : (
-                  <span className="text-base font-semibold text-gray-500 dark:text-gray-400">未歸類</span>
-                )}
-                <span className="text-xs text-gray-400">（{group.photos.length} 張）</span>
-              </div>
-
-              {/* Photo grid */}
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
-                {group.photos.map(photo => (
-                  <div key={photo.id} className="group cursor-pointer" onClick={() => openLightbox(photo)}>
-                    <div className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={photo.photo_url}
-                        alt={photo.contact_name ?? '合照'}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                      />
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center">
-                        <ZoomIn size={18} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
-                      </div>
-                    </div>
-                    {(photo.taken_at || photo.note) && (
-                      <p className="text-xs text-gray-400 truncate mt-0.5 px-0.5">
-                        {photo.taken_at ? new Date(photo.taken_at).toLocaleDateString('zh-TW') : ''}
-                        {photo.note ? ` · ${photo.note}` : ''}
-                      </p>
-                    )}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {groups.map(group => {
+            const cover = group.photos[0]
+            return (
+              <div key={group.contact_id ?? '__none__'} className="group cursor-pointer" onClick={() => openLightbox(cover)}>
+                <div className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={cover.photo_url}
+                    alt={group.contact_name ?? '合照'}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                  />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                    <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
                   </div>
-                ))}
+                  {group.photos.length > 1 && (
+                    <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs rounded-full px-2 py-0.5">
+                      +{group.photos.length - 1}
+                    </div>
+                  )}
+                </div>
+                <div className="mt-1.5 px-0.5">
+                  {group.contact_id ? (
+                    <Link
+                      href={`/contacts/${group.contact_id}`}
+                      className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline truncate block"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      {group.contact_name ?? '未知聯絡人'}
+                    </Link>
+                  ) : (
+                    <span className="text-sm text-gray-400 truncate block">未歸類</span>
+                  )}
+                  {cover.taken_at && (
+                    <p className="text-xs text-gray-400 truncate">
+                      {new Date(cover.taken_at).toLocaleDateString('zh-TW')}
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
