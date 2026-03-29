@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
         name, company, email, phone, job_title, created_at,
         contact_tags(tags(name))
       `)
+      .is('deleted_at', null)
       .gte('created_at', `${dateFrom}T00:00:00.000Z`)
       .lte('created_at', `${dateTo}T23:59:59.999Z`)
       .order('created_at', { ascending: false })
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
     let logsQuery = service
       .from('interaction_logs')
       .select(`
-        type, content, email_subject, meeting_date, created_at,
+        type, content, email_subject, meeting_date, meeting_time, meeting_location, created_at,
         contacts(name, company)
       `)
       .gte('created_at', `${dateFrom}T00:00:00.000Z`)
@@ -79,9 +80,10 @@ export async function POST(req: NextRequest) {
       company: (l.contacts as any)?.company ?? '',
       type: l.type ?? '',
       content: l.email_subject ?? l.content ?? '',
-      date: l.meeting_date
-        ? new Date(l.meeting_date).toLocaleString()
-        : l.created_at ? new Date(l.created_at).toLocaleString() : '',
+      date: l.meeting_date ?? '',
+      time: (l as unknown as Record<string, string>).meeting_time ? String((l as unknown as Record<string, string>).meeting_time).slice(0, 5) : '',
+      location: (l as unknown as Record<string, string>).meeting_location ?? '',
+      created_at: l.created_at ? new Date(l.created_at).toLocaleString() : '',
     }))
 
     if (format === 'json') {

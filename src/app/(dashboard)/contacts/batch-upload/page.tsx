@@ -119,7 +119,7 @@ export default function BatchUploadPage() {
         let dupType: RowData['dupType'] = 'none'
         let dupName: string | null = null
         if (data.email) {
-          const { data: exact } = await supabase.from('contacts').select('id, name').eq('email', data.email).maybeSingle()
+          const { data: exact } = await supabase.from('contacts').select('id, name').is('deleted_at', null).eq('email', data.email).maybeSingle()
           if (exact) { dupType = 'exact'; dupName = exact.name }
         }
         if (dupType === 'none' && data.name) {

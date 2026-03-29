@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
-import { analyzeBusinessCard, generateEmailContent, parseTaskCommand, parseMeetingCommand, parseMetCommand } from '@/lib/gemini'
+import { analyzeBusinessCard, generateEmailContent, parseTaskCommand, parseMeetingCommand, parseMetCommand, parseVisitNote } from '@/lib/gemini'
 import { processCardImage, processPhotoWithExif, extractExif, generateCardFilename } from '@/lib/imageProcessor'
 import { checkDuplicates } from '@/lib/duplicate'
 import { sendMail, createCalendarEvent } from '@/lib/graph'
@@ -176,6 +176,7 @@ async function searchContacts(query: string) {
   const { data } = await supabase
     .from('contacts')
     .select('id, name, company, job_title, email, phone, card_img_url, card_img_back_url')
+    .is('deleted_at', null)
     .or(`name.ilike.%${query}%,company.ilike.%${query}%,email.ilike.%${query}%`)
     .limit(5)
   return data ?? []
@@ -296,7 +297,8 @@ async function handleHelp(chatId: number) {
     `🤖 <b>myCRM Bot 指令列表</b>\n\n` +
     `📷 <b>傳送照片</b> — 掃描名片，AI 辨識後存入 CRM\n\n` +
     `/search [關鍵字]　/s — 搜尋聯絡人\n` +
-    `/note　/n — 新增筆記\n` +
+    `/note　/n — 新增筆記（AI 自動偵測拜訪資訊）\n` +
+    `/visit　/v — 逐步新增拜訪紀錄（引導輸入日期/時間/地點）\n` +
     `/email　/e — 發送郵件給聯絡人\n` +
     `/a　/a @姓名 — 新增名片（OCR 比對現有資料，確認後填入空白欄位）\n` +
     `/p　/p @姓名 — 新增合照（壓縮後存入，保留 EXIF 時間/GPS）\n` +
@@ -1310,17 +1312,121 @@ async function handleText(
   // ── Session: waiting_for_note_content ─────────────────────────────────────
   if (session?.state === 'waiting_for_note_content') {
     const contactId = session.context.contact_id as string | null
+    const contactName = session.context.contact_name as string | undefined
+
+    let logType: 'note' | 'meeting' = 'note'
+    let meetingDate: string | null = null
+    let meetingTime: string | null = null
+    let meetingLocation: string | null = null
+
+    try {
+      const parsed = await parseVisitNote(text.trim(), new Date().toISOString(), user.ai_model_id)
+      logType = parsed.type
+      meetingDate = parsed.meeting_date ?? null
+      meetingTime = parsed.meeting_time ?? null
+      meetingLocation = parsed.meeting_location ?? null
+    } catch { /* fall back to plain note */ }
+
     await supabase.from('interaction_logs').insert({
       contact_id: contactId ?? null,
-      type: 'note',
+      type: logType,
       content: text.trim(),
+      meeting_date: meetingDate,
+      meeting_time: meetingTime,
+      meeting_location: meetingLocation,
       created_by: user.id,
     })
     await clearSession(fromId)
-    const contactName = session.context.contact_name as string | undefined
+
+    const detailParts: string[] = []
+    if (meetingDate) detailParts.push(`📅 ${meetingDate}${meetingTime ? ` ${meetingTime}` : ''}`)
+    if (meetingLocation) detailParts.push(`📍 ${meetingLocation}`)
+    const detail = detailParts.length > 0 ? `\n${detailParts.join('  ')}` : ''
+
     await sendMessage(chatId, contactName
-      ? `✅ 已儲存筆記（${contactName}）`
-      : '✅ 已儲存為未歸類筆記'
+      ? `✅ 已儲存${logType === 'meeting' ? '拜訪紀錄' : '筆記'}（${contactName}）${detail}`
+      : `✅ 已儲存為未歸類${logType === 'meeting' ? '拜訪紀錄' : '筆記'}${detail}`
+    )
+    return
+  }
+
+  // ── Session: waiting_for_visit_contact ────────────────────────────────────
+  if (session?.state === 'waiting_for_visit_contact') {
+    const contacts = await searchContacts(text.trim())
+    if (contacts.length === 0) {
+      await setSession(fromId, 'waiting_for_visit_datetime', { contact_id: null, contact_name: null })
+      await sendMessage(chatId, '找不到此聯絡人，拜訪紀錄將存為未歸類。\n\n請輸入拜訪日期時間（例：2026-03-29 14:00），或輸入「略過」：')
+    } else if (contacts.length === 1) {
+      await setSession(fromId, 'waiting_for_visit_datetime', { contact_id: contacts[0].id, contact_name: contacts[0].name })
+      await sendMessage(chatId, `找到：${contacts[0].name}（${contacts[0].company ?? ''}）\n\n請輸入拜訪日期時間（例：2026-03-29 14:00），或輸入「略過」：`)
+    } else {
+      const buttons = contacts.map((c) => [{ text: `${c.name}（${c.company ?? ''}）`, callback_data: `select_visit_contact_${c.id}` }])
+      await sendMessage(chatId, '找到多筆聯絡人，請選擇：', { reply_markup: { inline_keyboard: buttons } })
+    }
+    return
+  }
+
+  // ── Session: waiting_for_visit_datetime ───────────────────────────────────
+  if (session?.state === 'waiting_for_visit_datetime') {
+    const skip = text.trim() === '略過' || text.trim().toLowerCase() === 'skip'
+    let meetingDate: string | null = null
+    let meetingTime: string | null = null
+    if (!skip) {
+      const match = text.trim().match(/^(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2}))?/)
+      if (match) {
+        meetingDate = match[1]
+        meetingTime = match[2] ?? null
+      } else {
+        await sendMessage(chatId, '格式不正確，請輸入 YYYY-MM-DD 或 YYYY-MM-DD HH:MM，或輸入「略過」：')
+        return
+      }
+    }
+    await setSession(fromId, 'waiting_for_visit_location', {
+      ...session.context,
+      meeting_date: meetingDate,
+      meeting_time: meetingTime,
+    })
+    await sendMessage(chatId, '請輸入拜訪地點，或輸入「略過」：')
+    return
+  }
+
+  // ── Session: waiting_for_visit_location ───────────────────────────────────
+  if (session?.state === 'waiting_for_visit_location') {
+    const skip = text.trim() === '略過' || text.trim().toLowerCase() === 'skip'
+    await setSession(fromId, 'waiting_for_visit_content', {
+      ...session.context,
+      meeting_location: skip ? null : text.trim(),
+    })
+    await sendMessage(chatId, '請輸入拜訪內容（筆記）：')
+    return
+  }
+
+  // ── Session: waiting_for_visit_content ────────────────────────────────────
+  if (session?.state === 'waiting_for_visit_content') {
+    const ctx = session.context as {
+      contact_id: string | null
+      contact_name: string | null
+      meeting_date: string | null
+      meeting_time: string | null
+      meeting_location: string | null
+    }
+    await supabase.from('interaction_logs').insert({
+      contact_id: ctx.contact_id ?? null,
+      type: 'meeting',
+      content: text.trim(),
+      meeting_date: ctx.meeting_date,
+      meeting_time: ctx.meeting_time,
+      meeting_location: ctx.meeting_location,
+      created_by: user.id,
+    })
+    await clearSession(fromId)
+    const parts: string[] = []
+    if (ctx.meeting_date) parts.push(`📅 ${ctx.meeting_date}${ctx.meeting_time ? ` ${ctx.meeting_time}` : ''}`)
+    if (ctx.meeting_location) parts.push(`📍 ${ctx.meeting_location}`)
+    const detail = parts.length > 0 ? `\n${parts.join('  ')}` : ''
+    await sendMessage(chatId, ctx.contact_name
+      ? `✅ 已儲存拜訪紀錄（${ctx.contact_name}）${detail}`
+      : `✅ 已儲存為未歸類拜訪紀錄${detail}`
     )
     return
   }
@@ -1388,6 +1494,28 @@ async function handleText(
       }
     }
     await setSession(fromId, 'waiting_for_note_contact', {})
+    await sendMessage(chatId, '請輸入聯絡人姓名或 Email：')
+    return
+  }
+
+  // ── /visit /v command ─────────────────────────────────────────────────────
+  if (cmd === '/visit' || cmd === '/v') {
+    const lastContactId = session?.last_contact_id
+    if (lastContactId) {
+      const { data: lastContact } = await supabase
+        .from('contacts').select('id, name, company').eq('id', lastContactId).single()
+      if (lastContact) {
+        await sendMessage(chatId,
+          `要為上一位聯絡人新增拜訪紀錄嗎？\n👤 ${lastContact.name}（${lastContact.company ?? ''}）`,
+          { reply_markup: { inline_keyboard: [[
+            { text: '✅ 是，就是他', callback_data: `use_last_visit_${lastContactId}` },
+            { text: '🔍 搜尋其他人', callback_data: 'search_other_visit' },
+          ]] } }
+        )
+        return
+      }
+    }
+    await setSession(fromId, 'waiting_for_visit_contact', {})
     await sendMessage(chatId, '請輸入聯絡人姓名或 Email：')
     return
   }
@@ -1677,6 +1805,36 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId, '已取消')
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await sendMessage(from.id, '已取消，行程未建立。')
+        }
+
+        // ── /visit: use last contact ─────────────────────────────────────────
+        else if (data?.startsWith('use_last_visit_')) {
+          const contactId = data.replace('use_last_visit_', '')
+          const { data: contact } = await supabase
+            .from('contacts').select('id, name').eq('id', contactId).single()
+          await setSession(from.id, 'waiting_for_visit_datetime', { contact_id: contactId, contact_name: contact?.name })
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, `聯絡人：${contact?.name}\n\n請輸入拜訪日期時間（例：2026-03-29 14:00），或輸入「略過」：`)
+        }
+
+        // ── /visit: search other contact ─────────────────────────────────────
+        else if (data === 'search_other_visit') {
+          await setSession(from.id, 'waiting_for_visit_contact', {})
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, '請輸入聯絡人姓名或 Email：')
+        }
+
+        // ── /visit: select contact from search results ───────────────────────
+        else if (data?.startsWith('select_visit_contact_')) {
+          const contactId = data.replace('select_visit_contact_', '')
+          const { data: contact } = await supabase
+            .from('contacts').select('id, name').eq('id', contactId).single()
+          await setSession(from.id, 'waiting_for_visit_datetime', { contact_id: contactId, contact_name: contact?.name })
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, `找到：${contact?.name}\n\n請輸入拜訪日期時間（例：2026-03-29 14:00），或輸入「略過」：`)
         }
 
         // ── Select contact for note ───────────────────────────────────────────

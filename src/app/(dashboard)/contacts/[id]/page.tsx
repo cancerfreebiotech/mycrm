@@ -26,6 +26,7 @@ interface Contact {
   address: string | null
   address_en: string | null
   fax: string | null
+  hospital: string | null
   department: string | null
   website: string | null
   linkedin_url: string | null
@@ -37,6 +38,7 @@ interface Contact {
   met_date: string | null
   referred_by: string | null
   importance: string
+  language: string
   card_img_url: string | null
   card_img_back_url: string | null
   created_at: string
@@ -51,6 +53,8 @@ interface Log {
   content: string | null
   type: string
   meeting_date: string | null
+  meeting_time: string | null
+  meeting_location: string | null
   created_at: string
   email_subject: string | null
   email_body: string | null
@@ -75,7 +79,7 @@ const EMPTY_EDIT = {
   job_title: '',
   email: '', second_email: '',
   phone: '', second_phone: '',
-  address: '', address_en: '', fax: '', department: '',
+  address: '', address_en: '', fax: '', hospital: '', department: '',
   website: '',
   linkedin_url: '', facebook_url: '',
   notes: '',
@@ -84,6 +88,7 @@ const EMPTY_EDIT = {
   met_date: '',
   referred_by: '',
   importance: 'medium',
+  language: 'english',
 }
 
 const OCR_FIELD_LABELS: Record<string, string> = {
@@ -92,7 +97,7 @@ const OCR_FIELD_LABELS: Record<string, string> = {
   job_title: '職稱',
   email: 'Email', second_email: '第二 Email',
   phone: '電話', second_phone: '第二電話',
-  address: '地址', address_en: '英文地址', fax: '傳真', department: '部門',
+  address: '地址', address_en: '英文地址', fax: '傳真', hospital: '醫院', department: '部門',
   website: '網站',
   linkedin_url: 'LinkedIn', facebook_url: 'Facebook',
 }
@@ -231,6 +236,8 @@ export default function ContactDetailPage() {
   const [editingLogId, setEditingLogId] = useState<string | null>(null)
   const [editingLogContent, setEditingLogContent] = useState('')
   const [editingLogMeetingDate, setEditingLogMeetingDate] = useState('')
+  const [editingLogMeetingTime, setEditingLogMeetingTime] = useState('')
+  const [editingLogMeetingLocation, setEditingLogMeetingLocation] = useState('')
   const [savingLogId, setSavingLogId] = useState<string | null>(null)
   const [deletingLogId, setDeletingLogId] = useState<string | null>(null)
   const [lightbox, setLightbox] = useState<string | null>(null)
@@ -299,6 +306,8 @@ export default function ContactDetailPage() {
   const [logContent, setLogContent] = useState('')
   const [logType, setLogType] = useState<'note' | 'meeting'>('note')
   const [logDate, setLogDate] = useState('')
+  const [logTime, setLogTime] = useState('')
+  const [logLocation, setLogLocation] = useState('')
   const [addingLog, setAddingLog] = useState(false)
 
   // Edit modal
@@ -317,6 +326,7 @@ export default function ContactDetailPage() {
 
   // Photos
   const [photoSaving, setPhotoSaving] = useState(false)
+  const [photoExifPreview, setPhotoExifPreview] = useState<{ date: string | null; location: string | null } | null>(null)
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [editingNoteText, setEditingNoteText] = useState('')
 
@@ -365,8 +375,8 @@ export default function ContactDetailPage() {
       if (profile) { setCurrentUserId(profile.id); setAiModelId(profile.ai_model_id ?? null); setMsProviderToken(profile.provider_token ?? null); setCurrentUserRole(profile.role ?? null) }
     }
     const [{ data: c }, { data: l }, { data: tags }, { data: cards }, { data: countries }, { data: photos }] = await Promise.all([
-      supabase.from('contacts').select('*, users(display_name), contact_tags(tags(id, name))').eq('id', id).single(),
-      supabase.from('interaction_logs').select('id, content, type, meeting_date, created_at, email_subject, email_body, email_attachments, users(display_name)').eq('contact_id', id).order('created_at', { ascending: false }).range(0, LOG_PAGE - 1),
+      supabase.from('contacts').select('*, users(display_name), contact_tags(tags(id, name))').eq('id', id).is('deleted_at', null).single(),
+      supabase.from('interaction_logs').select('id, content, type, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, users(display_name)').eq('contact_id', id).order('created_at', { ascending: false }).range(0, LOG_PAGE - 1),
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('contact_cards').select('id, card_img_url, card_img_back_url, label, created_at').eq('contact_id', id).order('created_at', { ascending: true }),
       supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),
@@ -408,7 +418,7 @@ export default function ContactDetailPage() {
     const from = logsOffsetRef.current
     const { data } = await supabase
       .from('interaction_logs')
-      .select('id, content, type, meeting_date, created_at, email_subject, email_body, email_attachments, users(display_name)')
+      .select('id, content, type, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, users(display_name)')
       .eq('contact_id', id)
       .order('created_at', { ascending: false })
       .range(from, from + LOG_PAGE - 1)
@@ -449,6 +459,7 @@ export default function ContactDetailPage() {
       address: contact.address ?? '',
       address_en: contact.address_en ?? '',
       fax: contact.fax ?? '',
+      hospital: contact.hospital ?? '',
       department: contact.department ?? '',
       website: contact.website ?? '',
       linkedin_url: contact.linkedin_url ?? '',
@@ -459,6 +470,7 @@ export default function ContactDetailPage() {
       met_date: contact.met_date ?? '',
       referred_by: contact.referred_by ?? '',
       importance: contact.importance ?? 'medium',
+      language: contact.language ?? 'english',
     })
     setEditOpen(true)
   }
@@ -508,6 +520,7 @@ export default function ContactDetailPage() {
         address: data.address || prev.address,
         address_en: data.address_en || prev.address_en,
         fax: data.fax || prev.fax,
+        hospital: data.hospital || prev.hospital,
         department: data.department || prev.department,
         website: data.website || prev.website,
         linkedin_url: data.linkedin_url || prev.linkedin_url,
@@ -658,6 +671,10 @@ export default function ContactDetailPage() {
               }
             }
           }
+          setPhotoExifPreview({
+            date: takenAt ? new Date(takenAt).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }) : null,
+            location: locationName,
+          })
         } catch { /* EXIF not available */ }
 
         const base64 = await compressImage(file, 2048, 0.85)
@@ -682,6 +699,7 @@ export default function ContactDetailPage() {
       console.error('Photo upload error:', err)
     } finally {
       setPhotoSaving(false)
+      setPhotoExifPreview(null)
     }
   }
 
@@ -732,13 +750,13 @@ export default function ContactDetailPage() {
     if (!logContent.trim()) return
     setAddingLog(true)
     const { data } = await supabase.from('interaction_logs')
-      .insert({ contact_id: id, content: logContent.trim(), type: logType, meeting_date: logType === 'meeting' && logDate ? logDate : null, created_by: currentUserId })
-      .select('id, content, type, meeting_date, created_at, email_subject, email_body, email_attachments, users(display_name)').single()
+      .insert({ contact_id: id, content: logContent.trim(), type: logType, meeting_date: logType === 'meeting' && logDate ? logDate : null, meeting_time: logType === 'meeting' && logTime ? logTime : null, meeting_location: logType === 'meeting' && logLocation.trim() ? logLocation.trim() : null, created_by: currentUserId })
+      .select('id, content, type, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, users(display_name)').single()
     if (data) {
       setLogs((prev) => [data as unknown as Log, ...prev])
       logsOffsetRef.current += 1
     }
-    setLogContent(''); setLogDate(''); setAddingLog(false)
+    setLogContent(''); setLogDate(''); setLogTime(''); setLogLocation(''); setAddingLog(false)
   }
 
   async function deleteLog(logId: string) {
@@ -755,9 +773,11 @@ export default function ContactDetailPage() {
     await supabase.from('interaction_logs').update({
       content: editingLogContent,
       meeting_date: editingLogMeetingDate || null,
+      meeting_time: editingLogMeetingTime || null,
+      meeting_location: editingLogMeetingLocation.trim() || null,
     }).eq('id', logId)
     setLogs((prev) => prev.map((l) => l.id === logId
-      ? { ...l, content: editingLogContent, meeting_date: editingLogMeetingDate || null }
+      ? { ...l, content: editingLogContent, meeting_date: editingLogMeetingDate || null, meeting_time: editingLogMeetingTime || null, meeting_location: editingLogMeetingLocation.trim() || null }
       : l
     ))
     setEditingLogId(null)
@@ -777,7 +797,7 @@ export default function ContactDetailPage() {
   async function openMailModal() {
     const [{ data: tplData }, { data: cData }] = await Promise.all([
       supabase.from('email_templates').select('id, title, subject, body_content, template_attachments(id, file_name, file_url, file_size)').order('title'),
-      supabase.from('contacts').select('id, name, name_en, email').not('email', 'is', null).order('name'),
+      supabase.from('contacts').select('id, name, name_en, email').is('deleted_at', null).not('email', 'is', null).order('name'),
     ])
     const tplList = (tplData ?? []).map((t: Record<string, unknown>) => ({
       id: t.id as string,
@@ -926,7 +946,7 @@ export default function ContactDetailPage() {
         }))
         const { data: logRows } = await supabase.from('interaction_logs')
           .insert(inserts)
-          .select('id, content, type, meeting_date, created_at, email_subject, email_body, email_attachments, users(display_name)')
+          .select('id, content, type, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, users(display_name)')
         // Update UI only for the current contact's log
         const currentLog = (logRows ?? []).find((r: Record<string, unknown>) => r.contact_id === id || uniqueContactIds[0] === id)
         if (currentLog) setLogs((prev) => [currentLog as unknown as Log, ...prev])
@@ -948,6 +968,7 @@ export default function ContactDetailPage() {
     const { data } = await supabase
       .from('contacts')
       .select('id, name, name_en, company, email')
+      .is('deleted_at', null)
       .neq('id', id)
       .or(`name.ilike.%${q}%,name_en.ilike.%${q}%,company.ilike.%${q}%,email.ilike.%${q}%`)
       .limit(8)
@@ -979,15 +1000,14 @@ export default function ContactDetailPage() {
   }
 
   async function handleDelete() {
-    if (!confirm(`確定要刪除「${contact?.name || contact?.name_en || '此聯絡人'}」？此操作無法復原。`)) return
+    if (!confirm(`確定要將「${contact?.name || contact?.name_en || '此聯絡人'}」移至回收區？Super Admin 可在回收區還原或永久刪除。`)) return
     setDeleting(true)
     try {
-      // Delete storage files
-      const { data: cards } = await supabase.from('contact_cards').select('storage_path').eq('contact_id', id)
-      const paths = (cards ?? []).map((c: { storage_path: string }) => c.storage_path).filter(Boolean)
-      if (paths.length > 0) await supabase.storage.from('cards').remove(paths)
-      // Delete contact (cascades to contact_cards, contact_tags, interaction_logs)
-      await supabase.from('contacts').delete().eq('id', id)
+      const res = await fetch(`/api/contacts/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const body = await res.json()
+        throw new Error(body.error ?? '刪除失敗')
+      }
       router.push('/contacts')
     } catch (e) {
       alert(e instanceof Error ? e.message : '刪除失敗')
@@ -1076,6 +1096,7 @@ export default function ContactDetailPage() {
             <InfoRow label={t('companyEn')} value={contact.company_en} />
             <InfoRow label={t('companyLocal')} value={contact.company_local} />
             <InfoRow label={t('jobTitle')} value={contact.job_title} />
+            <InfoRow label={t('language')} value={contact.language === 'chinese' ? t('languageChinese') : contact.language === 'japanese' ? t('languageJapanese') : t('languageEnglish')} />
             <div className="flex gap-3 text-sm items-center">
               <span className="w-24 text-gray-400 dark:text-gray-500 shrink-0">{t('importance')}</span>
               <div className="flex gap-1">
@@ -1101,6 +1122,7 @@ export default function ContactDetailPage() {
             <InfoRow label={t('address')} value={contact.address} />
             <InfoRow label={t('addressEn')} value={contact.address_en} />
             <InfoRow label={t('fax')} value={contact.fax} />
+            <InfoRow label={t('hospital')} value={contact.hospital} />
             <InfoRow label={t('department')} value={contact.department} />
             <InfoRow label={t('website')} value={contact.website} href={contact.website ? ensureHttp(contact.website) : undefined} />
             {contact.country_code && (() => {
@@ -1437,6 +1459,12 @@ export default function ContactDetailPage() {
             {photoSaving ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
             {photoSaving ? '上傳中...' : '新增合照'}
           </button>
+          {photoSaving && photoExifPreview && (photoExifPreview.date || photoExifPreview.location) && (
+            <div className="mt-1.5 text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
+              {photoExifPreview.date && <p>拍攝日期：{photoExifPreview.date}</p>}
+              {photoExifPreview.location && <p>地點：{photoExifPreview.location}</p>}
+            </div>
+          )}
           <input ref={photoFilesRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />
         </div>
       </div>
@@ -1453,8 +1481,14 @@ export default function ContactDetailPage() {
               <option value="meeting">{t('logTypes.meeting')}</option>
             </select>
             {logType === 'meeting' && (
-              <input type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)}
-                className="text-sm px-2 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" />
+              <>
+                <input type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)}
+                  className="text-sm px-2 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" />
+                <input type="time" value={logTime} onChange={(e) => setLogTime(e.target.value)}
+                  className="text-sm px-2 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-28" />
+                <input type="text" value={logLocation} onChange={(e) => setLogLocation(e.target.value)}
+                  placeholder="地點" className="text-sm px-2 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex-1" />
+              </>
             )}
           </div>
           <div className="flex gap-2">
@@ -1479,7 +1513,8 @@ export default function ContactDetailPage() {
                     <span className={`text-xs px-2 py-0.5 rounded ${TYPE_COLOR[log.type] ?? TYPE_COLOR.note}`}>
                       {t(`logTypes.${log.type as 'note' | 'meeting' | 'email' | 'system'}`)}
                     </span>
-                    {log.meeting_date && <span className="text-xs text-gray-500 dark:text-gray-400">📅 {log.meeting_date}</span>}
+                    {log.meeting_date && <span className="text-xs text-gray-500 dark:text-gray-400">📅 {log.meeting_date}{log.meeting_time ? ` ${log.meeting_time.slice(0, 5)}` : ''}</span>}
+                    {log.meeting_location && <span className="text-xs text-gray-500 dark:text-gray-400">📍 {log.meeting_location}</span>}
                     {isEmailLog && (
                       <button
                         type="button"
@@ -1504,14 +1539,20 @@ export default function ContactDetailPage() {
                         className="w-full px-3 py-2 text-sm border border-blue-300 dark:border-blue-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                       />
                       {log.type === 'meeting' && (
-                        <div className="flex items-center gap-2">
-                          <label className="text-xs text-gray-500 dark:text-gray-400 shrink-0">📅 會議日期</label>
-                          <input
-                            type="date"
-                            value={editingLogMeetingDate}
-                            onChange={(e) => setEditingLogMeetingDate(e.target.value)}
-                            className="px-2 py-1 text-sm border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800"
-                          />
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <label className="text-xs text-gray-500 dark:text-gray-400 shrink-0">📅 日期</label>
+                            <input type="date" value={editingLogMeetingDate} onChange={(e) => setEditingLogMeetingDate(e.target.value)}
+                              className="px-2 py-1 text-sm border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800" />
+                            <label className="text-xs text-gray-500 dark:text-gray-400 shrink-0">時間</label>
+                            <input type="time" value={editingLogMeetingTime} onChange={(e) => setEditingLogMeetingTime(e.target.value)}
+                              className="px-2 py-1 text-sm border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 w-28" />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <label className="text-xs text-gray-500 dark:text-gray-400 shrink-0">📍 地點</label>
+                            <input type="text" value={editingLogMeetingLocation} onChange={(e) => setEditingLogMeetingLocation(e.target.value)}
+                              placeholder="地點" className="flex-1 px-2 py-1 text-sm border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800" />
+                          </div>
                         </div>
                       )}
                       <div className="flex gap-2">
@@ -1570,6 +1611,8 @@ export default function ContactDetailPage() {
                               setEditingLogId(log.id)
                               setEditingLogContent(log.content ?? '')
                               setEditingLogMeetingDate(log.meeting_date ?? '')
+                              setEditingLogMeetingTime(log.meeting_time ?? '')
+                              setEditingLogMeetingLocation(log.meeting_location ?? '')
                             }}
                             className="text-gray-300 hover:text-gray-500 dark:hover:text-gray-400 ml-1"
                             title="編輯"
@@ -1744,11 +1787,25 @@ export default function ContactDetailPage() {
                 </div>
               </div>
 
+              {/* Language section */}
+              <div>
+                <label className={labelClass}>{t('language')}</label>
+                <select
+                  value={editForm.language}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, language: e.target.value }))}
+                  className={inputClass}
+                >
+                  <option value="chinese">{t('languageChinese')}</option>
+                  <option value="english">{t('languageEnglish')}</option>
+                  <option value="japanese">{t('languageJapanese')}</option>
+                </select>
+              </div>
+
               {/* Contact section */}
               <div>
                 <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">{t('sectionContact')}</p>
                 <div className="grid grid-cols-1 gap-3">
-                  {([['Email', 'email', 'email'], [t('secondEmail'), 'second_email', 'email'], [t('phone'), 'phone', 'tel'], [t('secondPhone'), 'second_phone', 'tel'], [t('fax'), 'fax', 'tel'], [t('address'), 'address', 'text'], [t('addressEn'), 'address_en', 'text'], [t('department'), 'department', 'text'], [t('website'), 'website', 'text']] as [string, string, string][]).map(([label, field, type]) => (
+                  {([['Email', 'email', 'email'], [t('secondEmail'), 'second_email', 'email'], [t('phone'), 'phone', 'tel'], [t('secondPhone'), 'second_phone', 'tel'], [t('fax'), 'fax', 'tel'], [t('address'), 'address', 'text'], [t('addressEn'), 'address_en', 'text'], [t('hospital'), 'hospital', 'text'], [t('department'), 'department', 'text'], [t('website'), 'website', 'text']] as [string, string, string][]).map(([label, field, type]) => (
                     <div key={field}>
                       <label className={labelClass}>{label}</label>
                       <input type={type} value={editForm[field as keyof typeof editForm]}

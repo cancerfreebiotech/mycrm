@@ -19,7 +19,7 @@ type OcrFields = {
   website: string; linkedin_url: string; facebook_url: string
 }
 
-const EMPTY_FORM: OcrFields & { notes: string; country_code: string; met_at: string; met_date: string; referred_by: string; importance: string; source: string } = {
+const EMPTY_FORM: OcrFields & { notes: string; country_code: string; met_at: string; met_date: string; referred_by: string; importance: string; source: string; language: string; hospital: string; department: string } = {
   name: '', name_en: '', name_local: '',
   company: '', company_en: '', company_local: '',
   job_title: '',
@@ -34,6 +34,9 @@ const EMPTY_FORM: OcrFields & { notes: string; country_code: string; met_at: str
   referred_by: '',
   importance: 'medium',
   source: '',
+  language: 'english',
+  hospital: '',
+  department: '',
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -122,7 +125,7 @@ export default function NewContactPage() {
     if (!form.email && !form.name) return
     let exact: DupContact | null = null
     if (form.email) {
-      const { data } = await supabase.from('contacts').select('id, name, company').eq('email', form.email).maybeSingle()
+      const { data } = await supabase.from('contacts').select('id, name, company').is('deleted_at', null).eq('email', form.email).maybeSingle()
       exact = data ?? null
     }
     setDupExact(exact)
@@ -557,6 +560,18 @@ export default function NewContactPage() {
               ))}
             </div>
           </div>
+          <div>
+            <label className={labelClass}>{t('language')}</label>
+            <select
+              value={form.language}
+              onChange={(e) => set('language', e.target.value)}
+              className={inputClass}
+            >
+              <option value="chinese">{t('languageChinese')}</option>
+              <option value="english">{t('languageEnglish')}</option>
+              <option value="japanese">{t('languageJapanese')}</option>
+            </select>
+          </div>
         </section>
 
         {/* Contact info */}
@@ -569,6 +584,8 @@ export default function NewContactPage() {
             <Field label={t('secondPhone')} field="second_phone" type="tel" />
           </div>
           <Field label={t('address')} field="address" />
+          <Field label={t('hospital')} field="hospital" />
+          <Field label={t('department')} field="department" />
           <Field label={t('website')} field="website" />
           <div>
             <label className={labelClass}>{t('country')}</label>

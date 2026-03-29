@@ -98,7 +98,7 @@ export default function NewsletterPage() {
     const [{ data: camps }, { data: tagRows }, { data: contactRows }] = await Promise.all([
       supabase.from('newsletter_campaigns').select('*').order('created_at', { ascending: false }),
       supabase.from('tags').select('id, name, color').order('name'),
-      supabase.from('contacts').select('id, name, email, company').not('email', 'is', null).order('name'),
+      supabase.from('contacts').select('id, name, email, company').is('deleted_at', null).not('email', 'is', null).order('name'),
     ])
     setCampaigns((camps ?? []) as Campaign[])
     setTags((tagRows ?? []) as Tag[])
@@ -369,7 +369,7 @@ function WizardView({
       ])
 
       const { data: contacts } = await supabase
-        .from('contacts').select('id, email').in('id', allContactIds).not('email', 'is', null)
+        .from('contacts').select('id, email').is('deleted_at', null).in('id', allContactIds).not('email', 'is', null)
       const eligible = (contacts ?? []).filter((c: { id: string; email: string }) => c.email && !excluded.has(c.email))
 
       const campaignPayload = {

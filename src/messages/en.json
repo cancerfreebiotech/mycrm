@@ -54,6 +54,7 @@
     "duplicates": "Duplicates",
     "camcard": "CamCard Import",
     "health": "System Health",
+    "trash": "Trash",
     "logout": "Sign Out",
     "tagManagement": "Tag Management",
     "userManagement": "User Management",
@@ -120,7 +121,13 @@
     "uploadPhoto": "Upload Card Photo",
     "recognizing": "AI recognizing...",
     "recognizeSuccess": "Recognition complete. Please verify the data.",
-    "recognizeFailed": "Recognition failed. Please fill in manually."
+    "recognizeFailed": "Recognition failed. Please fill in manually.",
+    "language": "Language",
+    "languageChinese": "Chinese",
+    "languageEnglish": "English",
+    "languageJapanese": "Japanese",
+    "hospital": "Hospital",
+    "department": "Department"
   },
   "batchUpload": {
     "title": "Batch Upload Cards",
@@ -145,7 +152,9 @@
     "emailSubject": "Email Subject",
     "emailAttachments": "Attachments",
     "expandEmail": "Click to expand full content",
-    "noLogs": "No interaction logs yet"
+    "noLogs": "No interaction logs yet",
+    "meetingTime": "Time",
+    "meetingLocation": "Location"
   },
   "sendEmail": {
     "title": "Send Email",

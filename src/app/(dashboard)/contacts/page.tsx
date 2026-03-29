@@ -94,6 +94,7 @@ export default function ContactsPage() {
       supabase
         .from('contacts')
         .select('id, name, company, job_title, email, phone, country_code, met_at, created_at, importance, users(display_name), contact_tags(tags(id, name))')
+        .is('deleted_at', null)
         .order('created_at', { ascending: false }),
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),

@@ -61,6 +61,7 @@ export default function DashboardPage() {
     const { count: total } = await supabase
       .from('contacts')
       .select('*', { count: 'exact', head: true })
+      .is('deleted_at', null)
     setTotalContacts(total ?? 0)
 
     const startOfMonth = new Date()
@@ -69,6 +70,7 @@ export default function DashboardPage() {
     const { count: monthly } = await supabase
       .from('contacts')
       .select('*', { count: 'exact', head: true })
+      .is('deleted_at', null)
       .gte('created_at', startOfMonth.toISOString())
     setMonthlyContacts(monthly ?? 0)
 
@@ -98,6 +100,7 @@ export default function DashboardPage() {
     const { data: contacts } = await supabase
       .from('contacts')
       .select('country_code, countries(name_zh, emoji)')
+      .is('deleted_at', null)
 
     if (!contacts) return
 
@@ -165,6 +168,7 @@ export default function DashboardPage() {
     const { data } = await supabase
       .from('contacts')
       .select('id, name, company, email')
+      .is('deleted_at', null)
       .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
       .limit(6)
     setSearchResults(data ?? [])

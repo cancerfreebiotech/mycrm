@@ -158,6 +158,39 @@ export async function parseMetCommand(
   return JSON.parse(raw) as MetParsed
 }
 
+export interface VisitNoteParsed {
+  type: 'note' | 'meeting'
+  content: string
+  meeting_date: string | null   // YYYY-MM-DD
+  meeting_time: string | null   // HH:MM
+  meeting_location: string | null
+}
+
+export async function parseVisitNote(
+  text: string,
+  nowIso: string,
+  aiModelId: string | null = null
+): Promise<VisitNoteParsed> {
+  const { modelId, apiKey } = await resolveModelConfig(aiModelId)
+  const genAI = new GoogleGenerativeAI(apiKey)
+  const geminiModel = genAI.getGenerativeModel({ model: modelId })
+
+  const todayDate = nowIso.slice(0, 10)
+  const prompt =
+    `現在日期（UTC+8）：${todayDate}\n\n` +
+    `分析以下筆記，判斷是否包含拜訪/會議資訊，回傳 JSON（無 markdown wrapper）：\n` +
+    `- type：若包含拜訪/會議資訊則 "meeting"，否則 "note"\n` +
+    `- content：筆記內容（原文，不要修改）\n` +
+    `- meeting_date：日期 YYYY-MM-DD，沒提到則 null；支援「昨天」「上週五」等自然語言\n` +
+    `- meeting_time：時間 HH:MM（24小時制），沒提到則 null\n` +
+    `- meeting_location：地點，沒提到則 null\n\n` +
+    `筆記：${text}`
+
+  const result = await geminiModel.generateContent(prompt)
+  const raw = result.response.text().trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
+  return JSON.parse(raw) as VisitNoteParsed
+}
+
 export async function generateEmailContent(
   description: string,
   templateContent?: string,

@@ -54,6 +54,7 @@
     "duplicates": "重複聯絡人",
     "camcard": "CamCard 匯入",
     "health": "系統健康",
+    "trash": "回收區",
     "logout": "登出",
     "tagManagement": "Tag 管理",
     "userManagement": "使用者管理",
@@ -120,7 +121,13 @@
     "uploadPhoto": "上傳名片照片",
     "recognizing": "AI 辨識中...",
     "recognizeSuccess": "辨識完成，請確認資料",
-    "recognizeFailed": "辨識失敗，請手動填寫"
+    "recognizeFailed": "辨識失敗，請手動填寫",
+    "language": "語言",
+    "languageChinese": "中文",
+    "languageEnglish": "英文",
+    "languageJapanese": "日文",
+    "hospital": "醫院",
+    "department": "部門"
   },
   "batchUpload": {
     "title": "批次上傳名片",
@@ -145,7 +152,9 @@
     "emailSubject": "郵件主旨",
     "emailAttachments": "附件",
     "expandEmail": "點擊展開完整內文",
-    "noLogs": "尚無互動紀錄"
+    "noLogs": "尚無互動紀錄",
+    "meetingTime": "時間",
+    "meetingLocation": "地點"
   },
   "sendEmail": {
     "title": "寄送郵件",

@@ -21,6 +21,7 @@ export async function checkDuplicates(email: string, name: string): Promise<Dupl
     const { data } = await supabase
       .from('contacts')
       .select('id, name, company, email')
+      .is('deleted_at', null)
       .eq('email', email)
       .maybeSingle()
     exact = data ?? null

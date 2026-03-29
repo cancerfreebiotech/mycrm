@@ -54,6 +54,7 @@
     "duplicates": "重複連絡先",
     "camcard": "CamCard取込",
     "health": "システム健全性",
+    "trash": "ゴミ箱",
     "logout": "サインアウト",
     "tagManagement": "タグ管理",
     "userManagement": "ユーザー管理",
@@ -120,7 +121,13 @@
     "uploadPhoto": "名刺写真をアップロード",
     "recognizing": "AI認識中...",
     "recognizeSuccess": "認識完了。データをご確認ください。",
-    "recognizeFailed": "認識に失敗しました。手動で入力してください。"
+    "recognizeFailed": "認識に失敗しました。手動で入力してください。",
+    "language": "言語",
+    "languageChinese": "中国語",
+    "languageEnglish": "英語",
+    "languageJapanese": "日本語",
+    "hospital": "病院",
+    "department": "診療科"
   },
   "batchUpload": {
     "title": "名刺一括アップロード",
@@ -145,7 +152,9 @@
     "emailSubject": "件名",
     "emailAttachments": "添付ファイル",
     "expandEmail": "クリックして全文を表示",
-    "noLogs": "交流記録はまだありません"
+    "noLogs": "交流記録はまだありません",
+    "meetingTime": "時刻",
+    "meetingLocation": "場所"
   },
   "sendEmail": {
     "title": "メールを送信",
