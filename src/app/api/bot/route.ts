@@ -2085,6 +2085,39 @@ export async function POST(req: NextRequest) {
               const contactLink = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">查看聯絡人頁面</a>` : ''
               const displayName = parsed.name || parsed.name_en || '聯絡人'
               await sendMessage(from.id, `✅ 已新增聯絡人：<b>${displayName}</b>${contactLink}`)
+
+              // Apollo.io email enrichment — only if no email was found
+              if (!parsed.email) {
+                try {
+                  const { data: apolloSetting } = await supabase
+                    .from('system_settings').select('value').eq('key', 'apollo_api_key').single()
+                  const apolloKey = apolloSetting?.value
+                  if (apolloKey) {
+                    const nameParts = (parsed.name_en || parsed.name || '').trim().split(/\s+/)
+                    const firstName = nameParts[0] ?? ''
+                    const lastName = nameParts.slice(1).join(' ') || undefined
+                    const apolloRes = await fetch('https://api.apollo.io/v1/people/match', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'X-Api-Key': apolloKey },
+                      body: JSON.stringify({
+                        first_name: firstName,
+                        last_name: lastName,
+                        organization_name: parsed.company || undefined,
+                      }),
+                    })
+                    if (apolloRes.ok) {
+                      const apolloData = await apolloRes.json()
+                      const foundEmail = apolloData?.person?.email as string | undefined
+                      if (foundEmail && foundEmail.includes('@')) {
+                        await supabase.from('contacts').update({ email: foundEmail }).eq('id', inserted.id)
+                        await sendMessage(from.id, `📧 已自動查到 email：${foundEmail}`)
+                      }
+                    }
+                  }
+                } catch {
+                  // Apollo enrichment failure is non-fatal
+                }
+              }
             }
             await clearSession(from.id)
           }
