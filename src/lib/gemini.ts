@@ -2,6 +2,24 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createServiceClient } from '@/lib/supabase'
 import { getPrompt } from '@/lib/prompts'
 
+/**
+ * Wraps any async Gemini call with one automatic retry after 3 seconds.
+ * On first failure, calls onFirstFailure (e.g. send "retrying..." message to user).
+ * If retry also fails, throws the error for the caller to handle.
+ */
+export async function withGeminiRetry<T>(
+  fn: () => Promise<T>,
+  onFirstFailure?: () => Promise<void>
+): Promise<T> {
+  try {
+    return await fn()
+  } catch {
+    if (onFirstFailure) await onFirstFailure()
+    await new Promise((r) => setTimeout(r, 3000))
+    return await fn()
+  }
+}
+
 export interface CardData {
   name: string
   name_en: string

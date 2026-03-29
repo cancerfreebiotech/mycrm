@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
-import { analyzeBusinessCard, generateEmailContent, parseTaskCommand, parseMeetingCommand, parseMetCommand, parseVisitNote } from '@/lib/gemini'
+import { analyzeBusinessCard, generateEmailContent, parseTaskCommand, parseMeetingCommand, parseMetCommand, parseVisitNote, withGeminiRetry } from '@/lib/gemini'
 import { processCardImage, processPhotoWithExif, extractExif, generateCardFilename } from '@/lib/imageProcessor'
 import { checkDuplicates } from '@/lib/duplicate'
 import { sendMail, createCalendarEvent } from '@/lib/graph'
@@ -400,7 +400,10 @@ async function processAddCardPhoto(
       .single()
 
     await sendMessage(chatId, '⏳ OCR 辨識中，請稍候...')
-    const cardData = await analyzeBusinessCard(compressed, user.ai_model_id)
+    const cardData = await withGeminiRetry(
+      () => analyzeBusinessCard(compressed, user.ai_model_id),
+      async () => { await sendMessage(chatId, '⏳ 辨識失敗，3 秒後自動重試...') }
+    )
 
     if (cardData.rotation) {
       const sharpLib = (await import('sharp')).default
@@ -665,12 +668,17 @@ async function handlePhoto(
 
       const genAI = new GoogleGenerativeAI(apiKey)
       const geminiModel = genAI.getGenerativeModel({ model: modelId })
-      const result = await geminiModel.generateContent([
-        LINKEDIN_PROMPT,
-        { inlineData: { mimeType: 'image/jpeg', data: base64 } },
-      ])
-      const raw = result.response.text().trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
-      const parsed = JSON.parse(raw) as { name: string; name_en: string; job_title: string; company: string; linkedin_url: string; email: string; notes: string }
+      const parsed = await withGeminiRetry(
+        async () => {
+          const result = await geminiModel.generateContent([
+            LINKEDIN_PROMPT,
+            { inlineData: { mimeType: 'image/jpeg', data: base64 } },
+          ])
+          const raw = result.response.text().trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
+          return JSON.parse(raw) as { name: string; name_en: string; job_title: string; company: string; linkedin_url: string; email: string; notes: string }
+        },
+        async () => { await sendMessage(chatId, '⏳ 辨識失敗，3 秒後自動重試...') }
+      )
 
       const displayName = parsed.name || parsed.name_en || '（無姓名）'
       if (!parsed.name && !parsed.name_en) {
@@ -762,7 +770,10 @@ async function handlePhoto(
     cardImgUrl = publicUrlData.publicUrl
 
     // OCR
-    const cardData = await analyzeBusinessCard(compressed, user.ai_model_id)
+    const cardData = await withGeminiRetry(
+      () => analyzeBusinessCard(compressed, user.ai_model_id),
+      async () => { await sendMessage(chatId, '⏳ 辨識失敗，3 秒後自動重試...') }
+    )
 
     // Rotate and re-upload if Gemini detected non-zero rotation
     if (cardData.rotation && cardData.rotation !== 0) {
@@ -1337,7 +1348,10 @@ async function handleText(
     let meetingLocation: string | null = null
 
     try {
-      const parsed = await parseVisitNote(text.trim(), new Date().toISOString(), user.ai_model_id)
+      const parsed = await withGeminiRetry(
+        () => parseVisitNote(text.trim(), new Date().toISOString(), user.ai_model_id),
+        async () => { await sendMessage(chatId, '⏳ AI 解析失敗，3 秒後自動重試...') }
+      )
       logType = parsed.type
       meetingDate = parsed.meeting_date ?? null
       meetingTime = parsed.meeting_time ?? null
