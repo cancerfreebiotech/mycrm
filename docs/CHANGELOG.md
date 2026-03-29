@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v2.1.1 — 改用 Hunter.io Email 補查；修正 i18n root messages（2026-03-29）
+
+### 變更項目
+
+- **Hunter.io 取代 Apollo.io**：LinkedIn 聯絡人無 email 時改用 Hunter.io Email Finder API 補查（`system_settings` key: `hunter_api_key`）
+- **修正 i18n root messages**：同步 `messages/` 根目錄語言檔，修正部署後 `nav.trash`、語文篩選、維護頁等 key 未生效的問題
+
+---
+
 ## v2.1.0 — 系統維護模式、OCR 重試、Apollo Email 補查、筆記過濾、回收區改進（2026-03-29）
 
 ### 變更項目

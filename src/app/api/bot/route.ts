@@ -2086,28 +2086,24 @@ export async function POST(req: NextRequest) {
               const displayName = parsed.name || parsed.name_en || '聯絡人'
               await sendMessage(from.id, `✅ 已新增聯絡人：<b>${displayName}</b>${contactLink}`)
 
-              // Apollo.io email enrichment — only if no email was found
+              // Hunter.io email enrichment — only if no email was found
               if (!parsed.email) {
                 try {
-                  const { data: apolloSetting } = await supabase
-                    .from('system_settings').select('value').eq('key', 'apollo_api_key').single()
-                  const apolloKey = apolloSetting?.value
-                  if (apolloKey) {
+                  const { data: hunterSetting } = await supabase
+                    .from('system_settings').select('value').eq('key', 'hunter_api_key').single()
+                  const hunterKey = hunterSetting?.value
+                  if (hunterKey) {
                     const nameParts = (parsed.name_en || parsed.name || '').trim().split(/\s+/)
                     const firstName = nameParts[0] ?? ''
-                    const lastName = nameParts.slice(1).join(' ') || undefined
-                    const apolloRes = await fetch('https://api.apollo.io/v1/people/match', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json', 'X-Api-Key': apolloKey },
-                      body: JSON.stringify({
-                        first_name: firstName,
-                        last_name: lastName,
-                        organization_name: parsed.company || undefined,
-                      }),
-                    })
-                    if (apolloRes.ok) {
-                      const apolloData = await apolloRes.json()
-                      const foundEmail = apolloData?.person?.email as string | undefined
+                    const lastName = nameParts.slice(1).join(' ') || ''
+                    const company = parsed.company || ''
+                    const params = new URLSearchParams({ api_key: hunterKey, first_name: firstName })
+                    if (lastName) params.set('last_name', lastName)
+                    if (company) params.set('company', company)
+                    const hunterRes = await fetch(`https://api.hunter.io/v2/email-finder?${params}`)
+                    if (hunterRes.ok) {
+                      const hunterData = await hunterRes.json()
+                      const foundEmail = hunterData?.data?.email as string | undefined
                       if (foundEmail && foundEmail.includes('@')) {
                         await supabase.from('contacts').update({ email: foundEmail }).eq('id', inserted.id)
                         await sendMessage(from.id, `📧 已自動查到 email：${foundEmail}`)
@@ -2115,7 +2111,7 @@ export async function POST(req: NextRequest) {
                     }
                   }
                 } catch {
-                  // Apollo enrichment failure is non-fatal
+                  // Hunter.io enrichment failure is non-fatal
                 }
               }
             }
