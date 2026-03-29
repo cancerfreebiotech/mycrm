@@ -279,5 +279,10 @@
   "footer": {
     "version": "v{version}",
     "deployedAt": "デプロイ日時：{time}"
+  },
+  "maintenance": {
+    "title": "システムメンテナンス中",
+    "subtitle": "System Maintenance",
+    "message": "しばらくしてからもう一度お試しください。急ぎの場合は管理者にご連絡ください。"
   }
 }

@@ -279,5 +279,10 @@
   "footer": {
     "version": "v{version}",
     "deployedAt": "部署於 {time}"
+  },
+  "maintenance": {
+    "title": "系統維護中",
+    "subtitle": "System Maintenance",
+    "message": "請稍後再試。如有急需請聯絡管理員。"
   }
 }

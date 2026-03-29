@@ -279,5 +279,10 @@
   "footer": {
     "version": "v{version}",
     "deployedAt": "Deployed {time}"
+  },
+  "maintenance": {
+    "title": "System Maintenance",
+    "subtitle": "System Maintenance",
+    "message": "Please try again later. Contact admin if urgent."
   }
 }

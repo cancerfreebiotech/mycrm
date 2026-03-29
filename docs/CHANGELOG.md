@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v2.1.0 — 系統維護模式、OCR 重試、Apollo Email 補查、筆記過濾、回收區改進（upcoming）
+## v2.1.0 — 系統維護模式、OCR 重試、Apollo Email 補查、筆記過濾、回收區改進（2026-03-29）
 
 ### 變更項目
 
