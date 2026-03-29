@@ -688,7 +688,7 @@ async function handlePhoto(
         (parsed.linkedin_url ? `🔗 ${parsed.linkedin_url}\n` : '') +
         (parsed.notes ? `\n📝 ${parsed.notes.slice(0, 100)}${parsed.notes.length > 100 ? '...' : ''}` : '')
 
-      await setSession(fromId, 'waiting_for_li_confirm', { parsed })
+      await setSession(fromId, 'waiting_for_li_confirm', { parsed, file_id: photo.file_id })
       await sendMessage(chatId, summary, {
         reply_markup: { inline_keyboard: [[
           { text: '✅ 確認新增', callback_data: 'confirm_li' },
@@ -2016,6 +2016,7 @@ export async function POST(req: NextRequest) {
         else if (data === 'confirm_li') {
           const session = await getSession(from.id)
           const parsed = session?.context?.parsed as Record<string, string> | undefined
+          const liFileId = session?.context?.file_id as string | undefined
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           if (!parsed) {
@@ -2039,6 +2040,22 @@ export async function POST(req: NextRequest) {
             if (error || !inserted) {
               await sendMessage(from.id, `❌ 新增失敗：${error?.message ?? '未知錯誤'}`)
             } else {
+              // Upload LinkedIn screenshot to Storage
+              if (liFileId) {
+                try {
+                  const imgBuffer = await downloadTelegramPhoto(liFileId)
+                  const compressed = await processCardImage(imgBuffer)
+                  const storagePath = `cards/linkedin_${inserted.id}_${Date.now()}.jpg`
+                  const { error: uploadError } = await supabase.storage
+                    .from('cards').upload(storagePath, compressed, { contentType: 'image/jpeg', upsert: false })
+                  if (!uploadError) {
+                    const { data: publicUrlData } = supabase.storage.from('cards').getPublicUrl(storagePath)
+                    await supabase.from('contacts').update({ card_img_url: publicUrlData.publicUrl }).eq('id', inserted.id)
+                  }
+                } catch {
+                  // Screenshot upload failure is non-fatal
+                }
+              }
               if (parsed.notes) {
                 await supabase.from('interaction_logs').insert({
                   contact_id: inserted.id,

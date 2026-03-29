@@ -253,7 +253,8 @@ export default function ContactsPage() {
       const data = await res.json()
       if (!res.ok || data.error) throw new Error(data.error ?? '解析失敗')
       sessionStorage.setItem('linkedin_prefill', JSON.stringify(data))
-      router.push('/contacts/new?source=linkedin')
+      const cardParam = data.card_img_url ? `&card_img_url=${encodeURIComponent(data.card_img_url)}` : ''
+      router.push(`/contacts/new?source=linkedin${cardParam}`)
     } catch (err) {
       alert('LinkedIn 截圖解析失敗：' + (err instanceof Error ? err.message : String(err)))
     } finally {

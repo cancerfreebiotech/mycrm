@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { processCardImage } from '@/lib/imageProcessor'
 
 export interface LinkedInParsed {
   name: string
@@ -69,7 +70,23 @@ export async function POST(req: NextRequest) {
     const raw = result.response.text().trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
     const parsed = JSON.parse(raw) as LinkedInParsed
 
-    return NextResponse.json(parsed)
+    // Upload screenshot to Storage
+    let card_img_url: string | null = null
+    try {
+      const imgBuffer = Buffer.from(image, 'base64')
+      const compressed = await processCardImage(imgBuffer)
+      const storagePath = `cards/linkedin_${user.id}_${Date.now()}.jpg`
+      const { error: uploadError } = await service.storage
+        .from('cards').upload(storagePath, compressed, { contentType: 'image/jpeg', upsert: false })
+      if (!uploadError) {
+        const { data: publicUrlData } = service.storage.from('cards').getPublicUrl(storagePath)
+        card_img_url = publicUrlData.publicUrl
+      }
+    } catch {
+      // Screenshot upload failure is non-fatal
+    }
+
+    return NextResponse.json({ ...parsed, card_img_url })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     return NextResponse.json({ error: message }, { status: 500 })
