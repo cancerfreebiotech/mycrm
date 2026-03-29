@@ -70,6 +70,9 @@ export async function POST(req: NextRequest) {
     const raw = result.response.text().trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
     const parsed = JSON.parse(raw) as LinkedInParsed
 
+    // Name fallback: use English name if no local language name
+    if (!parsed.name && parsed.name_en) parsed.name = parsed.name_en
+
     // Upload screenshot to Storage
     let card_img_url: string | null = null
     try {

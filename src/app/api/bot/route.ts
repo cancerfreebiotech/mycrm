@@ -2023,10 +2023,12 @@ export async function POST(req: NextRequest) {
             await sendMessage(from.id, '❌ 找不到解析資料，請重新傳送截圖。')
             await clearSession(from.id)
           } else {
+            // Name fallback: use English name if no local language name
+            const contactName = parsed.name || parsed.name_en || null
             const { data: inserted, error } = await supabase
               .from('contacts')
               .insert({
-                name: parsed.name || null,
+                name: contactName,
                 name_en: parsed.name_en || null,
                 job_title: parsed.job_title || null,
                 company: parsed.company || null,
