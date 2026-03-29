@@ -90,15 +90,18 @@ export default function ContactsPage() {
 
   async function fetchAll() {
     const supabase = createBrowserSupabaseClient()
-    const [{ data: contactData }, { data: tagData }, { data: countryData }] = await Promise.all([
-      supabase
-        .from('contacts')
-        .select('id, name, company, job_title, email, phone, country_code, met_at, created_at, importance, users(display_name), contact_tags(tags(id, name))')
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false }),
+    const SELECT = 'id, name, company, job_title, email, phone, country_code, met_at, created_at, importance, users(display_name), contact_tags(tags(id, name))'
+    const [contactResult, { data: tagData }, { data: countryData }] = await Promise.all([
+      supabase.from('contacts').select(SELECT).is('deleted_at', null).order('created_at', { ascending: false }),
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),
     ])
+    // Fallback: if deleted_at filter fails (PostgREST schema cache not yet updated), query without it
+    let contactData = contactResult.data
+    if (contactResult.error) {
+      const fallback = await supabase.from('contacts').select(SELECT).order('created_at', { ascending: false })
+      contactData = fallback.data
+    }
     const tags = tagData ?? []
     setContacts((contactData as Contact[]) ?? [])
     setAllTags(tags)
