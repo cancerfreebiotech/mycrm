@@ -3401,6 +3401,79 @@ department: "科別" / "Department" / "診療科"
 
 ---
 
+
+---
+
+### 37.7 拜訪紀錄（互動紀錄擴充）
+
+#### 概覽
+
+業務團隊拜訪聯絡人時，除了記錄拜訪內容，還需記錄拜訪時間與地點/方式（如「走廊 16:10」）。擴充現有 `interaction_logs` 表，並在 Web UI、報表、Telegram Bot 三端同步支援。
+
+#### DB 變更
+
+```sql
+alter table interaction_logs
+  add column if not exists meeting_time time default null,
+  add column if not exists meeting_location text default null;
+```
+
+| 欄位 | 類型 | 說明 |
+|------|------|------|
+| `meeting_time` | time | 拜訪時間（如 16:10），選填 |
+| `meeting_location` | text | 拜訪地點/方式（如「走廊」「診間」「電話」），自由輸入，選填 |
+
+- 僅 `type = 'meeting'` 時使用，其他 type 保持 null
+
+#### Web UI
+
+- 新增/編輯互動紀錄（type = meeting）時，顯示：
+  - 拜訪日期（現有 `meeting_date`）
+  - 拜訪時間（新增，time picker，選填）
+  - 拜訪地點/方式（新增，自由輸入，選填）
+  - 內容（現有 `content`）
+- 聯絡人詳情頁時間軸：`type = meeting` 時顯示時間與地點（若有）
+
+#### 報表（Excel）
+
+- 互動紀錄 Sheet 新增兩欄：「拜訪時間」、「拜訪地點/方式」
+- 僅 `type = meeting` 時有值，其他 type 留空
+
+#### Telegram Bot
+
+**方案一：`/n` — 自然語言輸入（AI 解析）**
+
+- 觸發：使用者傳 `/n` 後輸入自然語言，如「王醫師 走廊 16:10 討論下週開會」
+- Bot 用 Gemini 解析出：
+  - 聯絡人姓名 → 比對 contacts
+  - 拜訪時間（meeting_time）
+  - 拜訪地點（meeting_location）
+  - 內容（content）
+- Bot 回覆解析結果摘要，使用者確認後寫入 interaction_logs
+- 解析欄位不確定時標記「？」提示使用者修正
+
+**方案二：`/v` 或 `/visit` — 結構化逐步詢問**
+
+- 觸發：使用者傳 `/v` 或 `/visit`
+- Bot 依序詢問：
+  1. 「請輸入聯絡人姓名或搜尋關鍵字」
+  2. 「拜訪日期？（預設今天）」
+  3. 「拜訪時間？（選填，如 16:10，直接按跳過）」
+  4. 「拜訪地點/方式？（選填，如走廊、電話，直接按跳過）」
+  5. 「拜訪內容？」
+- 確認後寫入 interaction_logs（type = meeting）
+- 成功回覆「已記錄拜訪：{聯絡人} {日期} {時間} {地點}」
+
+#### i18n 新增 key
+
+```
+meeting.time: "拜訪時間" / "Visit Time" / "訪問時間"
+meeting.location: "拜訪地點/方式" / "Visit Location/Method" / "訪問場所/方法"
+meeting.skip: "跳過" / "Skip" / "スキップ"
+```
+
+---
+
 ## 三十八、v2.0 開發任務清單
 
 - [ ] **Task 115** `[修改]` — 修正 `/docs` Quick Start 說明書中 Telegram Bot 綁定步驟內容
@@ -3414,3 +3487,10 @@ department: "科別" / "Department" / "診療科"
 - [ ] **Task 123** `[修改]` — DB Migration：contacts 新增 `hospital`、`department` 欄位；新增 `medical_departments` 主檔 table
 - [ ] **Task 124** `[修改]` — 聯絡人詳情頁與新增表單：醫師判斷邏輯，顯示醫院（自由輸入）與科別（自由輸入）欄位；更新 API 接受 hospital、department
 - [ ] **Task 126** `[修改]` — i18n 三份語言檔新增 v2.0 相關 key（trash、language、hospital、department）
+- [ ] **Task 127** `[修改]` — DB Migration：interaction_logs 新增 `meeting_time`（time）、`meeting_location`（text）欄位
+- [ ] **Task 128** `[修改]` — Web UI：新增/編輯拜訪紀錄時顯示拜訪時間（time picker）與拜訪地點（自由輸入）；時間軸顯示時間與地點
+- [ ] **Task 129** `[修改]` — 報表 Excel：互動紀錄 Sheet 新增「拜訪時間」、「拜訪地點/方式」兩欄（type=meeting 時填入）
+- [ ] **Task 130** `[新增]` — Bot 新增 `/n` 指令：自然語言輸入，Gemini 解析聯絡人/時間/地點/內容，確認後寫入 interaction_logs（type=meeting）
+- [ ] **Task 131** `[新增]` — Bot 新增 `/v`（`/visit`）指令：逐步詢問聯絡人/日期/時間/地點/內容，確認後寫入 interaction_logs（type=meeting）
+- [ ] **Task 132** `[修改]` — i18n 三份語言檔新增拜訪紀錄相關 key（meeting.time、meeting.location、meeting.skip）
+
