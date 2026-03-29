@@ -128,7 +128,13 @@
     "languageJapanese": "日文",
     "languageFilter": "語文篩選",
     "hospital": "醫院",
-    "department": "部門"
+    "department": "部門",
+    "logTypes": {
+      "note": "筆記",
+      "meeting": "會議",
+      "email": "郵件",
+      "system": "系統"
+    }
   },
   "batchUpload": {
     "title": "批次上傳名片",
@@ -184,7 +190,12 @@
     "dateTo": "結束日期",
     "contact": "聯絡人",
     "unassigned": "未歸類",
-    "noResults": "找不到符合的筆記"
+    "noResults": "找不到符合的筆記",
+    "types": {
+      "note": "筆記",
+      "meeting": "會議",
+      "email": "郵件"
+    }
   },
   "unassignedNotes": {
     "title": "未歸類筆記",
@@ -284,5 +295,51 @@
     "title": "系統維護中",
     "subtitle": "System Maintenance",
     "message": "請稍後再試。如有急需請聯絡管理員。"
+  },
+  "login": {
+    "docs": "說明文件",
+    "subtitle": "登入以繼續使用 myCRM",
+    "button": "使用 Microsoft 帳號登入",
+    "hint": "僅限 @cancerfree.io 帳號",
+    "errors": {
+      "unauthorized_domain": "僅限 @cancerfree.io 帳號登入",
+      "auth_failed": "認證失敗，請再試一次",
+      "no_code": "未收到驗證碼，請再試一次",
+      "unknown": "發生未知錯誤"
+    }
+  },
+  "batch": {
+    "title": "批次上傳名片",
+    "saved": "已儲存 {saved} 筆，略過 {skipped} 筆",
+    "goToList": "前往聯絡人列表",
+    "dropzone": "拖放圖片至此，或點擊選擇（最多 {max} 張）",
+    "dropzoneHint": "支援 JPG、PNG、HEIC 格式",
+    "selected": "已選取 {count} 張",
+    "reselect": "重新選擇",
+    "startOcr": "開始辨識",
+    "processing": "辨識中...",
+    "done": "辨識完成",
+    "progress": "{done} / {total}",
+    "colSkip": "略過",
+    "colImage": "圖片",
+    "colName": "姓名",
+    "colCompany": "公司",
+    "colJobTitle": "職稱",
+    "colPhone": "電話",
+    "colStatus": "狀態",
+    "status": {
+      "processing": "辨識中",
+      "pending": "待辨識",
+      "error": "錯誤",
+      "duplicate": "重複",
+      "similar": "類似",
+      "ok": "完成"
+    },
+    "dupLegend": {
+      "exact": "完全重複",
+      "similar": "類似"
+    },
+    "willSave": "將儲存 {count} 筆，略過 {skip} 筆",
+    "saveAll": "全部存檔"
   }
 }

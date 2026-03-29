@@ -128,7 +128,13 @@
     "languageJapanese": "Japanese",
     "languageFilter": "Language Filter",
     "hospital": "Hospital",
-    "department": "Department"
+    "department": "Department",
+    "logTypes": {
+      "note": "Note",
+      "meeting": "Meeting",
+      "email": "Email",
+      "system": "System"
+    }
   },
   "batchUpload": {
     "title": "Batch Upload Cards",
@@ -184,7 +190,12 @@
     "dateTo": "To",
     "contact": "Contact",
     "unassigned": "Unassigned",
-    "noResults": "No matching notes found"
+    "noResults": "No matching notes found",
+    "types": {
+      "note": "Note",
+      "meeting": "Meeting",
+      "email": "Email"
+    }
   },
   "unassignedNotes": {
     "title": "Unassigned Notes",
@@ -284,5 +295,51 @@
     "title": "System Maintenance",
     "subtitle": "System Maintenance",
     "message": "Please try again later. Contact admin if urgent."
+  },
+  "login": {
+    "docs": "Documentation",
+    "subtitle": "Sign in to continue",
+    "button": "Sign in with Microsoft",
+    "hint": "@cancerfree.io accounts only",
+    "errors": {
+      "unauthorized_domain": "Access restricted to @cancerfree.io accounts only",
+      "auth_failed": "Authentication failed. Please try again.",
+      "no_code": "No auth code received. Please try again.",
+      "unknown": "An unknown error occurred"
+    }
+  },
+  "batch": {
+    "title": "Batch Upload Cards",
+    "saved": "Saved {saved}, skipped {skipped}",
+    "goToList": "Go to Contacts",
+    "dropzone": "Drop images here or click to select (max {max})",
+    "dropzoneHint": "Supports JPG, PNG, HEIC",
+    "selected": "{count} images selected",
+    "reselect": "Reselect",
+    "startOcr": "Start Recognition",
+    "processing": "Processing...",
+    "done": "Done",
+    "progress": "{done} / {total}",
+    "colSkip": "Skip",
+    "colImage": "Image",
+    "colName": "Name",
+    "colCompany": "Company",
+    "colJobTitle": "Job Title",
+    "colPhone": "Phone",
+    "colStatus": "Status",
+    "status": {
+      "processing": "Processing",
+      "pending": "Pending",
+      "error": "Error",
+      "duplicate": "Duplicate",
+      "similar": "Similar",
+      "ok": "Done"
+    },
+    "dupLegend": {
+      "exact": "Exact duplicate",
+      "similar": "Similar"
+    },
+    "willSave": "Will save {count}, skip {skip}",
+    "saveAll": "Save All"
   }
 }

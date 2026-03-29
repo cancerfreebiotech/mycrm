@@ -128,7 +128,13 @@
     "languageJapanese": "日本語",
     "languageFilter": "言語フィルター",
     "hospital": "病院",
-    "department": "診療科"
+    "department": "診療科",
+    "logTypes": {
+      "note": "メモ",
+      "meeting": "ミーティング",
+      "email": "メール",
+      "system": "システム"
+    }
   },
   "batchUpload": {
     "title": "名刺一括アップロード",
@@ -184,7 +190,12 @@
     "dateTo": "終了日",
     "contact": "連絡先",
     "unassigned": "未分類",
-    "noResults": "該当するメモが見つかりません"
+    "noResults": "該当するメモが見つかりません",
+    "types": {
+      "note": "メモ",
+      "meeting": "ミーティング",
+      "email": "メール"
+    }
   },
   "unassignedNotes": {
     "title": "未分類メモ",
@@ -284,5 +295,51 @@
     "title": "システムメンテナンス中",
     "subtitle": "System Maintenance",
     "message": "しばらくしてからもう一度お試しください。急ぎの場合は管理者にご連絡ください。"
+  },
+  "login": {
+    "docs": "使用説明書",
+    "subtitle": "myCRM にサインインしてください",
+    "button": "Microsoftアカウントでサインイン",
+    "hint": "@cancerfree.io アカウントのみ",
+    "errors": {
+      "unauthorized_domain": "@cancerfree.io アカウントのみアクセス可能",
+      "auth_failed": "認証に失敗しました。もう一度お試しください。",
+      "no_code": "認証コードが受信できませんでした。もう一度お試しください。",
+      "unknown": "不明なエラーが発生しました"
+    }
+  },
+  "batch": {
+    "title": "名刺一括アップロード",
+    "saved": "{saved} 件保存、{skipped} 件スキップ",
+    "goToList": "連絡先リストへ",
+    "dropzone": "ここに画像をドロップ、またはクリックして選択（最大 {max} 枚）",
+    "dropzoneHint": "JPG、PNG、HEIC 形式に対応",
+    "selected": "{count} 枚選択済み",
+    "reselect": "再選択",
+    "startOcr": "認識開始",
+    "processing": "処理中...",
+    "done": "完了",
+    "progress": "{done} / {total}",
+    "colSkip": "スキップ",
+    "colImage": "画像",
+    "colName": "氏名",
+    "colCompany": "会社",
+    "colJobTitle": "役職",
+    "colPhone": "電話",
+    "colStatus": "状態",
+    "status": {
+      "processing": "処理中",
+      "pending": "待機中",
+      "error": "エラー",
+      "duplicate": "重複",
+      "similar": "類似",
+      "ok": "完了"
+    },
+    "dupLegend": {
+      "exact": "完全重複",
+      "similar": "類似"
+    },
+    "willSave": "{count} 件保存、{skip} 件スキップ予定",
+    "saveAll": "すべて保存"
   }
 }
