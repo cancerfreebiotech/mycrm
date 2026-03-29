@@ -90,7 +90,7 @@ export default function ContactsPage() {
 
   async function fetchAll() {
     const supabase = createBrowserSupabaseClient()
-    const SELECT = 'id, name, company, job_title, email, phone, country_code, met_at, created_at, importance, users(display_name), contact_tags(tags(id, name))'
+    const SELECT = 'id, name, company, job_title, email, phone, country_code, met_at, created_at, importance, users!created_by(display_name), contact_tags(tags(id, name))'
     const [contactResult, { data: tagData }, { data: countryData }] = await Promise.all([
       supabase.from('contacts').select(SELECT).is('deleted_at', null).order('created_at', { ascending: false }),
       supabase.from('tags').select('id, name').order('name'),

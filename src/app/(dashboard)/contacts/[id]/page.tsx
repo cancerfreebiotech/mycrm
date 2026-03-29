@@ -375,7 +375,7 @@ export default function ContactDetailPage() {
       if (profile) { setCurrentUserId(profile.id); setAiModelId(profile.ai_model_id ?? null); setMsProviderToken(profile.provider_token ?? null); setCurrentUserRole(profile.role ?? null) }
     }
     const [{ data: c }, { data: l }, { data: tags }, { data: cards }, { data: countries }, { data: photos }] = await Promise.all([
-      supabase.from('contacts').select('*, users(display_name), contact_tags(tags(id, name))').eq('id', id).is('deleted_at', null).single(),
+      supabase.from('contacts').select('*, users!created_by(display_name), contact_tags(tags(id, name))').eq('id', id).is('deleted_at', null).single(),
       supabase.from('interaction_logs').select('id, content, type, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, users(display_name)').eq('contact_id', id).order('created_at', { ascending: false }).range(0, LOG_PAGE - 1),
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('contact_cards').select('id, card_img_url, card_img_back_url, label, created_at').eq('contact_id', id).order('created_at', { ascending: true }),
