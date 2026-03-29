@@ -42,15 +42,37 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   const isLoginPage = pathname === '/login'
+  const isMaintenancePage = pathname === '/maintenance'
 
   // Redirect unauthenticated users to login
-  if (!user && !isLoginPage) {
+  if (!user && !isLoginPage && !isMaintenancePage) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
   // Redirect authenticated users away from login page
   if (user && isLoginPage) {
     return NextResponse.redirect(new URL('/', request.url))
+  }
+
+  // Maintenance mode check for authenticated non-super_admin users
+  if (user && !isLoginPage && !isMaintenancePage) {
+    const { data: setting } = await supabase
+      .from('system_settings')
+      .select('value')
+      .eq('key', 'maintenance_mode')
+      .single()
+
+    if (setting?.value === 'true') {
+      const { data: profile } = await supabase
+        .from('users')
+        .select('role')
+        .eq('email', user.email!)
+        .single()
+
+      if (profile?.role !== 'super_admin') {
+        return NextResponse.redirect(new URL('/maintenance', request.url))
+      }
+    }
   }
 
   return supabaseResponse

@@ -127,10 +127,10 @@ async function getAuthorizedUser(telegramId: number) {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('users')
-    .select('id, email, display_name, ai_model_id, provider_token')
+    .select('id, email, display_name, ai_model_id, provider_token, role')
     .eq('telegram_id', telegramId)
     .single()
-  return data as { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null } | null
+  return data as { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null } | null
 }
 
 // ── Download photo from Telegram ──────────────────────────────────────────────
@@ -204,7 +204,7 @@ function durationLabel(minutes: number): string {
 
 async function handleMeet(
   chatId: number,
-  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null },
+  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
   text: string,
 ) {
   const supabase = createServiceClient()
@@ -310,6 +310,7 @@ async function handleHelp(chatId: number) {
     `/tasks　/t — 列出我的待處理任務\n` +
     `/user　/u — 列出組織成員\n` +
     `/AI — 顯示目前使用的 AI 模型\n` +
+    `/stop　/stop off — 開啟/關閉維護模式（管理員限定）\n` +
     `/help　/h — 顯示此說明`
   await sendMessage(chatId, text)
 }
@@ -604,7 +605,7 @@ async function processPersonalPhoto(
 async function handlePhoto(
   chatId: number,
   fromId: number,
-  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null },
+  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
   photo: { file_id: string },
   session: { state: string; context: Record<string, unknown> } | null
 ) {
@@ -871,7 +872,7 @@ async function handlePhoto(
 
 async function handleWork(
   chatId: number,
-  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null },
+  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
   naturalText: string,
   lastContactId?: string | null
 ) {
@@ -1090,7 +1091,7 @@ async function handleMet(
 
 async function handleTasks(
   chatId: number,
-  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null }
+  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null }
 ) {
   const supabase = createServiceClient()
 
@@ -1143,7 +1144,7 @@ async function handleTasks(
 async function handleText(
   chatId: number,
   fromId: number,
-  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null },
+  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
   text: string,
   session: { state: string; context: Record<string, unknown>; last_contact_id: string | null } | null
 ) {
@@ -1154,6 +1155,22 @@ async function handleText(
   // ── /help /h ───────────────────────────────────────────────────────────────
   if (cmd === '/help' || cmd === '/h') {
     await handleHelp(chatId)
+    return
+  }
+
+  // ── /stop — maintenance mode (super_admin only) ────────────────────────────
+  if (cmd === '/stop' || cmd === '/stop off') {
+    if (user.role !== 'super_admin') {
+      await sendMessage(chatId, '⛔ 此指令僅限管理員使用')
+      return
+    }
+    const enable = cmd === '/stop'
+    await supabase.from('system_settings').update({ value: enable ? 'true' : 'false', updated_at: new Date().toISOString(), updated_by: user.id }).eq('key', 'maintenance_mode')
+    if (enable) {
+      await sendMessage(chatId, '🔧 維護模式已開啟。所有使用者將看到維護中提示。')
+    } else {
+      await sendMessage(chatId, '✅ 維護模式已關閉。系統恢復正常。')
+    }
     return
   }
 
@@ -2432,6 +2449,19 @@ export async function POST(req: NextRequest) {
     if (!user) {
       await sendMessage(chatId, '⛔ 此 Bot 為 CancerFree Biotech 內部專用，你的帳號尚未授權。')
       return NextResponse.json({ ok: true })
+    }
+
+    // Maintenance mode check — block non-super_admin
+    if (user.role !== 'super_admin') {
+      const { data: setting } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'maintenance_mode')
+        .single()
+      if (setting?.value === 'true') {
+        await sendMessage(chatId, '🔧 系統維護中，請稍後再試。')
+        return NextResponse.json({ ok: true })
+      }
     }
 
     const session = await getSession(fromId)
