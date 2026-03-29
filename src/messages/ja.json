@@ -92,6 +92,15 @@
     "exportExcel": "Excelエクスポート",
     "exportCsv": "CSVエクスポート",
     "backToList": "リストに戻る",
+    "new": "連絡先を追加",
+    "tagFilter": "タグで絞り込み",
+    "countryFilter": "国で絞り込み",
+    "countryOther": "その他",
+    "importanceFilter": "重要度で絞り込み",
+    "metFilter": "出会った場所を検索...",
+    "clearFilter": "フィルターをクリア",
+    "createdAt": "作成日時",
+    "batchEditApply": "適用",
     "name": "氏名",
     "nameEn": "英語名",
     "nameLocal": "現地語名",
@@ -318,6 +327,10 @@
     "roleSuperAdmin": "スーパー管理者",
     "lastLogin": "最終ログイン",
     "changeRole": "ロールを変更",
+    "subtitle": "システムユーザーを管理",
+    "noUsers": "ユーザーがいません",
+    "teamsBound": "連携済み",
+    "teamsUnbound": "未連携",
     "colName": "氏名",
     "colEmail": "メール",
     "colTelegram": "Telegram",
@@ -523,8 +536,9 @@
     "source": "LinkedIn"
   },
   "footer": {
-    "version": "v{version}",
-    "deployedAt": "デプロイ日時：{time}"
+    "version": "v",
+    "deployedAt": "デプロイ日時：{time}",
+    "deployTime": "デプロイ："
   },
   "maintenance": {
     "title": "システムメンテナンス中",

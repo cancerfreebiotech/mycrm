@@ -92,6 +92,15 @@
     "exportExcel": "匯出 Excel",
     "exportCsv": "匯出 CSV",
     "backToList": "返回列表",
+    "new": "新增聯絡人",
+    "tagFilter": "依 Tag 篩選",
+    "countryFilter": "依國家篩選",
+    "countryOther": "其他",
+    "importanceFilter": "依重要程度篩選",
+    "metFilter": "搜尋認識地點...",
+    "clearFilter": "清除篩選",
+    "createdAt": "建立時間",
+    "batchEditApply": "套用",
     "name": "姓名",
     "nameEn": "英文名",
     "nameLocal": "本地語言名",
@@ -318,6 +327,10 @@
     "roleSuperAdmin": "Super Admin",
     "lastLogin": "最後登入",
     "changeRole": "變更角色",
+    "subtitle": "管理系統使用者",
+    "noUsers": "尚無使用者",
+    "teamsBound": "已綁定",
+    "teamsUnbound": "未設定",
     "colName": "姓名",
     "colEmail": "Email",
     "colTelegram": "Telegram",
@@ -523,8 +536,9 @@
     "source": "LinkedIn"
   },
   "footer": {
-    "version": "v{version}",
-    "deployedAt": "部署於 {time}"
+    "version": "v",
+    "deployedAt": "部署於 {time}",
+    "deployTime": "部署："
   },
   "maintenance": {
     "title": "系統維護中",

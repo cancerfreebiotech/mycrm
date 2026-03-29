@@ -92,6 +92,15 @@
     "exportExcel": "Export Excel",
     "exportCsv": "Export CSV",
     "backToList": "Back to List",
+    "new": "Add Contact",
+    "tagFilter": "Filter by Tag",
+    "countryFilter": "Filter by Country",
+    "countryOther": "Other",
+    "importanceFilter": "Filter by Importance",
+    "metFilter": "Search where we met...",
+    "clearFilter": "Clear Filter",
+    "createdAt": "Created At",
+    "batchEditApply": "Apply",
     "name": "Name",
     "nameEn": "English Name",
     "nameLocal": "Local Name",
@@ -318,6 +327,10 @@
     "roleSuperAdmin": "Super Admin",
     "lastLogin": "Last Login",
     "changeRole": "Change Role",
+    "subtitle": "Manage system users",
+    "noUsers": "No users yet",
+    "teamsBound": "Connected",
+    "teamsUnbound": "Not connected",
     "colName": "Name",
     "colEmail": "Email",
     "colTelegram": "Telegram",
@@ -523,8 +536,9 @@
     "source": "LinkedIn"
   },
   "footer": {
-    "version": "v{version}",
-    "deployedAt": "Deployed {time}"
+    "version": "v",
+    "deployedAt": "Deployed {time}",
+    "deployTime": "Deployed:"
   },
   "maintenance": {
     "title": "System Maintenance",
