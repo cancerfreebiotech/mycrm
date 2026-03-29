@@ -11,6 +11,7 @@
 - **醫師欄位**：contacts 新增 hospital（自由輸入）與 department（科別，自由輸入）欄位
 - **DB**：contacts 新增 deleted_at、deleted_by、language、hospital、department 欄位
 - **i18n**：zh-TW / en / ja 新增 v2.0 相關 key
+- **拜訪紀錄擴充**：interaction_logs 新增 meeting_time、meeting_location 欄位；Web UI 拜訪表單新增時間與地點欄位；報表 Excel 新增對應欄位；Bot 新增 `/n`（自然語言 AI 解析）與 `/v` `/visit`（逐步詢問）兩種拜訪紀錄指令
 
 
 ## v1.9.9 — 相簿頁改版：一人一張縮圖（2026-03-26）
