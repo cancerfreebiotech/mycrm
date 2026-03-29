@@ -3474,6 +3474,281 @@ meeting.skip: "跳過" / "Skip" / "スキップ"
 
 ---
 
+## 三十八、v2.1 新功能規格
+
+### 38.1 筆記搜尋 — 隱藏系統自動產生紀錄
+
+#### 概覽
+
+筆記搜尋頁（`/notes`）目前會顯示所有 `interaction_logs`，包含系統在建立聯絡人時自動寫入的預設紀錄。這些紀錄對業務使用者無意義，應從搜尋結果中排除。
+
+#### 排除條件
+
+以下 content 開頭的紀錄不顯示：
+- `透過 Telegram Bot 新增名片`
+- `從名片王匯入`（任何以此開頭的內容）
+
+#### 實作方式
+
+在 `fetchLogs()` query 加上 `.not('content', 'ilike', '透過 Telegram Bot 新增名片%').not('content', 'ilike', '從名片王匯入%')`
+
+---
+
+### 38.2 聯絡人篩選 — 語文欄位
+
+#### 概覽
+
+聯絡人列表頁（`/contacts`）已有 Tag、國家、重要性、認識地點等篩選器，新增語文（`language`）篩選。
+
+#### UI
+
+仿照現有國家篩選下拉，新增「語文」下拉：
+- 全部（預設）
+- 中文（chinese）
+- 英文（english）
+- 日文（japanese）
+
+#### 語文欄位顯示修正
+
+聯絡人詳情頁與新增/編輯表單中，語文下拉選項統一顯示為：
+- **中文**（value: `chinese`）
+- **EN**（value: `english`）
+- **日文**（value: `japanese`）
+
+> 原先 i18n key `contacts.language` 顯示為「語言 / Language」，修正為「語文」；`contacts.language.english` 顯示簡化為「EN」。
+
+#### i18n 新增 key
+
+```
+contacts.languageFilter: "語文篩選" / "Language Filter" / "言語フィルター"
+```
+
+---
+
+### 38.3 回收區 sidebar 翻譯修正
+
+#### 問題
+
+三份語言檔（zh-TW / en / ja）的 `nav` 區塊缺少 `trash` key，導致 `/admin/trash` 側邊欄顯示 `nav.trash` 原始 key。
+
+#### 修正
+
+三份語言檔 `nav` 區塊補上：
+
+```json
+"trash": "回收區"       // zh-TW
+"trash": "Trash"        // en
+"trash": "ゴミ箱"       // ja
+```
+
+---
+
+### 38.4 回收區聯絡人詳情
+
+#### 概覽
+
+`/admin/trash` 回收區目前只有列表，無法查看被刪除聯絡人的完整資料。新增點擊功能，可在不離開回收區的情況下查看聯絡人詳情。
+
+#### UI
+
+- 回收區列表每筆聯絡人姓名改為可點擊
+- 點擊後在頁面右側或彈出 Modal 顯示聯絡人詳情（唯讀）
+- 顯示內容：基本資料、Tags、名片圖、互動紀錄
+- Modal 內提供「還原」與「永久刪除」操作按鈕（與列表操作一致）
+
+---
+
+### 38.5 系統維護模式（/stop 指令）
+
+#### 概覽
+
+Super admin 可透過 Telegram Bot 指令開啟系統維護模式，鎖定所有非 super_admin 使用者的 Bot 操作及 Web 介面存取。
+
+#### DB 變更
+
+新增 `system_settings` 表：
+
+```sql
+create table if not exists system_settings (
+  key   text primary key,
+  value text not null,
+  updated_at timestamptz default now(),
+  updated_by uuid references users(id)
+);
+
+-- 初始資料
+insert into system_settings (key, value) values ('maintenance_mode', 'false')
+on conflict (key) do nothing;
+```
+
+#### Bot 指令
+
+| 指令 | 說明 | 權限 |
+|------|------|------|
+| `/stop` | 開啟維護模式 | super_admin 限定 |
+| `/stop off` | 關閉維護模式 | super_admin 限定 |
+
+- 非 super_admin 呼叫 `/stop` → 回覆「⛔ 此指令僅限管理員使用」
+- `/stop` 開啟成功 → 回覆「🔧 維護模式已開啟。所有使用者將看到維護中提示。」
+- `/stop off` 關閉成功 → 回覆「✅ 維護模式已關閉。系統恢復正常。」
+
+#### Bot 維護模式行為
+
+維護模式開啟時：
+- super_admin → 正常使用所有功能
+- 一般使用者傳送任何訊息/指令 → 回覆「🔧 系統維護中，請稍後再試。」並終止處理
+
+#### Web 維護模式行為
+
+維護模式開啟時：
+- super_admin → 正常存取所有頁面
+- 一般登入使用者 → 所有頁面顯示全螢幕維護中畫面（顯示「🔧 系統維護中，請稍後再試」）
+- 未登入使用者 → 登入頁正常顯示（可登入），登入後若非 super_admin 則顯示維護畫面
+
+#### 實作方式
+
+- `middleware.ts` 每次 request 查詢 `system_settings` 中 `maintenance_mode` 值
+- 若為 `true` 且使用者非 super_admin → redirect 至 `/maintenance` 頁面
+- Bot route 在處理訊息前先查詢維護模式狀態
+
+---
+
+### 38.6 LinkedIn 截圖圖片壓縮與存儲
+
+#### 概覽
+
+LinkedIn 截圖辨識後，目前僅存解析資料，不存原始截圖。新增邏輯將截圖壓縮後存入 Supabase Storage，與名片圖片存儲邏輯一致。
+
+#### 存儲路徑
+
+```
+cards/linkedin_{contactId}_{timestamp}.jpg
+```
+
+#### 流程
+
+1. Bot `/li` 或網頁上傳截圖
+2. 使用 `imageProcessor` 壓縮圖片（與名片相同邏輯）
+3. 上傳至 Supabase Storage `cards` bucket
+4. 確認建立聯絡人時，將 `card_img_url` 設為該截圖 URL
+5. `source` 欄位標記為 `'linkedin'`
+
+---
+
+### 38.7 姓名欄位 fallback 邏輯（名片 & LinkedIn）
+
+#### 概覽
+
+名片 OCR 或 LinkedIn 截圖辨識時，若只有英文名字（`name_en` 有值但 `name` 為空），應將 `name_en` 自動填入 `name` 欄位，確保聯絡人姓名不為空。
+
+#### 規則
+
+```
+if (!name && name_en) → name = name_en
+if (!name && name_local) → name = name_local
+```
+
+此邏輯適用於：
+- Telegram Bot 名片掃描（`/scan`、`/a`）
+- Telegram Bot LinkedIn 截圖（`/li`）
+- 網頁端 LinkedIn 截圖上傳（`/api/linkedin/parse`）
+
+> 注意：名片掃描的 `name` fallback 邏輯在 bot/route.ts 已部分實作，需確保 LinkedIn 路徑也涵蓋。
+
+---
+
+### 38.8 Apollo.io Email Enrichment
+
+#### 概覽
+
+LinkedIn 截圖辨識後通常無 email。整合 Apollo.io API，在 LinkedIn 聯絡人確認建立後，自動背景查詢 email 並補填。
+
+#### Apollo API
+
+- Endpoint：`POST https://api.apollo.io/v1/people/match`
+- 輸入：`first_name`、`last_name`、`organization_name`（或 `domain`）
+- 輸出：`email`（含信心分數）
+- 免費方案：每月 10,000 credits
+
+#### API Key 管理
+
+Apollo API Key 存入 `system_settings` 表：
+```sql
+insert into system_settings (key, value) values ('apollo_api_key', '')
+on conflict (key) do nothing;
+```
+
+Super admin 可在 `/admin/health`（系統狀態頁）或新增的設定區塊中設定 API Key。
+
+#### 流程
+
+1. LinkedIn 截圖確認建立聯絡人後
+2. 若 `email` 為空 → 背景呼叫 Apollo API
+3. 查到 email → 更新 `contacts.email`，Bot 回覆追加「📧 已自動查到 email：xxx@xxx.com」
+4. 查不到 → 不顯示錯誤，email 維持空白
+
+#### 注意
+
+- 僅 `source = 'linkedin'` 的新建聯絡人觸發
+- 名片掃描不觸發（名片通常已有 email）
+- API Key 未設定時跳過，不報錯
+
+---
+
+### 38.9 Gemini OCR 自動重試機制
+
+#### 概覽
+
+Telegram Bot 傳送圖片後，Gemini API 偶爾辨識失敗（網路錯誤、API 超時等）。新增自動重試邏輯，提升辨識成功率。
+
+#### 重試邏輯
+
+```
+第一次辨識失敗
+  → Bot 回覆「⏳ 辨識失敗，3 秒後自動重試...」
+  → 等待 3 秒
+  → 重試第二次
+    → 成功 → 正常流程繼續
+    → 失敗 → 存入 failed_scans + Bot 回覆「❌ 辨識失敗，已存入待審區，管理員將手動處理。」
+```
+
+#### 適用範圍
+
+所有使用 Gemini Vision 的 Bot 指令：
+- 名片掃描（`/scan`、`/a`、傳圖自動觸發）
+- LinkedIn 截圖（`/li`）
+- 合照 EXIF（`/p`）
+- 自然語言 AI 解析（`/n`）
+
+#### 實作方式
+
+抽出共用 `callGeminiWithRetry(prompt, imageData)` 函式：
+- 第一次呼叫失敗（任何 exception 或空回應）→ `await sleep(3000)` → 重試
+- 重試失敗 → throw error，由 caller 的 catch block 處理（存 failed_scans）
+- 回傳給使用者的中間訊息只在「第一次失敗、準備重試」時發送
+
+---
+
+## 三十九、v2.1 開發任務清單
+
+- [ ] **Task 133** `[修改]` — 筆記搜尋頁 `fetchLogs()` 加上排除條件，過濾 `透過 Telegram Bot 新增名片` 與 `從名片王匯入` 開頭的紀錄
+- [ ] **Task 134** `[修改]` — 聯絡人列表頁新增語文篩選下拉（全部 / 中文 / EN / 日文）；修正 i18n `contacts.language` 為「語文」、`contacts.language.english` 為「EN」
+- [ ] **Task 135** `[修改]` — 三份語言檔 `nav` 區塊補上 `trash` key（回收區 / Trash / ゴミ箱）
+- [ ] **Task 136** `[修改]` — 回收區頁面聯絡人姓名改為可點擊，點擊後以 Modal 顯示聯絡人詳情（唯讀），Modal 內含還原與永久刪除操作
+- [ ] **Task 137** `[新增]` — DB Migration：新增 `system_settings` 表；插入 `maintenance_mode`（false）、`apollo_api_key`（空字串）初始資料
+- [ ] **Task 138** `[新增]` — Bot 新增 `/stop` 指令（super_admin 限定）：開啟/關閉維護模式，更新 `system_settings`
+- [ ] **Task 139** `[修改]` — Bot route 在訊息處理前加入維護模式檢查：非 super_admin → 回覆維護中訊息並 return
+- [ ] **Task 140** `[修改]` — `middleware.ts` 加入維護模式檢查：查詢 `system_settings.maintenance_mode`，非 super_admin redirect 至 `/maintenance`
+- [ ] **Task 141** `[新增]` — 新增 `/maintenance` 頁面（全螢幕維護中畫面）
+- [ ] **Task 142** `[修改]` — LinkedIn 截圖（Bot `/li` + 網頁）確認建立後，壓縮截圖存入 Storage `cards` bucket，`card_img_url` 填入截圖 URL
+- [ ] **Task 143** `[修改]` — 名片掃描與 LinkedIn OCR 統一套用姓名 fallback 邏輯：`if (!name && name_en) name = name_en`
+- [ ] **Task 144** `[新增]` — 新增 `callGeminiWithRetry()` 共用函式：失敗後等 3 秒重試一次，重試仍失敗則 throw；Bot 第一次失敗時先回覆「⏳ 辨識失敗，3 秒後自動重試...」
+- [ ] **Task 145** `[修改]` — 所有 Bot Gemini 呼叫（名片、/li、/p、/n）改用 `callGeminiWithRetry()`
+- [ ] **Task 146** `[新增]` — 整合 Apollo.io API：LinkedIn 聯絡人建立後若無 email，背景呼叫 Apollo `people/match`，查到則更新 `contacts.email` 並通知使用者
+- [ ] **Task 147** `[修改]` — i18n 三份語言檔新增 v2.1 相關 key（maintenance、languageFilter、apollo 相關）
+
+---
+
 ## 三十八、v2.0 開發任務清單
 
 - [ ] **Task 115** `[修改]` — 修正 `/docs` Quick Start 說明書中 Telegram Bot 綁定步驟內容

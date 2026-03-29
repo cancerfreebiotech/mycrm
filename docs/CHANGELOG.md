@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## v2.1.0 — 系統維護模式、OCR 重試、Apollo Email 補查、筆記過濾、回收區改進（upcoming）
+
+### 變更項目
+
+- **筆記搜尋過濾**：筆記搜尋頁排除系統自動產生的預設紀錄（「透過 Telegram Bot 新增名片」、「從名片王匯入」開頭的紀錄）
+- **聯絡人篩選加語文**：聯絡人列表頁新增語文篩選下拉（全部 / 中文 / EN / 日文）；修正語文欄位 i18n 顯示（english → EN）
+- **回收區 sidebar 修正**：三份語言檔補上 `nav.trash` key，修正側邊欄顯示 `nav.trash` 原始 key 的問題
+- **回收區聯絡人詳情**：回收區列表聯絡人姓名改為可點擊，彈出 Modal 顯示完整詳情（唯讀），含還原與永久刪除操作
+- **系統維護模式**：新增 `system_settings` 表；Bot 新增 `/stop` 指令（super_admin 限定），開啟後所有非 super_admin 使用者的 Bot 輸入與 Web 頁面均顯示維護中訊息；新增 `/maintenance` 頁面
+- **LinkedIn 截圖存儲**：Bot `/li` 與網頁 LinkedIn 截圖確認建立聯絡人後，截圖壓縮存入 Storage，`card_img_url` 填入截圖 URL
+- **姓名 fallback 統一**：名片掃描與 LinkedIn OCR 統一套用 `if (!name && name_en) name = name_en` 邏輯
+- **Gemini OCR 自動重試**：抽出 `callGeminiWithRetry()` 共用函式；OCR 失敗後回覆「⏳ 辨識失敗，3 秒後自動重試...」，等 3 秒重試一次；重試仍失敗才存入 `failed_scans`；適用所有 Bot Gemini 呼叫（名片、/li、/p、/n）
+- **Apollo Email 補查**：整合 Apollo.io API；LinkedIn 建立的聯絡人若無 email，背景自動呼叫 Apollo `people/match` 查詢；查到則更新 `contacts.email` 並追加通知使用者；API Key 存於 `system_settings` 表
+- **DB**：新增 `system_settings` 表（`maintenance_mode`、`apollo_api_key`）
+- **i18n**：zh-TW / en / ja 新增 v2.1 相關 key（nav.trash、maintenance、languageFilter、language.english 簡化為 EN）
+
+---
+
 ## v2.0.0 — 權限強化、回收區、照片 EXIF、語文欄位、醫師欄位（2026-03-29）
 
 ### 變更項目
