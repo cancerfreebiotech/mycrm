@@ -3374,15 +3374,6 @@ alter table contacts
   add column if not exists hospital text default null,
   add column if not exists department text default null;
 
--- 科別主檔（由 super_admin 管理）
-create table if not exists medical_departments (
-  id uuid primary key default gen_random_uuid(),
-  name_zh text not null,
-  name_en text not null,
-  name_ja text not null,
-  sort_order int not null default 0,
-  created_at timestamptz default now()
-);
 ```
 
 #### 欄位規格
@@ -3390,24 +3381,15 @@ create table if not exists medical_departments (
 | 欄位 | 類型 | 說明 |
 |------|------|------|
 | `hospital` | text | 醫院名稱，自由輸入 |
-| `department` | text | 科別，從 medical_departments 選單選取 |
+| `department` | text | 科別，自由輸入 |
 
 #### 顯示條件
 
 - 僅當聯絡人 `title` 包含「MD」、「醫師」、「醫生」、「Doctor」等關鍵字時，詳情頁自動顯示醫院與科別欄位
 - 或使用者手動勾選「此聯絡人為醫師」
 
-#### 科別管理後台
-
-- 路由：`/admin/departments`（僅 super_admin）
-- 功能：新增科別（zh/en/ja 三語）、排序、刪除
-- Sidebar super_admin 區塊新增「科別管理」
-
 #### API 變更
 
-- `GET /api/medical-departments`：回傳科別清單
-- `POST /api/medical-departments`：新增科別（僅 super_admin）
-- `DELETE /api/medical-departments/[id]`：刪除科別（僅 super_admin）
 - `POST` / `PATCH /api/contacts`：接受 `hospital`、`department` 欄位
 
 #### i18n 新增 key
@@ -3415,7 +3397,6 @@ create table if not exists medical_departments (
 ```
 hospital: "醫院" / "Hospital" / "病院"
 department: "科別" / "Department" / "診療科"
-departments.manage: "科別管理" / "Manage Departments" / "診療科管理"
 ```
 
 ---
@@ -3431,6 +3412,5 @@ departments.manage: "科別管理" / "Manage Departments" / "診療科管理"
 - [ ] **Task 121** `[修改]` — DB Migration：contacts 新增 `language` 欄位（default 'english'，CHECK constraint）；OCR 建立聯絡人時依 country 自動預設語文
 - [ ] **Task 122** `[修改]` — 聯絡人詳情頁與新增表單加入「語文」下拉欄位（中文/英文/日文）；更新 API 接受 language 欄位
 - [ ] **Task 123** `[修改]` — DB Migration：contacts 新增 `hospital`、`department` 欄位；新增 `medical_departments` 主檔 table
-- [ ] **Task 124** `[修改]` — 聯絡人詳情頁與新增表單：醫師判斷邏輯，顯示醫院（自由輸入）與科別（下拉）欄位；更新 API 接受 hospital、department
-- [ ] **Task 125** `[新增]` — 新增 `GET/POST/DELETE /api/medical-departments` route；新增 `/admin/departments` 科別管理頁（僅 super_admin，含三語新增/排序/刪除）；Sidebar 新增「科別管理」
+- [ ] **Task 124** `[修改]` — 聯絡人詳情頁與新增表單：醫師判斷邏輯，顯示醫院（自由輸入）與科別（自由輸入）欄位；更新 API 接受 hospital、department
 - [ ] **Task 126** `[修改]` — i18n 三份語言檔新增 v2.0 相關 key（trash、language、hospital、department）
