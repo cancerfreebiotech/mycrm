@@ -3214,3 +3214,223 @@ linkedin.source: "LinkedIn" / "LinkedIn" / "LinkedIn"
 - [ ] **Task 112** `[修改]` — Bot 新增 `/li` 指令（傳圖 → OCR → 摘要確認 → 寫入 contacts，source='linkedin'）
 - [ ] **Task 113** `[修改]` — 網頁新增聯絡人下拉選單加入「LinkedIn 截圖」選項（上傳圖片 → /api/linkedin/parse → pre-fill 表單，source='linkedin'）
 - [ ] **Task 114** `[修改]` — i18n 三份語言檔新增 v1.9.7 相關 key（photos、linkedin）
+
+---
+
+## 三十七、v2.0 功能規格
+
+### 37.1 說明書修正：Telegram Bot 綁定步驟
+
+#### 問題描述
+
+快速開始說明書中，Telegram Bot 綁定步驟內容有誤，需修正為正確流程。
+
+#### 修正範圍
+
+- 頁面：`/docs`（Quick Start section）
+- 修正「第二步：綁定 Telegram Bot」相關說明文字
+
+> 正確流程待確認後由開發者填入，PRD 標記為需修正項目。
+
+---
+
+### 37.2 聯絡人刪除權限限制
+
+#### 概覽
+
+限制聯絡人刪除操作，僅建立者與 super_admin 可執行刪除；所有刪除皆為軟刪除（移至回收區），永久刪除僅限 super_admin 於回收區手動執行。
+
+#### 權限規則
+
+| 操作 | 建立者 | 一般使用者 | super_admin |
+|------|--------|------------|-------------|
+| 刪除聯絡人（移至回收區） | ✅ | ❌ | ✅ |
+| 查看回收區 | ❌ | ❌ | ✅ |
+| 永久刪除（從回收區清除） | ❌ | ❌ | ✅ |
+| 還原聯絡人 | ❌ | ❌ | ✅ |
+
+#### DB 變更
+
+```sql
+alter table contacts
+  add column if not exists deleted_at timestamptz default null,
+  add column if not exists deleted_by uuid references users(id) default null;
+```
+
+- `deleted_at IS NULL` = 正常聯絡人
+- `deleted_at IS NOT NULL` = 已軟刪除（在回收區）
+- 所有現有 `GET /api/contacts` 查詢需自動加上 `WHERE deleted_at IS NULL`
+
+#### 刪除按鈕顯示邏輯
+
+- 聯絡人詳情頁：刪除按鈕僅對「建立者」與「super_admin」顯示
+- 其他使用者不顯示刪除按鈕（非 disabled，直接隱藏）
+
+#### 回收區頁面
+
+- 路由：`/admin/trash`（僅 super_admin 可見）
+- 顯示所有 `deleted_at IS NOT NULL` 的聯絡人
+- 每筆顯示：姓名、刪除者、刪除時間
+- 操作：「還原」（清除 deleted_at）/ 「永久刪除」（真正 DELETE FROM）
+- 不自動清除，由 super_admin 手動處理
+- Sidebar 於 super_admin 區塊新增「回收區」項目
+
+#### API 變更
+
+- `DELETE /api/contacts/[id]`：改為軟刪除（設定 deleted_at、deleted_by），權限檢查建立者或 super_admin
+- `GET /api/contacts/trash`：回傳所有軟刪除聯絡人（僅 super_admin）
+- `POST /api/contacts/[id]/restore`：還原聯絡人（僅 super_admin）
+- `DELETE /api/contacts/[id]/permanent`：永久刪除（僅 super_admin）
+
+---
+
+### 37.3 網頁端照片上傳自動提取 GPS 與拍攝日期
+
+#### 概覽
+
+網頁端上傳合照時，前端自動讀取圖片 EXIF metadata，提取 GPS 座標與拍攝日期，與 Bot 端 `/p` 行為一致。
+
+#### 實作方式
+
+- 前端使用 `exifr` 套件（已有 Bot 端經驗）於瀏覽器端解析 EXIF
+- 解析後自動填入：
+  - `taken_at`：EXIF DateTimeOriginal（優先）或 CreateDate
+  - `latitude` / `longitude`：EXIF GPS 座標
+  - `location_name`：呼叫 `/api/geocode` reverse geocode 取得地名
+
+#### 流程
+
+1. 使用者在聯絡人詳情頁選擇上傳照片
+2. 前端讀取 EXIF → 取得 taken_at、GPS
+3. 若有 GPS → 呼叫 `/api/geocode` → 取得 location_name
+4. 連同圖片一併送出至 `POST /api/contacts/[id]/photos`
+5. 若無 EXIF（GPS 或日期不存在）→ 欄位保持 null，不報錯
+
+#### 顯示
+
+- 上傳預覽時顯示「拍攝日期：{date}」「地點：{location_name}」（若有）
+- 系統顯示日期以 EXIF 拍攝日期為準（非上傳日期）
+
+---
+
+### 37.4 聯絡人回收機制
+
+詳見 37.2（軟刪除架構已涵蓋回收機制）。
+
+---
+
+### 37.5 聯絡人語文欄位
+
+#### 概覽
+
+新增 `language` 欄位，記錄與該聯絡人溝通的慣用語文，並依地區自動預設。
+
+#### DB 變更
+
+```sql
+alter table contacts
+  add column if not exists language text not null default 'english'
+  check (language in ('chinese', 'english', 'japanese'));
+```
+
+#### 自動預設規則（OCR 建立聯絡人時）
+
+| 聯絡人所在地區 | 預設語文 |
+|----------------|----------|
+| 台灣（TW） | `chinese` |
+| 日本（JP） | `japanese` |
+| 其他 / 未知 | `english` |
+
+- 判斷依據：`contacts.country` 欄位
+- 手動新增時預設 `english`，使用者可修改
+
+#### UI
+
+- 聯絡人詳情頁「基本資料」區塊新增「語文」欄位（下拉：中文 / 英文 / 日文）
+- 新增聯絡人表單加入「語文」欄位
+
+#### i18n 新增 key
+
+```
+language: "語文" / "Language" / "言語"
+language.chinese: "中文" / "Chinese" / "中国語"
+language.english: "英文" / "English" / "英語"
+language.japanese: "日文" / "Japanese" / "日本語"
+```
+
+---
+
+### 37.6 醫師聯絡人：醫院與科別欄位
+
+#### 概覽
+
+針對職業為 MD（醫師）的聯絡人，新增 `hospital`（醫院）與 `department`（科別）欄位，並提供 super_admin 管理科別清單的後台。
+
+#### DB 變更
+
+```sql
+-- 聯絡人新增欄位
+alter table contacts
+  add column if not exists hospital text default null,
+  add column if not exists department text default null;
+
+-- 科別主檔（由 super_admin 管理）
+create table if not exists medical_departments (
+  id uuid primary key default gen_random_uuid(),
+  name_zh text not null,
+  name_en text not null,
+  name_ja text not null,
+  sort_order int not null default 0,
+  created_at timestamptz default now()
+);
+```
+
+#### 欄位規格
+
+| 欄位 | 類型 | 說明 |
+|------|------|------|
+| `hospital` | text | 醫院名稱，自由輸入 |
+| `department` | text | 科別，從 medical_departments 選單選取 |
+
+#### 顯示條件
+
+- 僅當聯絡人 `title` 包含「MD」、「醫師」、「醫生」、「Doctor」等關鍵字時，詳情頁自動顯示醫院與科別欄位
+- 或使用者手動勾選「此聯絡人為醫師」
+
+#### 科別管理後台
+
+- 路由：`/admin/departments`（僅 super_admin）
+- 功能：新增科別（zh/en/ja 三語）、排序、刪除
+- Sidebar super_admin 區塊新增「科別管理」
+
+#### API 變更
+
+- `GET /api/medical-departments`：回傳科別清單
+- `POST /api/medical-departments`：新增科別（僅 super_admin）
+- `DELETE /api/medical-departments/[id]`：刪除科別（僅 super_admin）
+- `POST` / `PATCH /api/contacts`：接受 `hospital`、`department` 欄位
+
+#### i18n 新增 key
+
+```
+hospital: "醫院" / "Hospital" / "病院"
+department: "科別" / "Department" / "診療科"
+departments.manage: "科別管理" / "Manage Departments" / "診療科管理"
+```
+
+---
+
+## 三十八、v2.0 開發任務清單
+
+- [ ] **Task 115** `[修改]` — 修正 `/docs` Quick Start 說明書中 Telegram Bot 綁定步驟內容
+- [ ] **Task 116** `[修改]` — DB Migration：contacts 新增 `deleted_at`、`deleted_by` 欄位；所有 GET contacts query 加上 `WHERE deleted_at IS NULL`
+- [ ] **Task 117** `[修改]` — 更新 `DELETE /api/contacts/[id]`：改為軟刪除，權限檢查（建立者或 super_admin）；隱藏非權限使用者的刪除按鈕
+- [ ] **Task 118** `[新增]` — 新增 `GET /api/contacts/trash`、`POST /api/contacts/[id]/restore`、`DELETE /api/contacts/[id]/permanent` route（均僅 super_admin）
+- [ ] **Task 119** `[新增]` — 新增 `/admin/trash` 回收區頁面（列表含姓名/刪除者/時間、還原、永久刪除操作）；Sidebar 新增「回收區」項目
+- [ ] **Task 120** `[修改]` — 網頁端合照上傳：前端整合 `exifr` 解析 EXIF，自動提取 taken_at / GPS，呼叫 `/api/geocode` 取得 location_name，一併送出
+- [ ] **Task 121** `[修改]` — DB Migration：contacts 新增 `language` 欄位（default 'english'，CHECK constraint）；OCR 建立聯絡人時依 country 自動預設語文
+- [ ] **Task 122** `[修改]` — 聯絡人詳情頁與新增表單加入「語文」下拉欄位（中文/英文/日文）；更新 API 接受 language 欄位
+- [ ] **Task 123** `[修改]` — DB Migration：contacts 新增 `hospital`、`department` 欄位；新增 `medical_departments` 主檔 table
+- [ ] **Task 124** `[修改]` — 聯絡人詳情頁與新增表單：醫師判斷邏輯，顯示醫院（自由輸入）與科別（下拉）欄位；更新 API 接受 hospital、department
+- [ ] **Task 125** `[新增]` — 新增 `GET/POST/DELETE /api/medical-departments` route；新增 `/admin/departments` 科別管理頁（僅 super_admin，含三語新增/排序/刪除）；Sidebar 新增「科別管理」
+- [ ] **Task 126** `[修改]` — i18n 三份語言檔新增 v2.0 相關 key（trash、language、hospital、department）
