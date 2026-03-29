@@ -8,8 +8,8 @@
 - **軟刪除 / 回收區**：所有刪除改為軟刪除（deleted_at），新增 `/admin/trash` 回收區頁面（僅 super_admin 可查看、還原、永久刪除）
 - **網頁端照片 EXIF**：上傳合照時前端自動提取 GPS 座標與拍攝日期（exifr），呼叫 reverse geocode 取得地名，顯示日期以拍攝日期為準
 - **語文欄位**：contacts 新增 language 欄位（中文/英文/日文），依 country 自動預設（TW→中文、JP→日文、其他→英文）
-- **醫師欄位**：contacts 新增 hospital（自由輸入）與 department（科別下拉）；新增 medical_departments 主檔與 `/admin/departments` 管理頁（super_admin）
-- **DB**：contacts 新增 deleted_at、deleted_by、language、hospital、department 欄位；新增 medical_departments table
+- **醫師欄位**：contacts 新增 hospital（自由輸入）與 department（科別，自由輸入）欄位
+- **DB**：contacts 新增 deleted_at、deleted_by、language、hospital、department 欄位
 - **i18n**：zh-TW / en / ja 新增 v2.0 相關 key
 
 
