@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v2.1.2 — 修正缺漏的 i18n keys（2026-03-29）
+
+### 變更項目
+
+- **新增 `batch` namespace**：批次上傳頁面重寫後所需的全部 key（status、dupLegend、progress 等）
+- **新增 `login` namespace**：登入頁面的 subtitle、button、hint、errors.*
+- **新增 `contacts.logTypes`**：聯絡人詳情頁的互動紀錄類型標籤（筆記、會議、郵件、系統）
+- **新增 `notes.types`**：筆記搜尋頁的類型篩選標籤（筆記、會議、郵件）
+- 同步 root `/messages/` 與 `src/messages/`
+
+---
+
 ## v2.1.1 — 改用 Hunter.io Email 補查；修正 i18n root messages（2026-03-29）
 
 ### 變更項目
