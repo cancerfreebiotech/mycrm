@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## v2.1.3 — 全面修正 i18n namespace 不符問題（2026-03-29）
+
+### 變更項目
+
+- **新增 `mail` namespace**：對應 contacts/[id] 頁面的寄信功能（原 `sendEmail` key 名不符）
+- **新增 `models` namespace**：對應 AI 模型管理頁面（原 `aiModels` key 名不符）
+- **新增 `tasks` namespace**：任務頁面全部 i18n key
+- **新增 `countries` namespace**：國家管理頁面全部 i18n key
+- **新增 `reports` namespace**：報表頁面全部 i18n key（含 Gmail 整合、排程）
+- **補齊 `dashboard`**：title、recentContacts、countryDistribution、countryOther、pendingNotes、noNotes
+- **補齊 `contacts`**：backToList、fax、addressEn、country、importance、creator、cardImages、interactionLogs、logPlaceholder、noLogs、loadMore、editContact、scanCard、sectionCompany/Contact/Social/Met、metAt/Date、referredBy、extraData、addTag、noTagsMatch、sendMail、uploadCard
+- **補齊 `unassignedNotes`**：assignTitle、assignSearch、searching、notFound
+- **補齊 `notes`**：allTypes、clearDate、confirmDelete、meetingDate
+- **補齊 `users`**：colName/Email/Telegram/Teams/Role/LastLogin/Actions、selfRoleHint、updating、demoteToMember、promoteToAdmin
+- **補齊 `settings`**：teamsBot、teamsBound/Unbound、aiModel、light/dark、assistants、assistantsHint、noAssistants、saved、saving
+- **補齊 `templates`**：colTitle/Subject/Attachments/Created、aiGenerating、generate、uploading、uploadBtn、saving
+- 同步 root `/messages/`
+
+---
+
 ## v2.1.2 — 修正缺漏的 i18n keys（2026-03-29）
 
 ### 變更項目
