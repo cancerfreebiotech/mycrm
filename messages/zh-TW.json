@@ -280,6 +280,7 @@
   },
   "unassignedNotes": {
     "title": "未歸類筆記",
+    "subtitle": "尚未歸類到聯絡人的筆記",
     "assignContact": "指定聯絡人",
     "assignTitle": "指定聯絡人",
     "assignPlaceholder": "搜尋聯絡人...",
@@ -288,14 +289,22 @@
     "notFound": "找不到符合的聯絡人",
     "assignSuccess": "已成功歸類",
     "deleteConfirm": "確定要刪除此筆記嗎？",
-    "empty": "目前沒有未歸類的筆記"
+    "empty": "目前沒有未歸類的筆記",
+    "emptyHint": "所有筆記都已歸類到聯絡人"
   },
   "tags": {
     "title": "Tag 管理",
+    "subtitle": "管理所有聯絡人的 Tag",
     "namePlaceholder": "輸入 Tag 名稱",
-    "contactCount": "使用中聯絡人",
+    "count": "共 {n} 個 Tag",
+    "noTags": "尚未建立任何 Tag",
+    "colName": "Tag 名稱",
+    "colContacts": "使用中聯絡人",
+    "colCreated": "建立時間",
+    "contactCount": "{n} 位聯絡人",
     "deleteConfirm": "確定要刪除此 Tag？刪除後所有聯絡人的此 Tag 將一併移除。",
-    "duplicateName": "此 Tag 名稱已存在"
+    "duplicateName": "此 Tag 名稱已存在",
+    "errorDuplicate": "此 Tag 名稱已存在"
   },
   "users": {
     "title": "使用者管理",

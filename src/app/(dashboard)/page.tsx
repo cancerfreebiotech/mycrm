@@ -47,6 +47,7 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<ContactOption[]>([])
   const [searching, setSearching] = useState(false)
+  const [displayName, setDisplayName] = useState<string>('')
 
   const supabase = createBrowserSupabaseClient()
 
@@ -55,6 +56,12 @@ export default function DashboardPage() {
     loadUnassignedNotes()
     loadTagStats()
     loadCountryStats()
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.email) {
+        supabase.from('users').select('display_name').eq('email', data.user.email).single()
+          .then(({ data: u }) => { if (u?.display_name) setDisplayName(u.display_name) })
+      }
+    })
   }, [])
 
   async function loadStats() {
@@ -190,7 +197,7 @@ export default function DashboardPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
-        <p className="text-gray-500 dark:text-gray-400 mt-1">{t('welcome')}</p>
+        <p className="text-gray-500 dark:text-gray-400 mt-1">{displayName ? t('welcome', { name: displayName }) : ''}</p>
       </div>
 
       {/* 統計卡片 */}

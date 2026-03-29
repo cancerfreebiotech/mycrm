@@ -280,6 +280,7 @@
   },
   "unassignedNotes": {
     "title": "未分類メモ",
+    "subtitle": "まだ連絡先に割り当てられていないメモ",
     "assignContact": "連絡先を割り当て",
     "assignTitle": "連絡先を割り当て",
     "assignPlaceholder": "連絡先を検索...",
@@ -288,14 +289,22 @@
     "notFound": "一致する連絡先が見つかりません",
     "assignSuccess": "割り当てが完了しました",
     "deleteConfirm": "このメモを削除してもよろしいですか？",
-    "empty": "未分類のメモはありません"
+    "empty": "未分類のメモはありません",
+    "emptyHint": "すべてのメモが連絡先に割り当てられています"
   },
   "tags": {
     "title": "タグ管理",
+    "subtitle": "すべての連絡先タグを管理",
     "namePlaceholder": "タグ名を入力",
-    "contactCount": "使用中の連絡先",
+    "count": "{n} 件のタグ",
+    "noTags": "タグがまだありません",
+    "colName": "タグ名",
+    "colContacts": "使用中の連絡先",
+    "colCreated": "作成日時",
+    "contactCount": "{n} 件の連絡先",
     "deleteConfirm": "このタグを削除しますか？すべての連絡先からも削除されます。",
-    "duplicateName": "このタグ名は既に存在します"
+    "duplicateName": "このタグ名は既に存在します",
+    "errorDuplicate": "このタグ名は既に存在します"
   },
   "users": {
     "title": "ユーザー管理",

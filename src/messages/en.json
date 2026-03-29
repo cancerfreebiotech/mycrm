@@ -280,6 +280,7 @@
   },
   "unassignedNotes": {
     "title": "Unassigned Notes",
+    "subtitle": "Notes not yet assigned to a contact",
     "assignContact": "Assign Contact",
     "assignTitle": "Assign Contact",
     "assignPlaceholder": "Search contact...",
@@ -288,14 +289,22 @@
     "notFound": "No matching contacts found",
     "assignSuccess": "Successfully assigned",
     "deleteConfirm": "Are you sure you want to delete this note?",
-    "empty": "No unassigned notes"
+    "empty": "No unassigned notes",
+    "emptyHint": "All notes have been assigned to contacts"
   },
   "tags": {
     "title": "Tag Management",
+    "subtitle": "Manage all contact tags",
     "namePlaceholder": "Enter tag name",
-    "contactCount": "Contacts",
+    "count": "{n} tags",
+    "noTags": "No tags created yet",
+    "colName": "Tag Name",
+    "colContacts": "Contacts",
+    "colCreated": "Created At",
+    "contactCount": "{n} contacts",
     "deleteConfirm": "Delete this tag? It will be removed from all contacts.",
-    "duplicateName": "This tag name already exists"
+    "duplicateName": "This tag name already exists",
+    "errorDuplicate": "This tag name already exists"
   },
   "users": {
     "title": "User Management",
