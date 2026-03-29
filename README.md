@@ -2,7 +2,7 @@
 
 A lightweight CRM built for `@cancerfree.io`. Snap a business card in Telegram → AI reads it → one tap to save → manage everything on the web.
 
-> Current version: **v1.3.0**
+> Current version: **v2.0.0**
 
 ---
 
@@ -15,7 +15,11 @@ A lightweight CRM built for `@cancerfree.io`. Snap a business card in Telegram �
 - **Email** — Send from the contact page via Microsoft Graph. Supports templates (with attachments), AI-generated content, editable To field, and one-off temp attachments.
 - **Task Management** — Create self-reminders or assign tasks to teammates; assistants can mark tasks done.
 - **Countries** — Admin-managed country list (ISO 3166-1 α-2 with multilingual names and flag emoji); contacts link to a country.
-- **Reports** — Generate Excel reports for contacts and interaction logs; schedule recurring email delivery via Gmail OAuth.
+- **Reports** — Generate Excel reports for contacts and interaction logs (incl. visit time/location); schedule recurring email delivery via Gmail OAuth.
+- **Soft Delete & Trash** — Contacts are soft-deleted (deleted_at); super_admin can restore or permanently delete via `/admin/trash`.
+- **Photo EXIF** — Uploading companion photos auto-extracts GPS + shooting date (exifr); reverse geocode to location name; preview shown during upload.
+- **Language / Medical Fields** — Contacts have `language` (中文/英文/日文), `hospital`, and `department` fields for medical contacts.
+- **Visit Records** — Interaction logs support `meeting_time` and `meeting_location`; web form has time picker + location input; Bot `/n` auto-parses via Gemini, `/v` guides step-by-step.
 - **Microsoft SSO** — Only `@cancerfree.io` accounts can sign in (Azure AD → Supabase Auth).
 - **Role-based Access** — `member` and `super_admin`. Admins manage users, AI endpoints/models, tags, templates, and countries.
 - **i18n** — UI fully translated in 繁中 / English / 日本語; locale saved in cookie.
@@ -59,6 +63,7 @@ A lightweight CRM built for `@cancerfree.io`. Snap a business card in Telegram �
 | `/admin/templates` | Email template management |
 | `/admin/reports` | Report generation + scheduled delivery |
 | `/admin/countries` | Country list management |
+| `/admin/trash` | Soft-deleted contacts (super_admin only) |
 | `/api/bot` | Telegram webhook |
 
 ---
@@ -73,12 +78,19 @@ contacts (id, created_by, name, name_en, name_local,
           email, second_email, phone, second_phone,
           address, website, linkedin_url, facebook_url,
           notes, country_code → countries.code,
+          language, hospital, department,
+          deleted_at, deleted_by,
           card_img_url, created_at)
 
 contact_cards (id, contact_id, url, storage_path, label, created_at)
 
+contact_photos (id, contact_id, photo_url, storage_path,
+                taken_at, latitude, longitude, location_name, note, created_at)
+
 interaction_logs (id, contact_id, user_id, type, content,
-                  email_subject, meeting_date, created_at)
+                  email_subject, meeting_date, meeting_time, meeting_location, created_at)
+
+medical_departments (id, name, created_at)
 
 tags (id, name, created_at)
 contact_tags (contact_id, tag_id)
@@ -152,7 +164,7 @@ curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<your-domain>/a
 1. Bind your Telegram ID in **Personal Settings** on the web.
 2. Send one or more business card photos to the bot.
 3. Bot replies with extracted info and a **Save** button.
-4. Use `/note` to log meeting notes, `/search` to look up contacts, `/email` to send mail.
+4. Use `/note` / `/n` to log meeting notes (AI auto-detects visit info), `/visit` / `/v` for step-by-step guided visit records, `/search` to look up contacts, `/email` to send mail.
 
 ---
 
