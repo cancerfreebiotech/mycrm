@@ -122,10 +122,11 @@
     "recognizing": "AI 辨識中...",
     "recognizeSuccess": "辨識完成，請確認資料",
     "recognizeFailed": "辨識失敗，請手動填寫",
-    "language": "語言",
+    "language": "語文",
     "languageChinese": "中文",
-    "languageEnglish": "英文",
+    "languageEnglish": "EN",
     "languageJapanese": "日文",
+    "languageFilter": "語文篩選",
     "hospital": "醫院",
     "department": "部門"
   },

@@ -124,8 +124,9 @@
     "recognizeFailed": "Recognition failed. Please fill in manually.",
     "language": "Language",
     "languageChinese": "Chinese",
-    "languageEnglish": "English",
+    "languageEnglish": "EN",
     "languageJapanese": "Japanese",
+    "languageFilter": "Language Filter",
     "hospital": "Hospital",
     "department": "Department"
   },

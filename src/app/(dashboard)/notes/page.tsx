@@ -63,6 +63,10 @@ export default function NotesPage() {
       .order('created_at', { ascending: false })
       .range(from, to)
 
+    query = query
+      .not('content', 'ilike', '透過 Telegram Bot 新增名片%')
+      .not('content', 'ilike', '從名片王匯入%')
+
     if (typeFilter !== 'all') query = query.eq('type', typeFilter)
     if (dateFrom) query = query.gte('created_at', dateFrom)
     if (dateTo) query = query.lte('created_at', dateTo + 'T23:59:59')

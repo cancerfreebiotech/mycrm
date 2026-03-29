@@ -124,8 +124,9 @@
     "recognizeFailed": "認識に失敗しました。手動で入力してください。",
     "language": "言語",
     "languageChinese": "中国語",
-    "languageEnglish": "英語",
+    "languageEnglish": "EN",
     "languageJapanese": "日本語",
+    "languageFilter": "言語フィルター",
     "hospital": "病院",
     "department": "診療科"
   },

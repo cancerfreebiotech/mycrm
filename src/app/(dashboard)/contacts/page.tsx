@@ -30,6 +30,7 @@ interface Contact {
   met_at: string | null
   created_at: string
   importance: string
+  language: string | null
   users: { display_name: string | null } | null
   contact_tags: { tags: Tag }[]
 }
@@ -64,6 +65,8 @@ export default function ContactsPage() {
   const [selectedImportance, setSelectedImportance] = useState<string>('')
   const [importanceDropdownOpen, setImportanceDropdownOpen] = useState(false)
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false)
+  const [selectedLanguage, setSelectedLanguage] = useState<string>('')
+  const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [addDropOpen, setAddDropOpen] = useState(false)
   const [liParsing, setLiParsing] = useState(false)
@@ -90,7 +93,7 @@ export default function ContactsPage() {
 
   async function fetchAll() {
     const supabase = createBrowserSupabaseClient()
-    const SELECT = 'id, name, company, job_title, email, phone, country_code, met_at, created_at, importance, users!created_by(display_name), contact_tags(tags(id, name))'
+    const SELECT = 'id, name, company, job_title, email, phone, country_code, met_at, created_at, importance, language, users!created_by(display_name), contact_tags(tags(id, name))'
     const [contactResult, { data: tagData }, { data: countryData }] = await Promise.all([
       supabase.from('contacts').select(SELECT).is('deleted_at', null).order('created_at', { ascending: false }),
       supabase.from('tags').select('id, name').order('name'),
@@ -166,7 +169,8 @@ export default function ContactsPage() {
         code === '__other__' ? !c.country_code : c.country_code === code
       )
     const matchImportance = !selectedImportance || c.importance === selectedImportance
-    return matchQuery && matchMet && matchTags && matchCountry && matchImportance
+    const matchLanguage = !selectedLanguage || c.language === selectedLanguage
+    return matchQuery && matchMet && matchTags && matchCountry && matchImportance && matchLanguage
   })
 
   const sorted = sortField
@@ -474,6 +478,40 @@ export default function ContactsPage() {
                   }`}
                 >
                   {value && <ImportanceDots value={value} />}
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Language filter dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => { setLanguageDropdownOpen((v) => !v); setTagDropdownOpen(false); setCountryDropdownOpen(false); setImportanceDropdownOpen(false) }}
+            className="flex items-center gap-2 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            {t('languageFilter')}
+            {selectedLanguage && (
+              <span className="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs px-1.5 py-0.5 rounded-full">1</span>
+            )}
+            <ChevronDown size={14} />
+          </button>
+          {languageDropdownOpen && (
+            <div className="absolute top-full mt-1 left-0 z-10 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-36">
+              {[
+                { value: '', label: 'ALL' },
+                { value: 'chinese', label: t('languageChinese') },
+                { value: 'english', label: 'EN' },
+                { value: 'japanese', label: t('languageJapanese') },
+              ].map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => { setSelectedLanguage(value); setLanguageDropdownOpen(false); setPage(1) }}
+                  className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 ${
+                    selectedLanguage === value ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300'
+                  }`}
+                >
                   {label}
                 </button>
               ))}
