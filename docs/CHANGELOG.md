@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v2.2.8 — 聯絡人列表改用 API route（2026-03-31）
+
+### 變更項目
+- 聯絡人列表改從 `/api/contacts/all`（service role）拉資料，繞過 PostgREST max_rows=1000 限制
+
 ## v2.2.7 — 聯絡人頁面修正（2026-03-31）
 
 ### 變更項目
