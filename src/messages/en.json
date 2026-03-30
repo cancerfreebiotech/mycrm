@@ -283,6 +283,8 @@
     "meetingDate": "Meeting date: {date}",
     "viewAll": "View all",
     "contactCount": "{count} contacts",
+    "sortNewest": "Newest first",
+    "sortOldest": "Oldest first",
     "types": {
       "note": "Note",
       "meeting": "Meeting",
@@ -455,7 +457,13 @@
     "assigneesLabel": "Assignees",
     "selfReminder": "If no assignee, this is a personal reminder",
     "saving": "Saving...",
-    "confirmCancel": "Are you sure you want to cancel this task?"
+    "confirmCancel": "Are you sure you want to cancel this task?",
+    "status": {
+      "pending": "Pending",
+      "done": "Done",
+      "postponed": "Postponed",
+      "cancelled": "Cancelled"
+    }
   },
   "countries": {
     "title": "Country Management",
@@ -572,7 +580,8 @@
     "searching": "Searching...",
     "searchResult": "Searched {total}, found {found} emails",
     "noApiKey": "Please set API Key first",
-    "loadingStats": "Loading..."
+    "loadingStats": "Loading...",
+    "searchDetail": "Search Detail"
   },
   "login": {
     "docs": "Documentation",

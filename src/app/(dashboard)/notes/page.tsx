@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Search, FileText, Users, Mail, Calendar, Trash2, ChevronRight } from 'lucide-react'
+import { Search, FileText, Users, Mail, Calendar, Trash2, ChevronRight, ArrowDownUp } from 'lucide-react'
 
 type LogType = 'all' | 'note' | 'meeting' | 'email'
 
@@ -55,9 +55,11 @@ export default function NotesPage() {
   const [dateTo, setDateTo] = useState('')
   const [typeFilter, setTypeFilter] = useState<LogType>('all')
   const [page, setPage] = useState(1)
+  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
+  const [jumpInput, setJumpInput] = useState('')
   const [deleting, setDeleting] = useState<string | null>(null)
 
-  useEffect(() => { setPage(1) }, [keyword, dateFrom, dateTo, typeFilter])
+  useEffect(() => { setPage(1) }, [keyword, dateFrom, dateTo, typeFilter, sortDir])
 
   const fetchGroups = useCallback(async () => {
     setLoading(true)
@@ -68,7 +70,7 @@ export default function NotesPage() {
       .not('contact_id', 'is', null)
       .not('content', 'ilike', '透過 Telegram Bot 新增名片%')
       .not('content', 'ilike', '從名片王匯入%')
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: sortDir === 'asc' })
       .limit(FETCH_LIMIT)
 
     if (typeFilter !== 'all') query = query.eq('type', typeFilter)
@@ -106,7 +108,7 @@ export default function NotesPage() {
 
     setGroups(built)
     setLoading(false)
-  }, [keyword, dateFrom, dateTo, typeFilter])
+  }, [keyword, dateFrom, dateTo, typeFilter, sortDir])
 
   useEffect(() => { fetchGroups() }, [fetchGroups])
 
@@ -194,11 +196,20 @@ export default function NotesPage() {
         </div>
       </div>
 
-      {/* Summary */}
+      {/* Summary + sort toggle */}
       {!loading && (
         <div className="flex items-center justify-between mb-3 text-sm text-gray-500 dark:text-gray-400">
           <span>{t('contactCount', { count: groups.length })}</span>
-          {totalPages > 1 && <span>{tc('page', { current: page, total: totalPages })}</span>}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSortDir((d) => d === 'desc' ? 'asc' : 'desc')}
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 dark:hover:text-blue-400"
+            >
+              <ArrowDownUp size={13} />
+              {sortDir === 'desc' ? t('sortNewest') : t('sortOldest')}
+            </button>
+            {totalPages > 1 && <span>{tc('page', { current: page, total: totalPages })}</span>}
+          </div>
         </div>
       )}
 
@@ -290,7 +301,7 @@ export default function NotesPage() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-1 mt-4">
+        <div className="flex items-center justify-center gap-1 mt-4 flex-wrap">
           <button onClick={() => setPage(1)} disabled={page === 1}
             className="px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40">«</button>
           <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
@@ -316,6 +327,26 @@ export default function NotesPage() {
             className="px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40">›</button>
           <button onClick={() => setPage(totalPages)} disabled={page === totalPages}
             className="px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40">»</button>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              const n = parseInt(jumpInput, 10)
+              if (!isNaN(n) && n >= 1 && n <= totalPages) setPage(n)
+              setJumpInput('')
+            }}
+            className="flex items-center gap-1 ml-1"
+          >
+            <input
+              type="number"
+              min={1}
+              max={totalPages}
+              value={jumpInput}
+              onChange={(e) => setJumpInput(e.target.value)}
+              placeholder="跳至"
+              className="w-14 px-2 py-1 text-xs text-center border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <button type="submit" className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">Go</button>
+          </form>
         </div>
       )}
     </div>

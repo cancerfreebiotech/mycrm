@@ -91,9 +91,10 @@ export async function POST() {
     .order('hunter_searched_at', { ascending: true, nullsFirst: true })
     .limit(50)
 
-  if (!contacts?.length) return NextResponse.json({ total: 0, found: 0 })
+  if (!contacts?.length) return NextResponse.json({ total: 0, found: 0, results: [] })
 
   let found = 0
+  const results: Array<{ name: string | null; company: string | null; email: string | null }> = []
 
   for (const contact of contacts) {
     try {
@@ -125,10 +126,12 @@ export async function POST() {
           .update({ hunter_searched_at: new Date().toISOString() })
           .eq('id', contact.id)
       }
+
+      results.push({ name: contact.name, company: contact.company, email })
     } catch {
-      // skip individual errors, continue batch
+      results.push({ name: contact.name, company: contact.company, email: null })
     }
   }
 
-  return NextResponse.json({ total: contacts.length, found })
+  return NextResponse.json({ total: contacts.length, found, results })
 }

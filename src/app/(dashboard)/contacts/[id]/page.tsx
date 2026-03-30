@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { sendMail } from '@/lib/graph'
-import { ArrowLeft, ImageIcon, Mail, X, Pencil, Loader2, Plus, Upload, Trash2, Copy, Check, Sparkles, Paperclip, ZoomIn, ZoomOut, Maximize2, ChevronDown, Merge, Search } from 'lucide-react'
+import { ArrowLeft, ImageIcon, Mail, X, Pencil, Loader2, Plus, Upload, Trash2, Copy, Check, Sparkles, Paperclip, ZoomIn, ZoomOut, Maximize2, ChevronDown, Merge, Search, RotateCw } from 'lucide-react'
 import Image from 'next/image'
 
 interface Tag { id: string; name: string }
@@ -211,6 +211,7 @@ export default function ContactDetailPage() {
 
   const [contact, setContact] = useState<Contact | null>(null)
   const [contactCards, setContactCards] = useState<ContactCard[]>([])
+  const [rotatingCard, setRotatingCard] = useState<string | null>(null)
   const [contactPhotos, setContactPhotos] = useState<ContactPhoto[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [allCountries, setAllCountries] = useState<Country[]>([])
@@ -729,6 +730,27 @@ export default function ContactDetailPage() {
     load()
   }
 
+  async function rotateCard(cardId: string, deg: 90 | 180 | 270, side: 'front' | 'back' = 'front') {
+    setRotatingCard(`${cardId}-${side}`)
+    try {
+      const res = await fetch(`/api/cards/${cardId}/rotate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deg, side }),
+      })
+      if (!res.ok) throw new Error('旋轉失敗')
+      const { url } = await res.json()
+      setContactCards((prev) => prev.map((c) => {
+        if (c.id !== cardId) return c
+        return side === 'front' ? { ...c, card_img_url: url } : { ...c, card_img_back_url: url }
+      }))
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '旋轉失敗')
+    } finally {
+      setRotatingCard(null)
+    }
+  }
+
   // ── Tags ────────────────────────────────────────────────────────────────────
 
   async function addTag(tag: Tag) {
@@ -1226,19 +1248,39 @@ export default function ContactDetailPage() {
               <div key={card.id} className="relative group">
                 <div className="flex gap-1">
                   {/* Front */}
-                  <div className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative" onClick={() => openLightbox(card.card_img_url)}>
-                    <Image src={card.card_img_url} alt={card.label ?? '名片正面'} width={144} height={96} className="object-cover w-full h-full" />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-                      <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
-                    </div>
-                  </div>
-                  {/* Back (if exists) */}
-                  {card.card_img_back_url && (
-                    <div className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative" onClick={() => openLightbox(card.card_img_back_url!)}>
-                      <Image src={card.card_img_back_url} alt={card.label ? `${card.label} 反面` : '名片反面'} width={144} height={96} className="object-cover w-full h-full" />
+                  <div className="relative">
+                    <div className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative" onClick={() => openLightbox(card.card_img_url)}>
+                      <Image src={card.card_img_url} alt={card.label ?? '名片正面'} width={144} height={96} className="object-cover w-full h-full" />
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
                         <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
                       </div>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); rotateCard(card.id, 90, 'front') }}
+                      disabled={rotatingCard === `${card.id}-front`}
+                      title="順時針旋轉 90°"
+                      className="absolute bottom-1 left-1 bg-black/60 text-white rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 disabled:opacity-50"
+                    >
+                      {rotatingCard === `${card.id}-front` ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
+                    </button>
+                  </div>
+                  {/* Back (if exists) */}
+                  {card.card_img_back_url && (
+                    <div className="relative">
+                      <div className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative" onClick={() => openLightbox(card.card_img_back_url!)}>
+                        <Image src={card.card_img_back_url} alt={card.label ? `${card.label} 反面` : '名片反面'} width={144} height={96} className="object-cover w-full h-full" />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                          <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                        </div>
+                      </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); rotateCard(card.id, 90, 'back') }}
+                        disabled={rotatingCard === `${card.id}-back`}
+                        title="順時針旋轉 90°"
+                        className="absolute bottom-1 left-1 bg-black/60 text-white rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 disabled:opacity-50"
+                      >
+                        {rotatingCard === `${card.id}-back` ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
+                      </button>
                     </div>
                   )}
                 </div>

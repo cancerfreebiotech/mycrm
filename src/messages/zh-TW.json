@@ -283,6 +283,8 @@
     "meetingDate": "會議日期：{date}",
     "viewAll": "查看全部",
     "contactCount": "共 {count} 位聯絡人",
+    "sortNewest": "最新在前",
+    "sortOldest": "最舊在前",
     "types": {
       "note": "筆記",
       "meeting": "會議",
@@ -455,7 +457,13 @@
     "assigneesLabel": "指派對象",
     "selfReminder": "若未指派對象，則為個人提醒",
     "saving": "儲存中...",
-    "confirmCancel": "確定要取消此任務嗎？"
+    "confirmCancel": "確定要取消此任務嗎？",
+    "status": {
+      "pending": "待處理",
+      "done": "完成",
+      "postponed": "延期",
+      "cancelled": "取消"
+    }
   },
   "countries": {
     "title": "國家管理",
@@ -572,7 +580,8 @@
     "searching": "補查中...",
     "searchResult": "共查 {total} 筆，找到 {found} 筆 email",
     "noApiKey": "請先設定 API Key",
-    "loadingStats": "載入中..."
+    "loadingStats": "載入中...",
+    "searchDetail": "本次查詢明細"
   },
   "login": {
     "docs": "說明文件",

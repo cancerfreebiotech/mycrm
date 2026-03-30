@@ -70,7 +70,7 @@ function HunterSection() {
   const [saving, setSaving] = useState(false)
   const [savedOk, setSavedOk] = useState(false)
   const [searching, setSearching] = useState(false)
-  const [searchResult, setSearchResult] = useState<{ total: number; found: number } | null>(null)
+  const [searchResult, setSearchResult] = useState<{ total: number; found: number; results: Array<{ name: string | null; company: string | null; email: string | null }> } | null>(null)
 
   const loadStats = useCallback(async () => {
     const res = await fetch('/api/admin/hunter')
@@ -190,6 +190,30 @@ function HunterSection() {
           </p>
         )}
       </div>
+
+      {/* Per-contact results */}
+      {searchResult && searchResult.results.length > 0 && (
+        <div className="mt-4 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+          <div className="bg-gray-50 dark:bg-gray-800 px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+            {t('searchDetail')}
+          </div>
+          <div className="divide-y divide-gray-100 dark:divide-gray-800 max-h-64 overflow-y-auto">
+            {searchResult.results.map((r, i) => (
+              <div key={i} className="flex items-center gap-3 px-3 py-2 text-sm">
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium text-gray-800 dark:text-gray-200">{r.name ?? '—'}</span>
+                  {r.company && <span className="text-gray-400 text-xs ml-2">{r.company}</span>}
+                </div>
+                {r.email ? (
+                  <span className="text-green-600 dark:text-green-400 text-xs font-mono">{r.email}</span>
+                ) : (
+                  <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

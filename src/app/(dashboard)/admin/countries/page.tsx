@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Plus, Pencil, Trash2, Check, X, Loader2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Check, X, Loader2, ChevronsUpDown, ChevronUp, ChevronDown } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
 interface Country {
@@ -85,6 +85,8 @@ export default function AdminCountriesPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmDeleteCode, setConfirmDeleteCode] = useState<string | null>(null)
+  const [sortField, setSortField] = useState<'code' | 'name_zh' | 'name_en'>('code')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   useEffect(() => { fetchCountries() }, [])
 
@@ -170,6 +172,28 @@ export default function AdminCountriesPage() {
     fetchCountries()
   }
 
+  function handleSort(field: 'code' | 'name_zh' | 'name_en') {
+    if (sortField === field) {
+      setSortDir((d) => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDir('asc')
+    }
+  }
+
+  const sortedCountries = [...countries].sort((a, b) => {
+    const av = a[sortField] ?? ''
+    const bv = b[sortField] ?? ''
+    return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+  })
+
+  function SortIcon({ field }: { field: 'code' | 'name_zh' | 'name_en' }) {
+    if (sortField !== field) return <ChevronsUpDown size={12} className="inline ml-1 text-gray-300" />
+    return sortDir === 'asc'
+      ? <ChevronUp size={12} className="inline ml-1 text-blue-500" />
+      : <ChevronDown size={12} className="inline ml-1 text-blue-500" />
+  }
+
   const inputClass = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
 
   return (
@@ -189,10 +213,10 @@ export default function AdminCountriesPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <tr>
-              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 w-16">{t('colCode')}</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 w-16 cursor-pointer hover:text-blue-500 select-none" onClick={() => handleSort('code')}>{t('colCode')}<SortIcon field="code" /></th>
               <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 w-8">旗</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">{t('colNameZh')}</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 hidden sm:table-cell">{t('colNameEn')}</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-500 select-none" onClick={() => handleSort('name_zh')}>{t('colNameZh')}<SortIcon field="name_zh" /></th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 hidden sm:table-cell cursor-pointer hover:text-blue-500 select-none" onClick={() => handleSort('name_en')}>{t('colNameEn')}<SortIcon field="name_en" /></th>
               <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 hidden md:table-cell">{t('colNameJa')}</th>
               <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 w-20">{t('colStatus')}</th>
               <th className="px-4 py-3 text-right font-medium text-gray-600 dark:text-gray-400 w-28">{t('colActions')}</th>
@@ -210,7 +234,7 @@ export default function AdminCountriesPage() {
                 <td colSpan={7} className="px-4 py-8 text-center text-gray-400">{t('noCountries')}</td>
               </tr>
             ) : (
-              countries.map((c) => (
+              sortedCountries.map((c) => (
                 <tr key={c.code} className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
                   <td className="px-4 py-3 font-mono font-medium text-gray-900 dark:text-gray-100">{c.code}</td>
                   <td className="px-4 py-3 text-lg">{c.emoji}</td>

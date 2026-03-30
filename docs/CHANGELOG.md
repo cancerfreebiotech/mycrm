@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v2.2.1 — 排序、旋轉、語言修正、Hunter明細（2026-03-30）
+
+### 變更項目
+- **國家管理排序**：點擊代碼/中文名/英文名欄位可排序，支援升降序切換
+- **筆記搜尋**：新增日期排序切換（最新/最舊在前）；分頁加入跳頁輸入框
+- **任務語言修正**：補齊三語 `tasks.status.*`（pending/done/postponed/cancelled）
+- **名片圖片旋轉**：聯絡人頁名片圖 hover 顯示旋轉按鈕，點擊後自動旋轉 90° 並存回 Storage
+- **Hunter 補查明細**：補查完成後顯示每位聯絡人查詢結果（姓名、公司、找到的 email）
+- **語言補齊**：新增 `notes.sortNewest/sortOldest`、`hunter.searchDetail` 三語
+
+---
+
 ## v2.2.0 — Hunter補查管理、語文Migration、筆記分組、Bot多語言、名片王分頁（2026-03-30）
 
 ### 變更項目
