@@ -583,7 +583,10 @@
     "loadingStats": "読み込み中...",
     "searchDetail": "検索明細",
     "foundDetail": "Email 取得済み",
-    "notFoundDetail": "Email 未取得"
+    "notFoundDetail": "Email 未取得",
+    "resetSearch": "検索記録をリセット",
+    "resetConfirm": "Email未取得の検索記録をリセットしますか？",
+    "resetDone": "{count}件をリセットしました"
   },
   "login": {
     "docs": "使用説明書",

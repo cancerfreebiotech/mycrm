@@ -70,6 +70,7 @@ function HunterSection() {
   const [saving, setSaving] = useState(false)
   const [savedOk, setSavedOk] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const [searchResult, setSearchResult] = useState<{ total: number; found: number; results: Array<{ name: string | null; company: string | null; email: string | null }> } | null>(null)
 
   const loadStats = useCallback(async () => {
@@ -180,6 +181,22 @@ function HunterSection() {
         >
           {searching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
           {searching ? t('searching') : t('startSearch')}
+        </button>
+        <button
+          onClick={async () => {
+            if (!confirm(t('resetConfirm'))) return
+            setResetting(true)
+            const res = await fetch('/api/admin/hunter', { method: 'DELETE' })
+            const data = await res.json()
+            setResetting(false)
+            await loadStats()
+            alert(t('resetDone', { count: data.reset ?? 0 }))
+          }}
+          disabled={resetting}
+          className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
+        >
+          {resetting ? <Loader2 size={14} className="animate-spin" /> : null}
+          {t('resetSearch')}
         </button>
         {!stats?.hasApiKey && (
           <p className="text-xs text-gray-400">{t('noApiKey')}</p>

@@ -89,7 +89,7 @@ export async function POST() {
     .is('deleted_at', null)
     .or(`hunter_searched_at.is.null,hunter_searched_at.lt.${thirtyDaysAgo}`)
     .order('hunter_searched_at', { ascending: true, nullsFirst: true })
-    .limit(50)
+    .limit(100)
 
   if (!contacts?.length) return NextResponse.json({ total: 0, found: 0, results: [] })
 
@@ -134,4 +134,19 @@ export async function POST() {
   }
 
   return NextResponse.json({ total: contacts.length, found, results })
+}
+
+// DELETE — reset hunter_searched_at for all contacts without email
+export async function DELETE() {
+  const supabase = createServiceClient()
+  const { count, error } = await supabase
+    .from('contacts')
+    .update({ hunter_searched_at: null })
+    .is('email', null)
+    .not('hunter_searched_at', 'is', null)
+    .is('deleted_at', null)
+    .select('id', { count: 'exact', head: true })
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true, reset: count ?? 0 })
 }

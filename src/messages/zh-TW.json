@@ -583,7 +583,10 @@
     "loadingStats": "載入中...",
     "searchDetail": "本次查詢明細",
     "foundDetail": "已找到 email",
-    "notFoundDetail": "找不到 email"
+    "notFoundDetail": "找不到 email",
+    "resetSearch": "重置查詢紀錄",
+    "resetConfirm": "確定要重置所有未找到 email 的查詢紀錄嗎？",
+    "resetDone": "已重置 {count} 筆"
   },
   "login": {
     "docs": "說明文件",

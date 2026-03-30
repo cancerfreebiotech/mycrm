@@ -583,7 +583,10 @@
     "loadingStats": "Loading...",
     "searchDetail": "Search Detail",
     "foundDetail": "Email found",
-    "notFoundDetail": "Email not found"
+    "notFoundDetail": "Email not found",
+    "resetSearch": "Reset Search Records",
+    "resetConfirm": "Reset all not-found search records?",
+    "resetDone": "Reset {count} records"
   },
   "login": {
     "docs": "Documentation",
