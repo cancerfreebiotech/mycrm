@@ -30,9 +30,10 @@ export async function POST(
   // Derive storage path from public URL
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const publicPrefix = `${supabaseUrl}/storage/v1/object/public/cards/`
-  const storagePath = imgUrl.startsWith(publicPrefix)
+  const rawPath = imgUrl.startsWith(publicPrefix)
     ? imgUrl.slice(publicPrefix.length)
     : null
+  const storagePath = rawPath ? rawPath.split('?')[0] : null
 
   if (!storagePath) {
     return NextResponse.json({ error: 'cannot_derive_path' }, { status: 400 })
