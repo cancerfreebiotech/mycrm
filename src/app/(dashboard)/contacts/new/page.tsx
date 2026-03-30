@@ -39,6 +39,12 @@ const EMPTY_FORM: OcrFields & { notes: string; country_code: string; met_at: str
   department: '',
 }
 
+function countryToLanguage(code: string | null | undefined): string {
+  if (code === 'TW' || code === 'CN') return 'chinese'
+  if (code === 'JP') return 'japanese'
+  return 'english'
+}
+
 const FIELD_LABELS: Record<string, string> = {
   name: '姓名', name_en: '英文姓名', name_local: '當地語言姓名',
   company: '公司', company_en: '英文公司', company_local: '當地語言公司',
@@ -92,7 +98,7 @@ export default function NewContactPage() {
         const raw = sessionStorage.getItem('linkedin_prefill')
         if (raw) {
           try {
-            const li = JSON.parse(raw) as { name?: string; name_en?: string; job_title?: string; company?: string; linkedin_url?: string; email?: string; notes?: string }
+            const li = JSON.parse(raw) as { name?: string; name_en?: string; job_title?: string; company?: string; linkedin_url?: string; email?: string; notes?: string; country_code?: string }
             sessionStorage.removeItem('linkedin_prefill')
             setForm(prev => ({
               ...prev,
@@ -104,6 +110,8 @@ export default function NewContactPage() {
               email: li.email ?? '',
               notes: li.notes ?? '',
               source: 'linkedin',
+              country_code: li.country_code ?? '',
+              language: countryToLanguage(li.country_code),
             }))
           } catch { /* ignore */ }
         }
@@ -118,7 +126,11 @@ export default function NewContactPage() {
   }, [])
 
   function set(field: keyof typeof EMPTY_FORM, value: string) {
-    setForm((prev) => ({ ...prev, [field]: value }))
+    setForm((prev) => {
+      const next = { ...prev, [field]: value }
+      if (field === 'country_code') next.language = countryToLanguage(value)
+      return next
+    })
   }
 
   async function checkDup() {
@@ -233,6 +245,11 @@ export default function NewContactPage() {
       for (const field of Object.keys(FIELD_LABELS) as (keyof OcrFields)[]) {
         const val = ocrResult[field]
         if (val) next[field] = val
+      }
+      const ocrWithCountry = ocrResult as Partial<OcrFields> & { country_code?: string }
+      if (ocrWithCountry.country_code) {
+        next.country_code = ocrWithCountry.country_code
+        next.language = countryToLanguage(ocrWithCountry.country_code)
       }
       return next
     })

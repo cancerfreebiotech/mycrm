@@ -281,6 +281,8 @@
     "noResults": "該当するメモが見つかりません",
     "confirmDelete": "このメモを削除してもよろしいですか？",
     "meetingDate": "ミーティング日：{date}",
+    "viewAll": "すべて表示",
+    "contactCount": "{count}件の連絡先",
     "types": {
       "note": "メモ",
       "meeting": "ミーティング",
@@ -552,6 +554,25 @@
     "title": "システムメンテナンス中",
     "subtitle": "System Maintenance",
     "message": "しばらくしてからもう一度お試しください。急ぎの場合は管理者にご連絡ください。"
+  },
+  "hunter": {
+    "title": "Hunter.io メール補完",
+    "freeQuotaHint": "無料プラン：月50クレジット",
+    "apiKey": "API キー",
+    "apiKeySet": "設定済み",
+    "apiKeyPlaceholder": "Hunter.io API キーを入力",
+    "saveKey": "API キーを保存",
+    "saved": "保存しました",
+    "statsTitle": "メールなし連絡先の統計",
+    "totalNoEmail": "メールなし",
+    "neverSearched": "未検索",
+    "searchedNotFound": "検索済み・未発見",
+    "searchedThisMonth": "今月検索済み",
+    "startSearch": "補完開始",
+    "searching": "検索中...",
+    "searchResult": "{total}件検索、{found}件のメール発見",
+    "noApiKey": "先にAPIキーを設定してください",
+    "loadingStats": "読み込み中..."
   },
   "login": {
     "docs": "使用説明書",

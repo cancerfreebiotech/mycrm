@@ -281,6 +281,8 @@
     "noResults": "找不到符合的筆記",
     "confirmDelete": "確定要刪除此筆記嗎？",
     "meetingDate": "會議日期：{date}",
+    "viewAll": "查看全部",
+    "contactCount": "共 {count} 位聯絡人",
     "types": {
       "note": "筆記",
       "meeting": "會議",
@@ -552,6 +554,25 @@
     "title": "系統維護中",
     "subtitle": "System Maintenance",
     "message": "請稍後再試。如有急需請聯絡管理員。"
+  },
+  "hunter": {
+    "title": "Hunter.io Email 補查",
+    "freeQuotaHint": "免費方案每月 50 credits",
+    "apiKey": "API Key",
+    "apiKeySet": "已設定",
+    "apiKeyPlaceholder": "輸入 Hunter.io API Key",
+    "saveKey": "儲存 API Key",
+    "saved": "已儲存",
+    "statsTitle": "無 email 聯絡人統計",
+    "totalNoEmail": "無 email 聯絡人",
+    "neverSearched": "從未查過",
+    "searchedNotFound": "查過但找不到",
+    "searchedThisMonth": "本月已查",
+    "startSearch": "開始補查",
+    "searching": "補查中...",
+    "searchResult": "共查 {total} 筆，找到 {found} 筆 email",
+    "noApiKey": "請先設定 API Key",
+    "loadingStats": "載入中..."
   },
   "login": {
     "docs": "說明文件",

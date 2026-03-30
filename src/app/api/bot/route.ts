@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { getBotLanguage, BOT_MESSAGES, type BotMessages } from '@/lib/bot-messages'
 import { analyzeBusinessCard, generateEmailContent, parseTaskCommand, parseMeetingCommand, parseMetCommand, parseVisitNote, withGeminiRetry } from '@/lib/gemini'
 import { processCardImage, processPhotoWithExif, extractExif, generateCardFilename } from '@/lib/imageProcessor'
 import { checkDuplicates } from '@/lib/duplicate'
 import { sendMail, createCalendarEvent } from '@/lib/graph'
 import { getValidProviderToken } from '@/lib/graph-server'
 import { sendTeamsTaskNotification, sendTeamsMessage } from '@/lib/teams'
+
+function countryToLanguage(code: string | null | undefined): string {
+  if (code === 'TW' || code === 'CN') return 'chinese'
+  if (code === 'JP') return 'japanese'
+  return 'english'
+}
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`
@@ -145,7 +152,7 @@ async function downloadTelegramPhoto(fileId: string): Promise<Buffer> {
 
 // ── Handle /AI ────────────────────────────────────────────────────────────────
 
-async function handleAI(chatId: number, aiModelId: string | null) {
+async function handleAI(chatId: number, aiModelId: string | null, m: BotMessages) {
   const supabase = createServiceClient()
   if (!aiModelId) {
     await sendMessage(chatId, '🤖 目前使用預設模型：<b>gemini-2.5-flash</b>')
@@ -206,20 +213,21 @@ async function handleMeet(
   chatId: number,
   user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
   text: string,
+  m: BotMessages,
 ) {
   const supabase = createServiceClient()
   if (!text.trim()) {
-    await sendMessage(chatId, '請提供會議資訊，例如：\n<code>/meet 3/25 下午1點 參訪 九州大學實驗室</code>\n<code>/meet 明天下午3點 和 Luna 開產品會議</code>')
+    await sendMessage(chatId, m.meetUsage)
     return
   }
 
-  await sendMessage(chatId, '⏳ AI 解析中...')
+  await sendMessage(chatId, m.meetParsing)
 
   let parsed
   try {
     parsed = await parseMeetingCommand(text, new Date().toISOString(), user.ai_model_id)
   } catch {
-    await sendMessage(chatId, '❌ AI 解析失敗，請確認格式後再試。')
+    await sendMessage(chatId, m.meetParseFailed)
     return
   }
 
@@ -265,7 +273,7 @@ async function handleMeet(
     .single()
 
   if (draftErr || !draft) {
-    await sendMessage(chatId, '❌ 暫存行程失敗，請稍後再試。')
+    await sendMessage(chatId, m.meetSaveFailed)
     return
   }
 
@@ -292,30 +300,11 @@ async function handleMeet(
 
 // ── Handle /help ──────────────────────────────────────────────────────────────
 
-async function handleHelp(chatId: number) {
-  const text =
-    `🤖 <b>myCRM Bot 指令列表</b>\n\n` +
-    `📷 <b>傳送照片</b> — 掃描名片，AI 辨識後存入 CRM\n\n` +
-    `/search [關鍵字]　/s — 搜尋聯絡人\n` +
-    `/note　/n — 新增筆記（AI 自動偵測拜訪資訊）\n` +
-    `/visit　/v — 逐步新增拜訪紀錄（引導輸入日期/時間/地點）\n` +
-    `/email　/e — 發送郵件給聯絡人\n` +
-    `/a　/a @姓名 — 新增名片（OCR 比對現有資料，確認後填入空白欄位）\n` +
-    `/p　/p @姓名 — 新增合照（壓縮後存入，保留 EXIF 時間/GPS）\n` +
-    `/work [描述]　/w — AI 解析任務，指派給他人或提醒自己\n` +
-    `/meet [描述]　/m — AI 安排會議行程，確認後建立 Outlook 邀請\n` +
-    `/met {數量} {描述}　— 批次記錄最近 N 位聯絡人的認識場合\n` +
-    `　　例：/met 5 台北生技展 王小明介紹 昨天\n` +
-    `/li — LinkedIn 截圖轉聯絡人（傳送截圖後 AI 解析，確認後新增）\n` +
-    `/tasks　/t — 列出我的待處理任務\n` +
-    `/user　/u — 列出組織成員\n` +
-    `/AI — 顯示目前使用的 AI 模型\n` +
-    `/stop　/stop off — 開啟/關閉維護模式（管理員限定）\n` +
-    `/help　/h — 顯示此說明`
-  await sendMessage(chatId, text)
+async function handleHelp(chatId: number, m: BotMessages) {
+  await sendMessage(chatId, m.help)
 }
 
-async function handleUser(chatId: number) {
+async function handleUser(chatId: number, m: BotMessages) {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('users')
@@ -323,7 +312,7 @@ async function handleUser(chatId: number) {
     .order('created_at', { ascending: true })
 
   if (!data || data.length === 0) {
-    await sendMessage(chatId, '目前沒有成員資料。')
+    await sendMessage(chatId, m.membersEmpty)
     return
   }
 
@@ -334,15 +323,15 @@ async function handleUser(chatId: number) {
     return `${i + 1}. <b>${name}</b>\n   📧 ${u.email}\n   ${tg} · ${teams}`
   })
 
-  await sendMessage(chatId, `👥 <b>組織成員列表（共 ${data.length} 人）</b>\n\n` + lines.join('\n\n'))
+  await sendMessage(chatId, m.membersHeader(data.length) + '\n\n' + lines.join('\n\n'))
 }
 
 // ── Handle /search ────────────────────────────────────────────────────────────
 
-async function handleSearch(chatId: number, keyword: string) {
+async function handleSearch(chatId: number, keyword: string, m: BotMessages) {
   const contacts = await searchContacts(keyword)
   if (contacts.length === 0) {
-    await sendMessage(chatId, `找不到符合「${keyword}」的聯絡人`)
+    await sendMessage(chatId, m.searchNotFound(keyword))
     return
   }
 
@@ -386,8 +375,10 @@ async function processAddCardPhoto(
   user: { id: string; ai_model_id: string | null },
   contactId: string,
   fileId: string,
-  contactNameHint?: string
+  contactNameHint?: string,
+  m?: BotMessages
 ) {
+  const _m = m ?? BOT_MESSAGES.zh
   const supabase = createServiceClient()
   try {
     const imgBuffer = await downloadTelegramPhoto(fileId)
@@ -555,8 +546,10 @@ async function processPersonalPhoto(
   contactId: string,
   fileIds: string[],
   contactNameHint?: string,
-  note?: string
+  note?: string,
+  m?: BotMessages
 ) {
+  const _m = m ?? BOT_MESSAGES.zh
   const supabase = createServiceClient()
   try {
     let uploaded = 0
@@ -595,11 +588,11 @@ async function processPersonalPhoto(
     const displayName = contactNameHint ?? '此聯絡人'
     const countMsg = fileIds.length > 1 ? ` ${fileIds.length} 張` : ''
     const noteMsg = note ? '，附註已存入互動紀錄' : ''
-    await sendMessage(chatId, `✅ 合照${countMsg}已存入 <b>${displayName}</b>${noteMsg}`)
+    await sendMessage(chatId, _m.photoSaved(displayName, countMsg, noteMsg))
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[bot] personal photo error:', msg)
-    await sendMessage(chatId, `❌ 處理失敗：${msg}`)
+    await sendMessage(chatId, _m.photoFailed(msg))
   }
 }
 
@@ -610,7 +603,8 @@ async function handlePhoto(
   fromId: number,
   user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
   photo: { file_id: string },
-  session: { state: string; context: Record<string, unknown> } | null
+  session: { state: string; context: Record<string, unknown> } | null,
+  m: BotMessages = BOT_MESSAGES.zh
 ) {
   const supabase = createServiceClient()
 
@@ -747,11 +741,11 @@ async function handlePhoto(
     .select('*', { count: 'exact', head: true })
     .eq('created_by', user.id)
   if ((pendingCount ?? 0) >= 5) {
-    await sendMessage(chatId, `⚠️ 你目前有 ${pendingCount} 張名片待確認，請先處理後再傳新的`)
+    await sendMessage(chatId, m.cardPendingWarning(pendingCount ?? 0))
     return
   }
 
-  await sendMessage(chatId, '⏳ 處理中，請稍候...')
+  await sendMessage(chatId, m.cardOcring)
   let storagePath: string | null = null
   let cardImgUrl: string | null = null
   try {
@@ -772,7 +766,7 @@ async function handlePhoto(
     // OCR
     const cardData = await withGeminiRetry(
       () => analyzeBusinessCard(compressed, user.ai_model_id),
-      async () => { await sendMessage(chatId, '⏳ 辨識失敗，3 秒後自動重試...') }
+      async () => { await sendMessage(chatId, m.cardOcrRetry) }
     )
 
     // Rotate and re-upload if Gemini detected non-zero rotation
@@ -804,9 +798,7 @@ async function handlePhoto(
         storage_path: storagePath,
         card_img_url: cardImgUrl,
       })
-      await sendMessage(chatId,
-        '❌ 辨識失敗：無法識別姓名。\n\n照片已保留，已通知管理員查看。\n若需要，管理員可至後台手動建立聯絡人。'
-      )
+      await sendMessage(chatId, m.cardOcrFailed)
       return
     }
 
@@ -818,7 +810,7 @@ async function handlePhoto(
       dupWarning += `\n🔍 系統有相似聯絡人：${similar[0].name}（${similar[0].company}），請確認是否為同一人`
     }
 
-    const contactPayload = { ...cardData, card_img_url: cardImgUrl }
+    const contactPayload = { ...cardData, card_img_url: cardImgUrl, language: countryToLanguage(cardData.country_code) }
     const { data: pending, error: pendingError } = await supabase
       .from('pending_contacts')
       .insert({ data: contactPayload, created_by: user.id, storage_path: storagePath })
@@ -847,7 +839,7 @@ async function handlePhoto(
       `📞 電話：${cardData.phone || '—'}\n` +
       `🌍 國家：${countryDisplay}` +
       dupWarning +
-      `\n\n請確認是否存檔？`
+      m.cardConfirmPrompt
 
     await sendMessage(chatId, resultText, {
       reply_markup: {
@@ -885,10 +877,11 @@ async function handleWork(
   chatId: number,
   user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
   naturalText: string,
-  lastContactId?: string | null
+  lastContactId?: string | null,
+  m: BotMessages = BOT_MESSAGES.zh
 ) {
   const supabase = createServiceClient()
-  await sendMessage(chatId, '⏳ AI 解析任務中，請稍候...')
+  await sendMessage(chatId, m.taskParsing)
 
   let parsed
   try {
@@ -966,7 +959,7 @@ async function handleWork(
     .single()
 
   if (error || !task) {
-    await sendMessage(chatId, '❌ 建立任務失敗，請稍後再試。')
+    await sendMessage(chatId, m.taskSaveFailed)
     return
   }
 
@@ -1039,7 +1032,8 @@ async function handleMet(
   chatId: number,
   user: { id: string; email: string; ai_model_id: string | null },
   count: number,
-  description: string
+  description: string,
+  m: BotMessages = BOT_MESSAGES.zh
 ) {
   const supabase = createServiceClient()
   const nowIso = new Date().toISOString()
@@ -1102,7 +1096,8 @@ async function handleMet(
 
 async function handleTasks(
   chatId: number,
-  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null }
+  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
+  m: BotMessages = BOT_MESSAGES.zh
 ) {
   const supabase = createServiceClient()
 
@@ -1124,7 +1119,7 @@ async function handleTasks(
     .limit(10)
 
   if (!tasks || tasks.length === 0) {
-    await sendMessage(chatId, '✅ 你目前沒有待處理任務！')
+    await sendMessage(chatId, m.todosEmpty)
     return
   }
 
@@ -1157,7 +1152,8 @@ async function handleText(
   fromId: number,
   user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
   text: string,
-  session: { state: string; context: Record<string, unknown>; last_contact_id: string | null } | null
+  session: { state: string; context: Record<string, unknown>; last_contact_id: string | null } | null,
+  m: BotMessages = BOT_MESSAGES.zh
 ) {
   const supabase = createServiceClient()
 
@@ -1165,42 +1161,42 @@ async function handleText(
 
   // ── /help /h ───────────────────────────────────────────────────────────────
   if (cmd === '/help' || cmd === '/h') {
-    await handleHelp(chatId)
+    await handleHelp(chatId, m)
     return
   }
 
   // ── /stop — maintenance mode (super_admin only) ────────────────────────────
   if (cmd === '/stop' || cmd === '/stop off') {
     if (user.role !== 'super_admin') {
-      await sendMessage(chatId, '⛔ 此指令僅限管理員使用')
+      await sendMessage(chatId, m.adminOnly)
       return
     }
     const enable = cmd === '/stop'
     await supabase.from('system_settings').update({ value: enable ? 'true' : 'false', updated_at: new Date().toISOString(), updated_by: user.id }).eq('key', 'maintenance_mode')
     if (enable) {
-      await sendMessage(chatId, '🔧 維護模式已開啟。所有使用者將看到維護中提示。')
+      await sendMessage(chatId, m.maintenanceOn)
     } else {
-      await sendMessage(chatId, '✅ 維護模式已關閉。系統恢復正常。')
+      await sendMessage(chatId, m.maintenanceOff)
     }
     return
   }
 
   // ── /user /u ───────────────────────────────────────────────────────────────
   if (cmd === '/user' || cmd === '/u') {
-    await handleUser(chatId)
+    await handleUser(chatId, m)
     return
   }
 
   // ── /AI ────────────────────────────────────────────────────────────────────
   if (cmd.toLowerCase() === '/ai') {
-    await handleAI(chatId, user.ai_model_id)
+    await handleAI(chatId, user.ai_model_id, m)
     return
   }
 
   // ── /search /s ─────────────────────────────────────────────────────────────
   const searchMatch = cmd.match(/^\/(?:search|s)\s+(.+)/)
   if (searchMatch) {
-    await handleSearch(chatId, searchMatch[1].trim())
+    await handleSearch(chatId, searchMatch[1].trim(), m)
     return
   }
 
@@ -1465,7 +1461,7 @@ async function handleText(
   // ── /work /w ───────────────────────────────────────────────────────────────
   const workMatch = cmd.match(/^\/(?:work|w)\s+(.+)/s)
   if (workMatch) {
-    await handleWork(chatId, user, workMatch[1].trim(), session?.last_contact_id)
+    await handleWork(chatId, user, workMatch[1].trim(), session?.last_contact_id, m)
     return
   }
 
@@ -1474,20 +1470,20 @@ async function handleText(
   console.log('[bot] /met check:', { cmd: cmd.slice(0, 60), matched: !!metMatch })
   if (metMatch) {
     const count = Math.min(parseInt(metMatch[1], 10), 20)
-    await handleMet(chatId, user, count, metMatch[2].trim())
+    await handleMet(chatId, user, count, metMatch[2].trim(), m)
     return
   }
 
   // ── /meet /m ───────────────────────────────────────────────────────────────
   const meetMatch = text.match(/^\/(?:meet|m)(?:@\S+)?\s*([\s\S]*)$/i)
   if (meetMatch) {
-    await handleMeet(chatId, user, meetMatch[1].trim())
+    await handleMeet(chatId, user, meetMatch[1].trim(), m)
     return
   }
 
   // ── /tasks /t ──────────────────────────────────────────────────────────────
   if (cmd === '/tasks' || cmd === '/t') {
-    await handleTasks(chatId, user)
+    await handleTasks(chatId, user, m)
     return
   }
 
@@ -1708,8 +1704,10 @@ export async function POST(req: NextRequest) {
 
       try {
         const user = await getAuthorizedUser(from.id)
+        const lang = await getBotLanguage(from, supabase)
+        const m = BOT_MESSAGES[lang]
         if (!user) {
-          await answerCallbackQuery(callbackQueryId, '⛔ 無使用權限')
+          await answerCallbackQuery(callbackQueryId, m.unauthorized)
           return NextResponse.json({ ok: true })
         }
 
@@ -1728,7 +1726,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ ok: true })
           }
 
-          await answerCallbackQuery(callbackQueryId, '✅ 已成功存檔！')
+          await answerCallbackQuery(callbackQueryId, m.cbCardSaved)
 
           // Strip rotation field (OCR-only, no contacts column)
           const { rotation: _r, ...contactFields } = pending.data as Record<string, unknown>
@@ -1779,9 +1777,9 @@ export async function POST(req: NextRequest) {
             await supabase.storage.from('cards').remove([pending.storage_path])
           }
           await supabase.from('pending_contacts').delete().eq('id', pendingId)
-          await answerCallbackQuery(callbackQueryId, '已取消')
+          await answerCallbackQuery(callbackQueryId, m.cbCardCancelled)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, '已取消，名片未存檔。')
+          await sendMessage(from.id, m.cardCancelled)
         }
 
         // ── Meet confirm ──────────────────────────────────────────────────────
@@ -1818,7 +1816,7 @@ export async function POST(req: NextRequest) {
               location: draft.location ?? undefined,
             })
             await supabase.from('meeting_drafts').delete().eq('id', draftId)
-            await answerCallbackQuery(callbackQueryId, '✅ 行程已建立！')
+            await answerCallbackQuery(callbackQueryId, m.cbMeetConfirmed)
             await editMessageReplyMarkup(message.chat.id, message.message_id)
             const timeLabel = formatTaipeiRange(draft.start_at, draft.duration_minutes)
             const linkText = webLink ? `\n\n🔗 <a href="${webLink}">在 Outlook 開啟</a>` : ''
@@ -1833,9 +1831,9 @@ export async function POST(req: NextRequest) {
         else if (data?.startsWith('meet_cancel_')) {
           const draftId = data.replace('meet_cancel_', '')
           await supabase.from('meeting_drafts').delete().eq('id', draftId)
-          await answerCallbackQuery(callbackQueryId, '已取消')
+          await answerCallbackQuery(callbackQueryId, m.cbMeetCancelled)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, '已取消，行程未建立。')
+          await sendMessage(from.id, m.meetCancelled)
         }
 
         // ── /visit: use last contact ─────────────────────────────────────────
@@ -2049,6 +2047,7 @@ export async function POST(req: NextRequest) {
                 email: parsed.email || null,
                 linkedin_url: parsed.linkedin_url || null,
                 source: 'linkedin',
+                language: countryToLanguage(parsed.country_code),
                 created_by: user.id,
               })
               .select('id')
@@ -2507,9 +2506,12 @@ export async function POST(req: NextRequest) {
     const chatId: number = message.chat.id
     const fromId: number = message.from?.id
 
+    const lang = await getBotLanguage(message.from, supabase)
+    const m = BOT_MESSAGES[lang]
+
     const user = await getAuthorizedUser(fromId)
     if (!user) {
-      await sendMessage(chatId, '⛔ 此 Bot 為 CancerFree Biotech 內部專用，你的帳號尚未授權。')
+      await sendMessage(chatId, m.unauthorized)
       return NextResponse.json({ ok: true })
     }
 
@@ -2530,13 +2532,13 @@ export async function POST(req: NextRequest) {
 
     if (message.photo) {
       const photo = message.photo[message.photo.length - 1]
-      await handlePhoto(chatId, fromId, user, photo, session)
+      await handlePhoto(chatId, fromId, user, photo, session, m)
     } else if (message.document && message.document.mime_type?.startsWith('image/')) {
       // Image sent as file — route to same handlers; EXIF will be preserved
       const doc = { file_id: message.document.file_id }
-      await handlePhoto(chatId, fromId, user, doc, session)
+      await handlePhoto(chatId, fromId, user, doc, session, m)
     } else if (message.text) {
-      await handleText(chatId, fromId, user, message.text, session)
+      await handleText(chatId, fromId, user, message.text, session, m)
     }
 
     return NextResponse.json({ ok: true })

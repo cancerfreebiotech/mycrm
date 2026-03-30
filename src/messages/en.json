@@ -281,6 +281,8 @@
     "noResults": "No matching notes found",
     "confirmDelete": "Are you sure you want to delete this note?",
     "meetingDate": "Meeting date: {date}",
+    "viewAll": "View all",
+    "contactCount": "{count} contacts",
     "types": {
       "note": "Note",
       "meeting": "Meeting",
@@ -552,6 +554,25 @@
     "title": "System Maintenance",
     "subtitle": "System Maintenance",
     "message": "Please try again later. Contact admin if urgent."
+  },
+  "hunter": {
+    "title": "Hunter.io Email Lookup",
+    "freeQuotaHint": "Free plan: 50 credits per month",
+    "apiKey": "API Key",
+    "apiKeySet": "Set",
+    "apiKeyPlaceholder": "Enter Hunter.io API Key",
+    "saveKey": "Save API Key",
+    "saved": "Saved",
+    "statsTitle": "Contacts Without Email",
+    "totalNoEmail": "No Email",
+    "neverSearched": "Never Searched",
+    "searchedNotFound": "Searched, Not Found",
+    "searchedThisMonth": "Searched This Month",
+    "startSearch": "Start Lookup",
+    "searching": "Searching...",
+    "searchResult": "Searched {total}, found {found} emails",
+    "noApiKey": "Please set API Key first",
+    "loadingStats": "Loading..."
   },
   "login": {
     "docs": "Documentation",

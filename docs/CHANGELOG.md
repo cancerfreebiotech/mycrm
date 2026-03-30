@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v2.2.0 — Hunter補查管理、語文Migration、筆記分組、Bot多語言、名片王分頁（upcoming）
+## v2.2.0 — Hunter補查管理、語文Migration、筆記分組、Bot多語言、名片王分頁（2026-03-30）
 
 ### 變更項目
 

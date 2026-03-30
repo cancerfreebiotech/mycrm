@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   Activity, Loader2, RefreshCw, CheckCircle2, XCircle, MinusCircle,
-  Database, Cpu, Send, Bot, Zap
+  Database, Cpu, Send, Bot, Zap, Search, Key
 } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import type { ServiceStatus } from '@/app/api/health-check/route'
 
 const SERVICE_ICONS: Record<string, React.ReactNode> = {
@@ -13,6 +14,15 @@ const SERVICE_ICONS: Record<string, React.ReactNode> = {
   'Telegram Bot': <Bot size={18} />,
   'SendGrid': <Send size={18} />,
   'Teams Bot': <Zap size={18} />,
+}
+
+interface HunterStats {
+  totalNoEmail: number
+  neverSearched: number
+  searchedNotFound: number
+  searchedThisMonth: number
+  pendingCount: number
+  hasApiKey: boolean
 }
 
 interface HealthResult {
@@ -49,6 +59,137 @@ function LatencyBar({ ms }: { ms: number | undefined }) {
         <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${width}%` }} />
       </div>
       <span className="text-xs text-gray-400 w-14 text-right">{ms} ms</span>
+    </div>
+  )
+}
+
+function HunterSection() {
+  const t = useTranslations('hunter')
+  const [stats, setStats] = useState<HunterStats | null>(null)
+  const [apiKey, setApiKey] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [savedOk, setSavedOk] = useState(false)
+  const [searching, setSearching] = useState(false)
+  const [searchResult, setSearchResult] = useState<{ total: number; found: number } | null>(null)
+
+  const loadStats = useCallback(async () => {
+    const res = await fetch('/api/admin/hunter')
+    if (res.ok) setStats(await res.json())
+  }, [])
+
+  useEffect(() => { loadStats() }, [loadStats])
+
+  const saveKey = async () => {
+    setSaving(true)
+    setSavedOk(false)
+    const res = await fetch('/api/admin/hunter', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey }),
+    })
+    setSaving(false)
+    if (res.ok) {
+      setSavedOk(true)
+      setApiKey('')
+      loadStats()
+      setTimeout(() => setSavedOk(false), 3000)
+    }
+  }
+
+  const startSearch = async () => {
+    setSearching(true)
+    setSearchResult(null)
+    const res = await fetch('/api/admin/hunter', { method: 'POST' })
+    setSearching(false)
+    if (res.ok) {
+      const data = await res.json()
+      setSearchResult(data)
+      loadStats()
+    }
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mt-6">
+      <div className="flex items-center gap-2 mb-5">
+        <div className="p-2 rounded-lg bg-orange-50 dark:bg-orange-950/30 text-orange-500">
+          <Search size={18} />
+        </div>
+        <div>
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{t('title')}</h2>
+          <p className="text-xs text-gray-400">{t('freeQuotaHint')}</p>
+        </div>
+      </div>
+
+      {/* API Key */}
+      <div className="mb-5">
+        <label className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
+          <Key size={12} /> {t('apiKey')}
+          {stats?.hasApiKey && (
+            <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400 ml-2">
+              <CheckCircle2 size={11} /> {t('apiKeySet')}
+            </span>
+          )}
+        </label>
+        <div className="flex gap-2">
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder={t('apiKeyPlaceholder')}
+            className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-400"
+          />
+          <button
+            onClick={saveKey}
+            disabled={saving || !apiKey}
+            className="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 flex items-center gap-1.5"
+          >
+            {saving ? <Loader2 size={13} className="animate-spin" /> : null}
+            {savedOk ? t('saved') : t('saveKey')}
+          </button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="mb-5">
+        <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">{t('statsTitle')}</p>
+        {stats ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: t('totalNoEmail'), value: stats.totalNoEmail, color: 'text-gray-700 dark:text-gray-300' },
+              { label: t('neverSearched'), value: stats.neverSearched, color: 'text-blue-600 dark:text-blue-400' },
+              { label: t('searchedNotFound'), value: stats.searchedNotFound, color: 'text-yellow-600 dark:text-yellow-400' },
+              { label: t('searchedThisMonth'), value: stats.searchedThisMonth, color: 'text-green-600 dark:text-green-400' },
+            ].map((s) => (
+              <div key={s.label} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-center">
+                <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400">{t('loadingStats')}</p>
+        )}
+      </div>
+
+      {/* Trigger */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          onClick={startSearch}
+          disabled={searching || !stats?.hasApiKey}
+          className="flex items-center gap-2 px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50"
+        >
+          {searching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+          {searching ? t('searching') : t('startSearch')}
+        </button>
+        {!stats?.hasApiKey && (
+          <p className="text-xs text-gray-400">{t('noApiKey')}</p>
+        )}
+        {searchResult && (
+          <p className="text-sm text-green-600 dark:text-green-400">
+            {t('searchResult', { total: searchResult.total, found: searchResult.found })}
+          </p>
+        )}
+      </div>
     </div>
   )
 }
@@ -203,6 +344,9 @@ export default function HealthPage() {
           <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded bg-red-400 inline-block" /> &gt; 2000 ms — 異常慢</span>
         </div>
       </div>
+
+      {/* Hunter.io section */}
+      <HunterSection />
     </div>
   )
 }

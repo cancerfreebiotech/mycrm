@@ -41,12 +41,13 @@ type ContactSearchResult = { id: string; name: string | null; name_en: string | 
 export default function CamcardPage() {
   const supabase = createBrowserSupabaseClient()  // used for contact search only
 
-  const PAGE_SIZE = 50
+  const PAGE_SIZE = 20
 
   const [groups, setGroups] = useState<GroupedCards[]>([])
   const [loading, setLoading] = useState(true)
   const [totalPending, setTotalPending] = useState(0)
   const [page, setPage] = useState(1)
+  const [jumpInput, setJumpInput] = useState('')
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
@@ -469,6 +470,34 @@ export default function CamcardPage() {
             >
               <ChevronRight size={16} />
             </button>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                const n = parseInt(jumpInput, 10)
+                const maxPage = Math.ceil(totalPending / PAGE_SIZE)
+                if (!isNaN(n) && n >= 1 && n <= maxPage) {
+                  setPage(n)
+                }
+                setJumpInput('')
+              }}
+              className="flex items-center gap-1"
+            >
+              <input
+                type="number"
+                min={1}
+                max={Math.ceil(totalPending / PAGE_SIZE)}
+                value={jumpInput}
+                onChange={(e) => setJumpInput(e.target.value)}
+                placeholder="跳至"
+                className="w-16 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1 text-xs text-center bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <button
+                type="submit"
+                className="px-2 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Go
+              </button>
+            </form>
           </div>
         )}
       </div>
