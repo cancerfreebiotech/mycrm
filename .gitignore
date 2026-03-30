@@ -37,6 +37,17 @@ yarn-error.log*
 # claude
 .claude/
 
+# scripts temp files
+/scripts/camcard-import/tmp*
+/scripts/camcard-import/b[0-9]*_[0-9]*.jpg
+/scripts/camcard-import/progress.json
+/scripts/camcard-import/failed.txt
+/scripts/camcard-import/all_names.txt
+/scripts/camcard-import/pending_names.txt
+/scripts/camcard-import/unprocessed.json
+/scripts/camcard-import/remaining.json
+/scripts/camcard-import/worklist.json
+
 # vercel
 .vercel
 
