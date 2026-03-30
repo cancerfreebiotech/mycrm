@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v2.2.5 — Dashboard 統計改用 DB 聚合（2026-03-31）
+
+### 變更項目
+- 國家分布、Tag 分布改用 SQL RPC（`dashboard_country_stats`, `dashboard_tag_stats`）
+- 不再受 Supabase 前端 1000 筆上限影響，支援萬筆以上聯絡人
+
 ## v2.2.4 — 旋轉修正、筆記跳頁、Hunter明細（2026-03-30）
 
 ### 變更項目

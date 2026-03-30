@@ -89,53 +89,27 @@ export default function DashboardPage() {
   }
 
   async function loadTagStats() {
-    const { data } = await supabase
-      .from('tags')
-      .select('name, contact_tags(tag_id)')
+    const { data } = await supabase.rpc('dashboard_tag_stats')
     if (!data) return
-    const stats = data
-      .map((t) => ({
-        name: t.name,
-        count: Array.isArray(t.contact_tags) ? t.contact_tags.length : 0,
-      }))
-      .filter((t) => t.count > 0)
-      .sort((a, b) => b.count - a.count)
-    setTagStats(stats)
+    setTagStats(data.map((r: { name: string; count: number }) => ({ name: r.name, count: Number(r.count) })))
   }
 
   async function loadCountryStats() {
-    const { data: contacts } = await supabase
-      .from('contacts')
-      .select('country_code, countries(name_zh, emoji)')
-      .is('deleted_at', null)
+    const { data } = await supabase.rpc('dashboard_country_stats')
+    if (!data) return
 
-    if (!contacts) return
-
-    const map: Record<string, { name: string; emoji: string | null; count: number }> = {}
+    const stats: CountryStat[] = []
     let otherCount = 0
 
-    contacts.forEach((c) => {
-      const code = c.country_code as string | null
-      if (!code) {
-        otherCount++
+    data.forEach((r: { country_code: string | null; name_zh: string | null; emoji: string | null; count: number }) => {
+      if (!r.country_code) {
+        otherCount += Number(r.count)
       } else {
-        if (!map[code]) {
-          const country = c.countries as { name_zh: string; emoji: string | null } | null
-          map[code] = { name: country?.name_zh ?? code, emoji: country?.emoji ?? null, count: 0 }
-        }
-        map[code].count++
+        stats.push({ code: r.country_code, name: r.name_zh ?? r.country_code, emoji: r.emoji ?? null, count: Number(r.count) })
       }
     })
 
-    const stats: CountryStat[] = Object.entries(map)
-      .filter(([, v]) => v.count > 0)
-      .map(([code, v]) => ({ code, ...v }))
-      .sort((a, b) => b.count - a.count)
-
-    if (otherCount > 0) {
-      stats.push({ code: '__other__', name: '', emoji: null, count: otherCount })
-    }
-
+    if (otherCount > 0) stats.push({ code: '__other__', name: '', emoji: null, count: otherCount })
     setCountryStats(stats)
   }
 
