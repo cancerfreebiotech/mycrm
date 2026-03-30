@@ -95,7 +95,7 @@ export default function ContactsPage() {
     const supabase = createBrowserSupabaseClient()
     const SELECT = 'id, name, company, job_title, email, phone, country_code, met_at, created_at, importance, language, users!created_by(display_name), contact_tags(tags(id, name))'
     const [contactResult, { data: tagData }, { data: countryData }] = await Promise.all([
-      supabase.from('contacts').select(SELECT).is('deleted_at', null).order('created_at', { ascending: false }),
+      supabase.from('contacts').select(SELECT).is('deleted_at', null).order('created_at', { ascending: false }).limit(10000),
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),
     ])
@@ -286,7 +286,7 @@ export default function ContactsPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm text-gray-500 dark:text-gray-400">{tc('total', { count: sorted.length })}</span>
-          <span className="hidden sm:inline text-sm text-gray-400 dark:text-gray-500">{tc('page', { page, total: totalPages })}</span>
+          <span className="hidden sm:inline text-sm text-gray-400 dark:text-gray-500">{tc('page', { current: page, total: totalPages })}</span>
           <button
             onClick={() => exportData('xlsx')}
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
