@@ -192,28 +192,47 @@ function HunterSection() {
       </div>
 
       {/* Per-contact results */}
-      {searchResult && searchResult.results.length > 0 && (
-        <div className="mt-4 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-          <div className="bg-gray-50 dark:bg-gray-800 px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-            {t('searchDetail')}
-          </div>
-          <div className="divide-y divide-gray-100 dark:divide-gray-800 max-h-64 overflow-y-auto">
-            {searchResult.results.map((r, i) => (
-              <div key={i} className="flex items-center gap-3 px-3 py-2 text-sm">
-                <div className="flex-1 min-w-0">
-                  <span className="font-medium text-gray-800 dark:text-gray-200">{r.name ?? '—'}</span>
-                  {r.company && <span className="text-gray-400 text-xs ml-2">{r.company}</span>}
+      {searchResult && (() => {
+        const notFound = searchResult.results.filter(r => !r.email)
+        const found = searchResult.results.filter(r => r.email)
+        return (
+          <div className="mt-4 space-y-3">
+            {found.length > 0 && (
+              <div className="border border-green-200 dark:border-green-900 rounded-lg overflow-hidden">
+                <div className="bg-green-50 dark:bg-green-950 px-3 py-2 text-xs font-medium text-green-700 dark:text-green-400">
+                  {t('foundDetail')} ({found.length})
                 </div>
-                {r.email ? (
-                  <span className="text-green-600 dark:text-green-400 text-xs font-mono">{r.email}</span>
-                ) : (
-                  <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
-                )}
+                <div className="divide-y divide-gray-100 dark:divide-gray-800 max-h-48 overflow-y-auto">
+                  {found.map((r, i) => (
+                    <div key={i} className="flex items-center gap-3 px-3 py-2 text-sm">
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium text-gray-800 dark:text-gray-200">{r.name ?? '—'}</span>
+                        {r.company && <span className="text-gray-400 text-xs ml-2">{r.company}</span>}
+                      </div>
+                      <span className="text-green-600 dark:text-green-400 text-xs font-mono">{r.email}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
+            )}
+            {notFound.length > 0 && (
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                <div className="bg-gray-50 dark:bg-gray-800 px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                  {t('notFoundDetail')} ({notFound.length})
+                </div>
+                <div className="divide-y divide-gray-100 dark:divide-gray-800 max-h-48 overflow-y-auto">
+                  {notFound.map((r, i) => (
+                    <div key={i} className="flex items-center gap-3 px-3 py-2 text-sm">
+                      <span className="font-medium text-gray-800 dark:text-gray-200">{r.name ?? '—'}</span>
+                      {r.company && <span className="text-gray-400 text-xs ml-2">{r.company}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

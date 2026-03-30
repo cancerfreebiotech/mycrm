@@ -581,7 +581,9 @@
     "searchResult": "Searched {total}, found {found} emails",
     "noApiKey": "Please set API Key first",
     "loadingStats": "Loading...",
-    "searchDetail": "Search Detail"
+    "searchDetail": "Search Detail",
+    "foundDetail": "Email found",
+    "notFoundDetail": "Email not found"
   },
   "login": {
     "docs": "Documentation",

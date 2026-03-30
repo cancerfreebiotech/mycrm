@@ -4,8 +4,9 @@ import sharp from 'sharp'
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   const { deg, side = 'front' } = await req.json() as { deg: 90 | 180 | 270; side?: 'front' | 'back' }
   if (![90, 180, 270].includes(deg)) {
     return NextResponse.json({ error: 'invalid_deg' }, { status: 400 })
@@ -16,7 +17,7 @@ export async function POST(
   const { data: card, error: fetchErr } = await supabase
     .from('contact_cards')
     .select('id, card_img_url, card_img_back_url, storage_path')
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   if (fetchErr || !card) {
@@ -66,7 +67,7 @@ export async function POST(
 
   // Update DB field
   const updateField = isFront ? { card_img_url: newUrl } : { card_img_back_url: newUrl }
-  await supabase.from('contact_cards').update(updateField).eq('id', params.id)
+  await supabase.from('contact_cards').update(updateField).eq('id', id)
 
   return NextResponse.json({ ok: true, url: newUrl })
 }

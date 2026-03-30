@@ -581,7 +581,9 @@
     "searchResult": "{total}件検索、{found}件のメール発見",
     "noApiKey": "先にAPIキーを設定してください",
     "loadingStats": "読み込み中...",
-    "searchDetail": "検索明細"
+    "searchDetail": "検索明細",
+    "foundDetail": "Email 取得済み",
+    "notFoundDetail": "Email 未取得"
   },
   "login": {
     "docs": "使用説明書",

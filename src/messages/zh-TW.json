@@ -581,7 +581,9 @@
     "searchResult": "共查 {total} 筆，找到 {found} 筆 email",
     "noApiKey": "請先設定 API Key",
     "loadingStats": "載入中...",
-    "searchDetail": "本次查詢明細"
+    "searchDetail": "本次查詢明細",
+    "foundDetail": "已找到 email",
+    "notFoundDetail": "找不到 email"
   },
   "login": {
     "docs": "說明文件",

@@ -208,7 +208,29 @@ export default function NotesPage() {
               <ArrowDownUp size={13} />
               {sortDir === 'desc' ? t('sortNewest') : t('sortOldest')}
             </button>
-            {totalPages > 1 && <span>{tc('page', { current: page, total: totalPages })}</span>}
+            {totalPages > 1 && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  const n = parseInt(jumpInput, 10)
+                  if (!isNaN(n) && n >= 1 && n <= totalPages) setPage(n)
+                  setJumpInput('')
+                }}
+                className="flex items-center gap-1"
+              >
+                <span className="text-xs">{tc('page', { current: page, total: totalPages })}</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={totalPages}
+                  value={jumpInput}
+                  onChange={(e) => setJumpInput(e.target.value)}
+                  placeholder="跳至"
+                  className="w-12 px-1.5 py-0.5 text-xs text-center border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <button type="submit" className="px-1.5 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">Go</button>
+              </form>
+            )}
           </div>
         </div>
       )}
@@ -327,26 +349,6 @@ export default function NotesPage() {
             className="px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40">›</button>
           <button onClick={() => setPage(totalPages)} disabled={page === totalPages}
             className="px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40">»</button>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              const n = parseInt(jumpInput, 10)
-              if (!isNaN(n) && n >= 1 && n <= totalPages) setPage(n)
-              setJumpInput('')
-            }}
-            className="flex items-center gap-1 ml-1"
-          >
-            <input
-              type="number"
-              min={1}
-              max={totalPages}
-              value={jumpInput}
-              onChange={(e) => setJumpInput(e.target.value)}
-              placeholder="跳至"
-              className="w-14 px-2 py-1 text-xs text-center border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-            <button type="submit" className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">Go</button>
-          </form>
         </div>
       )}
     </div>
