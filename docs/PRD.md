@@ -3769,3 +3769,179 @@ Telegram Bot 傳送圖片後，Gemini API 偶爾辨識失敗（網路錯誤、AP
 - [ ] **Task 131** `[新增]` — Bot 新增 `/v`（`/visit`）指令：逐步詢問聯絡人/日期/時間/地點/內容，確認後寫入 interaction_logs（type=meeting）
 - [ ] **Task 132** `[修改]` — i18n 三份語言檔新增拜訪紀錄相關 key（meeting.time、meeting.location、meeting.skip）
 
+---
+
+## 四十、v2.2 新功能規格
+
+### 40.1 Hunter.io Email 補查管理頁面
+
+#### 概覽
+
+在 `/admin/health` 頁面新增 Hunter.io Email 補查區塊，提供 API Key 設定、額度顯示、手動觸發補查功能。
+
+#### DB 變更
+
+```sql
+-- contacts 新增欄位
+alter table contacts
+  add column if not exists hunter_searched_at timestamptz default null;
+```
+
+| 欄位 | 說明 |
+|------|------|
+| `hunter_searched_at` | 上次 Hunter 查詢時間；NULL = 從未查過；有值但無 email = 查過找不到，下個月再試 |
+
+`system_settings` 補充 key（接續 v2.1 已建立的表）：
+```sql
+insert into system_settings (key, value) values ('hunter_api_key', '')
+on conflict (key) do nothing;
+```
+
+#### UI（/admin/health 新增區塊）
+
+- **API Key 設定**：輸入框 + 儲存按鈕
+- **統計顯示**：
+  - 無 email 聯絡人總數
+  - 從未查過（`hunter_searched_at IS NULL` 且 `email IS NULL`）
+  - 查過但找不到（`hunter_searched_at IS NOT NULL` 且 `email IS NULL`）
+  - 本月已查筆數
+- **免費額度提示**：「免費方案每月 50 credits」
+- **手動觸發按鈕**：「開始補查」
+  - 優先順序：從未查過 > 上次查詢超過 30 天
+  - 已有 email 的聯絡人完全跳過
+  - 補查完成後顯示結果：「共查 X 筆，找到 Y 筆 email」
+
+#### 補查邏輯
+
+```
+取得待查名單（已有 email 者排除）：
+  1. hunter_searched_at IS NULL（從未查過，優先）
+  2. hunter_searched_at < now() - interval '30 days'（超過 30 天）
+
+依序呼叫 Hunter Email Finder API：
+  POST https://api.hunter.io/v2/email-finder
+  params: first_name, last_name, company, api_key
+
+找到 email → 更新 contacts.email + hunter_searched_at = now()
+找不到    → 只更新 hunter_searched_at = now()（記錄已查過）
+```
+
+---
+
+### 40.2 聯絡人語文預設規則更新 + 既有資料 Migration
+
+#### 概覽
+
+更新語文（`language`）欄位的自動預設規則，並對既有聯絡人跑一次批次更新。
+
+#### 預設規則
+
+| 國家代碼 | 語文 |
+|----------|------|
+| `TW`（台灣）| `chinese` |
+| `CN`（中國）| `chinese` |
+| `JP`（日本）| `japanese` |
+| 其他 / 未設定 | `english` |
+
+#### DB Migration（既有資料）
+
+```sql
+-- 批次更新現有聯絡人
+update contacts set language = 'chinese'
+  where country_code in ('TW', 'CN') and deleted_at is null;
+
+update contacts set language = 'japanese'
+  where country_code = 'JP' and deleted_at is null;
+
+update contacts set language = 'english'
+  where country_code not in ('TW', 'CN', 'JP')
+    and language != 'chinese' and language != 'japanese'
+    and deleted_at is null;
+```
+
+#### 新建聯絡人規則
+
+OCR 建立聯絡人時（Bot 名片、LinkedIn、網頁新增）依 `country_code` 自動帶入 `language`，邏輯同上表。
+
+---
+
+### 40.3 筆記搜尋頁改版（以聯絡人分組）
+
+#### 概覽
+
+`/notes` 筆記搜尋頁改版，從平鋪列表改為以**聯絡人為單位分組**，每個聯絡人預設顯示最新 3 筆互動紀錄，點擊跳到聯絡人詳情頁。
+
+#### 顯示規則
+
+- 以聯絡人分組，依**該聯絡人最新一筆筆記的時間**排序（最新在上）
+- 每位聯絡人預設顯示最新 **3 筆**互動紀錄
+- 若該聯絡人有超過 3 筆，顯示「查看全部 →」連結，點擊跳到聯絡人詳情頁
+- 未歸類筆記（`contact_id IS NULL`）不在此頁顯示，維持在 `/unassigned-notes`
+
+#### 搜尋行為
+
+- 關鍵字搜尋、日期區間、類型篩選維持現有邏輯
+- 搜尋結果維持分組顯示，只顯示符合條件的聯絡人（該聯絡人至少有一筆符合的紀錄）
+- 每位聯絡人只顯示符合條件的筆記（不補滿 3 筆）
+
+#### API 調整
+
+查詢改為先 GROUP BY `contact_id`，取每位聯絡人最新 3 筆，再依聯絡人最新筆記時間排序。
+
+---
+
+### 40.4 Telegram Bot 多語言回覆
+
+#### 概覽
+
+Bot 所有回覆訊息依使用者語言設定自動切換為中文、英文或日文。
+
+#### 語言判斷優先順序
+
+1. `users.language`（使用者在 myCRM 個人設定中選擇的語言）
+2. Telegram `message.from.language_code`（Telegram 帳號語言）
+3. Fallback：**中文**
+
+#### language_code 對應規則
+
+| Telegram language_code | Bot 語言 |
+|------------------------|----------|
+| `zh`、`zh-hant`、`zh-hans` | 中文 |
+| `ja` | 日文 |
+| 其他 | 中文（fallback） |
+
+#### 實作方式
+
+- 抽出 `getBotLanguage(telegramUser, userId)` 共用函式
+- 所有 Bot 回覆字串改為從語言包讀取（建立 `src/lib/bot-messages.ts`，包含 zh / en / ja 三份訊息）
+- 適用範圍：所有 Bot 指令回覆，包含 `/help`、名片掃描、`/li`、`/n`、`/v`、`/stop` 等
+
+---
+
+### 40.5 名片王匯入審查分頁
+
+#### 概覽
+
+`/admin/camcard` 名片王匯入審查頁面新增分頁功能，支援直接跳頁，與其他列表頁分頁元件一致。
+
+#### UI
+
+- 每頁顯示筆數：與現有列表頁一致（PAGE_SIZE = 20）
+- 分頁元件：首頁、上一頁、頁碼、下一頁、末頁，支援跳頁輸入框
+- 分頁狀態顯示：「第 X 頁，共 Y 頁（Z 筆）」
+
+---
+
+## 四十一、v2.2 開發任務清單
+
+- [ ] **Task 148** `[修改]` — DB Migration：`contacts` 新增 `hunter_searched_at` 欄位；`system_settings` 補入 `hunter_api_key` 初始資料
+- [ ] **Task 149** `[修改]` — `/admin/health` 新增 Hunter.io 補查區塊：API Key 設定、統計顯示（無 email 總數、未查過、查過找不到、本月已查）、手動觸發補查按鈕
+- [ ] **Task 150** `[新增]` — 實作 Hunter Email Finder 補查邏輯：優先未查過 → 超過 30 天未查，已有 email 跳過，查後更新 `hunter_searched_at`
+- [ ] **Task 151** `[修改]` — DB Migration：批次更新現有聯絡人 `language` 欄位（TW/CN → chinese、JP → japanese、其他 → english）
+- [ ] **Task 152** `[修改]` — 新建聯絡人（Bot OCR、LinkedIn、網頁）依 `country_code` 自動套用語文預設規則（TW/CN → chinese、JP → japanese、其他 → english）
+- [ ] **Task 153** `[修改]` — `/notes` 筆記搜尋頁改版：以聯絡人分組，每人顯示最新 3 筆，依聯絡人最新筆記時間排序；超過 3 筆顯示「查看全部 →」跳聯絡人詳情頁；搜尋結果維持分組
+- [ ] **Task 154** `[新增]` — 新增 `src/lib/bot-messages.ts`：包含 zh / en / ja 三份 Bot 回覆訊息語言包
+- [ ] **Task 155** `[新增]` — 新增 `getBotLanguage(telegramUser, userId)` 共用函式：依 users.language → Telegram language_code → fallback 中文判斷語言
+- [ ] **Task 156** `[修改]` — 所有 Bot 回覆訊息改用語言包，支援中 / 英 / 日三語自動切換
+- [ ] **Task 157** `[修改]` — `/admin/camcard` 名片王匯入審查頁加入分頁功能（PAGE_SIZE=20，支援跳頁）
+

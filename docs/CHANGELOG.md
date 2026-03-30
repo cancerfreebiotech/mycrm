@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## v2.2.0 — Hunter補查管理、語文Migration、筆記分組、Bot多語言、名片王分頁（upcoming）
+
+### 變更項目
+
+- **Hunter.io 補查管理頁面**：`/admin/health` 新增 Hunter.io 區塊；API Key 設定；顯示無 email 聯絡人統計（未查過 / 查過找不到 / 本月已查）；手動觸發補查按鈕；優先查從未查過的，超過 30 天再查，已有 email 完全跳過
+- **聯絡人語文預設規則更新**：TW / CN → 中文；JP → 日文；其他 → 英文；跑 DB Migration 批次更新所有既有聯絡人
+- **筆記搜尋頁改版**：以聯絡人分組顯示，每人預設最新 3 筆，依聯絡人最新筆記時間排序；超過 3 筆顯示「查看全部 →」跳聯絡人詳情頁；搜尋維持分組；未歸類筆記維持在 `/unassigned-notes`
+- **Telegram Bot 多語言回覆**：所有 Bot 回覆訊息支援中 / 英 / 日三語自動切換；語言判斷順序：`users.language` → Telegram `language_code` → fallback 中文；新增 `bot-messages.ts` 語言包與 `getBotLanguage()` 共用函式
+- **名片王匯入審查分頁**：`/admin/camcard` 加入分頁功能（PAGE_SIZE=20），支援直接跳頁
+- **DB**：`contacts` 新增 `hunter_searched_at` 欄位；`system_settings` 補入 `hunter_api_key`
+
+---
+
 ## v2.1.3 — 全面修正 i18n namespace 不符問題（2026-03-29）
 
 ### 變更項目
