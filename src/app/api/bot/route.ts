@@ -1558,12 +1558,12 @@ async function handleText(
         return
       }
     }
-    await sendMessage(chatId, '找不到上一位聯絡人，請先掃描名片或用 <code>/a @姓名</code> 指定。')
+    await sendMessage(chatId, '找不到上一位聯絡人，請先掃描名片或用 <code>/a 姓名</code> 指定。')
     return
   }
 
-  // ── /a @name — add card to specified contact ──────────────────────────────
-  const addCardMatch = cmd.match(/^\/a\s+@(.+)/)
+  // ── /a name — add card to specified contact ──────────────────────────────
+  const addCardMatch = cmd.match(/^\/a\s+(.+)/)
   if (addCardMatch) {
     const query = addCardMatch[1].trim()
     const contacts = await searchContacts(query)
@@ -1590,12 +1590,12 @@ async function handleText(
         return
       }
     }
-    await sendMessage(chatId, '找不到上一位聯絡人，請先掃描名片或用 <code>/p @姓名</code> 指定。')
+    await sendMessage(chatId, '找不到上一位聯絡人，請先掃描名片或用 <code>/p 姓名</code> 指定。')
     return
   }
 
-  // ── /p @name — add personal photo to specified contact ────────────────────
-  const addPhotoMatch = cmd.match(/^\/p\s+@(.+)/)
+  // ── /p name — add personal photo to specified contact ────────────────────
+  const addPhotoMatch = cmd.match(/^\/p\s+(.+)/)
   if (addPhotoMatch) {
     const query = addPhotoMatch[1].trim()
     const contacts = await searchContacts(query)

@@ -73,7 +73,7 @@ export default function ContactsPage() {
   const liInputRef = useRef<HTMLInputElement>(null)
   const [page, setPage] = useState(1)
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null)
-  type SortField = 'name' | 'company' | 'job_title' | 'email' | 'phone' | 'created_at'
+  type SortField = 'name' | 'company' | 'job_title' | 'email' | 'created_at'
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -563,7 +563,6 @@ export default function ContactsPage() {
                       </button>
                     </div>
                   )}
-                  {c.phone && <p className="text-sm text-gray-700 dark:text-gray-300">{c.phone}</p>}
                 </div>
               </div>
             ))}
@@ -589,7 +588,6 @@ export default function ContactsPage() {
                 [t('company'), 'company'],
                 [t('jobTitle'), 'job_title'],
                 ['Email', 'email'],
-                [t('phone'), 'phone'],
               ] as [string, SortField][]).map(([label, field]) => (
                 <th key={field} className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">
                   <button
@@ -621,11 +619,11 @@ export default function ContactsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-gray-400">{tc('loading')}</td>
+                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">{tc('loading')}</td>
               </tr>
             ) : sorted.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-gray-400">{t('noResults')}</td>
+                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">{t('noResults')}</td>
               </tr>
             ) : (
               paginated.map((c) => (
@@ -657,7 +655,6 @@ export default function ContactsPage() {
                       </span>
                     ) : '—'}
                   </td>
-                  <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{c.phone || '—'}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {c.contact_tags.map((ct) => ct.tags && (
