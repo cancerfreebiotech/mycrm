@@ -140,6 +140,8 @@
     "loadMore": "Load More",
     "editContact": "Edit Contact",
     "scanCard": "Scan card to auto-fill data",
+    "sectionBasic": "Basic Info",
+    "sectionNotes": "Notes",
     "sectionCompany": "Company Info",
     "sectionContact": "Contact Info",
     "sectionSocial": "Social Media",

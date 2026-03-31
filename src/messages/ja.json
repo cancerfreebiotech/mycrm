@@ -140,6 +140,8 @@
     "loadMore": "さらに読み込む",
     "editContact": "連絡先を編集",
     "scanCard": "名刺をスキャンして自動入力",
+    "sectionBasic": "基本情報",
+    "sectionNotes": "備考",
     "sectionCompany": "会社情報",
     "sectionContact": "連絡先情報",
     "sectionSocial": "ソーシャルメディア",

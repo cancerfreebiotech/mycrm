@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v2.2.10 — 修正新增聯絡人頁面 i18n 缺失 key（2026-03-31）
+
+### 變更項目
+- 補上 contacts.sectionBasic、contacts.sectionNotes（三語言）
+
 ## v2.2.9 — 聯絡人列表突破 1000 筆限制（2026-03-31）
 
 ### 變更項目
