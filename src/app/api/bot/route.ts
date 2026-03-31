@@ -1503,6 +1503,23 @@ async function handleText(
     return
   }
 
+  // ── /note /n name — shortcut with contact name ────────────────────────────
+  const noteNameMatch = cmd.match(/^\/(?:note|n)\s+(.+)/)
+  if (noteNameMatch) {
+    const contacts = await searchContacts(noteNameMatch[1].trim())
+    if (contacts.length === 0) {
+      await setSession(fromId, 'waiting_for_note_content', { contact_id: null })
+      await sendMessage(chatId, '找不到此聯絡人，筆記將存為未歸類。\n\n請輸入筆記內容：')
+    } else if (contacts.length === 1) {
+      await setSession(fromId, 'waiting_for_note_content', { contact_id: contacts[0].id, contact_name: contacts[0].name })
+      await sendMessage(chatId, `找到：${contacts[0].name}（${contacts[0].company ?? ''}）\n\n請輸入筆記內容：`)
+    } else {
+      const buttons = contacts.map((c) => [{ text: `${c.name}（${c.company ?? ''}）`, callback_data: `select_contact_${c.id}` }])
+      await sendMessage(chatId, '找到多筆聯絡人，請選擇：', { reply_markup: { inline_keyboard: buttons } })
+    }
+    return
+  }
+
   // ── /note command ──────────────────────────────────────────────────────────
   if (cmd === '/note' || cmd === '/n') {
     const lastContactId = session?.last_contact_id
@@ -1522,6 +1539,23 @@ async function handleText(
     }
     await setSession(fromId, 'waiting_for_note_contact', {})
     await sendMessage(chatId, '請輸入聯絡人姓名或 Email：')
+    return
+  }
+
+  // ── /visit /v name — shortcut with contact name ──────────────────────────
+  const visitNameMatch = cmd.match(/^\/(?:visit|v)\s+(.+)/)
+  if (visitNameMatch) {
+    const contacts = await searchContacts(visitNameMatch[1].trim())
+    if (contacts.length === 0) {
+      await setSession(fromId, 'waiting_for_visit_datetime', { contact_id: null, contact_name: null })
+      await sendMessage(chatId, '找不到此聯絡人，拜訪紀錄將存為未歸類。\n\n請輸入拜訪日期時間（例：2026-03-29 14:00），或輸入「略過」：')
+    } else if (contacts.length === 1) {
+      await setSession(fromId, 'waiting_for_visit_datetime', { contact_id: contacts[0].id, contact_name: contacts[0].name })
+      await sendMessage(chatId, `找到：${contacts[0].name}（${contacts[0].company ?? ''}）\n\n請輸入拜訪日期時間（例：2026-03-29 14:00），或輸入「略過」：`)
+    } else {
+      const buttons = contacts.map((c) => [{ text: `${c.name}（${c.company ?? ''}）`, callback_data: `select_visit_contact_${c.id}` }])
+      await sendMessage(chatId, '找到多筆聯絡人，請選擇：', { reply_markup: { inline_keyboard: buttons } })
+    }
     return
   }
 
