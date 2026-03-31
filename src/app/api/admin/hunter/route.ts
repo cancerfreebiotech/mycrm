@@ -43,13 +43,28 @@ export async function GET() {
     .is('deleted_at', null)
     .or(`hunter_searched_at.is.null,hunter_searched_at.lt.${thirtyDaysAgo}`)
 
+  // Fetch Hunter.io account credit info
+  let credits: { used: number; available: number } | null = null
+  const hunterKey = apiKeyRes.data?.value
+  if (hunterKey) {
+    try {
+      const accountRes = await fetch(`https://api.hunter.io/v2/account?api_key=${hunterKey}`)
+      if (accountRes.ok) {
+        const accountData = await accountRes.json()
+        const req = accountData?.data?.requests
+        if (req) credits = { used: req.searches?.used ?? 0, available: req.searches?.available ?? 0 }
+      }
+    } catch { /* ignore */ }
+  }
+
   return NextResponse.json({
     totalNoEmail: totalRes.count ?? 0,
     neverSearched: neverRes.count ?? 0,
     searchedNotFound: notFoundRes.count ?? 0,
     searchedThisMonth: thisMonthRes.count ?? 0,
     pendingCount: pendingRes.count ?? 0,
-    hasApiKey: !!(apiKeyRes.data?.value),
+    hasApiKey: !!hunterKey,
+    credits,
   })
 }
 

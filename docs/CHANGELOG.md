@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v2.2.12 — Hunter.io 顯示剩餘 credit（2026-03-31）
+
+### 變更項目
+- Hunter 介面加上本月剩餘／已用 credits（呼叫 Hunter /v2/account API）
+
 ## v2.2.11 — 修正新增聯絡人頁面輸入凍結問題（2026-03-31）
 
 ### 變更項目

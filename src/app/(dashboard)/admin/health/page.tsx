@@ -23,6 +23,7 @@ interface HunterStats {
   searchedThisMonth: number
   pendingCount: number
   hasApiKey: boolean
+  credits: { used: number; available: number } | null
 }
 
 interface HealthResult {
@@ -118,6 +119,12 @@ function HunterSection() {
         <div>
           <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{t('title')}</h2>
           <p className="text-xs text-gray-400">{t('freeQuotaHint')}</p>
+          {stats?.credits && (
+            <p className="text-xs mt-0.5">
+              <span className="text-green-600 dark:text-green-400 font-medium">{stats.credits.available} credits 剩餘</span>
+              <span className="text-gray-400 ml-1">（本月已用 {stats.credits.used}）</span>
+            </p>
+          )}
         </div>
       </div>
 
