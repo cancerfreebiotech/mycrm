@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v2.2.11 — 修正新增聯絡人頁面輸入凍結問題（2026-03-31）
+
+### 變更項目
+- 將 Field 元件移至 NewContactPage 外部，避免每次 state 更新時 React unmount/remount 所有 input
+
 ## v2.2.10 — 修正新增聯絡人頁面 i18n 缺失 key（2026-03-31）
 
 ### 變更項目

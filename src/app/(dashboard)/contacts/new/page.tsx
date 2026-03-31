@@ -53,6 +53,25 @@ const FIELD_LABELS: Record<string, string> = {
   linkedin_url: 'LinkedIn', facebook_url: 'Facebook',
 }
 
+const inputClass = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
+const labelClass = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1'
+
+type FieldProps = { label: string; value: string; onChange: (v: string) => void; onBlur?: () => void; type?: string }
+function Field({ label, value, onChange, onBlur, type }: FieldProps) {
+  return (
+    <div>
+      <label className={labelClass}>{label}</label>
+      <input
+        type={type ?? 'text'}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+        className={inputClass}
+      />
+    </div>
+  )
+}
+
 export default function NewContactPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -342,24 +361,6 @@ export default function NewContactPage() {
     setSelectedTags((prev) => prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id])
   }
 
-  const inputClass = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
-  const labelClass = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1'
-
-  function Field({ label, field, type }: { label: string; field: keyof typeof EMPTY_FORM; type?: string }) {
-    return (
-      <div>
-        <label className={labelClass}>{label}</label>
-        <input
-          type={type ?? 'text'}
-          value={form[field]}
-          onChange={(e) => set(field, e.target.value)}
-          onBlur={['email', 'name'].includes(field) ? checkDup : undefined}
-          className={inputClass}
-        />
-      </div>
-    )
-  }
-
   const ocrHasValues = ocrResult && Object.values(ocrResult).some(Boolean)
 
   return (
@@ -548,16 +549,16 @@ export default function NewContactPage() {
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
           <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('sectionBasic')}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Field label={t('name')} field="name" />
-            <Field label={t('nameEn')} field="name_en" />
-            <Field label={t('nameLocal')} field="name_local" />
+            <Field label={t('name')} value={form.name} onChange={(v) => set('name', v)} onBlur={checkDup} />
+            <Field label={t('nameEn')} value={form.name_en} onChange={(v) => set('name_en', v)} />
+            <Field label={t('nameLocal')} value={form.name_local} onChange={(v) => set('name_local', v)} />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Field label={t('company')} field="company" />
-            <Field label={t('companyEn')} field="company_en" />
-            <Field label={t('companyLocal')} field="company_local" />
+            <Field label={t('company')} value={form.company} onChange={(v) => set('company', v)} />
+            <Field label={t('companyEn')} value={form.company_en} onChange={(v) => set('company_en', v)} />
+            <Field label={t('companyLocal')} value={form.company_local} onChange={(v) => set('company_local', v)} />
           </div>
-          <Field label={t('jobTitle')} field="job_title" />
+          <Field label={t('jobTitle')} value={form.job_title} onChange={(v) => set('job_title', v)} />
           <div>
             <label className={labelClass}>{t('importance')}</label>
             <div className="flex gap-2">
@@ -595,15 +596,15 @@ export default function NewContactPage() {
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
           <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('sectionContact')}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Email" field="email" type="email" />
-            <Field label={t('secondEmail')} field="second_email" type="email" />
-            <Field label={t('phone')} field="phone" type="tel" />
-            <Field label={t('secondPhone')} field="second_phone" type="tel" />
+            <Field label="Email" value={form.email} onChange={(v) => set('email', v)} onBlur={checkDup} type="email" />
+            <Field label={t('secondEmail')} value={form.second_email} onChange={(v) => set('second_email', v)} type="email" />
+            <Field label={t('phone')} value={form.phone} onChange={(v) => set('phone', v)} type="tel" />
+            <Field label={t('secondPhone')} value={form.second_phone} onChange={(v) => set('second_phone', v)} type="tel" />
           </div>
-          <Field label={t('address')} field="address" />
-          <Field label={t('hospital')} field="hospital" />
-          <Field label={t('department')} field="department" />
-          <Field label={t('website')} field="website" />
+          <Field label={t('address')} value={form.address} onChange={(v) => set('address', v)} />
+          <Field label={t('hospital')} value={form.hospital} onChange={(v) => set('hospital', v)} />
+          <Field label={t('department')} value={form.department} onChange={(v) => set('department', v)} />
+          <Field label={t('website')} value={form.website} onChange={(v) => set('website', v)} />
           <div>
             <label className={labelClass}>{t('country')}</label>
             <select
@@ -623,8 +624,8 @@ export default function NewContactPage() {
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
           <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('sectionSocial')}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="LinkedIn" field="linkedin_url" />
-            <Field label="Facebook" field="facebook_url" />
+            <Field label="LinkedIn" value={form.linkedin_url} onChange={(v) => set('linkedin_url', v)} />
+            <Field label="Facebook" value={form.facebook_url} onChange={(v) => set('facebook_url', v)} />
           </div>
         </section>
 
@@ -645,12 +646,12 @@ export default function NewContactPage() {
         {/* Met section */}
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
           <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('sectionMet')}</h2>
-          <Field label={t('metAt')} field="met_at" />
+          <Field label={t('metAt')} value={form.met_at} onChange={(v) => set('met_at', v)} />
           <div>
             <label className={labelClass}>{t('metDate')}</label>
             <input type="date" value={form.met_date} onChange={(e) => set('met_date', e.target.value)} className={inputClass} />
           </div>
-          <Field label={t('referredBy')} field="referred_by" />
+          <Field label={t('referredBy')} value={form.referred_by} onChange={(v) => set('referred_by', v)} />
         </section>
 
         {/* Tags */}
