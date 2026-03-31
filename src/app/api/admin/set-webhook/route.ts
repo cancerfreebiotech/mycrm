@@ -6,7 +6,7 @@ import { createServiceClient } from '@/lib/supabase'
 export async function GET(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get('secret')
   const adminSecret = process.env.ADMIN_SECRET
-  if (adminSecret && secret !== adminSecret) {
+  if (!adminSecret || secret !== adminSecret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
