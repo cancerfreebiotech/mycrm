@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { ALL_FEATURE_KEYS, FEATURE_LABELS } from '@/lib/features'
 
 interface CrmUser {
   id: string
@@ -14,6 +15,7 @@ interface CrmUser {
   role: string
   last_login_at: string | null
   created_at: string
+  granted_features: string[]
 }
 
 export default function AdminUsersPage() {
@@ -43,7 +45,7 @@ export default function AdminUsersPage() {
 
       const { data } = await supabase
         .from('users')
-        .select('id, email, display_name, telegram_id, teams_user_id, role, last_login_at, created_at')
+        .select('id, email, display_name, telegram_id, teams_user_id, role, last_login_at, created_at, granted_features')
         .order('created_at', { ascending: true })
 
       setUsers(data ?? [])
@@ -58,6 +60,19 @@ export default function AdminUsersPage() {
     const { error } = await supabase.from('users').update({ role: newRole }).eq('id', u.id)
     if (!error) {
       setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, role: newRole } : x))
+    }
+    setUpdatingId(null)
+  }
+
+  async function toggleFeature(u: CrmUser, feature: string) {
+    const current = u.granted_features ?? []
+    const next = current.includes(feature)
+      ? current.filter((f) => f !== feature)
+      : [...current, feature]
+    setUpdatingId(u.id)
+    const { error } = await supabase.from('users').update({ granted_features: next }).eq('id', u.id)
+    if (!error) {
+      setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, granted_features: next } : x))
     }
     setUpdatingId(null)
   }
@@ -114,7 +129,7 @@ export default function AdminUsersPage() {
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
                     {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : '—'}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 space-y-2">
                     <button
                       onClick={() => toggleRole(u)}
                       disabled={updatingId === u.id || u.id === currentUserId}
@@ -127,6 +142,27 @@ export default function AdminUsersPage() {
                         ? t('demoteToMember')
                         : t('promoteToAdmin')}
                     </button>
+                    {u.role !== 'super_admin' && (
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {ALL_FEATURE_KEYS.map((key) => {
+                          const granted = (u.granted_features ?? []).includes(key)
+                          return (
+                            <button
+                              key={key}
+                              onClick={() => toggleFeature(u, key)}
+                              disabled={updatingId === u.id}
+                              className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${
+                                granted
+                                  ? 'bg-blue-100 dark:bg-blue-950 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                                  : 'border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:border-gray-400'
+                              }`}
+                            >
+                              {granted ? '✓ ' : ''}{FEATURE_LABELS[key]}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))

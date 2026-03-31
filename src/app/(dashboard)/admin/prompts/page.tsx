@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { SYSTEM_PROMPTS, type PromptKey } from '@/lib/prompt-constants'
 import { Check, RotateCcw } from 'lucide-react'
+import { PermissionGate } from '@/components/PermissionGate'
 
 const PROMPT_KEYS: PromptKey[] = ['ocr_card', 'task_parse', 'email_generate', 'docs_generate']
 
@@ -74,6 +75,7 @@ export default function AdminPromptsPage() {
   if (loading) return <div className="text-sm text-gray-400 dark:text-gray-500 p-8">載入中…</div>
 
   return (
+    <PermissionGate feature="prompts">
     <div className="space-y-8 max-w-3xl">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Prompt 管理</h1>
@@ -146,5 +148,6 @@ export default function AdminPromptsPage() {
         })}
       </div>
     </div>
+    </PermissionGate>
   )
 }

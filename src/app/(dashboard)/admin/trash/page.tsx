@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { Trash2, RotateCcw, Loader2, AlertTriangle, X, CreditCard, MessageSquare } from 'lucide-react'
+import { PermissionGate } from '@/components/PermissionGate'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 
@@ -150,6 +151,7 @@ export default function TrashPage() {
   }
 
   return (
+    <PermissionGate feature="trash">
     <div className="p-6 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
@@ -380,5 +382,6 @@ export default function TrashPage() {
         </div>
       )}
     </div>
+    </PermissionGate>
   )
 }

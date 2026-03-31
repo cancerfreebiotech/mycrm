@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Check, Loader2, ExternalLink } from 'lucide-react'
+import { PermissionGate } from '@/components/PermissionGate'
 import Image from 'next/image'
 
 interface FailedScan {
@@ -51,6 +52,7 @@ export default function FailedScansPage() {
   }
 
   return (
+    <PermissionGate feature="failed_scans">
     <div className="max-w-4xl">
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -154,5 +156,6 @@ export default function FailedScansPage() {
         </div>
       )}
     </div>
+    </PermissionGate>
   )
 }

@@ -7,6 +7,7 @@ import {
   Plus, Send, Pause, Play, Copy, Trash2, ChevronRight, ChevronLeft,
   Users, Mail, BarChart2, X, Search, Check, AlertCircle,
 } from 'lucide-react'
+import { PermissionGate } from '@/components/PermissionGate'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -177,6 +178,7 @@ export default function NewsletterPage() {
 
   // ── Campaign List ─────────────────────────────────────────────────────────
   return (
+    <PermissionGate feature="newsletter">
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -246,6 +248,7 @@ export default function NewsletterPage() {
         </div>
       )}
     </div>
+    </PermissionGate>
   )
 }
 

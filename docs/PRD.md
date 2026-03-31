@@ -101,9 +101,30 @@ xlsx
 | 角色 | 說明 |
 |------|------|
 | `member` | 預設，所有 `@cancerfree.io` 登入者自動取得 |
-| `super_admin` | 可管理使用者角色、Gemini model 清單，系統可有多位 |
+| `super_admin` | 可管理使用者角色、Gemini model 清單、功能授權，系統可有多位 |
 
 > 第一位使用者需由開發者在 Supabase 手動設為 `super_admin`。
+
+### 功能授權（v2.3）
+
+`member` 預設無法存取進階功能。super_admin 可在使用者管理頁對每個 member 授權以下功能：
+
+| 功能 Key | 功能名稱 | 路徑 |
+|----------|---------|------|
+| `tags` | 標籤管理 | `/admin/tags` |
+| `unassigned_notes` | 未分配筆記 | `/unassigned-notes` |
+| `email_templates` | Email 範本 | `/admin/templates` |
+| `prompts` | Prompt 管理 | `/admin/prompts` |
+| `countries` | 國家管理 | `/admin/countries` |
+| `newsletter` | Newsletter | `/admin/newsletter` |
+| `failed_scans` | 辨識失敗審查 | `/admin/failed-scans` |
+| `duplicates` | 重複聯絡人 | `/admin/duplicates` |
+| `camcard` | 名片匯入 | `/admin/camcard` |
+| `trash` | 資源回收桶 | `/admin/trash` |
+
+- 所有功能在側邊欄對所有使用者可見
+- 無授權時點進頁面顯示「沒有權限，請聯絡管理員」
+- super_admin 專屬功能（AI模型設定、使用者管理、系統健康）僅 super_admin 可見
 
 ---
 
@@ -117,6 +138,7 @@ xlsx
 | display_name | text | 顯示名稱 |
 | telegram_id | bigint (UNIQUE, nullable) | Telegram 數字 ID |
 | role | text (default 'member') | `member` 或 `super_admin` |
+| granted_features | text[] (default '{}') | 被授權的功能 key 清單（v2.3） |
 | gemini_model | text (default 'gemini-1.5-flash') | 個人偏好 model_id，對應 gemini_models.model_id |
 | theme | text (default 'light') | `light` 或 `dark` |
 | last_login_at | timestamptz | 最後登入時間 |

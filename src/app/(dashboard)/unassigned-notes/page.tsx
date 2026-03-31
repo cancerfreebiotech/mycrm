@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Search, Trash2, X } from 'lucide-react'
+import { PermissionGate } from '@/components/PermissionGate'
 
 interface Note {
   id: string
@@ -108,6 +109,7 @@ export default function UnassignedNotesPage() {
   }
 
   return (
+    <PermissionGate feature="unassigned_notes">
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -238,5 +240,6 @@ export default function UnassignedNotesPage() {
         </div>
       )}
     </div>
+    </PermissionGate>
   )
 }

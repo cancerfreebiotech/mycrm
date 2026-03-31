@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Pencil, Trash2, Plus, X, Upload, Paperclip, Loader2, Sparkles } from 'lucide-react'
+import { PermissionGate } from '@/components/PermissionGate'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 
@@ -183,6 +184,7 @@ export default function AdminTemplatesPage() {
   }
 
   return (
+    <PermissionGate feature="email_templates">
     <div className="max-w-4xl">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
@@ -338,5 +340,6 @@ export default function AdminTemplatesPage() {
         </div>
       )}
     </div>
+    </PermissionGate>
   )
 }

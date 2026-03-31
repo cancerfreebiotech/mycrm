@@ -111,21 +111,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/settings', label: t('settings'), icon: Settings },
     { href: docsUrl, label: t('docs'), icon: BookOpen, external: docsUrl.startsWith('http') },
   ]
-  const adminItems: NavItem[] = isSuperAdmin ? [
+  // Grantable features — visible to ALL users, access controlled per page
+  const grantableItems: NavItem[] = [
     { href: '/admin/tags', label: t('tags'), icon: Tag },
     { href: '/unassigned-notes', label: t('unassignedNotes'), icon: StickyNote },
     { href: '/admin/templates', label: t('emailTemplates'), icon: Mail },
-    { href: '/admin/models', label: t('models'), icon: ShieldCheck },
-    { href: '/admin/users', label: t('users'), icon: ShieldCheck },
     { href: '/admin/prompts', label: t('prompts'), icon: ShieldCheck },
     { href: '/admin/countries', label: t('countries'), icon: MapPin },
     { href: '/admin/newsletter', label: t('newsletter'), icon: Newspaper },
     { href: '/admin/failed-scans', label: t('failedScans'), icon: ShieldCheck },
     { href: '/admin/duplicates', label: t('duplicates'), icon: ScanSearch },
     { href: '/admin/camcard', label: t('camcard'), icon: FolderInput },
-    { href: '/admin/health', label: t('health'), icon: Activity },
     { href: '/admin/trash', label: t('trash'), icon: Trash2 },
+  ]
+  // Super admin only — hidden from regular users
+  const superAdminItems: NavItem[] = isSuperAdmin ? [
+    { href: '/admin/models', label: t('models'), icon: ShieldCheck },
+    { href: '/admin/users', label: t('users'), icon: ShieldCheck },
+    { href: '/admin/health', label: t('health'), icon: Activity },
   ] : []
+  const adminItems = [...grantableItems, ...superAdminItems]
 
   // Label span shared classes — hidden on tablet, shown on hover & desktop (unless collapsed)
   const labelCls = collapsed
@@ -166,7 +171,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto overflow-x-hidden">
           {[...memberItems, ...adminItems].map(({ href, label, icon: Icon, external }, idx) => {
             const active = !external && (href === '/' ? pathname === '/' : pathname.startsWith(href))
-            const isFirstAdminItem = isSuperAdmin && idx === memberItems.length
+            const isFirstAdminItem = idx === memberItems.length
             const cls = `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
               active
                 ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400'

@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## v2.3.0 — 功能權限管理系統（2026-03-31）
+
+### 變更項目
+- 新增 `users.granted_features TEXT[]` 欄位（需執行 DB migration）
+- Super admin 可在使用者管理頁對每個使用者勾選開放功能
+- 側邊欄：10 個可授權功能對所有使用者可見，super admin 專屬功能（AI模型、使用者管理、系統健康）僅 super admin 可見
+- 無權限頁面顯示「沒有權限，請聯絡管理員」而非跳轉
+- `/docs` 頁面改為需登入才能查看
+- 新增 `src/lib/features.ts` 功能定義檔
+- 新增 `src/components/PermissionGate.tsx` 權限守門元件
+- 新增 `src/lib/checkPermission.ts` API 保護工具函式
+
+### DB Migration（需手動執行）
+```sql
+ALTER TABLE users ADD COLUMN IF NOT EXISTS granted_features TEXT[] DEFAULT '{}';
+```
+
 ## v2.2.13 — 聯絡人頁移除電話欄、Bot 指令統一不用 @（2026-03-31）
 
 ### 變更項目

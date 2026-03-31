@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { ScanSearch, Loader2, Merge, X, ExternalLink } from 'lucide-react'
+import { PermissionGate } from '@/components/PermissionGate'
 
 interface DupContact {
   id: string
@@ -170,6 +171,7 @@ export default function DuplicatesPage() {
   }
 
   return (
+    <PermissionGate feature="duplicates">
     <div className="max-w-4xl">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
@@ -276,5 +278,6 @@ export default function DuplicatesPage() {
         )
       })()}
     </div>
+    </PermissionGate>
   )
 }

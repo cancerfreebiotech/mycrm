@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Plus, Pencil, Trash2, Check, X } from 'lucide-react'
+import { PermissionGate } from '@/components/PermissionGate'
 
 interface Tag {
   id: string
@@ -83,6 +84,7 @@ export default function TagsPage() {
   }
 
   return (
+    <PermissionGate feature="tags">
     <div className="max-w-2xl">
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -191,5 +193,6 @@ export default function TagsPage() {
         )}
       </div>
     </div>
+    </PermissionGate>
   )
 }

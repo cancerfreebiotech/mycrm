@@ -8,6 +8,7 @@ import {
   ChevronDown, ChevronRight, AlertTriangle, CheckSquare, ZoomIn,
   ChevronLeft,
 } from 'lucide-react'
+import { PermissionGate } from '@/components/PermissionGate'
 
 interface Tag { id: string; name: string }
 
@@ -442,6 +443,7 @@ export default function CamcardPage() {
   }
 
   return (
+    <PermissionGate feature="camcard">
     <div className="max-w-4xl">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
@@ -674,5 +676,6 @@ export default function CamcardPage() {
         </div>
       )}
     </div>
+    </PermissionGate>
   )
 }
