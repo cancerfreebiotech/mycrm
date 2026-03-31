@@ -121,7 +121,7 @@ function HunterSection() {
           <p className="text-xs text-gray-400">{t('freeQuotaHint')}</p>
           {stats?.credits && (
             <p className="text-xs mt-0.5">
-              <span className="text-green-600 dark:text-green-400 font-medium">{stats.credits.available} credits 剩餘</span>
+              <span className="text-green-600 dark:text-green-400 font-medium">{stats.credits.available - stats.credits.used} / {stats.credits.available} credits 剩餘</span>
               <span className="text-gray-400 ml-1">（本月已用 {stats.credits.used}）</span>
             </p>
           )}
