@@ -162,6 +162,8 @@ const zh: BotMessages = {
     '/search [關鍵字]　/s — 搜尋聯絡人\n' +
     '/n [姓名]　　　　　　 — 新增筆記\n' +
     '/v [姓名]　　　　　　 — 記錄拜訪\n' +
+    '/a [姓名]　　　　　　 — 為聯絡人新增名片\n' +
+    '/p [姓名]　　　　　　 — 為聯絡人新增合照\n' +
     '/li　　　　　　　　　 — 傳送 LinkedIn 截圖解析\n' +
     '/ai　　　　　　　　　 — AI 生成拜訪信/感謝函\n' +
     '/task [任務內容]　　 — 新增任務\n' +
@@ -260,6 +262,8 @@ const en: BotMessages = {
     '/search [keyword]　/s — Search contacts\n' +
     '/n [name]　　　　　　　 — Add note\n' +
     '/v [name]　　　　　　　 — Log a visit\n' +
+    '/a [name]　　　　　　　 — Add business card to contact\n' +
+    '/p [name]　　　　　　　 — Add personal photo to contact\n' +
     '/li　　　　　　　　　　　 — Send LinkedIn screenshot to parse\n' +
     '/ai　　　　　　　　　　　 — AI generate follow-up / thank-you email\n' +
     '/task [task]　　　　　　 — Add task\n' +
@@ -358,6 +362,8 @@ const ja: BotMessages = {
     '/search [キーワード]　/s — 連絡先を検索\n' +
     '/n [名前]　　　　　　　　 — メモを追加\n' +
     '/v [名前]　　　　　　　　 — 訪問を記録\n' +
+    '/a [名前]　　　　　　　　 — 連絡先に名刺を追加\n' +
+    '/p [名前]　　　　　　　　 — 連絡先に写真を追加\n' +
     '/li　　　　　　　　　　　　 — LinkedInスクショを解析\n' +
     '/ai　　　　　　　　　　　　 — AI でフォローアップメールを生成\n' +
     '/task [タスク内容]　　　 — タスクを追加\n' +
