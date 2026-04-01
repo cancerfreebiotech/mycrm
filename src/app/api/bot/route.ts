@@ -1224,35 +1224,40 @@ async function handleText(
 
   // ── Session: waiting_contact_for_email ────────────────────────────────────
   if (session?.state === 'waiting_contact_for_email') {
-    const contacts = await searchContacts(text.trim())
-    if (contacts.length === 0) {
-      await sendMessage(chatId, '找不到符合的聯絡人，請再試一次：')
-    } else if (contacts.length === 1) {
-      await setSession(fromId, 'waiting_email_method', {
-        contact_id: contacts[0].id,
-        contact_name: contacts[0].name,
-        contact_email: contacts[0].email,
-      })
-      await sendMessage(chatId,
-        `收件人：<b>${contacts[0].name}</b>（${contacts[0].email || '無 email'}）\n\n` +
-        `請選擇發信方式：\n1. 使用 Email Template\n2. 直接描述，AI 幫你生成`,
-        { reply_markup: { inline_keyboard: [[
-          { text: '1️⃣ 使用 Template', callback_data: 'email_method_1' },
-          { text: '2️⃣ AI 生成', callback_data: 'email_method_2' },
-        ]] } }
-      )
+    if (cmd.startsWith('/')) {
+      await clearSession(fromId)
     } else {
-      const buttons = contacts.map((c) => [{
-        text: `${c.name}（${c.company ?? ''}）`,
-        callback_data: `select_email_contact_${c.id}`,
-      }])
-      await sendMessage(chatId, '找到多筆聯絡人，請選擇：', { reply_markup: { inline_keyboard: buttons } })
+      const contacts = await searchContacts(text.trim())
+      if (contacts.length === 0) {
+        await sendMessage(chatId, '找不到符合的聯絡人，請再試一次：')
+      } else if (contacts.length === 1) {
+        await setSession(fromId, 'waiting_email_method', {
+          contact_id: contacts[0].id,
+          contact_name: contacts[0].name,
+          contact_email: contacts[0].email,
+        })
+        await sendMessage(chatId,
+          `收件人：<b>${contacts[0].name}</b>（${contacts[0].email || '無 email'}）\n\n` +
+          `請選擇發信方式：\n1. 使用 Email Template\n2. 直接描述，AI 幫你生成`,
+          { reply_markup: { inline_keyboard: [[
+            { text: '1️⃣ 使用 Template', callback_data: 'email_method_1' },
+            { text: '2️⃣ AI 生成', callback_data: 'email_method_2' },
+          ]] } }
+        )
+      } else {
+        const buttons = contacts.map((c) => [{
+          text: `${c.name}（${c.company ?? ''}）`,
+          callback_data: `select_email_contact_${c.id}`,
+        }])
+        await sendMessage(chatId, '找到多筆聯絡人，請選擇：', { reply_markup: { inline_keyboard: buttons } })
+      }
+      return
     }
-    return
   }
 
   // ── Session: waiting_email_description ───────────────────────────────────
   if (session?.state === 'waiting_email_description') {
+    if (cmd.startsWith('/')) { await clearSession(fromId) } else {
     await sendMessage(chatId, '⏳ AI 生成中，請稍候...')
     try {
       const body = await generateEmailContent(text.trim(), undefined, user.ai_model_id)
@@ -1276,10 +1281,12 @@ async function handleText(
       await sendMessage(chatId, `❌ AI 生成失敗：${msg}`)
     }
     return
+    } // end command escape
   }
 
   // ── Session: waiting_email_supplement ─────────────────────────────────────
   if (session?.state === 'waiting_email_supplement') {
+    if (cmd.startsWith('/')) { await clearSession(fromId) } else {
     await sendMessage(chatId, '⏳ AI 生成中，請稍候...')
     try {
       const templateContent = session.context.template_body as string
@@ -1305,20 +1312,24 @@ async function handleText(
       await sendMessage(chatId, `❌ AI 生成失敗：${msg}`)
     }
     return
+    } // end command escape
   }
 
   // ── Session: waiting_for_photo_note ───────────────────────────────────────
   if (session?.state === 'waiting_for_photo_note') {
+    if (cmd.startsWith('/')) { await clearSession(fromId) } else {
     const contactId = session.context.contact_id as string
     const fileIds = (session.context.pending_file_ids as string[] | undefined) ?? []
     const contactNameHint = session.context.contact_name as string | undefined
     await sendMessage(chatId, '⏳ 上傳中...')
     await processPersonalPhoto(chatId, fromId, contactId, fileIds, contactNameHint, text.trim())
     return
+    } // end command escape
   }
 
   // ── Session: waiting_for_note_contact ─────────────────────────────────────
   if (session?.state === 'waiting_for_note_contact') {
+    if (cmd.startsWith('/')) { await clearSession(fromId) } else {
     const contacts = await searchContacts(text.trim())
     if (contacts.length === 0) {
       await setSession(fromId, 'waiting_for_note_content', { contact_id: null })
@@ -1331,10 +1342,12 @@ async function handleText(
       await sendMessage(chatId, '找到多筆聯絡人，請選擇：', { reply_markup: { inline_keyboard: buttons } })
     }
     return
+    } // end command escape
   }
 
   // ── Session: waiting_for_note_content ─────────────────────────────────────
   if (session?.state === 'waiting_for_note_content') {
+    if (cmd.startsWith('/')) { await clearSession(fromId) } else {
     const contactId = session.context.contact_id as string | null
     const contactName = session.context.contact_name as string | undefined
 
@@ -1375,10 +1388,12 @@ async function handleText(
       : `✅ 已儲存為未歸類${logType === 'meeting' ? '拜訪紀錄' : '筆記'}${detail}`
     )
     return
+    } // end command escape
   }
 
   // ── Session: waiting_for_visit_contact ────────────────────────────────────
   if (session?.state === 'waiting_for_visit_contact') {
+    if (cmd.startsWith('/')) { await clearSession(fromId) } else {
     const contacts = await searchContacts(text.trim())
     if (contacts.length === 0) {
       await setSession(fromId, 'waiting_for_visit_datetime', { contact_id: null, contact_name: null })
@@ -1391,10 +1406,12 @@ async function handleText(
       await sendMessage(chatId, '找到多筆聯絡人，請選擇：', { reply_markup: { inline_keyboard: buttons } })
     }
     return
+    } // end command escape
   }
 
   // ── Session: waiting_for_visit_datetime ───────────────────────────────────
   if (session?.state === 'waiting_for_visit_datetime') {
+    if (cmd.startsWith('/')) { await clearSession(fromId) } else {
     const skip = text.trim() === '略過' || text.trim().toLowerCase() === 'skip'
     let meetingDate: string | null = null
     let meetingTime: string | null = null
@@ -1415,10 +1432,12 @@ async function handleText(
     })
     await sendMessage(chatId, '請輸入拜訪地點，或輸入「略過」：')
     return
+    } // end command escape
   }
 
   // ── Session: waiting_for_visit_location ───────────────────────────────────
   if (session?.state === 'waiting_for_visit_location') {
+    if (cmd.startsWith('/')) { await clearSession(fromId) } else {
     const skip = text.trim() === '略過' || text.trim().toLowerCase() === 'skip'
     await setSession(fromId, 'waiting_for_visit_content', {
       ...session.context,
@@ -1426,10 +1445,12 @@ async function handleText(
     })
     await sendMessage(chatId, '請輸入拜訪內容（筆記）：')
     return
+    } // end command escape
   }
 
   // ── Session: waiting_for_visit_content ────────────────────────────────────
   if (session?.state === 'waiting_for_visit_content') {
+    if (cmd.startsWith('/')) { await clearSession(fromId) } else {
     const ctx = session.context as {
       contact_id: string | null
       contact_name: string | null
@@ -1456,6 +1477,7 @@ async function handleText(
       : `✅ 已儲存為未歸類拜訪紀錄${detail}`
     )
     return
+    } // end command escape
   }
 
   // ── /work /w ───────────────────────────────────────────────────────────────
@@ -1489,6 +1511,7 @@ async function handleText(
 
   // ── Session: waiting_task_postpone_date ───────────────────────────────────
   if (session?.state === 'waiting_task_postpone_date') {
+    if (cmd.startsWith('/')) { await clearSession(fromId) } else {
     const taskId = session.context.task_id as string
     const dateStr = text.trim()
     // Try to parse the date
@@ -1501,6 +1524,7 @@ async function handleText(
     await clearSession(fromId)
     await sendMessage(chatId, `✅ 已延後任務截止時間至 ${new Date(parsed).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}`)
     return
+    } // end command escape
   }
 
   // ── /note /n name — shortcut with contact name ────────────────────────────
