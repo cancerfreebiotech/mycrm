@@ -159,7 +159,16 @@ function HunterSection() {
 
       {/* Stats */}
       <div className="mb-5">
-        <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">{t('statsTitle')}</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-medium text-gray-600 dark:text-gray-400">{t('statsTitle')}</p>
+          <button
+            onClick={loadStats}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+          >
+            <RefreshCw size={11} />
+            {t('refresh')}
+          </button>
+        </div>
         {stats ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[

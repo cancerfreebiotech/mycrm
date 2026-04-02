@@ -7,8 +7,11 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts')
 
 const { version } = JSON.parse(readFileSync(join(__dirname, "package.json"), "utf-8"));
 
-const now = new Date();
-const deployTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+const deployTime = new Intl.DateTimeFormat('zh-TW', {
+  timeZone: 'Asia/Taipei',
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', hour12: false,
+}).format(new Date()).replace(/\//g, '-');
 
 const nextConfig: NextConfig = {
   env: {

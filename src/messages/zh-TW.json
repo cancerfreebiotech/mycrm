@@ -591,7 +591,8 @@
     "notFoundDetail": "找不到 email",
     "resetSearch": "重置查詢紀錄",
     "resetConfirm": "確定要重置所有未找到 email 的查詢紀錄嗎？",
-    "resetDone": "已重置 {count} 筆"
+    "resetDone": "已重置 {count} 筆",
+    "refresh": "重新整理"
   },
   "login": {
     "docs": "說明文件",

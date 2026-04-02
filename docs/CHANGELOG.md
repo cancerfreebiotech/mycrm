@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v2.4.3 — Hunter.io 統計刷新、Footer 台北時間（2026-04-02）
+
+### 變更項目
+- fix: footer deploy 時間改用 `Asia/Taipei` timezone（Vercel build server 為 UTC，原本時間差 8 小時）
+- feat: Hunter.io 統計區塊新增「重新整理」按鈕，可即時刷新無 email 聯絡人數量
+
 ## v2.4.2 — Teams Bot 改名 Dr.Ave（2026-04-02）
 
 ### 變更項目

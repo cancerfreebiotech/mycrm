@@ -591,7 +591,8 @@
     "notFoundDetail": "Email 未取得",
     "resetSearch": "検索記録をリセット",
     "resetConfirm": "Email未取得の検索記録をリセットしますか？",
-    "resetDone": "{count}件をリセットしました"
+    "resetDone": "{count}件をリセットしました",
+    "refresh": "更新"
   },
   "login": {
     "docs": "使用説明書",
