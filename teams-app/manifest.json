@@ -11,12 +11,12 @@
     "termsOfUseUrl": "https://mycrm.vercel.app"
   },
   "name": {
-    "short": "myCRM Bot",
-    "full": "myCRM Bot — 任務管理與通知"
+    "short": "Dr.Ave",
+    "full": "Dr.Ave — 任務管理與通知"
   },
   "description": {
     "short": "任務指派、提醒與 CRM 通知",
-    "full": "myCRM Bot 提供任務指派、截止提醒、以及 CRM 聯絡人管理通知功能。"
+    "full": "Dr.Ave 提供任務指派、截止提醒、以及 CRM 聯絡人管理通知功能。"
   },
   "icons": {
     "color": "color.png",
