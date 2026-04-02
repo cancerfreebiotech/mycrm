@@ -42,6 +42,7 @@ export async function middleware(request: NextRequest) {
 
   const isLoginPage = pathname === '/login'
   const isMaintenancePage = pathname === '/maintenance'
+  const isMfaPage = pathname.startsWith('/mfa/')
 
   // Redirect unauthenticated users to login
   if (!user && !isLoginPage && !isMaintenancePage) {
@@ -53,8 +54,27 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  // Maintenance mode check for authenticated non-super_admin users
+  // MFA AAL check for authenticated users (skip for login/maintenance/mfa pages)
   if (user && !isLoginPage && !isMaintenancePage) {
+    const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+    if (aalData) {
+      const { currentLevel, nextLevel } = aalData
+      if (nextLevel === 'aal1') {
+        // No TOTP factor enrolled yet — force setup
+        if (!isMfaPage) {
+          return NextResponse.redirect(new URL('/mfa/setup', request.url))
+        }
+      } else if (nextLevel === 'aal2' && currentLevel !== 'aal2') {
+        // Factor enrolled but not verified this session
+        if (!isMfaPage) {
+          return NextResponse.redirect(new URL('/mfa/verify', request.url))
+        }
+      }
+    }
+  }
+
+  // Maintenance mode check for authenticated non-super_admin users
+  if (user && !isLoginPage && !isMaintenancePage && !isMfaPage) {
     const { data: setting } = await supabase
       .from('system_settings')
       .select('value')

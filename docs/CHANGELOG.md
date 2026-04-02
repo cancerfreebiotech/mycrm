@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v2.4.1 — fix: Bot slash command 在 waiting session 中無法正確 dispatch（2026-04-02）
+
+### 變更項目
+- fix: `handleText` 入口加統一 session-clear check，任何 slash command 在 active session 下都先 clear session 再正常 dispatch，修正 `/help`、`/search`、`/email` 等指令在 waiting 狀態下無效的問題
+
 ## v2.4.0 — 三語文件、Dr.Ave、MFA強制、Export授權、回饋表單（upcoming）
 
 ### 變更項目

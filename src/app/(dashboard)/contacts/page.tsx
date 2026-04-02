@@ -80,6 +80,7 @@ export default function ContactsPage() {
   const [batchModalOpen, setBatchModalOpen] = useState(false)
   const [batchForm, setBatchForm] = useState({ met_at: '', met_date: new Date().toISOString().slice(0, 10), referred_by: '' })
   const [batchSaving, setBatchSaving] = useState(false)
+  const [canExport, setCanExport] = useState(false)
 
   function copyEmail(email: string) {
     navigator.clipboard.writeText(email)
@@ -93,11 +94,18 @@ export default function ContactsPage() {
 
   async function fetchAll() {
     const supabase = createBrowserSupabaseClient()
-    const [contactRes, { data: tagData }, { data: countryData }] = await Promise.all([
+    const { data: { user } } = await supabase.auth.getUser()
+    const [contactRes, { data: tagData }, { data: countryData }, { data: userData }] = await Promise.all([
       fetch('/api/contacts/all').then(r => r.json()),
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),
+      user?.email
+        ? supabase.from('users').select('role, granted_features').eq('email', user.email).single()
+        : Promise.resolve({ data: null }),
     ])
+    const isSuperAdmin = userData?.role === 'super_admin'
+    const grantedFeatures: string[] = userData?.granted_features ?? []
+    setCanExport(isSuperAdmin || grantedFeatures.includes('export_contacts'))
     const tags = tagData ?? []
     setContacts((Array.isArray(contactRes) ? contactRes : []) as Contact[])
     setAllTags(tags)
@@ -281,14 +289,18 @@ export default function ContactsPage() {
           <span className="text-sm text-gray-500 dark:text-gray-400">{tc('total', { count: sorted.length })}</span>
           <span className="hidden sm:inline text-sm text-gray-400 dark:text-gray-500">{tc('page', { current: page, total: totalPages })}</span>
           <button
-            onClick={() => exportData('xlsx')}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+            onClick={() => canExport && exportData('xlsx')}
+            disabled={!canExport}
+            title={!canExport ? t('exportNoPermission') : undefined}
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Download size={14} /> Excel
           </button>
           <button
-            onClick={() => exportData('csv')}
-            className="hidden sm:flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+            onClick={() => canExport && exportData('csv')}
+            disabled={!canExport}
+            title={!canExport ? t('exportNoPermission') : undefined}
+            className="hidden sm:flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Download size={14} /> CSV
           </button>

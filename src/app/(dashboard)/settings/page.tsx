@@ -5,7 +5,7 @@ import { useTheme } from 'next-themes'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Sun, Moon, Check, RotateCcw, X, Plus, ChevronDown } from 'lucide-react'
+import { Sun, Moon, Check, RotateCcw, X, Plus, ChevronDown, ShieldCheck, ShieldOff } from 'lucide-react'
 import { SUPPORTED_LOCALES, type Locale } from '@/i18n/config'
 import { SYSTEM_PROMPTS } from '@/lib/prompt-constants'
 
@@ -62,9 +62,24 @@ export default function SettingsPage() {
   const [savingEmailPrompt, setSavingEmailPrompt] = useState(false)
   const [savedEmailPromptFlag, setSavedEmailPromptFlag] = useState(false)
 
+  const [mfaEnabled, setMfaEnabled] = useState(false)
+  const [mfaLoading, setMfaLoading] = useState(true)
+  const [mfaUnenrolling, setMfaUnenrolling] = useState(false)
+  const [mfaError, setMfaError] = useState<string | null>(null)
+  const tm = useTranslations('mfa')
+
   const filteredModels = allModels.filter((m) => m.endpoint_id === selectedEndpointId)
 
   useEffect(() => { setMounted(true) }, [])
+
+  useEffect(() => {
+    async function checkMfa() {
+      const { data } = await supabase.auth.mfa.listFactors()
+      setMfaEnabled((data?.totp?.length ?? 0) > 0)
+      setMfaLoading(false)
+    }
+    checkMfa()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     async function load() {
@@ -124,6 +139,22 @@ export default function SettingsPage() {
     loadEmailPrompt()
     loadAllUsers()
   }, [])
+
+  async function handleMfaUnenroll() {
+    if (!confirm(tm('unenrollConfirm'))) return
+    setMfaUnenrolling(true)
+    setMfaError(null)
+    const { data } = await supabase.auth.mfa.listFactors()
+    const factor = data?.totp?.[0]
+    if (!factor) { setMfaUnenrolling(false); return }
+    const { error } = await supabase.auth.mfa.unenroll({ factorId: factor.id })
+    if (error) {
+      setMfaError(tm('error'))
+    } else {
+      setMfaEnabled(false)
+    }
+    setMfaUnenrolling(false)
+  }
 
   async function loadEmailPrompt() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -466,6 +497,45 @@ export default function SettingsPage() {
             )}
           </div>
           {assistantError && <p className="mt-2 text-xs text-red-500">{assistantError}</p>}
+        </div>
+
+        {/* MFA */}
+        <div className="border-t border-gray-100 dark:border-gray-800 pt-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {mfaEnabled
+                ? <ShieldCheck size={16} className="text-green-500" />
+                : <ShieldOff size={16} className="text-gray-400" />
+              }
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{tm('title')}</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                mfaEnabled
+                  ? 'bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+              }`}>
+                {mfaLoading ? '...' : mfaEnabled ? tm('enabled') : tm('disabled')}
+              </span>
+            </div>
+            {!mfaLoading && (
+              mfaEnabled ? (
+                <button
+                  onClick={handleMfaUnenroll}
+                  disabled={mfaUnenrolling}
+                  className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-300 transition-colors disabled:opacity-50"
+                >
+                  {mfaUnenrolling ? tm('loading') : tm('unenroll')}
+                </button>
+              ) : (
+                <a
+                  href="/mfa/setup"
+                  className="text-xs text-blue-600 hover:text-blue-800 dark:hover:text-blue-400 transition-colors"
+                >
+                  {tm('enable')}
+                </a>
+              )
+            )}
+          </div>
+          {mfaError && <p className="mt-1 text-xs text-red-500">{mfaError}</p>}
         </div>
 
         {/* Email Generate Prompt */}

@@ -13,6 +13,7 @@ export type FeatureKey =
   | 'duplicates'
   | 'camcard'
   | 'trash'
+  | 'export_contacts'
 
 export const FEATURE_ROUTES: Record<FeatureKey, string> = {
   tags: '/admin/tags',
@@ -25,6 +26,7 @@ export const FEATURE_ROUTES: Record<FeatureKey, string> = {
   duplicates: '/admin/duplicates',
   camcard: '/admin/camcard',
   trash: '/admin/trash',
+  export_contacts: '/contacts',
 }
 
 export const FEATURE_LABELS: Record<FeatureKey, string> = {
@@ -38,6 +40,7 @@ export const FEATURE_LABELS: Record<FeatureKey, string> = {
   duplicates: '重複聯絡人',
   camcard: '名片匯入',
   trash: '資源回收桶',
+  export_contacts: '匯出聯絡人',
 }
 
 export const ALL_FEATURE_KEYS = Object.keys(FEATURE_ROUTES) as FeatureKey[]

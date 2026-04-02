@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import React, { useEffect, useRef, useState } from 'react'
-import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon, Globe, BarChart2, ClipboardList, MapPin, Menu, X, ChevronLeft, ChevronRight, Newspaper, ScanSearch, FolderInput, Activity, Images, Trash2 } from 'lucide-react'
+import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon, Globe, BarChart2, ClipboardList, MapPin, Menu, X, ChevronLeft, ChevronRight, Newspaper, ScanSearch, FolderInput, Activity, Images, Trash2, MessageSquarePlus } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
@@ -110,6 +110,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/admin/reports', label: t('reports'), icon: BarChart2 },
     { href: '/settings', label: t('settings'), icon: Settings },
     { href: docsUrl, label: t('docs'), icon: BookOpen, external: docsUrl.startsWith('http') },
+    { href: '/feedback', label: t('feedback'), icon: MessageSquarePlus },
   ]
   // Grantable features — visible to ALL users, access controlled per page
   const grantableItems: NavItem[] = [
@@ -129,6 +130,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/admin/models', label: t('models'), icon: ShieldCheck },
     { href: '/admin/users', label: t('users'), icon: ShieldCheck },
     { href: '/admin/health', label: t('health'), icon: Activity },
+    { href: '/admin/feedback', label: t('feedbackManage'), icon: MessageSquarePlus },
   ] : []
   const adminItems = [...grantableItems, ...superAdminItems]
 

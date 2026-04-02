@@ -1159,6 +1159,12 @@ async function handleText(
 
   const cmd = text.trim()
 
+  // ── Clear active session on any slash command (must run before all handlers)
+  if (cmd.startsWith('/') && session?.state) {
+    await clearSession(fromId)
+    session = null
+  }
+
   // ── /help /h ───────────────────────────────────────────────────────────────
   if (cmd === '/help' || cmd === '/h') {
     await handleHelp(chatId, m)
