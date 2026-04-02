@@ -2,7 +2,7 @@
 
 A lightweight CRM built for `@cancerfree.io`. Snap a business card in Telegram → AI reads it → one tap to save → manage everything on the web.
 
-> Current version: **v2.0.0**
+> Current version: **v2.4.2**
 
 ---
 
@@ -21,7 +21,11 @@ A lightweight CRM built for `@cancerfree.io`. Snap a business card in Telegram �
 - **Language / Medical Fields** — Contacts have `language` (中文/英文/日文), `hospital`, and `department` fields for medical contacts.
 - **Visit Records** — Interaction logs support `meeting_time` and `meeting_location`; web form has time picker + location input; Bot `/n` auto-parses via Gemini, `/v` guides step-by-step.
 - **Microsoft SSO** — Only `@cancerfree.io` accounts can sign in (Azure AD → Supabase Auth).
+- **MFA (TOTP)** — All users must set up two-factor authentication after first login. TOTP via any authenticator app; manage from Settings.
 - **Role-based Access** — `member` and `super_admin`. Admins manage users, AI endpoints/models, tags, templates, and countries.
+- **Export Permissions** — Contact export is gated by `export_contacts` in `granted_features`; admins grant per-user from `/admin/users`.
+- **Feedback** — Users submit bug reports or feature requests (with optional screenshot) from the sidebar. Admins triage via `/admin/feedback`.
+- **Teams Bot (Dr.Ave)** — Microsoft Teams bot for task assignment, deadline reminders, and CRM notifications. Package: `DrAve-Bot.zip`.
 - **i18n** — UI fully translated in 繁中 / English / 日本語; locale saved in cookie.
 - **Responsive Sidebar** — Mobile hamburger drawer; tablet icon-only with hover expand; desktop full width.
 - **Light / Dark Theme** — Toggle in the header; preference saved in DB.
@@ -33,10 +37,11 @@ A lightweight CRM built for `@cancerfree.io`. Snap a business card in Telegram �
 
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 14 (App Router, TypeScript) |
+| Framework | Next.js 16 (App Router, TypeScript) |
 | Styling | Tailwind CSS v4 |
 | Database & Storage | Supabase (PostgreSQL + Storage) |
 | Telegram Bot | Telegraf |
+| Teams Bot | Bot Framework (Azure) |
 | AI / OCR | Pluggable (Google Gemini by default) |
 | Email | Microsoft Graph API |
 | Image Processing | Sharp (server) + Canvas (browser) |
@@ -55,15 +60,19 @@ A lightweight CRM built for `@cancerfree.io`. Snap a business card in Telegram �
 | `/contacts/batch-upload` | Batch card scan (up to 20 images) |
 | `/notes` | Full-text note/log search |
 | `/tasks` | Task management |
-| `/settings` | Personal settings (Telegram ID, AI model, theme) |
+| `/feedback` | Submit bug report or feature request |
+| `/settings` | Personal settings (Telegram ID, AI model, theme, MFA) |
+| `/mfa/setup` | First-time TOTP setup |
+| `/mfa/verify` | MFA verification on login |
 | `/docs` | In-app user guide |
-| `/admin/users` | User role management |
+| `/admin/users` | User role & permission management |
 | `/admin/models` | AI endpoint + model management |
 | `/admin/tags` | Tag management |
 | `/admin/templates` | Email template management |
 | `/admin/reports` | Report generation + scheduled delivery |
 | `/admin/countries` | Country list management |
 | `/admin/trash` | Soft-deleted contacts (super_admin only) |
+| `/admin/feedback` | Feedback triage (super_admin only) |
 | `/api/bot` | Telegram webhook |
 
 ---
@@ -71,7 +80,8 @@ A lightweight CRM built for `@cancerfree.io`. Snap a business card in Telegram �
 ## Database Schema (key tables)
 
 ```sql
-users (id, email, display_name, role, telegram_id, ai_model_id, provider_token, created_at)
+users (id, email, display_name, role, telegram_id, ai_model_id,
+       provider_token, granted_features, created_at)
 
 contacts (id, created_by, name, name_en, name_local,
           company, company_en, company_local, job_title,
@@ -107,6 +117,8 @@ task_assignees (task_id, user_id)
 countries (id, code, name_zh, name_en, name_ja, emoji, is_active, created_at)
 
 report_schedules (id, name, cron_expr, range_days, recipients, is_active, created_at)
+
+feedback (id, created_by, type, title, description, screenshot_url, status, created_at)
 ```
 
 ---
@@ -161,10 +173,18 @@ curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<your-domain>/a
 
 ## Bot Usage
 
+### Telegram Bot
+
 1. Bind your Telegram ID in **Personal Settings** on the web.
 2. Send one or more business card photos to the bot.
 3. Bot replies with extracted info and a **Save** button.
-4. Use `/note` / `/n` to log meeting notes (AI auto-detects visit info), `/visit` / `/v` for step-by-step guided visit records, `/search` to look up contacts, `/email` to send mail.
+4. Use `/note` / `/n` to log meeting notes, `/visit` / `/v` for guided visit records, `/search` to look up contacts, `/email` to send mail.
+
+### Teams Bot (Dr.Ave)
+
+1. Upload `teams-app/DrAve-Bot.zip` to Teams Admin Center.
+2. Assign the app to users or teams.
+3. Supports task notifications, deadline reminders, and CRM alerts.
 
 ---
 
