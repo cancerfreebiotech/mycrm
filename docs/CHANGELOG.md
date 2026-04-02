@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v2.4.2 — Teams Bot 改名 Dr.Ave（2026-04-02）
+
+### 變更項目
+- feat: manifest.json Bot 名稱 myCRM Bot → Dr.Ave，更換 color.png（ava.png 192×192）與 outline.png（白色透明），重新打包為 DrAve-Bot.zip
+
 ## v2.4.1 — fix: Bot slash command 在 waiting session 中無法正確 dispatch（2026-04-02）
 
 ### 變更項目
