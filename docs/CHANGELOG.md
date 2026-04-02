@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## v2.4.0 — 三語文件、Dr.Ave、MFA強制、Export授權、回饋表單（upcoming）
+
+### 變更項目
+
+- **文件全面三語化**：`docs/` 所有 Markdown 文件補齊英文（`*.en.md`）與日文（`*.ja.md`）版本；掃描補齊 Web UI i18n 三份語言檔缺漏 key
+- **Teams Bot 改名 Dr.Ave**：更新 manifest.json Bot 名稱為 Dr.Ave；更換 color.png / outline.png 頭像；重新打包 zip（圖片由管理員提供）
+- **MFA 強制登入（TOTP）**：所有使用者登入後強制設定 TOTP；新增 `/mfa/setup`（首次設定）與 `/mfa/verify`（每次登入驗證）頁面；middleware 加入 AAL 檢查；`/settings` 新增 MFA 管理區塊
+- **聯絡人 Export 獨立授權**：Export 功能納入 `granted_features` 權限系統，新增 `export_contacts` 權限，預設所有人關閉；`/admin/users` 可個別授權；無權限者 Export 按鈕 disabled
+- **系統回饋表單**：新增 `feedback` 表與 Storage bucket；Sidebar 新增「💬 回饋」入口；Bug 無截圖時送出前確認提示；新增 `/admin/feedback` 管理頁（列表、詳情、狀態更新，super_admin 限定）；回饋資料格式支援 Claude Code 讀取分析
+- **TODO**：Supabase 備份策略（Synology NAS + Databasus）待後續版本規劃
+- **DB**：新增 `feedback` 表
+- **i18n**：zh-TW / en / ja 新增 mfa.*、feedback.*、contacts.exportNoPermission
+
+---
+
 ## v2.3.1 — bot /n /v 支援直接帶聯絡人名字（2026-03-31）
 
 ### 變更項目
