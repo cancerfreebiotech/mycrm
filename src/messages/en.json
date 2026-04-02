@@ -630,7 +630,10 @@
     "invalidCode": "Invalid code, please try again",
     "error": "Operation failed, please try again",
     "loading": "Loading...",
-    "backToApp": "Back to App"
+    "backToApp": "Back to App",
+    "scanQr": "Scan the QR code with your authenticator app",
+    "manualEntry": "Enter key manually",
+    "cancel": "Cancel"
   },
   "feedback": {
     "title": "Feedback",

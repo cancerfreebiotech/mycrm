@@ -5,7 +5,8 @@ import { useTheme } from 'next-themes'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Sun, Moon, Check, RotateCcw, X, Plus, ChevronDown, ShieldCheck, ShieldOff } from 'lucide-react'
+import { Sun, Moon, Check, RotateCcw, X, Plus, ChevronDown, ShieldCheck, ShieldOff, Loader2, Eye, EyeOff } from 'lucide-react'
+import QRCode from 'qrcode'
 import { SUPPORTED_LOCALES, type Locale } from '@/i18n/config'
 import { SYSTEM_PROMPTS } from '@/lib/prompt-constants'
 
@@ -67,6 +68,15 @@ export default function SettingsPage() {
   const [mfaUnenrolling, setMfaUnenrolling] = useState(false)
   const [mfaError, setMfaError] = useState<string | null>(null)
   const tm = useTranslations('mfa')
+
+  // Inline enrollment state
+  const [mfaEnrolling, setMfaEnrolling] = useState(false)
+  const [mfaQrUrl, setMfaQrUrl] = useState<string | null>(null)
+  const [mfaSecret, setMfaSecret] = useState<string | null>(null)
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null)
+  const [mfaCode, setMfaCode] = useState('')
+  const [mfaVerifying, setMfaVerifying] = useState(false)
+  const [mfaShowSecret, setMfaShowSecret] = useState(false)
 
   const filteredModels = allModels.filter((m) => m.endpoint_id === selectedEndpointId)
 
@@ -139,6 +149,59 @@ export default function SettingsPage() {
     loadEmailPrompt()
     loadAllUsers()
   }, [])
+
+  async function handleMfaStartEnroll() {
+    setMfaError(null)
+    setMfaEnrolling(true)
+    setMfaCode('')
+    const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp' })
+    if (error || !data) {
+      setMfaError(tm('error'))
+      setMfaEnrolling(false)
+      return
+    }
+    const qrUrl = await QRCode.toDataURL(data.totp.uri, { width: 180, margin: 2 })
+    setMfaQrUrl(qrUrl)
+    setMfaSecret(data.totp.secret)
+    setMfaFactorId(data.id)
+  }
+
+  async function handleMfaVerify() {
+    if (!mfaFactorId || mfaCode.length !== 6) return
+    setMfaVerifying(true)
+    setMfaError(null)
+    const { data: challengeData, error: challengeErr } = await supabase.auth.mfa.challenge({ factorId: mfaFactorId })
+    if (challengeErr || !challengeData) {
+      setMfaError(tm('error'))
+      setMfaVerifying(false)
+      return
+    }
+    const { error: verifyErr } = await supabase.auth.mfa.verify({
+      factorId: mfaFactorId,
+      challengeId: challengeData.id,
+      code: mfaCode,
+    })
+    setMfaVerifying(false)
+    if (verifyErr) {
+      setMfaError(tm('invalidCode'))
+      return
+    }
+    setMfaEnabled(true)
+    setMfaEnrolling(false)
+    setMfaQrUrl(null)
+    setMfaSecret(null)
+    setMfaFactorId(null)
+    setMfaCode('')
+  }
+
+  function handleMfaCancelEnroll() {
+    setMfaEnrolling(false)
+    setMfaQrUrl(null)
+    setMfaSecret(null)
+    setMfaFactorId(null)
+    setMfaCode('')
+    setMfaError(null)
+  }
 
   async function handleMfaUnenroll() {
     if (!confirm(tm('unenrollConfirm'))) return
@@ -525,16 +588,84 @@ export default function SettingsPage() {
                 >
                   {mfaUnenrolling ? tm('loading') : tm('unenroll')}
                 </button>
-              ) : (
-                <a
-                  href="/mfa/setup"
+              ) : !mfaEnrolling ? (
+                <button
+                  onClick={handleMfaStartEnroll}
                   className="text-xs text-blue-600 hover:text-blue-800 dark:hover:text-blue-400 transition-colors"
                 >
                   {tm('enable')}
-                </a>
-              )
+                </button>
+              ) : null
             )}
           </div>
+
+          {/* Inline enrollment panel */}
+          {mfaEnrolling && (
+            <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4">
+              {mfaQrUrl ? (
+                <>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{tm('scanQr')}</p>
+                  <img src={mfaQrUrl} alt="TOTP QR" className="w-[180px] h-[180px] rounded-lg border border-gray-200 dark:border-gray-700" />
+
+                  {/* Manual secret */}
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setMfaShowSecret(v => !v)}
+                      className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    >
+                      {mfaShowSecret ? <EyeOff size={12} /> : <Eye size={12} />}
+                      {tm('manualEntry')}
+                    </button>
+                    {mfaShowSecret && (
+                      <p className="mt-1 text-xs font-mono bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-gray-700 dark:text-gray-300 break-all select-all">
+                        {mfaSecret}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Code input */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">{tm('enterCode')}</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={mfaCode}
+                      onChange={e => setMfaCode(e.target.value.replace(/\D/g, ''))}
+                      onKeyDown={e => e.key === 'Enter' && handleMfaVerify()}
+                      placeholder="000000"
+                      className="w-36 text-center text-lg font-mono tracking-widest px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      autoFocus
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleMfaVerify}
+                      disabled={mfaVerifying || mfaCode.length !== 6}
+                      className="flex items-center gap-1.5 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {mfaVerifying ? <Loader2 size={13} className="animate-spin" /> : null}
+                      {tm('verify')}
+                    </button>
+                    <button
+                      onClick={handleMfaCancelEnroll}
+                      className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                    >
+                      {tm('cancel')}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <Loader2 size={14} className="animate-spin" />
+                  {tm('loading')}
+                </div>
+              )}
+            </div>
+          )}
+
           {mfaError && <p className="mt-1 text-xs text-red-500">{mfaError}</p>}
         </div>
 

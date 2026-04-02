@@ -630,7 +630,10 @@
     "invalidCode": "驗證碼錯誤，請再試一次",
     "error": "操作失敗，請再試一次",
     "loading": "載入中...",
-    "backToApp": "返回系統"
+    "backToApp": "返回系統",
+    "scanQr": "請使用驗證器 App 掃描以下 QR Code",
+    "manualEntry": "手動輸入金鑰",
+    "cancel": "取消"
   },
   "feedback": {
     "title": "意見回饋",

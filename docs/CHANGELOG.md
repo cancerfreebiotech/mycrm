@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v2.4.4 — 個人設定頁 MFA inline 設定（2026-04-02）
+
+### 變更項目
+- feat: 個人設定頁 MFA 區塊改為 inline enrollment，點「啟用 MFA」後直接展開 QR Code + 驗證碼輸入，不再跳轉到 /mfa/setup 頁面
+- i18n: mfa 新增 scanQr / manualEntry / cancel 三個 key
+
 ## v2.4.3 — Hunter.io 統計刷新、Footer 台北時間（2026-04-02）
 
 ### 變更項目
