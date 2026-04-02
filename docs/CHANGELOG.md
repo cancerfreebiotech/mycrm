@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v2.4.5 — 名片王匯入編輯功能（2026-04-03）
+
+### 變更項目
+- `/admin/camcard`：每張名片新增「編輯」按鈕，開啟 modal 可編輯所有 OCR 欄位（中文名、英文名、日文名、公司、職稱、Email、電話、地址等）後再確認匯入
+- 新增 `PUT /api/camcard/[id]/update` API，更新 `camcard_pending.ocr_data`
+
 ## v2.4.4 — 個人設定頁 MFA inline 設定（2026-04-02）
 
 ### 變更項目

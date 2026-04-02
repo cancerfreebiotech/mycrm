@@ -6,7 +6,7 @@ import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import {
   FolderInput, Loader2, Check, X, Merge, ExternalLink,
   ChevronDown, ChevronRight, AlertTriangle, CheckSquare, ZoomIn,
-  ChevronLeft,
+  ChevronLeft, Pencil,
 } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
 
@@ -75,6 +75,11 @@ export default function CamcardPage() {
 
   // Batch confirm
   const [batchConfirming, setBatchConfirming] = useState<string | null>(null)
+
+  // Edit modal
+  const [editCard, setEditCard] = useState<PendingCard | null>(null)
+  const [editData, setEditData] = useState<Record<string, string>>({})
+  const [editSaving, setEditSaving] = useState(false)
 
   const fetchPending = useCallback(async (targetPage = page) => {
     setLoading(true)
@@ -247,6 +252,48 @@ export default function CamcardPage() {
     }
   }
 
+  function openEdit(card: PendingCard) {
+    const ocr = card.ocr_data ?? {}
+    const fields: Record<string, string> = {}
+    for (const key of [
+      'name', 'name_en', 'name_local',
+      'company', 'company_en',
+      'job_title', 'department',
+      'email', 'second_email',
+      'phone', 'second_phone', 'fax',
+      'address', 'address_en',
+      'website', 'linkedin_url', 'facebook_url',
+      'country_code',
+    ]) {
+      fields[key] = (ocr[key] as string) ?? ''
+    }
+    setEditData(fields)
+    setEditCard(card)
+  }
+
+  async function handleSaveEdit() {
+    if (!editCard) return
+    setEditSaving(true)
+    try {
+      const res = await fetch(`/api/camcard/${editCard.id}/update`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ocr_data: editData }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error)
+      // Update local state
+      setGroups((prev) => prev.map((g) => ({
+        ...g,
+        cards: g.cards.map((c) => c.id === editCard.id ? { ...c, ocr_data: { ...editData } } : c),
+      })))
+      setEditCard(null)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '儲存失敗')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
   function removeCard(cardId: string) {
     setGroups((prev) => {
       const next = prev
@@ -361,6 +408,13 @@ export default function CamcardPage() {
             >
               {isLoading ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
               新增
+            </button>
+            <button
+              onClick={() => openEdit(card)}
+              disabled={isLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40"
+            >
+              <Pencil size={12} /> 編輯
             </button>
             <button
               onClick={() => openMerge(card)}
@@ -586,6 +640,83 @@ export default function CamcardPage() {
             className="max-w-full max-h-full rounded-xl shadow-2xl object-contain"
             onClick={(e) => e.stopPropagation()}
           />
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {editCard && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <Pencil size={16} /> 編輯名片資料
+              </h2>
+              <button onClick={() => setEditCard(null)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                {([
+                  ['name', '中文名'],
+                  ['name_en', '英文名'],
+                  ['name_local', '日文名'],
+                  ['company', '公司（中文）'],
+                  ['company_en', '公司（英文）'],
+                  ['job_title', '職稱'],
+                  ['department', '部門'],
+                  ['email', 'Email'],
+                  ['second_email', 'Email 2'],
+                  ['phone', '電話'],
+                  ['second_phone', '電話 2'],
+                  ['fax', '傳真'],
+                  ['country_code', '國家碼'],
+                  ['website', '網站'],
+                  ['linkedin_url', 'LinkedIn'],
+                  ['facebook_url', 'Facebook'],
+                ] as [string, string][]).map(([key, label]) => (
+                  <div key={key}>
+                    <label className="block text-xs text-gray-400 mb-1">{label}</label>
+                    <input
+                      type="text"
+                      value={editData[key] ?? ''}
+                      onChange={(e) => setEditData((prev) => ({ ...prev, [key]: e.target.value }))}
+                      className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                ))}
+                <div className="col-span-2">
+                  <label className="block text-xs text-gray-400 mb-1">地址（中文）</label>
+                  <input
+                    type="text"
+                    value={editData.address ?? ''}
+                    onChange={(e) => setEditData((prev) => ({ ...prev, address: e.target.value }))}
+                    className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-gray-400 mb-1">地址（英文）</label>
+                  <input
+                    type="text"
+                    value={editData.address_en ?? ''}
+                    onChange={(e) => setEditData((prev) => ({ ...prev, address_en: e.target.value }))}
+                    className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+              <button onClick={() => setEditCard(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">取消</button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={editSaving}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {editSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                儲存
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
