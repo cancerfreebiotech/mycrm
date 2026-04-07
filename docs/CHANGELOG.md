@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v2.5.1 — Telegram Bot 新增 /lang 語言切換指令（2026-04-07）
+
+### 變更項目
+- Telegram Bot 新增 `/lang [zh|en|ja]` 指令，可直接在 Bot 切換回應語言（更新 `users.language`），切換後立即以新語言回覆確認
+- `/help` 三語版本均加入 `/lang` 指令說明
+
 ## v2.5.0 — 名片審查篩選器；說明文件公開快速開始（2026-04-07）
 
 ### 變更項目

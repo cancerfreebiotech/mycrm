@@ -125,6 +125,10 @@ export interface BotMessages {
   // ── /todos ─────────────────────────────────────────────────────────────────
   todosEmpty: string
 
+  // ── /lang ──────────────────────────────────────────────────────────────────
+  langChanged: (lang: string) => string
+  langInvalid: string
+
   // ── Maintenance ────────────────────────────────────────────────────────────
   maintenanceOn: string
   maintenanceOff: string
@@ -170,6 +174,7 @@ const zh: BotMessages = {
     '/meet [會議資訊]　　 — 新增行程\n' +
     '/members　　　　　　 — 查看組織成員\n' +
     '/todos　　　　　　　 — 查看我的任務\n' +
+    '/lang [zh|en|ja]　　 — 切換 Bot 語言\n' +
     '/stop　　　　　　　　 — 中止目前操作',
 
   cardOcring: '⏳ OCR 辨識中，請稍候...',
@@ -229,6 +234,9 @@ const zh: BotMessages = {
 
   todosEmpty: '✅ 你目前沒有待處理任務！',
 
+  langChanged: (lang) => `✅ 語言已切換為：${lang}`,
+  langInvalid: '❌ 無效語言。請使用：/lang zh、/lang en 或 /lang ja',
+
   maintenanceOn: '🔧 維護模式已開啟。所有使用者將看到維護中提示。',
   maintenanceOff: '✅ 維護模式已關閉。系統恢復正常。',
 
@@ -270,6 +278,7 @@ const en: BotMessages = {
     '/meet [meeting info]　 — Add schedule\n' +
     '/members　　　　　　　 — View team members\n' +
     '/todos　　　　　　　　　 — View my tasks\n' +
+    '/lang [zh|en|ja]　　　 — Switch Bot language\n' +
     '/stop　　　　　　　　　　 — Cancel current operation',
 
   cardOcring: '⏳ Recognizing card, please wait...',
@@ -329,6 +338,9 @@ const en: BotMessages = {
 
   todosEmpty: '✅ You have no pending tasks!',
 
+  langChanged: (lang) => `✅ Language switched to: ${lang}`,
+  langInvalid: '❌ Invalid language. Use: /lang zh, /lang en, or /lang ja',
+
   maintenanceOn: '🔧 Maintenance mode enabled. All users will see a maintenance notice.',
   maintenanceOff: '✅ Maintenance mode disabled. System is back to normal.',
 
@@ -370,6 +382,7 @@ const ja: BotMessages = {
     '/meet [会議情報]　　　　 — スケジュールを追加\n' +
     '/members　　　　　　　　 — メンバー一覧を表示\n' +
     '/todos　　　　　　　　　　 — 自分のタスクを確認\n' +
+    '/lang [zh|en|ja]　　　　 — Bot言語を切り替え\n' +
     '/stop　　　　　　　　　　　 — 現在の操作をキャンセル',
 
   cardOcring: '⏳ 名刺を認識中、少々お待ちください...',
@@ -428,6 +441,9 @@ const ja: BotMessages = {
   stopConfirm: (action) => `キャンセルしました：${action}`,
 
   todosEmpty: '✅ 未処理のタスクはありません！',
+
+  langChanged: (lang) => `✅ 言語を切り替えました：${lang}`,
+  langInvalid: '❌ 無効な言語コードです。/lang zh、/lang en、/lang ja をご利用ください',
 
   maintenanceOn: '🔧 メンテナンスモードを有効にしました。',
   maintenanceOff: '✅ メンテナンスモードを無効にしました。システムは通常運用に戻りました。',

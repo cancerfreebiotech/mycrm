@@ -1171,6 +1171,22 @@ async function handleText(
     return
   }
 
+  // ── /lang ──────────────────────────────────────────────────────────────────
+  if (cmd.startsWith('/lang')) {
+    const arg = cmd.replace('/lang', '').trim().toLowerCase()
+    const langMap: Record<string, string> = { zh: 'chinese', en: 'english', ja: 'japanese' }
+    const langLabel: Record<string, string> = { zh: '繁體中文', en: 'English', ja: '日本語' }
+    if (!langMap[arg]) {
+      await sendMessage(chatId, m.langInvalid)
+      return
+    }
+    await supabase.from('users').update({ language: langMap[arg] }).eq('telegram_id', from)
+    // Reply in the newly selected language
+    const newM = BOT_MESSAGES[arg as keyof typeof BOT_MESSAGES]
+    await sendMessage(chatId, newM.langChanged(langLabel[arg]))
+    return
+  }
+
   // ── /stop — maintenance mode (super_admin only) ────────────────────────────
   if (cmd === '/stop' || cmd === '/stop off') {
     if (user.role !== 'super_admin') {
