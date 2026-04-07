@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v2.5.0 — 名片審查篩選器；說明文件公開快速開始（2026-04-07）
+
+### 變更項目
+- `/admin/camcard`：新增篩選列（搜尋姓名／公司、國家、有重複、有 Email、排序），支援 400ms debounce 搜尋與一鍵清除
+- `GET /api/camcard/pending`：新增 `search`、`has_duplicate`、`country_code`、`has_email`、`sort` 篩選參數
+- `middleware.ts`：`/docs` 路由不再要求登入，未登入使用者可直接瀏覽快速開始文件
+
 ## v2.4.5 — 名片王匯入編輯功能（2026-04-03）
 
 ### 變更項目

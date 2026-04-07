@@ -43,9 +43,10 @@ export async function middleware(request: NextRequest) {
   const isLoginPage = pathname === '/login'
   const isMaintenancePage = pathname === '/maintenance'
   const isMfaPage = pathname.startsWith('/mfa/')
+  const isDocsPage = pathname.startsWith('/docs')
 
   // Redirect unauthenticated users to login
-  if (!user && !isLoginPage && !isMaintenancePage) {
+  if (!user && !isLoginPage && !isMaintenancePage && !isDocsPage) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
@@ -54,8 +55,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  // MFA AAL check for authenticated users (skip for login/maintenance/mfa pages)
-  if (user && !isLoginPage && !isMaintenancePage) {
+  // MFA AAL check for authenticated users (skip for login/maintenance/mfa/docs pages)
+  if (user && !isLoginPage && !isMaintenancePage && !isDocsPage) {
     const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
     if (aalData) {
       const { currentLevel, nextLevel } = aalData
@@ -74,7 +75,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Maintenance mode check for authenticated non-super_admin users
-  if (user && !isLoginPage && !isMaintenancePage && !isMfaPage) {
+  if (user && !isLoginPage && !isMaintenancePage && !isMfaPage && !isDocsPage) {
     const { data: setting } = await supabase
       .from('system_settings')
       .select('value')

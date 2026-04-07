@@ -6,17 +6,45 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '50'), 100)
   const offset = Math.max(parseInt(url.searchParams.get('offset') ?? '0'), 0)
+  const search = (url.searchParams.get('search') ?? '').trim()
+  const hasDuplicate = url.searchParams.get('has_duplicate') === '1'
+  const countryCode = (url.searchParams.get('country_code') ?? '').trim()
+  const hasEmail = url.searchParams.get('has_email') === '1'
+  const sort = url.searchParams.get('sort') ?? 'newest'
 
-  const { count } = await supabase
+  let countQ = supabase
     .from('camcard_pending')
     .select('id', { count: 'exact', head: true })
     .eq('status', 'pending')
 
-  const { data, error } = await supabase
+  let dataQ = supabase
     .from('camcard_pending')
     .select('id, image_filename, card_img_url, back_img_url, ocr_data, status, duplicate_contact_id, match_type, created_at')
     .eq('status', 'pending')
-    .order('created_at', { ascending: false })
+
+  if (hasDuplicate) {
+    countQ = countQ.not('duplicate_contact_id', 'is', null)
+    dataQ = dataQ.not('duplicate_contact_id', 'is', null)
+  }
+  if (countryCode) {
+    countQ = countQ.filter('ocr_data->>country_code', 'eq', countryCode)
+    dataQ = dataQ.filter('ocr_data->>country_code', 'eq', countryCode)
+  }
+  if (hasEmail) {
+    countQ = countQ.not('ocr_data->>email', 'is', null).filter('ocr_data->>email', 'neq', '')
+    dataQ = dataQ.not('ocr_data->>email', 'is', null).filter('ocr_data->>email', 'neq', '')
+  }
+  if (search) {
+    const s = `%${search}%`
+    const orFilter = `image_filename.ilike.${s},ocr_data->>name.ilike.${s},ocr_data->>name_en.ilike.${s},ocr_data->>company.ilike.${s},ocr_data->>company_en.ilike.${s}`
+    countQ = countQ.or(orFilter)
+    dataQ = dataQ.or(orFilter)
+  }
+
+  const { count } = await countQ
+
+  const { data, error } = await dataQ
+    .order('created_at', { ascending: sort === 'oldest' })
     .range(offset, offset + limit - 1)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

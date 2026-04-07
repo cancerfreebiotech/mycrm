@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import {
   FolderInput, Loader2, Check, X, Merge, ExternalLink,
   ChevronDown, ChevronRight, AlertTriangle, CheckSquare, ZoomIn,
-  ChevronLeft, Pencil,
+  ChevronLeft, Pencil, Search, RotateCcw,
 } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
 
@@ -81,10 +81,31 @@ export default function CamcardPage() {
   const [editData, setEditData] = useState<Record<string, string>>({})
   const [editSaving, setEditSaving] = useState(false)
 
-  const fetchPending = useCallback(async (targetPage = page) => {
+  // Filters
+  const [searchInput, setSearchInput] = useState('')
+  const [searchFilter, setSearchFilter] = useState('')
+  const [hasDuplicateFilter, setHasDuplicateFilter] = useState(false)
+  const [countryCodeFilter, setCountryCodeFilter] = useState('')
+  const [hasEmailFilter, setHasEmailFilter] = useState(false)
+  const [sortFilter, setSortFilter] = useState<'newest' | 'oldest'>('newest')
+
+  // Debounce search input → searchFilter
+  useEffect(() => {
+    const t = setTimeout(() => setSearchFilter(searchInput), 400)
+    return () => clearTimeout(t)
+  }, [searchInput])
+
+  const fetchPending = useCallback(async (targetPage: number) => {
     setLoading(true)
     const offset = (targetPage - 1) * PAGE_SIZE
-    const res = await fetch(`/api/camcard/pending?limit=${PAGE_SIZE}&offset=${offset}`)
+    const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) })
+    if (searchFilter) params.set('search', searchFilter)
+    if (hasDuplicateFilter) params.set('has_duplicate', '1')
+    if (countryCodeFilter) params.set('country_code', countryCodeFilter)
+    if (hasEmailFilter) params.set('has_email', '1')
+    if (sortFilter === 'oldest') params.set('sort', 'oldest')
+
+    const res = await fetch(`/api/camcard/pending?${params}`)
     const json = res.ok ? await res.json() : { cards: [], total: 0 }
     const cards: PendingCard[] = json.cards ?? []
     setTotalPending(json.total ?? 0)
@@ -102,12 +123,21 @@ export default function CamcardPage() {
     grouped.sort((a, b) => b.cards.length - a.cards.length)
     setGroups(grouped)
     setLoading(false)
-  }, [supabase])
+  }, [searchFilter, hasDuplicateFilter, countryCodeFilter, hasEmailFilter, sortFilter])
 
+  // Fetch when page or fetchPending (filters) change
   useEffect(() => {
     fetchPending(page)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page])
+  }, [page, fetchPending])
+
+  // When filters change, reset to page 1 (fetchPending change above handles the re-fetch)
+  const isFirstRender = useRef(true)
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return }
+    if (page !== 1) setPage(1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchFilter, hasDuplicateFilter, countryCodeFilter, hasEmailFilter, sortFilter])
 
   useEffect(() => {
     supabase.from('tags').select('id, name').order('name').then(({ data }) => setAllTags(data ?? []))
@@ -555,6 +585,90 @@ export default function CamcardPage() {
               </button>
             </form>
           </div>
+        )}
+      </div>
+
+      {/* Filter bar */}
+      <div className="mb-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 flex flex-wrap gap-3 items-center">
+        {/* Search */}
+        <div className="relative flex-1 min-w-[180px]">
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="搜尋姓名、公司..."
+            className="w-full pl-7 pr-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        {/* Country code */}
+        <div className="flex items-center gap-1.5">
+          <label className="text-xs text-gray-400 shrink-0">國家</label>
+          <div className="relative">
+            <select
+              value={countryCodeFilter}
+              onChange={(e) => setCountryCodeFilter(e.target.value)}
+              className="appearance-none pl-2 pr-6 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            >
+              <option value="">全部</option>
+              <option value="TW">TW 台灣</option>
+              <option value="JP">JP 日本</option>
+              <option value="SG">SG 新加坡</option>
+              <option value="HK">HK 香港</option>
+              <option value="CN">CN 中國</option>
+              <option value="US">US 美國</option>
+            </select>
+            <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          </div>
+        </div>
+
+        {/* Has duplicate */}
+        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={hasDuplicateFilter}
+            onChange={(e) => setHasDuplicateFilter(e.target.checked)}
+            className="w-3.5 h-3.5 rounded border-gray-300 text-orange-500 focus:ring-orange-400"
+          />
+          <span className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">⚠️ 有重複</span>
+        </label>
+
+        {/* Has email */}
+        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={hasEmailFilter}
+            onChange={(e) => setHasEmailFilter(e.target.checked)}
+            className="w-3.5 h-3.5 rounded border-gray-300 text-blue-500 focus:ring-blue-400"
+          />
+          <span className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">✉ 有 Email</span>
+        </label>
+
+        {/* Sort */}
+        <div className="flex items-center gap-1.5">
+          <label className="text-xs text-gray-400 shrink-0">排序</label>
+          <div className="relative">
+            <select
+              value={sortFilter}
+              onChange={(e) => setSortFilter(e.target.value as 'newest' | 'oldest')}
+              className="appearance-none pl-2 pr-6 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            >
+              <option value="newest">最新優先</option>
+              <option value="oldest">最舊優先</option>
+            </select>
+            <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          </div>
+        </div>
+
+        {/* Reset */}
+        {(searchInput || hasDuplicateFilter || countryCodeFilter || hasEmailFilter || sortFilter !== 'newest') && (
+          <button
+            onClick={() => { setSearchInput(''); setHasDuplicateFilter(false); setCountryCodeFilter(''); setHasEmailFilter(false); setSortFilter('newest') }}
+            className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-gray-500 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+          >
+            <RotateCcw size={11} /> 清除
+          </button>
         )}
       </div>
 
