@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v2.6.0 — MFA 重設、回饋截圖修正、報表 Tag 篩選、移除 Gmail（2026-04-09）
+
+### 變更項目
+- **管理員重設 MFA**：使用者管理頁新增「重設 MFA」按鈕，管理員可協助使用者清除 TOTP 驗證器，讓對方重新設置
+- **回饋截圖上傳修正**：找到根本原因（`feedback` storage bucket 缺少 INSERT RLS policy），新增 migration 修正；同時修正 storage path 多餘前綴
+- **報表 Tag 篩選**：報表產生頁新增 Tag 多選篩選，選取後只顯示有任一所選 tag 的聯絡人（OR 邏輯）
+- **移除 Gmail 整合**：報表頁面移除 Gmail OAuth 連結區塊（API routes 保留）
+
 ## v2.5.2 — 名片審查多選批次確認（2026-04-09）
 
 ### 變更項目

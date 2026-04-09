@@ -16,10 +16,11 @@ export async function POST(req: NextRequest) {
 
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { dateFrom, dateTo, format } = await req.json() as {
+  const { dateFrom, dateTo, format, tagIds } = await req.json() as {
     dateFrom: string
     dateTo: string
     format: 'json' | 'excel'
+    tagIds?: string[]
   }
 
   if (!dateFrom || !dateTo) {
@@ -44,6 +45,23 @@ export async function POST(req: NextRequest) {
     if (!isSuperAdmin) {
       contactsQuery = contactsQuery.eq('created_by', profile.id)
     }
+
+    // Tag filter (OR logic)
+    if (tagIds && tagIds.length > 0) {
+      const { data: taggedContacts } = await service
+        .from('contact_tags')
+        .select('contact_id')
+        .in('tag_id', tagIds)
+      const contactIds = [...new Set((taggedContacts ?? []).map((t) => t.contact_id))]
+      if (contactIds.length === 0) {
+        // No contacts match — return empty
+        return format === 'json'
+          ? NextResponse.json({ contacts: [], logs: [] })
+          : new NextResponse(new Uint8Array(), { headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': `attachment; filename="report_${dateFrom}_${dateTo}.xlsx"` } })
+      }
+      contactsQuery = contactsQuery.in('id', contactIds)
+    }
+
     const { data: contacts } = await contactsQuery
 
     // Sheet 2: interaction logs in range

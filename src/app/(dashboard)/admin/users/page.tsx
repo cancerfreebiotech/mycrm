@@ -28,6 +28,7 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [resetMfaId, setResetMfaId] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -62,6 +63,24 @@ export default function AdminUsersPage() {
       setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, role: newRole } : x))
     }
     setUpdatingId(null)
+  }
+
+  async function resetMfa(u: CrmUser) {
+    if (!confirm(`確定要重設「${u.display_name || u.email}」的 MFA？該用戶下次登入時需重新設置。`)) return
+    setResetMfaId(u.id)
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/reset-mfa`, { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) {
+        alert(`已刪除 ${data.deleted} 個 MFA 驗證器`)
+      } else {
+        alert(`重設失敗：${data.error}`)
+      }
+    } catch {
+      alert('重設失敗，請稍後再試')
+    } finally {
+      setResetMfaId(null)
+    }
   }
 
   async function toggleFeature(u: CrmUser, feature: string) {
@@ -130,18 +149,27 @@ export default function AdminUsersPage() {
                     {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : '—'}
                   </td>
                   <td className="px-4 py-3 space-y-2">
-                    <button
-                      onClick={() => toggleRole(u)}
-                      disabled={updatingId === u.id || u.id === currentUserId}
-                      title={u.id === currentUserId ? t('selfRoleHint') : undefined}
-                      className="px-3 py-1 text-xs border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 transition-colors"
-                    >
-                      {updatingId === u.id
-                        ? t('updating')
-                        : u.role === 'super_admin'
-                        ? t('demoteToMember')
-                        : t('promoteToAdmin')}
-                    </button>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        onClick={() => toggleRole(u)}
+                        disabled={updatingId === u.id || u.id === currentUserId}
+                        title={u.id === currentUserId ? t('selfRoleHint') : undefined}
+                        className="px-3 py-1 text-xs border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 transition-colors"
+                      >
+                        {updatingId === u.id
+                          ? t('updating')
+                          : u.role === 'super_admin'
+                          ? t('demoteToMember')
+                          : t('promoteToAdmin')}
+                      </button>
+                      <button
+                        onClick={() => resetMfa(u)}
+                        disabled={resetMfaId === u.id}
+                        className="px-3 py-1 text-xs border border-orange-200 dark:border-orange-800 rounded-lg text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/30 disabled:opacity-40 transition-colors"
+                      >
+                        {resetMfaId === u.id ? '重設中...' : '重設 MFA'}
+                      </button>
+                    </div>
                     {u.role !== 'super_admin' && (
                       <div className="flex flex-wrap gap-1.5 mt-1">
                         {ALL_FEATURE_KEYS.map((key) => {

@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { useSearchParams } from 'next/navigation'
-import { Plus, Pencil, Trash2, Check } from 'lucide-react'
+import { Plus, Pencil, Trash2, Check, X } from 'lucide-react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 
 interface Schedule {
@@ -17,6 +16,8 @@ interface Schedule {
   created_at: string
   owner_id?: string
 }
+
+interface Tag { id: string; name: string }
 
 interface ContactRow {
   name: string
@@ -45,7 +46,6 @@ const FREQ_CRON: Record<string, string> = {
 export default function ReportsPage() {
   const t = useTranslations('reports')
   const tc = useTranslations('common')
-  const searchParams = useSearchParams()
   const supabase = createBrowserSupabaseClient()
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
 
@@ -54,6 +54,8 @@ export default function ReportsPage() {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
   const [dateFrom, setDateFrom] = useState(thirtyDaysAgo)
   const [dateTo, setDateTo] = useState(today)
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([])
+  const [allTags, setAllTags] = useState<Tag[]>([])
   const [generating, setGenerating] = useState(false)
   const [contacts, setContacts] = useState<ContactRow[] | null>(null)
   const [logs, setLogs] = useState<LogRow[] | null>(null)
@@ -61,9 +63,6 @@ export default function ReportsPage() {
   // Schedules
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [loadingSchedules, setLoadingSchedules] = useState(true)
-
-  // Gmail OAuth
-  const [gmailEmail, setGmailEmail] = useState<string | null>(null)
 
   // Modal
   const [showModal, setShowModal] = useState(false)
@@ -76,16 +75,11 @@ export default function ReportsPage() {
     recipients: '',
   })
   const [saving, setSaving] = useState(false)
-  const [flashMsg, setFlashMsg] = useState<string | null>(null)
 
   useEffect(() => {
     loadRole()
     loadSchedules()
-    loadGmail()
-    if (searchParams.get('gmail') === 'connected') {
-      setFlashMsg('Gmail 已成功連結！')
-      setTimeout(() => setFlashMsg(null), 4000)
-    }
+    supabase.from('tags').select('id, name').order('name').then(({ data }) => setAllTags(data ?? []))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -106,21 +100,13 @@ export default function ReportsPage() {
     setLoadingSchedules(false)
   }
 
-  async function loadGmail() {
-    const res = await fetch('/api/auth/gmail/status')
-    if (res.ok) {
-      const data = await res.json()
-      setGmailEmail(data.email ?? null)
-    }
-  }
-
   async function handleGenerate(format: 'json' | 'excel') {
     setGenerating(true)
     try {
       const res = await fetch('/api/reports/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dateFrom, dateTo, format }),
+        body: JSON.stringify({ dateFrom, dateTo, format, tagIds: selectedTagIds }),
       })
 
       if (format === 'excel') {
@@ -215,12 +201,6 @@ export default function ReportsPage() {
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t('subtitle')}</p>
       </div>
 
-      {flashMsg && (
-        <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg px-4 py-2">
-          <Check size={14} /> {flashMsg}
-        </div>
-      )}
-
       {/* Generate section */}
       <section className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-4">
         <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">{t('sectionGenerate')}</h2>
@@ -243,7 +223,41 @@ export default function ReportsPage() {
               className="text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <div className="flex gap-2">
+          {allTags.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">標籤篩選</label>
+              <div className="flex flex-wrap gap-1.5 max-w-sm">
+                {allTags.map(tag => {
+                  const selected = selectedTagIds.includes(tag.id)
+                  return (
+                    <button
+                      key={tag.id}
+                      onClick={() => setSelectedTagIds(prev =>
+                        selected ? prev.filter(id => id !== tag.id) : [...prev, tag.id]
+                      )}
+                      className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                        selected
+                          ? 'bg-blue-600 border-blue-600 text-white'
+                          : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-blue-400'
+                      }`}
+                    >
+                      {tag.name}
+                      {selected && <X size={10} />}
+                    </button>
+                  )
+                })}
+              </div>
+              {selectedTagIds.length > 0 && (
+                <button
+                  onClick={() => setSelectedTagIds([])}
+                  className="mt-1.5 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  清除標籤篩選
+                </button>
+              )}
+            </div>
+          )}
+          <div className="flex gap-2 self-end">
             <button
               onClick={() => handleGenerate('json')}
               disabled={generating}
@@ -330,33 +344,6 @@ export default function ReportsPage() {
               )}
             </div>
           </div>
-        )}
-      </section>
-
-      {/* Gmail OAuth section */}
-      <section className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-3">
-        <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">{t('sectionGmail')}</h2>
-        <p className="text-xs text-gray-500 dark:text-gray-400">{t('gmailHint')}</p>
-        {gmailEmail ? (
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-700 dark:text-gray-300">{t('gmailConnected', { email: gmailEmail })}</span>
-            <a
-              href="/api/auth/gmail"
-              className="text-sm text-blue-600 hover:underline"
-            >
-              {t('gmailReconnect')}
-            </a>
-          </div>
-        ) : (
-          <a
-            href="/api/auth/gmail"
-            className="inline-block px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            {t('gmailConnect')}
-          </a>
-        )}
-        {searchParams.get('gmail') === 'connected' && !gmailEmail && (
-          <p className="text-xs text-green-600 dark:text-green-400">Gmail 連結成功，請重新整理頁面以查看帳戶資訊。</p>
         )}
       </section>
 

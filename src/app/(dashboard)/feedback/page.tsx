@@ -54,7 +54,7 @@ export default function FeedbackPage() {
 
     if (screenshot) {
       const ext = screenshot.name.split('.').pop() ?? 'png'
-      const path = `feedback/${user.id}/${Date.now()}.${ext}`
+      const path = `${user.id}/${Date.now()}.${ext}`
       const { error: uploadError } = await supabase.storage
         .from('feedback')
         .upload(path, screenshot, { contentType: screenshot.type })
