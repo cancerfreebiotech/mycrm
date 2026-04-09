@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v2.6.7 — MFA 狀態/重設改用 DB 函數（2026-04-09）
+
+### 變更項目
+- **MFA 狀態修正**：改用 DB 函數 `get_users_mfa_status()` 直接查 `auth.mfa_factors`，繞過 JS Admin API 權限問題
+- **MFA 重設修正**：改用 DB 函數 `get_auth_user_id_by_email()` 查 auth UUID，取代 `listUsers()` 呼叫
+
 ## v2.6.6 — 報表 Tag 篩選根本修正（2026-04-09）
 
 ### 變更項目

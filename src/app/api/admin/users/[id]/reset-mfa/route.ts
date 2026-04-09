@@ -21,7 +21,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   const { id: targetUserId } = await params
 
-  // Look up the target user's email from public users table
+  // Look up target user's email from public users table
   const { data: targetProfile } = await service
     .from('users')
     .select('email')
@@ -32,26 +32,24 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
-  // Resolve the auth user ID by email (public users.id may differ from auth.users.id)
-  const { data: { users: authUsers }, error: listErr } = await service.auth.admin.listUsers({ perPage: 1000 })
-  if (listErr) return NextResponse.json({ error: listErr.message }, { status: 500 })
+  // Resolve auth user UUID via DB function (avoids listUsers API permission issues)
+  const { data: authUserId, error: lookupError } = await service.rpc('get_auth_user_id_by_email', {
+    p_email: targetProfile.email,
+  })
 
-  const authUser = authUsers.find(u => u.email === targetProfile.email)
-  if (!authUser) return NextResponse.json({ error: 'Auth user not found' }, { status: 404 })
+  if (lookupError || !authUserId) {
+    return NextResponse.json({ error: 'Auth user not found' }, { status: 404 })
+  }
 
-  const authUserId = authUser.id
+  // Delete all verified MFA factors directly via admin API
+  const { data: factorsData, error: listError } = await service.auth.admin.mfa.listFactors({ userId: authUserId })
+  if (listError) return NextResponse.json({ error: listError.message }, { status: 500 })
 
-  // List all MFA factors for the target auth user
-  const { data: factorsData, error: listFactorsError } = await service.auth.admin.mfa.listFactors({ userId: authUserId })
-  if (listFactorsError) return NextResponse.json({ error: listFactorsError.message }, { status: 500 })
-
-  // listFactors returns { totp: [], phone: [] } — combine all factor types
   const allFactors = [
     ...(factorsData?.totp ?? []),
     ...(factorsData?.phone ?? []),
   ]
 
-  // Delete each factor
   let deleted = 0
   for (const factor of allFactors) {
     const { error } = await service.auth.admin.mfa.deleteFactor({ userId: authUserId, id: factor.id })
