@@ -39,6 +39,7 @@ export async function POST(
   const body = await req.json().catch(() => ({}))
   const tagIds: string[] = body.tagIds ?? []
   const importance: string = ['high', 'medium', 'low'].includes(body.importance) ? body.importance : 'medium'
+  const language: string = ['chinese', 'english', 'japanese'].includes(body.language) ? body.language : 'english'
   const supabase = createServiceClient()
 
   // Resolve confirming user via session cookies (most reliable)
@@ -74,6 +75,7 @@ export async function POST(
   }
   if (confirmedByUserId) contactData.created_by = confirmedByUserId
   contactData.importance = importance
+  contactData.language = language
   const extraData: Record<string, string> = {}
   for (const [ocrKey, contactKey] of Object.entries(OCR_TO_CONTACT)) {
     if (ocr[ocrKey]) contactData[contactKey] = ocr[ocrKey]

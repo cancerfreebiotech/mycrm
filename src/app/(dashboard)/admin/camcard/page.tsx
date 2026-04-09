@@ -70,6 +70,9 @@ export default function CamcardPage() {
   // Importance
   const [cardImportance, setCardImportance] = useState<Record<string, string>>({})
 
+  // Language
+  const [cardLanguage, setCardLanguage] = useState<Record<string, string>>({})
+
   // Lightbox
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
@@ -188,12 +191,13 @@ export default function CamcardPage() {
     setActionLoading(cardId)
     const tagIds = cardTags[cardId] ?? []
     const importance = cardImportance[cardId] ?? 'medium'
+    const language = cardLanguage[cardId] ?? 'english'
     const user = await resolveUser()
     try {
       const res = await fetch(`/api/camcard/${cardId}/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tagIds, importance, confirmedByUserId: user?.id, confirmedByName: user?.display_name }),
+        body: JSON.stringify({ tagIds, importance, language, confirmedByUserId: user?.id, confirmedByName: user?.display_name }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
       removeCard(cardId)
@@ -362,11 +366,12 @@ export default function CamcardPage() {
       await Promise.all(chunk.map(async (id) => {
         const tagIds = cardTags[id] ?? []
         const importance = cardImportance[id] ?? 'medium'
+        const language = cardLanguage[id] ?? 'english'
         try {
           const res = await fetch(`/api/camcard/${id}/confirm`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tagIds, importance, confirmedByUserId: user?.id, confirmedByName: user?.display_name }),
+            body: JSON.stringify({ tagIds, importance, language, confirmedByUserId: user?.id, confirmedByName: user?.display_name }),
           })
           if (res.ok) {
             removeCard(id)
@@ -437,6 +442,7 @@ export default function CamcardPage() {
     const dup = card.duplicate_contact
     const isLoading = actionLoading === card.id
     const importance = cardImportance[card.id] ?? 'medium'
+    const language = cardLanguage[card.id] ?? 'english'
 
     return (
       <div className={`bg-white dark:bg-gray-900 rounded-xl border p-4 ${hasDup ? 'border-yellow-300 dark:border-yellow-700' : selectedCards.has(card.id) ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
@@ -557,6 +563,22 @@ export default function CamcardPage() {
                 }`}
               >
                 {v === 'high' ? 'H' : v === 'low' ? 'L' : 'M'}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-gray-400 shrink-0">語言：</span>
+            {([['chinese', '中'], ['english', 'EN'], ['japanese', '日']] as const).map(([v, label]) => (
+              <button
+                key={v}
+                onClick={() => setCardLanguage((prev) => ({ ...prev, [card.id]: v }))}
+                className={`px-2 h-6 text-xs rounded border transition-colors ${
+                  language === v
+                    ? 'bg-blue-500 border-blue-500 text-white'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-500 hover:border-blue-400'
+                }`}
+              >
+                {label}
               </button>
             ))}
           </div>
