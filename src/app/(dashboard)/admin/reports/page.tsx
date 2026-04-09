@@ -27,7 +27,11 @@ interface LogRow {
   date: string
   time: string
   location: string
+  creator: string
 }
+
+type SortCol = keyof LogRow
+type SortDir = 'asc' | 'desc'
 
 const FREQ_CRON: Record<string, string> = {
   weekly: '0 9 * * 1',
@@ -53,6 +57,8 @@ export default function ReportsPage() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [generating, setGenerating] = useState(false)
   const [logs, setLogs] = useState<LogRow[] | null>(null)
+  const [sortCol, setSortCol] = useState<SortCol>('date')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
 
   const LOG_TYPES = [
     { value: 'meeting', label: '拜訪' },
@@ -343,41 +349,72 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {logs !== null && (
-          <div className="mt-2">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t('previewLogs', { count: logs.length })}
-            </p>
-            {logs.length === 0 ? (
-              <p className="text-sm text-gray-400">{t('noData')}</p>
-            ) : (
-              <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 dark:bg-gray-800">
-                    <tr>
-                      {[t('colLogContact'), t('colCompany'), t('colLogType'), t('colLogContent'), t('colLogDate'), '時間', '地點'].map(h => (
-                        <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                    {logs.map((l, i) => (
-                      <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                        <td className="px-3 py-2 text-gray-900 dark:text-gray-100">{l.contact}</td>
-                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{l.company}</td>
-                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{l.type}</td>
-                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400 max-w-xs truncate">{l.content}</td>
-                        <td className="px-3 py-2 text-gray-500 dark:text-gray-500 whitespace-nowrap">{l.date}</td>
-                        <td className="px-3 py-2 text-gray-500 dark:text-gray-500">{l.time}</td>
-                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{l.location}</td>
+        {logs !== null && (() => {
+          const sorted = [...logs].sort((a, b) => {
+            const av = a[sortCol] ?? ''
+            const bv = b[sortCol] ?? ''
+            const cmp = av < bv ? -1 : av > bv ? 1 : 0
+            return sortDir === 'asc' ? cmp : -cmp
+          })
+
+          function SortTh({ col, label }: { col: SortCol; label: string }) {
+            const active = sortCol === col
+            function toggle() {
+              if (active) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+              else { setSortCol(col); setSortDir('asc') }
+            }
+            return (
+              <th
+                className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 cursor-pointer select-none hover:text-gray-800 dark:hover:text-gray-200 whitespace-nowrap"
+                onClick={toggle}
+              >
+                {label}{active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ' ↕'}
+              </th>
+            )
+          }
+
+          return (
+            <div className="mt-2">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                {t('previewLogs', { count: logs.length })}
+              </p>
+              {logs.length === 0 ? (
+                <p className="text-sm text-gray-400">{t('noData')}</p>
+              ) : (
+                <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 dark:bg-gray-800">
+                      <tr>
+                        <SortTh col="contact" label={t('colLogContact')} />
+                        <SortTh col="company" label={t('colCompany')} />
+                        <SortTh col="type" label={t('colLogType')} />
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{t('colLogContent')}</th>
+                        <SortTh col="date" label={t('colLogDate')} />
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">時間</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">地點</th>
+                        <SortTh col="creator" label="填寫人" />
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                      {sorted.map((l, i) => (
+                        <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                          <td className="px-3 py-2 text-gray-900 dark:text-gray-100 whitespace-nowrap">{l.contact}</td>
+                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">{l.company}</td>
+                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">{l.type}</td>
+                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400 max-w-sm whitespace-pre-wrap break-words">{l.content}</td>
+                          <td className="px-3 py-2 text-gray-500 dark:text-gray-500 whitespace-nowrap">{l.date}</td>
+                          <td className="px-3 py-2 text-gray-500 dark:text-gray-500 whitespace-nowrap">{l.time}</td>
+                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{l.location}</td>
+                          <td className="px-3 py-2 text-gray-500 dark:text-gray-500 whitespace-nowrap">{l.creator}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )
+        })()}
       </section>
 
       {/* Schedules section */}

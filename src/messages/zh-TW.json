@@ -176,7 +176,7 @@
     "department": "部門",
     "logTypes": {
       "note": "筆記",
-      "meeting": "會議",
+      "meeting": "拜訪",
       "email": "郵件",
       "system": "系統"
     }
@@ -292,7 +292,7 @@
     "sortOldest": "最舊在前",
     "types": {
       "note": "筆記",
-      "meeting": "會議",
+      "meeting": "拜訪",
       "email": "郵件"
     }
   },

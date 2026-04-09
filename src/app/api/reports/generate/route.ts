@@ -46,6 +46,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: rpcError.message }, { status: 500 })
     }
 
+    const TYPE_LABEL: Record<string, string> = {
+      meeting: '拜訪',
+      note: '備忘',
+      email: 'Email',
+    }
+
     const logRows = (logs ?? []).map((l: {
       contact_name: string | null
       contact_company: string | null
@@ -55,14 +61,16 @@ export async function POST(req: NextRequest) {
       meeting_date: string | null
       meeting_time: string | null
       meeting_location: string | null
+      creator_name: string | null
     }) => ({
       contact: l.contact_name ?? '',
       company: l.contact_company ?? '',
-      type: l.type ?? '',
+      type: TYPE_LABEL[l.type ?? ''] ?? l.type ?? '',
       content: l.email_subject ?? l.content ?? '',
       date: l.meeting_date ?? '',
       time: l.meeting_time ? String(l.meeting_time).slice(0, 5) : '',
       location: l.meeting_location ?? '',
+      creator: l.creator_name ?? '',
     }))
 
     if (format === 'json') {
