@@ -81,6 +81,11 @@ export default function CamcardPage() {
   const [editData, setEditData] = useState<Record<string, string>>({})
   const [editSaving, setEditSaving] = useState(false)
 
+  // Multi-select bulk confirm
+  const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set())
+  const [bulkConfirming, setBulkConfirming] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
+
   // Filters
   const [searchInput, setSearchInput] = useState('')
   const [searchFilter, setSearchFilter] = useState('')
@@ -122,6 +127,9 @@ export default function CamcardPage() {
     map.forEach((c, company) => grouped.push({ company, cards: c }))
     grouped.sort((a, b) => b.cards.length - a.cards.length)
     setGroups(grouped)
+
+    // Auto-select non-duplicate cards
+    setSelectedCards(new Set(cards.filter(c => !c.duplicate_contact_id).map(c => c.id)))
     setLoading(false)
   }, [searchFilter, hasDuplicateFilter, countryCodeFilter, hasEmailFilter, sortFilter])
 
@@ -341,6 +349,40 @@ export default function CamcardPage() {
     setTotalPending((n) => n - 1)
   }
 
+  async function handleBulkConfirm() {
+    const ids = [...selectedCards]
+    if (ids.length === 0) return
+    setBulkConfirming(true)
+    setBulkProgress({ done: 0, total: ids.length })
+    const user = await resolveUser()
+
+    const CHUNK = 5
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK)
+      await Promise.all(chunk.map(async (id) => {
+        const tagIds = cardTags[id] ?? []
+        const importance = cardImportance[id] ?? 'medium'
+        try {
+          const res = await fetch(`/api/camcard/${id}/confirm`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tagIds, importance, confirmedByUserId: user?.id, confirmedByName: user?.display_name }),
+          })
+          if (res.ok) {
+            removeCard(id)
+            setSelectedCards(prev => { const n = new Set(prev); n.delete(id); return n })
+          }
+        } catch {
+          // continue on individual failure
+        }
+        setBulkProgress(prev => prev ? { ...prev, done: prev.done + 1 } : null)
+      }))
+    }
+
+    setBulkConfirming(false)
+    setBulkProgress(null)
+  }
+
   function CardThumb({ url, alt, onPreview }: { url: string | null; alt: string; onPreview: (u: string) => void }) {
     const [broken, setBroken] = useState(false)
     if (!url || broken) {
@@ -397,8 +439,26 @@ export default function CamcardPage() {
     const importance = cardImportance[card.id] ?? 'medium'
 
     return (
-      <div className={`bg-white dark:bg-gray-900 rounded-xl border p-4 ${hasDup ? 'border-yellow-300 dark:border-yellow-700' : 'border-gray-200 dark:border-gray-700'}`}>
+      <div className={`bg-white dark:bg-gray-900 rounded-xl border p-4 ${hasDup ? 'border-yellow-300 dark:border-yellow-700' : selectedCards.has(card.id) ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
         <div className="flex gap-4">
+          {/* Checkbox */}
+          <div className="flex items-start pt-1 shrink-0">
+            <input
+              type="checkbox"
+              checked={selectedCards.has(card.id)}
+              disabled={hasDup}
+              onChange={() => {
+                setSelectedCards(prev => {
+                  const next = new Set(prev)
+                  if (next.has(card.id)) next.delete(card.id)
+                  else next.add(card.id)
+                  return next
+                })
+              }}
+              className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+            />
+          </div>
+
           {/* Card images: front + back stacked, click to enlarge */}
           <div className="flex flex-col gap-1 shrink-0">
             <CardThumb url={card.card_img_url} alt="正面" onPreview={setPreviewUrl} />
@@ -661,6 +721,26 @@ export default function CamcardPage() {
           </div>
         </div>
 
+        {/* Select all / Deselect all */}
+        <div className="flex items-center gap-1.5 border-l border-gray-200 dark:border-gray-700 pl-3">
+          <button
+            onClick={() => {
+              const allNonDup = groups.flatMap(g => g.cards).filter(c => !c.duplicate_contact_id).map(c => c.id)
+              setSelectedCards(new Set(allNonDup))
+            }}
+            className="text-xs text-blue-500 hover:text-blue-700 dark:hover:text-blue-300 whitespace-nowrap"
+          >
+            全選
+          </button>
+          <span className="text-gray-300 dark:text-gray-600 text-xs">·</span>
+          <button
+            onClick={() => setSelectedCards(new Set())}
+            className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap"
+          >
+            取消全選
+          </button>
+        </div>
+
         {/* Reset */}
         {(searchInput || hasDuplicateFilter || countryCodeFilter || hasEmailFilter || sortFilter !== 'newest') && (
           <button
@@ -918,6 +998,40 @@ export default function CamcardPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {/* Floating bulk confirm bar */}
+      {(selectedCards.size > 0 || bulkConfirming) && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-2xl shadow-2xl px-5 py-3">
+          {bulkConfirming && bulkProgress ? (
+            <>
+              <Loader2 size={16} className="animate-spin shrink-0" />
+              <span className="text-sm font-medium whitespace-nowrap">確認中… {bulkProgress.done} / {bulkProgress.total}</span>
+              <div className="w-28 bg-gray-700 dark:bg-gray-300 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="bg-green-400 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${Math.round((bulkProgress.done / bulkProgress.total) * 100)}%` }}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="text-sm whitespace-nowrap">已選取 <b>{selectedCards.size}</b> 張</span>
+              <button
+                onClick={handleBulkConfirm}
+                disabled={bulkConfirming}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 font-medium whitespace-nowrap"
+              >
+                <Check size={13} /> 確認選取（{selectedCards.size}）張
+              </button>
+              <button
+                onClick={() => setSelectedCards(new Set())}
+                className="text-xs text-gray-400 dark:text-gray-500 hover:text-white dark:hover:text-gray-800 whitespace-nowrap"
+              >
+                取消選取
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

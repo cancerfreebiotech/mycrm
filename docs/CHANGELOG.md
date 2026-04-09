@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## v2.5.2 — 名片審查多選批次確認（2026-04-09）
+
+### 變更項目
+- `/admin/camcard`：每張名片左上角新增 checkbox，載入後自動勾選無重複的卡片
+- 有 `duplicate_contact_id` 的卡片 checkbox 呈 disabled，需手動合併或略過
+- 已勾選卡片的 border 變綠，視覺上區分選取狀態
+- Filter bar 新增「全選 / 取消全選」快捷鈕
+- 頁面底部新增浮動確認列：顯示已選 N 張，一鍵送出批次確認
+- 批次確認以 5 張一組平行執行，顯示進度條（確認中 X/N）
+- 批次確認保留 tagIds 與 importance metadata
+
 ## v2.5.1 — Telegram Bot 新增 /lang 語言切換指令（2026-04-07）
 
 ### 變更項目
