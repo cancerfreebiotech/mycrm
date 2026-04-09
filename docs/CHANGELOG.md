@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v2.6.6 — 報表 Tag 篩選根本修正（2026-04-09）
+
+### 變更項目
+- **報表 Tag 篩選修正**：改用 Supabase RPC（資料庫函數 `get_interaction_logs_by_tags`），讓 JOIN 在 DB 端完成。原因：當 MD tag 有 904 個聯絡人時，`.in()` 篩選會把 904 個 UUID 放入 URL（約 33,000 字元），超過 PostgREST URL 長度限制導致查詢失敗
+
 ## v2.6.5 — 報表移除建立時間欄位、MFA 狀態修正（2026-04-09）
 
 ### 變更項目
