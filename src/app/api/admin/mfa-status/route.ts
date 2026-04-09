@@ -3,7 +3,7 @@ import { createClient, createServiceClient } from '@/lib/supabase'
 
 /**
  * GET /api/admin/mfa-status
- * Returns a map of { [email]: boolean } indicating whether each user has MFA enabled.
+ * Returns a map of { [email]: boolean } indicating whether each user has verified MFA.
  * Only accessible by super_admin.
  */
 export async function GET() {
@@ -23,17 +23,23 @@ export async function GET() {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  // Get all auth users
   const { data: { users: authUsers }, error } = await service.auth.admin.listUsers({ perPage: 1000 })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Build email → hasMfa map
+  // Check each user's MFA factors individually (listUsers doesn't reliably include factor data)
   const status: Record<string, boolean> = {}
-  for (const u of authUsers) {
-    if (u.email) {
-      const factors = u.factors ?? []
-      status[u.email] = factors.some((f) => f.status === 'verified')
-    }
-  }
+  await Promise.all(
+    authUsers.map(async (u) => {
+      if (!u.email) return
+      const { data: factorsData } = await service.auth.admin.mfa.listFactors({ userId: u.id })
+      const allFactors = [
+        ...(factorsData?.totp ?? []),
+        ...(factorsData?.phone ?? []),
+      ]
+      status[u.email] = allFactors.some((f) => f.status === 'verified')
+    })
+  )
 
   return NextResponse.json({ status })
 }

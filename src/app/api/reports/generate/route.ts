@@ -84,7 +84,6 @@ export async function POST(req: NextRequest) {
         ? String((l as unknown as Record<string, string>).meeting_time).slice(0, 5)
         : '',
       location: (l as unknown as Record<string, string>).meeting_location ?? '',
-      created_at: l.created_at ? new Date(l.created_at).toLocaleString() : '',
     }))
 
     if (format === 'json') {

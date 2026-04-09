@@ -27,7 +27,6 @@ interface LogRow {
   date: string
   time: string
   location: string
-  created_at: string
 }
 
 const FREQ_CRON: Record<string, string> = {
@@ -278,7 +277,7 @@ export default function ReportsPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 dark:bg-gray-800">
                     <tr>
-                      {[t('colLogContact'), t('colCompany'), t('colLogType'), t('colLogContent'), t('colLogDate'), '時間', '地點', t('colCreatedAt')].map(h => (
+                      {[t('colLogContact'), t('colCompany'), t('colLogType'), t('colLogContent'), t('colLogDate'), '時間', '地點'].map(h => (
                         <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{h}</th>
                       ))}
                     </tr>
@@ -293,7 +292,6 @@ export default function ReportsPage() {
                         <td className="px-3 py-2 text-gray-500 dark:text-gray-500 whitespace-nowrap">{l.date}</td>
                         <td className="px-3 py-2 text-gray-500 dark:text-gray-500">{l.time}</td>
                         <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{l.location}</td>
-                        <td className="px-3 py-2 text-gray-500 dark:text-gray-500 whitespace-nowrap">{l.created_at}</td>
                       </tr>
                     ))}
                   </tbody>
