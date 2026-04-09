@@ -133,6 +133,14 @@ export default function CamcardPage() {
 
     // Auto-select non-duplicate cards
     setSelectedCards(new Set(cards.filter(c => !c.duplicate_contact_id).map(c => c.id)))
+
+    // Initialize language from country_code in OCR data
+    const langMap: Record<string, string> = {}
+    for (const card of cards) {
+      const cc = card.ocr_data?.country_code ?? ''
+      langMap[card.id] = cc === 'JP' ? 'japanese' : (cc === 'TW' || cc === 'CN') ? 'chinese' : 'english'
+    }
+    setCardLanguage(prev => ({ ...langMap, ...prev }))
     setLoading(false)
   }, [searchFilter, hasDuplicateFilter, countryCodeFilter, hasEmailFilter, sortFilter])
 

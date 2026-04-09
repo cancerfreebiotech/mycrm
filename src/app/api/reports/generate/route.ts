@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
       company: (l.contacts as any)?.company ?? '',
       type: l.type ?? '',
       content: l.email_subject ?? l.content ?? '',
-      date: l.meeting_date ?? '',
+      date: l.meeting_date ?? (l.created_at ? new Date(l.created_at).toLocaleDateString('zh-TW') : ''),
       time: (l as unknown as Record<string, string>).meeting_time
         ? String((l as unknown as Record<string, string>).meeting_time).slice(0, 5)
         : '',
