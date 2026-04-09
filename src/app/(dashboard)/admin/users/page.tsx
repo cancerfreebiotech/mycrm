@@ -29,6 +29,7 @@ export default function AdminUsersPage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [resetMfaId, setResetMfaId] = useState<string | null>(null)
+  const [mfaStatus, setMfaStatus] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     async function load() {
@@ -51,6 +52,13 @@ export default function AdminUsersPage() {
 
       setUsers(data ?? [])
       setLoading(false)
+
+      // Load MFA status
+      const mfaRes = await fetch('/api/admin/mfa-status')
+      if (mfaRes.ok) {
+        const { status } = await mfaRes.json()
+        setMfaStatus(status ?? {})
+      }
     }
     load()
   }, [])
@@ -73,6 +81,12 @@ export default function AdminUsersPage() {
       const data = await res.json()
       if (res.ok) {
         alert(`已刪除 ${data.deleted} 個 MFA 驗證器`)
+        // Refresh MFA status
+        const mfaRes = await fetch('/api/admin/mfa-status')
+        if (mfaRes.ok) {
+          const { status } = await mfaRes.json()
+          setMfaStatus(status ?? {})
+        }
       } else {
         alert(`重設失敗：${data.error}`)
       }
@@ -105,7 +119,7 @@ export default function AdminUsersPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <tr>
-              {[t('colName'), t('colEmail'), t('colTelegram'), t('colTeams'), t('colRole'), t('colLastLogin'), t('colActions')].map((h) => (
+              {[t('colName'), t('colEmail'), t('colTelegram'), t('colTeams'), t('colRole'), t('colLastLogin'), 'MFA', t('colActions')].map((h) => (
                 <th key={h} className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">{h}</th>
               ))}
             </tr>
@@ -113,11 +127,11 @@ export default function AdminUsersPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">{tc('loading')}</td>
+                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">{tc('loading')}</td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">{t('noUsers')}</td>
+                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">{t('noUsers')}</td>
               </tr>
             ) : (
               users.map((u) => (
@@ -148,6 +162,24 @@ export default function AdminUsersPage() {
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
                     {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : '—'}
                   </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col gap-1.5 items-start">
+                      {mfaStatus[u.email] ? (
+                        <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 rounded-full">已設定</span>
+                      ) : (
+                        <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-full">未設定</span>
+                      )}
+                      {mfaStatus[u.email] && (
+                        <button
+                          onClick={() => resetMfa(u)}
+                          disabled={resetMfaId === u.id}
+                          className="px-2 py-0.5 text-xs border border-orange-200 dark:border-orange-800 rounded-lg text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/30 disabled:opacity-40 transition-colors"
+                        >
+                          {resetMfaId === u.id ? '重設中...' : '重設'}
+                        </button>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 space-y-2">
                     <div className="flex flex-wrap gap-1.5">
                       <button
@@ -161,13 +193,6 @@ export default function AdminUsersPage() {
                           : u.role === 'super_admin'
                           ? t('demoteToMember')
                           : t('promoteToAdmin')}
-                      </button>
-                      <button
-                        onClick={() => resetMfa(u)}
-                        disabled={resetMfaId === u.id}
-                        className="px-3 py-1 text-xs border border-orange-200 dark:border-orange-800 rounded-lg text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/30 disabled:opacity-40 transition-colors"
-                      >
-                        {resetMfaId === u.id ? '重設中...' : '重設 MFA'}
                       </button>
                     </div>
                     {u.role !== 'super_admin' && (
