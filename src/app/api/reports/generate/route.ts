@@ -16,11 +16,13 @@ export async function POST(req: NextRequest) {
 
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { dateFrom, dateTo, format, tagIds } = await req.json() as {
+  const { dateFrom, dateTo, format, tagIds, countryCodes, types } = await req.json() as {
     dateFrom: string
     dateTo: string
     format: 'json' | 'excel'
     tagIds?: string[]
+    countryCodes?: string[]
+    types?: string[]
   }
 
   if (!dateFrom || !dateTo) {
@@ -36,6 +38,8 @@ export async function POST(req: NextRequest) {
       p_date_from: `${dateFrom}T00:00:00.000Z`,
       p_date_to: `${dateTo}T23:59:59.999Z`,
       p_created_by: isSuperAdmin ? null : profile.id,
+      p_country_codes: (countryCodes && countryCodes.length > 0) ? countryCodes : null,
+      p_types: (types && types.length > 0) ? types : null,
     })
 
     if (rpcError) {

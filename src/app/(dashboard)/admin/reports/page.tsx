@@ -48,8 +48,24 @@ export default function ReportsPage() {
   const [dateTo, setDateTo] = useState(today)
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
+  const [selectedCountries, setSelectedCountries] = useState<string[]>([])
+  const [allCountries, setAllCountries] = useState<string[]>([])
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [generating, setGenerating] = useState(false)
   const [logs, setLogs] = useState<LogRow[] | null>(null)
+
+  const LOG_TYPES = [
+    { value: 'meeting', label: '拜訪' },
+    { value: 'note', label: '備忘' },
+    { value: 'email', label: 'Email' },
+  ]
+
+  const COUNTRY_LABELS: Record<string, string> = {
+    TW: '🇹🇼 TW', JP: '🇯🇵 JP', US: '🇺🇸 US', KR: '🇰🇷 KR',
+    SG: '🇸🇬 SG', HK: '🇭🇰 HK', CN: '🇨🇳 CN', IN: '🇮🇳 IN',
+    FR: '🇫🇷 FR', DE: '🇩🇪 DE', CH: '🇨🇭 CH', BE: '🇧🇪 BE',
+    AT: '🇦🇹 AT', CY: '🇨🇾 CY',
+  }
 
   // Schedules
   const [schedules, setSchedules] = useState<Schedule[]>([])
@@ -71,6 +87,10 @@ export default function ReportsPage() {
     loadRole()
     loadSchedules()
     supabase.from('tags').select('id, name').order('name').then(({ data }) => setAllTags(data ?? []))
+    supabase.from('contacts').select('country_code').not('country_code', 'is', null).then(({ data }) => {
+      const codes = [...new Set((data ?? []).map(c => c.country_code).filter(Boolean))].sort()
+      setAllCountries(codes as string[])
+    })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -97,7 +117,7 @@ export default function ReportsPage() {
       const res = await fetch('/api/reports/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dateFrom, dateTo, format, tagIds: selectedTagIds }),
+        body: JSON.stringify({ dateFrom, dateTo, format, tagIds: selectedTagIds, countryCodes: selectedCountries, types: selectedTypes }),
       })
 
       if (format === 'excel') {
@@ -242,7 +262,65 @@ export default function ReportsPage() {
                   onClick={() => setSelectedTagIds([])}
                   className="mt-1.5 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                 >
-                  清除標籤篩選
+                  清除
+                </button>
+              )}
+            </div>
+          )}
+          {/* Type filter */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">互動類型</label>
+            <div className="flex gap-1.5">
+              {LOG_TYPES.map(({ value, label }) => {
+                const selected = selectedTypes.includes(value)
+                return (
+                  <button
+                    key={value}
+                    onClick={() => setSelectedTypes(prev =>
+                      selected ? prev.filter(v => v !== value) : [...prev, value]
+                    )}
+                    className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                      selected
+                        ? 'bg-blue-600 border-blue-600 text-white'
+                        : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-blue-400'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          {/* Country filter */}
+          {allCountries.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">國家</label>
+              <div className="flex flex-wrap gap-1.5 max-w-xs">
+                {allCountries.map(code => {
+                  const selected = selectedCountries.includes(code)
+                  return (
+                    <button
+                      key={code}
+                      onClick={() => setSelectedCountries(prev =>
+                        selected ? prev.filter(c => c !== code) : [...prev, code]
+                      )}
+                      className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                        selected
+                          ? 'bg-blue-600 border-blue-600 text-white'
+                          : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-blue-400'
+                      }`}
+                    >
+                      {COUNTRY_LABELS[code] ?? code}
+                    </button>
+                  )
+                })}
+              </div>
+              {selectedCountries.length > 0 && (
+                <button
+                  onClick={() => setSelectedCountries([])}
+                  className="mt-1.5 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  清除
                 </button>
               )}
             </div>
