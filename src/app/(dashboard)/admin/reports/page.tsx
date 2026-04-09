@@ -19,22 +19,15 @@ interface Schedule {
 
 interface Tag { id: string; name: string }
 
-interface ContactRow {
-  name: string
-  company: string
-  email: string
-  phone: string
-  job_title: string
-  tags: string
-  created_at: string
-}
-
 interface LogRow {
   contact: string
   company: string
   type: string
   content: string
   date: string
+  time: string
+  location: string
+  created_at: string
 }
 
 const FREQ_CRON: Record<string, string> = {
@@ -57,7 +50,6 @@ export default function ReportsPage() {
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [generating, setGenerating] = useState(false)
-  const [contacts, setContacts] = useState<ContactRow[] | null>(null)
   const [logs, setLogs] = useState<LogRow[] | null>(null)
 
   // Schedules
@@ -119,7 +111,6 @@ export default function ReportsPage() {
         URL.revokeObjectURL(url)
       } else {
         const data = await res.json()
-        setContacts(data.contacts ?? [])
         setLogs(data.logs ?? [])
       }
     } finally {
@@ -275,74 +266,40 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {contacts !== null && (
-          <div className="space-y-4 mt-2">
-            {/* Contacts table */}
-            <div>
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                {t('previewContacts', { count: contacts.length })}
-              </p>
-              {contacts.length === 0 ? (
-                <p className="text-sm text-gray-400">{t('noData')}</p>
-              ) : (
-                <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 dark:bg-gray-800">
-                      <tr>
-                        {[t('colName'), t('colCompany'), t('colEmail'), t('colPhone'), t('colTags'), t('colCreatedAt')].map(h => (
-                          <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                      {contacts.map((c, i) => (
-                        <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                          <td className="px-3 py-2 text-gray-900 dark:text-gray-100">{c.name}</td>
-                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{c.company}</td>
-                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{c.email}</td>
-                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{c.phone}</td>
-                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{c.tags}</td>
-                          <td className="px-3 py-2 text-gray-500 dark:text-gray-500 whitespace-nowrap">{c.created_at}</td>
-                        </tr>
+        {logs !== null && (
+          <div className="mt-2">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              {t('previewLogs', { count: logs.length })}
+            </p>
+            {logs.length === 0 ? (
+              <p className="text-sm text-gray-400">{t('noData')}</p>
+            ) : (
+              <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 dark:bg-gray-800">
+                    <tr>
+                      {[t('colLogContact'), t('colCompany'), t('colLogType'), t('colLogContent'), t('colLogDate'), '時間', '地點', t('colCreatedAt')].map(h => (
+                        <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{h}</th>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {/* Logs table */}
-            <div>
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                {t('previewLogs', { count: logs?.length ?? 0 })}
-              </p>
-              {(logs?.length ?? 0) === 0 ? (
-                <p className="text-sm text-gray-400">{t('noData')}</p>
-              ) : (
-                <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 dark:bg-gray-800">
-                      <tr>
-                        {[t('colLogContact'), t('colCompany'), t('colLogType'), t('colLogContent'), t('colLogDate')].map(h => (
-                          <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{h}</th>
-                        ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                    {logs.map((l, i) => (
+                      <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                        <td className="px-3 py-2 text-gray-900 dark:text-gray-100">{l.contact}</td>
+                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{l.company}</td>
+                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{l.type}</td>
+                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400 max-w-xs truncate">{l.content}</td>
+                        <td className="px-3 py-2 text-gray-500 dark:text-gray-500 whitespace-nowrap">{l.date}</td>
+                        <td className="px-3 py-2 text-gray-500 dark:text-gray-500">{l.time}</td>
+                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{l.location}</td>
+                        <td className="px-3 py-2 text-gray-500 dark:text-gray-500 whitespace-nowrap">{l.created_at}</td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                      {logs!.map((l, i) => (
-                        <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                          <td className="px-3 py-2 text-gray-900 dark:text-gray-100">{l.contact}</td>
-                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{l.company}</td>
-                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{l.type}</td>
-                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400 max-w-xs truncate">{l.content}</td>
-                          <td className="px-3 py-2 text-gray-500 dark:text-gray-500 whitespace-nowrap">{l.date}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </section>

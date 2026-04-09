@@ -30,47 +30,35 @@ export async function POST(req: NextRequest) {
   try {
     const isSuperAdmin = profile.role === 'super_admin'
 
-    // Sheet 1: contacts created in range
-    let contactsQuery = service
-      .from('contacts')
-      .select(`
-        name, company, email, phone, job_title, created_at,
-        contact_tags(tags(name))
-      `)
-      .is('deleted_at', null)
-      .gte('created_at', `${dateFrom}T00:00:00.000Z`)
-      .lte('created_at', `${dateTo}T23:59:59.999Z`)
-      .order('created_at', { ascending: false })
-
-    if (!isSuperAdmin) {
-      contactsQuery = contactsQuery.eq('created_by', profile.id)
-    }
-
-    // Tag filter (OR logic)
+    // Resolve contact IDs for tag filter (applied to logs via contact_id)
+    let contactIdFilter: string[] | null = null
     if (tagIds && tagIds.length > 0) {
       const { data: taggedContacts } = await service
         .from('contact_tags')
         .select('contact_id')
         .in('tag_id', tagIds)
-      const contactIds = [...new Set((taggedContacts ?? []).map((t) => t.contact_id))]
-      if (contactIds.length === 0) {
-        // No contacts match — return empty
+      contactIdFilter = [...new Set((taggedContacts ?? []).map((t) => t.contact_id))]
+      if (contactIdFilter.length === 0) {
         return format === 'json'
-          ? NextResponse.json({ contacts: [], logs: [] })
-          : new NextResponse(new Uint8Array(), { headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': `attachment; filename="report_${dateFrom}_${dateTo}.xlsx"` } })
+          ? NextResponse.json({ logs: [] })
+          : new NextResponse(new Uint8Array(), {
+              headers: {
+                'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'Content-Disposition': `attachment; filename="report_${dateFrom}_${dateTo}.xlsx"`,
+              },
+            })
       }
-      contactsQuery = contactsQuery.in('id', contactIds)
     }
 
-    const { data: contacts } = await contactsQuery
-
-    // Sheet 2: interaction logs in range
+    // Interaction logs
     let logsQuery = service
       .from('interaction_logs')
       .select(`
         type, content, email_subject, meeting_date, meeting_time, meeting_location, created_at,
         contacts(name, company)
       `)
+      .neq('type', 'system')
+      .not('content', 'ilike', '%透過 Telegram Bot 新增名片%')
       .gte('created_at', `${dateFrom}T00:00:00.000Z`)
       .lte('created_at', `${dateTo}T23:59:59.999Z`)
       .order('created_at', { ascending: false })
@@ -78,18 +66,11 @@ export async function POST(req: NextRequest) {
     if (!isSuperAdmin) {
       logsQuery = logsQuery.eq('created_by', profile.id)
     }
-    const { data: logs } = await logsQuery
+    if (contactIdFilter) {
+      logsQuery = logsQuery.in('contact_id', contactIdFilter)
+    }
 
-    const contactRows = (contacts ?? []).map((c) => ({
-      name: c.name ?? '',
-      company: c.company ?? '',
-      email: c.email ?? '',
-      phone: c.phone ?? '',
-      job_title: c.job_title ?? '',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tags: (c.contact_tags as any[])?.map((ct: any) => ct.tags?.name).filter(Boolean).join(', ') ?? '',
-      created_at: c.created_at ? new Date(c.created_at).toLocaleString() : '',
-    }))
+    const { data: logs } = await logsQuery
 
     const logRows = (logs ?? []).map((l) => ({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -99,24 +80,21 @@ export async function POST(req: NextRequest) {
       type: l.type ?? '',
       content: l.email_subject ?? l.content ?? '',
       date: l.meeting_date ?? '',
-      time: (l as unknown as Record<string, string>).meeting_time ? String((l as unknown as Record<string, string>).meeting_time).slice(0, 5) : '',
+      time: (l as unknown as Record<string, string>).meeting_time
+        ? String((l as unknown as Record<string, string>).meeting_time).slice(0, 5)
+        : '',
       location: (l as unknown as Record<string, string>).meeting_location ?? '',
       created_at: l.created_at ? new Date(l.created_at).toLocaleString() : '',
     }))
 
     if (format === 'json') {
-      return NextResponse.json({ contacts: contactRows, logs: logRows })
+      return NextResponse.json({ logs: logRows })
     }
 
     // Build Excel
     const wb = XLSX.utils.book_new()
-
-    const ws1 = XLSX.utils.json_to_sheet(contactRows)
-    XLSX.utils.book_append_sheet(wb, ws1, '新增名片')
-
-    const ws2 = XLSX.utils.json_to_sheet(logRows)
-    XLSX.utils.book_append_sheet(wb, ws2, '互動紀錄')
-
+    const ws = XLSX.utils.json_to_sheet(logRows)
+    XLSX.utils.book_append_sheet(wb, ws, '互動紀錄')
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
 
     return new NextResponse(buf, {
