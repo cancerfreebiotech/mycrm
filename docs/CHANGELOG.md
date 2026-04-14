@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v2.7.2 — SendGrid 匯入寫入互動紀錄（2026-04-14）
+
+### 變更項目
+- import-suppressions API 重寫：分頁取全部（突破 500 筆限制）、限最近 90 天
+- 匯入後自動為 CRM 裡有對應聯絡人建立 system 類型互動紀錄，帶 SendGrid 原始時間戳
+- 紀錄內容：`SendGrid 硬退信：{原因}` / `SendGrid 無效信箱：{錯誤}` / `SendGrid 已退訂`
+- 重複匯入安全：已有同類型 SendGrid log 的聯絡人不會重複建立
+- 沒有對應 CRM 聯絡人的 email 不建 log
+
 ## v2.7.1 — Email 狀態加入「可寄信」篩選（2026-04-14）
 
 ### 變更項目
