@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v2.7.0 — SendGrid Email 狀態整合（2026-04-14）
+
+### 變更項目
+- DB：contacts 表新增 `email_status` 欄位（bounced / unsubscribed / invalid），從 SendGrid 歷史資料 backfill 54 筆
+- 聯絡人清單：新增「Email 狀態」filter dropdown（硬退信 / 已退訂 / 無效信箱）
+- 聯絡人清單：email 欄位顯示狀態 badge（紅色硬退信、橘色已退訂、黃色無效信箱），手機版同步
+- 聯絡人詳情：互動紀錄區塊頂端新增 SendGrid 狀態橫幅（有狀態時才顯示）
+- API `/api/sendgrid/import-suppressions`：匯入後自動同步更新 contacts.email_status
+- API `/api/contacts/all`：SELECT 加入 email_status 欄位
+
 ## v2.6.9 — 報表欄位完善（2026-04-09）
 
 ### 變更項目

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 
-const SELECT_FIELDS = 'id, name, company, job_title, email, phone, country_code, met_at, created_at, importance, language, users!created_by(display_name), contact_tags(tags(id, name))'
+const SELECT_FIELDS = 'id, name, company, job_title, email, phone, country_code, met_at, created_at, importance, language, email_status, users!created_by(display_name), contact_tags(tags(id, name))'
 const BATCH_SIZE = 1000
 
 // GET — fetch all contacts (bypasses PostgREST 1000-row limit via pagination)

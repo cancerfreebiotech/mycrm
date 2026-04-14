@@ -32,7 +32,7 @@ export async function POST() {
   const supabase = createServiceClient()
   const result = { bounces: 0, invalidEmails: 0, unsubscribes: 0, errors: [] as string[] }
 
-  // 1. Hard bounces → blacklist
+  // 1. Hard bounces → blacklist + contacts.email_status
   try {
     const bounces = await sgFetch<SgBounce>('/suppression/bounces', apiKey)
     if (bounces.length > 0) {
@@ -44,13 +44,16 @@ export async function POST() {
         .from('newsletter_blacklist')
         .upsert(rows, { onConflict: 'email' })
       if (error) throw new Error(error.message)
+      // Sync to contacts
+      const emails = rows.map((r) => r.email)
+      await supabase.from('contacts').update({ email_status: 'bounced' }).in('email', emails).is('deleted_at', null)
       result.bounces = rows.length
     }
   } catch (e) {
     result.errors.push(`bounces: ${e instanceof Error ? e.message : String(e)}`)
   }
 
-  // 2. Invalid emails → blacklist
+  // 2. Invalid emails → blacklist + contacts.email_status
   try {
     const invalids = await sgFetch<SgInvalid>('/suppression/invalid_emails', apiKey)
     if (invalids.length > 0) {
@@ -62,13 +65,16 @@ export async function POST() {
         .from('newsletter_blacklist')
         .upsert(rows, { onConflict: 'email' })
       if (error) throw new Error(error.message)
+      // Sync to contacts
+      const emails = rows.map((r) => r.email)
+      await supabase.from('contacts').update({ email_status: 'invalid' }).in('email', emails).is('deleted_at', null)
       result.invalidEmails = rows.length
     }
   } catch (e) {
     result.errors.push(`invalid_emails: ${e instanceof Error ? e.message : String(e)}`)
   }
 
-  // 3. Global unsubscribes → newsletter_unsubscribes
+  // 3. Global unsubscribes → newsletter_unsubscribes + contacts.email_status
   try {
     const unsubs = await sgFetch<SgUnsubscribe>('/suppression/unsubscribes', apiKey)
     if (unsubs.length > 0) {
@@ -82,6 +88,9 @@ export async function POST() {
         .from('newsletter_unsubscribes')
         .upsert(rows, { onConflict: 'email' })
       if (error) throw new Error(error.message)
+      // Sync to contacts
+      const emails = rows.map((r) => r.email)
+      await supabase.from('contacts').update({ email_status: 'unsubscribed' }).in('email', emails).is('deleted_at', null)
       result.unsubscribes = rows.length
     }
   } catch (e) {

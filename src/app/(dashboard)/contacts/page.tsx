@@ -31,6 +31,7 @@ interface Contact {
   created_at: string
   importance: string
   language: string | null
+  email_status: 'bounced' | 'unsubscribed' | 'invalid' | null
   users: { display_name: string | null } | null
   contact_tags: { tags: Tag }[]
 }
@@ -67,6 +68,8 @@ export default function ContactsPage() {
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false)
   const [selectedLanguage, setSelectedLanguage] = useState<string>('')
   const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false)
+  const [selectedEmailStatus, setSelectedEmailStatus] = useState<string>('')
+  const [emailStatusDropdownOpen, setEmailStatusDropdownOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [addDropOpen, setAddDropOpen] = useState(false)
   const [liParsing, setLiParsing] = useState(false)
@@ -171,7 +174,8 @@ export default function ContactsPage() {
       )
     const matchImportance = !selectedImportance || c.importance === selectedImportance
     const matchLanguage = !selectedLanguage || c.language === selectedLanguage
-    return matchQuery && matchMet && matchTags && matchCountry && matchImportance && matchLanguage
+    const matchEmailStatus = !selectedEmailStatus || c.email_status === selectedEmailStatus
+    return matchQuery && matchMet && matchTags && matchCountry && matchImportance && matchLanguage && matchEmailStatus
   })
 
   const sorted = sortField
@@ -525,6 +529,50 @@ export default function ContactsPage() {
           )}
         </div>
 
+        {/* Email Status filter dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => { setEmailStatusDropdownOpen((v) => !v); setTagDropdownOpen(false); setCountryDropdownOpen(false); setImportanceDropdownOpen(false); setLanguageDropdownOpen(false) }}
+            className="flex items-center gap-2 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            Email 狀態
+            {selectedEmailStatus && (
+              <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                selectedEmailStatus === 'bounced' ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300' :
+                selectedEmailStatus === 'unsubscribed' ? 'bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300' :
+                'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
+              }`}>1</span>
+            )}
+            <ChevronDown size={14} />
+          </button>
+          {emailStatusDropdownOpen && (
+            <div className="absolute top-full mt-1 left-0 z-10 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-40">
+              {[
+                { value: '', label: 'ALL' },
+                { value: 'bounced', label: '硬退信' },
+                { value: 'unsubscribed', label: '已退訂' },
+                { value: 'invalid', label: '無效信箱' },
+              ].map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => { setSelectedEmailStatus(value); setEmailStatusDropdownOpen(false); setPage(1) }}
+                  className={`w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800 ${
+                    selectedEmailStatus === value ? 'font-medium' : 'text-gray-700 dark:text-gray-300'
+                  } ${value === 'bounced' && selectedEmailStatus === value ? 'text-red-600 dark:text-red-400' : ''}
+                  ${value === 'unsubscribed' && selectedEmailStatus === value ? 'text-orange-600 dark:text-orange-400' : ''}
+                  ${value === 'invalid' && selectedEmailStatus === value ? 'text-yellow-600 dark:text-yellow-400' : ''}
+                  ${value === '' && selectedEmailStatus === value ? 'text-gray-700 dark:text-gray-300' : ''}`}
+                >
+                  {value === 'bounced' && <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />}
+                  {value === 'unsubscribed' && <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />}
+                  {value === 'invalid' && <span className="w-2 h-2 rounded-full bg-yellow-500 shrink-0" />}
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Met-at filter */}
         <input
           type="text"
@@ -573,6 +621,9 @@ export default function ContactsPage() {
                       <button onClick={() => copyEmail(c.email!)} className="text-gray-400 hover:text-blue-500 shrink-0">
                         {copiedEmail === c.email ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
                       </button>
+                      {c.email_status === 'bounced' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 shrink-0">硬退信</span>}
+                      {c.email_status === 'unsubscribed' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800 shrink-0">已退訂</span>}
+                      {c.email_status === 'invalid' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800 shrink-0">無效信箱</span>}
                     </div>
                   )}
                 </div>
@@ -655,16 +706,27 @@ export default function ContactsPage() {
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{c.job_title || '—'}</td>
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
                     {c.email ? (
-                      <span className="flex items-center gap-1.5">
-                        <span>{c.email}</span>
-                        <button
-                          onClick={() => copyEmail(c.email!)}
-                          className="text-gray-400 hover:text-blue-500 transition-colors flex-shrink-0"
-                          title="複製 Email"
-                        >
-                          {copiedEmail === c.email ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
-                        </button>
-                      </span>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="flex items-center gap-1.5">
+                          <span>{c.email}</span>
+                          <button
+                            onClick={() => copyEmail(c.email!)}
+                            className="text-gray-400 hover:text-blue-500 transition-colors flex-shrink-0"
+                            title="複製 Email"
+                          >
+                            {copiedEmail === c.email ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
+                          </button>
+                        </span>
+                        {c.email_status === 'bounced' && (
+                          <span className="inline-flex w-fit text-xs font-medium px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">硬退信</span>
+                        )}
+                        {c.email_status === 'unsubscribed' && (
+                          <span className="inline-flex w-fit text-xs font-medium px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800">已退訂</span>
+                        )}
+                        {c.email_status === 'invalid' && (
+                          <span className="inline-flex w-fit text-xs font-medium px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800">無效信箱</span>
+                        )}
+                      </div>
                     ) : '—'}
                   </td>
                   <td className="px-4 py-3">
