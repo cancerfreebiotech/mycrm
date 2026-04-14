@@ -174,7 +174,8 @@ export default function ContactsPage() {
       )
     const matchImportance = !selectedImportance || c.importance === selectedImportance
     const matchLanguage = !selectedLanguage || c.language === selectedLanguage
-    const matchEmailStatus = !selectedEmailStatus || c.email_status === selectedEmailStatus
+    const matchEmailStatus = !selectedEmailStatus ||
+      (selectedEmailStatus === 'ok' ? !c.email_status : c.email_status === selectedEmailStatus)
     return matchQuery && matchMet && matchTags && matchCountry && matchImportance && matchLanguage && matchEmailStatus
   })
 
@@ -540,7 +541,8 @@ export default function ContactsPage() {
               <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                 selectedEmailStatus === 'bounced' ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300' :
                 selectedEmailStatus === 'unsubscribed' ? 'bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300' :
-                'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
+                selectedEmailStatus === 'invalid' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300' :
+                'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
               }`}>1</span>
             )}
             <ChevronDown size={14} />
@@ -548,24 +550,23 @@ export default function ContactsPage() {
           {emailStatusDropdownOpen && (
             <div className="absolute top-full mt-1 left-0 z-10 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-40">
               {[
-                { value: '', label: 'ALL' },
-                { value: 'bounced', label: '硬退信' },
-                { value: 'unsubscribed', label: '已退訂' },
-                { value: 'invalid', label: '無效信箱' },
-              ].map(({ value, label }) => (
+                { value: '', label: 'ALL', dot: null },
+                { value: 'ok', label: '✉ 可寄信', dot: 'bg-green-500' },
+                { value: 'bounced', label: '硬退信', dot: 'bg-red-500' },
+                { value: 'unsubscribed', label: '已退訂', dot: 'bg-orange-400' },
+                { value: 'invalid', label: '無效信箱', dot: 'bg-yellow-500' },
+              ].map(({ value, label, dot }) => (
                 <button
                   key={value}
                   onClick={() => { setSelectedEmailStatus(value); setEmailStatusDropdownOpen(false); setPage(1) }}
                   className={`w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800 ${
                     selectedEmailStatus === value ? 'font-medium' : 'text-gray-700 dark:text-gray-300'
-                  } ${value === 'bounced' && selectedEmailStatus === value ? 'text-red-600 dark:text-red-400' : ''}
+                  } ${value === 'ok' && selectedEmailStatus === value ? 'text-green-600 dark:text-green-400' : ''}
+                  ${value === 'bounced' && selectedEmailStatus === value ? 'text-red-600 dark:text-red-400' : ''}
                   ${value === 'unsubscribed' && selectedEmailStatus === value ? 'text-orange-600 dark:text-orange-400' : ''}
-                  ${value === 'invalid' && selectedEmailStatus === value ? 'text-yellow-600 dark:text-yellow-400' : ''}
-                  ${value === '' && selectedEmailStatus === value ? 'text-gray-700 dark:text-gray-300' : ''}`}
+                  ${value === 'invalid' && selectedEmailStatus === value ? 'text-yellow-600 dark:text-yellow-400' : ''}`}
                 >
-                  {value === 'bounced' && <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />}
-                  {value === 'unsubscribed' && <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />}
-                  {value === 'invalid' && <span className="w-2 h-2 rounded-full bg-yellow-500 shrink-0" />}
+                  {dot && <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />}
                   {label}
                 </button>
               ))}
