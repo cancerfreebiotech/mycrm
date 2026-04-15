@@ -23,7 +23,7 @@ export async function refreshMicrosoftToken(refreshToken: string): Promise<{ acc
       refresh_token: refreshToken,
       client_id: clientId,
       client_secret: clientSecret,
-      scope: 'email profile Mail.Send Calendars.ReadWrite offline_access',
+      scope: 'openid email profile Mail.Send Calendars.ReadWrite offline_access',
     }),
   })
   if (!res.ok) {
