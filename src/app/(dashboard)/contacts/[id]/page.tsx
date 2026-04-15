@@ -548,6 +548,11 @@ export default function ContactDetailPage() {
     load()
   }
 
+  async function patchEmailStatus(value: 'bounced' | 'invalid' | null) {
+    await supabase.from('contacts').update({ email_status: value }).eq('id', id)
+    load()
+  }
+
   // ── Contact Cards (multi-stage) ────────────────────────────────────────────
 
   function handleCardFilesAdd(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1516,25 +1521,48 @@ export default function ContactDetailPage() {
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
         <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('interactionLogs')}</h2>
 
-        {/* SendGrid email status banner */}
-        {contact.email_status && (
-          <div className={`flex items-start gap-2 mb-4 px-3 py-2.5 rounded-lg border text-sm ${
+        {/* Email status banner — interactive */}
+        {contact.email_status ? (
+          <div className={`flex items-center justify-between mb-4 px-3 py-2.5 rounded-lg border text-sm ${
             contact.email_status === 'bounced'
               ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800 text-red-700 dark:text-red-400'
               : contact.email_status === 'unsubscribed'
               ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-400'
               : 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-400'
           }`}>
-            <span className="font-semibold shrink-0">
-              {contact.email_status === 'bounced' && 'SendGrid：硬退信'}
-              {contact.email_status === 'unsubscribed' && 'SendGrid：已退訂'}
-              {contact.email_status === 'invalid' && 'SendGrid：無效信箱'}
-            </span>
-            <span className="text-xs opacity-75">
-              {contact.email_status === 'bounced' && '此聯絡人的 Email 曾硬退信，電子報無法送達。'}
-              {contact.email_status === 'unsubscribed' && '此聯絡人已退訂 Newsletter，電子報不會發送。'}
-              {contact.email_status === 'invalid' && '此 Email 格式或網域有誤，無法正常寄送。'}
-            </span>
+            <div className="flex items-start gap-2">
+              <span className="font-semibold shrink-0">
+                {contact.email_status === 'bounced' && '硬退信'}
+                {contact.email_status === 'unsubscribed' && '已退訂'}
+                {contact.email_status === 'invalid' && '無效信箱'}
+              </span>
+              <span className="text-xs opacity-75">
+                {contact.email_status === 'bounced' && '此 Email 曾退信，群發郵件不會選到此人。'}
+                {contact.email_status === 'unsubscribed' && '此聯絡人已退訂，電子報不會發送。'}
+                {contact.email_status === 'invalid' && '此 Email 格式或網域有誤，無法寄送。'}
+              </span>
+            </div>
+            <button
+              onClick={() => patchEmailStatus(null)}
+              className="text-xs px-2 py-1 rounded border border-current opacity-60 hover:opacity-100 shrink-0"
+            >
+              清除標記
+            </button>
+          </div>
+        ) : contact.email && (
+          <div className="flex items-center gap-2 mb-4">
+            <button
+              onClick={() => patchEmailStatus('bounced')}
+              className="text-xs px-2 py-1 rounded border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
+            >
+              標記硬退信
+            </button>
+            <button
+              onClick={() => patchEmailStatus('invalid')}
+              className="text-xs px-2 py-1 rounded border border-yellow-300 dark:border-yellow-700 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
+            >
+              標記無效信箱
+            </button>
           </div>
         )}
 
