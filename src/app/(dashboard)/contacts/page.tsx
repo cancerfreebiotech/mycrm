@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Search, Download, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Copy, Check, Loader2, X, Linkedin } from 'lucide-react'
+import { Search, Download, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Copy, Check, Loader2, X, Linkedin, Mail } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 interface Tag {
@@ -76,7 +76,7 @@ export default function ContactsPage() {
   const liInputRef = useRef<HTMLInputElement>(null)
   const [page, setPage] = useState(1)
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null)
-  type SortField = 'name' | 'company' | 'job_title' | 'email' | 'created_at'
+  type SortField = 'name' | 'company' | 'job_title' | 'email' | 'created_at' | 'tag'
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -166,7 +166,7 @@ export default function ContactsPage() {
       !metQuery || c.met_at?.toLowerCase().includes(metQuery.toLowerCase())
     const matchTags =
       selectedTags.length === 0 ||
-      selectedTags.every((tid) => c.contact_tags.some((ct) => ct.tags?.id === tid))
+      selectedTags.some((tid) => c.contact_tags.some((ct) => ct.tags?.id === tid))
     const matchCountry =
       selectedCountries.length === 0 ||
       selectedCountries.some((code) =>
@@ -181,8 +181,17 @@ export default function ContactsPage() {
 
   const sorted = sortField
     ? [...filtered].sort((a, b) => {
-        const va: string = sortField === 'created_at' ? a.created_at : (a[sortField] ?? '')
-        const vb: string = sortField === 'created_at' ? b.created_at : (b[sortField] ?? '')
+        let va: string, vb: string
+        if (sortField === 'tag') {
+          va = a.contact_tags.map(ct => ct.tags?.name ?? '').sort().join(',')
+          vb = b.contact_tags.map(ct => ct.tags?.name ?? '').sort().join(',')
+        } else if (sortField === 'created_at') {
+          va = a.created_at
+          vb = b.created_at
+        } else {
+          va = a[sortField] ?? ''
+          vb = b[sortField] ?? ''
+        }
         if (!va && !vb) return 0
         if (!va) return 1
         if (!vb) return -1
@@ -190,6 +199,7 @@ export default function ContactsPage() {
       })
     : filtered
 
+  const emailable = sorted.filter(c => c.email && !c.email_status)
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
   const paginated = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
@@ -315,6 +325,17 @@ export default function ContactsPage() {
           >
             <Plus size={14} /> {t('batchUpload')}
           </Link>
+          {emailable.length > 0 && (
+            <button
+              onClick={() => {
+                sessionStorage.setItem('emailRecipients', JSON.stringify(emailable.map(c => c.id)))
+                router.push('/email/compose')
+              }}
+              className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            >
+              <Mail size={14} /> 寄信給 {emailable.length} 人
+            </button>
+          )}
           {selectedIds.size > 0 && (
             <button
               onClick={() => setBatchModalOpen(true)}
@@ -665,7 +686,17 @@ export default function ContactsPage() {
                   </button>
                 </th>
               ))}
-              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">Tags</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">
+                <button
+                  onClick={() => handleSort('tag')}
+                  className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                >
+                  Tags
+                  {sortField !== 'tag' && <ChevronsUpDown size={12} className="text-gray-400" />}
+                  {sortField === 'tag' && sortDir === 'asc' && <ChevronUp size={12} className="text-blue-500" />}
+                  {sortField === 'tag' && sortDir === 'desc' && <ChevronDown size={12} className="text-blue-500" />}
+                </button>
+              </th>
               <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">{t('creator')}</th>
               <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">
                 <button

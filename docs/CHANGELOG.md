@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v2.8.0 — 群發郵件功能 + Tag 篩選排序改進（2026-04-15）
+
+### 變更項目
+- 新增群發郵件功能：聯絡人頁面篩選後可一鍵寄信，< 450 人走 Outlook Graph API（BCC），>= 450 人走 SendGrid（personalizations 逐封寄出）
+- 新增 `/email/compose` 撰寫頁面：BCC 收件人摘要、CC 欄位（預設自己 email）、主旨、TipTap 富文字編輯器
+- 新增 `/api/email/send` API：自動判斷 Outlook/SendGrid 路徑，寄完為每位聯絡人建立 email 類型互動紀錄
+- Tag 篩選邏輯改為 OR（選多個 tag 時，符合任一即顯示）
+- Tags 欄位新增排序功能（點擊 header 可按 tag name 排序）
+
 ## v2.7.2 — SendGrid 匯入寫入互動紀錄（2026-04-14）
 
 ### 變更項目
