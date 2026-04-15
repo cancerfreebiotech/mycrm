@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v2.8.4 — Microsoft OAuth scope 修正（2026-04-15）
+
+### 變更項目
+- 修正 Microsoft token refresh 缺少 `openid` scope 導致寄信失敗
+
 ## v2.8.3 — 寄送方式可選 + AI 潤稿修正（2026-04-15）
 
 ### 變更項目
