@@ -200,6 +200,12 @@ export default function ContactsPage() {
     : filtered
 
   const emailable = sorted.filter(c => c.email && !c.email_status)
+  const hasFilter = !!(query || metQuery || selectedTags.length > 0 || selectedCountries.length > 0 || selectedImportance || selectedLanguage || selectedEmailStatus)
+  const selectedEmailable = selectedIds.size > 0
+    ? sorted.filter(c => selectedIds.has(c.id) && c.email && !c.email_status)
+    : []
+  const emailTargets = selectedIds.size > 0 ? selectedEmailable : emailable
+  const showEmailBtn = emailTargets.length > 0 && (selectedIds.size > 0 || hasFilter)
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
   const paginated = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
@@ -325,15 +331,15 @@ export default function ContactsPage() {
           >
             <Plus size={14} /> {t('batchUpload')}
           </Link>
-          {emailable.length > 0 && (query || metQuery || selectedTags.length > 0 || selectedCountries.length > 0 || selectedImportance || selectedLanguage || selectedEmailStatus) && (
+          {showEmailBtn && (
             <button
               onClick={() => {
-                sessionStorage.setItem('emailRecipients', JSON.stringify(emailable.map(c => c.id)))
+                sessionStorage.setItem('emailRecipients', JSON.stringify(emailTargets.map(c => c.id)))
                 router.push('/email/compose')
               }}
               className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700"
             >
-              <Mail size={14} /> 寄信給 {emailable.length} 人
+              <Mail size={14} /> 寄信給 {emailTargets.length} 人
             </button>
           )}
           {selectedIds.size > 0 && (
