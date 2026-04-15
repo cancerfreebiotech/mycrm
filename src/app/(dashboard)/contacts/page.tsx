@@ -161,7 +161,8 @@ export default function ContactsPage() {
     const matchQuery =
       !query ||
       c.name?.toLowerCase().includes(query.toLowerCase()) ||
-      c.company?.toLowerCase().includes(query.toLowerCase())
+      c.company?.toLowerCase().includes(query.toLowerCase()) ||
+      c.email?.toLowerCase().includes(query.toLowerCase())
     const matchMet =
       !metQuery || c.met_at?.toLowerCase().includes(metQuery.toLowerCase())
     const matchTags =
