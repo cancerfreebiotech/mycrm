@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v2.8.3 — 寄送方式可選 + AI 潤稿修正（2026-04-15）
+
+### 變更項目
+- Outlook / SendGrid 寄送方式改為使用者可選（預設仍按人數自動建議）
+- 超過 450 人選 Outlook 時顯示警告提示
+- AI 潤稿改送純文字（去除 HTML 標籤），避免 Gemini PROHIBITED_CONTENT 錯誤
+
 ## v2.8.2 — BCC 修正 + AI 潤稿簡化（2026-04-15）
 
 ### 變更項目

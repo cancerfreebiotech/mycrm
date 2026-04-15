@@ -31,6 +31,7 @@ export default function EmailComposePage() {
 
   // AI
   const [aiLoading, setAiLoading] = useState(false)
+  const [method, setMethod] = useState<'outlook' | 'sendgrid'>('outlook')
 
   useEffect(() => {
     const raw = sessionStorage.getItem('emailRecipients')
@@ -72,6 +73,7 @@ export default function EmailComposePage() {
       if (data) all.push(...(data as Recipient[]))
     }
     setRecipients(all)
+    setMethod(all.length >= 450 ? 'sendgrid' : 'outlook')
     setLoading(false)
   }
 
@@ -83,15 +85,16 @@ export default function EmailComposePage() {
     if (!bodyHtml.trim() && !subject.trim()) return
     setAiLoading(true)
     try {
+      // Strip HTML tags to plain text for AI input
+      const plainText = bodyHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
       const description = subject.trim()
-        ? `主旨：${subject}\n\n請根據以下草稿潤飾成正式商業郵件：`
-        : '請根據以下草稿潤飾成正式商業郵件，並生成主旨：'
+        ? `主旨：${subject}\n\n請根據以下草稿潤飾成正式商業郵件：\n${plainText}`
+        : `請根據以下草稿潤飾成正式商業郵件，並生成主旨：\n${plainText}`
       const res = await fetch('/api/ai-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           description,
-          templateContent: bodyHtml || undefined,
           generateSubject: !subject.trim(),
         }),
       })
@@ -126,6 +129,7 @@ export default function EmailComposePage() {
           bodyHtml,
           cc: cc.trim() || undefined,
           userId,
+          method,
         }),
       })
       const data = await res.json()
@@ -139,8 +143,6 @@ export default function EmailComposePage() {
       setSending(false)
     }
   }
-
-  const method = recipients.length < 450 ? 'Outlook' : 'SendGrid'
 
   if (loading) {
     return (
@@ -181,16 +183,29 @@ export default function EmailComposePage() {
         <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">撰寫群發郵件</h1>
       </div>
 
-      {/* Method badge */}
+      {/* Method selector */}
       <div className="flex items-center gap-2 mb-4">
-        <span className={`text-xs px-2 py-0.5 rounded font-medium ${method === 'Outlook' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'}`}>
-          {method}
-        </span>
+        <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <button
+            onClick={() => setMethod('outlook')}
+            className={`text-xs px-3 py-1.5 font-medium transition-colors ${method === 'outlook' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+          >
+            Outlook
+          </button>
+          <button
+            onClick={() => setMethod('sendgrid')}
+            className={`text-xs px-3 py-1.5 font-medium transition-colors ${method === 'sendgrid' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+          >
+            SendGrid
+          </button>
+        </div>
         <span className="text-sm text-gray-500 dark:text-gray-400">
-          {recipients.length < 450
-            ? `${recipients.length} 位收件人（< 450，走 Outlook BCC）`
-            : `${recipients.length} 位收件人（>= 450，走 SendGrid）`}
+          {recipients.length} 位收件人
+          {method === 'outlook' ? '（BCC 群發）' : '（每人獨立信件）'}
         </span>
+        {method === 'outlook' && recipients.length >= 450 && (
+          <span className="text-xs text-amber-600 dark:text-amber-400">Outlook 上限 500 人</span>
+        )}
       </div>
 
       {/* BCC Recipients - expandable & editable */}
@@ -275,7 +290,7 @@ export default function EmailComposePage() {
       </div>
 
       {/* Warning for SendGrid */}
-      {method === 'SendGrid' && (
+      {method === 'sendgrid' && (
         <div className="flex items-start gap-2 mb-4 px-3 py-2.5 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-sm text-amber-700 dark:text-amber-300">
           <AlertCircle size={16} className="mt-0.5 shrink-0" />
           <span>SendGrid 路徑每位收件人各收到一封獨立信件（非 BCC），寄件人為系統設定的 SendGrid 帳號。</span>

@@ -12,6 +12,7 @@ interface SendBody {
   bodyHtml: string
   cc?: string
   userId: string
+  method?: 'outlook' | 'sendgrid'
 }
 
 export async function POST(req: NextRequest) {
@@ -44,7 +45,10 @@ export async function POST(req: NextRequest) {
   let sentCount = 0
   const errors: string[] = []
 
-  if (valid.length < OUTLOOK_MAX) {
+  // Use client-chosen method, fallback to auto-detect by count
+  const chosenMethod = body.method ?? (valid.length < OUTLOOK_MAX ? 'outlook' : 'sendgrid')
+
+  if (chosenMethod === 'outlook') {
     // ── Outlook (Graph API) BCC ──
     method = 'outlook'
     try {
