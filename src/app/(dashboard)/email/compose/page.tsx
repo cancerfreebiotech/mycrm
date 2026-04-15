@@ -89,8 +89,8 @@ export default function EmailComposePage() {
       // Strip HTML tags to plain text for AI input
       const plainText = bodyHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
       const description = subject.trim()
-        ? `主旨：${subject}\n\n請根據以下草稿潤飾成正式商業郵件：\n${plainText}`
-        : `請根據以下草稿潤飾成正式商業郵件，並生成主旨：\n${plainText}`
+        ? `Subject: ${subject}\n\nPolish the following draft into a professional business email. IMPORTANT: reply in the SAME language as the draft below.\n\nDraft:\n${plainText}`
+        : `Polish the following draft into a professional business email and generate a subject line. IMPORTANT: reply in the SAME language as the draft below.\n\nDraft:\n${plainText}`
       const res = await fetch('/api/ai-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
