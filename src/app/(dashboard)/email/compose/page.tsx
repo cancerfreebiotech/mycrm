@@ -30,9 +30,7 @@ export default function EmailComposePage() {
   const [showRecipients, setShowRecipients] = useState(false)
 
   // AI
-  const [aiPrompt, setAiPrompt] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
-  const [showAi, setShowAi] = useState(false)
 
   useEffect(() => {
     const raw = sessionStorage.getItem('emailRecipients')
@@ -82,14 +80,17 @@ export default function EmailComposePage() {
   }
 
   async function handleAiGenerate() {
-    if (!aiPrompt.trim()) return
+    if (!bodyHtml.trim() && !subject.trim()) return
     setAiLoading(true)
     try {
+      const description = subject.trim()
+        ? `主旨：${subject}\n\n請根據以下草稿潤飾成正式商業郵件：`
+        : '請根據以下草稿潤飾成正式商業郵件，並生成主旨：'
       const res = await fetch('/api/ai-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          description: aiPrompt,
+          description,
           templateContent: bodyHtml || undefined,
           generateSubject: !subject.trim(),
         }),
@@ -99,15 +100,12 @@ export default function EmailComposePage() {
         alert(data.error)
         return
       }
-      // Convert plain text line breaks to HTML paragraphs
       const html = data.text
         .split('\n')
         .map((line: string) => line.trim() ? `<p>${line}</p>` : '<p></p>')
         .join('')
       setBodyHtml(html)
       if (data.subject && !subject.trim()) setSubject(data.subject)
-      setShowAi(false)
-      setAiPrompt('')
     } catch (e) {
       alert(e instanceof Error ? e.message : '生成失敗')
     } finally {
@@ -259,43 +257,20 @@ export default function EmailComposePage() {
         <div className="flex items-center justify-between mb-1">
           <label className="text-sm font-medium text-gray-700 dark:text-gray-300">內文</label>
           <button
-            onClick={() => setShowAi(v => !v)}
-            className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors ${showAi ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' : 'text-gray-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 dark:hover:text-purple-400'}`}
+            onClick={handleAiGenerate}
+            disabled={aiLoading || (!bodyHtml.trim() && !subject.trim())}
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="AI 會根據目前內文潤飾成正式郵件"
           >
-            <Sparkles size={12} />
-            AI 撰寫
+            {aiLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+            {aiLoading ? 'AI 潤稿中...' : 'AI 潤稿'}
           </button>
         </div>
-
-        {showAi && (
-          <div className="mb-3 p-3 border border-purple-200 dark:border-purple-800 rounded-lg bg-purple-50 dark:bg-purple-950/30">
-            <textarea
-              value={aiPrompt}
-              onChange={e => setAiPrompt(e.target.value)}
-              placeholder="描述你要寄的信件內容，例如：邀請參加 4/25 的研討會，提供早鳥優惠..."
-              rows={3}
-              className="w-full px-3 py-2 text-sm border border-purple-200 dark:border-purple-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
-            />
-            <div className="flex items-center justify-between mt-2">
-              <p className="text-xs text-purple-500 dark:text-purple-400">
-                {bodyHtml ? 'AI 會以目前內文為基礎修改' : '若主旨為空，AI 會一併生成主旨'}
-              </p>
-              <button
-                onClick={handleAiGenerate}
-                disabled={aiLoading || !aiPrompt.trim()}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {aiLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                {aiLoading ? '生成中...' : '生成'}
-              </button>
-            </div>
-          </div>
-        )}
 
         <TipTapEditor
           content={bodyHtml}
           onChange={(html) => setBodyHtml(html)}
-          placeholder="撰寫郵件內容..."
+          placeholder="先寫草稿，再按「AI 潤稿」自動修飾成正式郵件..."
         />
       </div>
 
