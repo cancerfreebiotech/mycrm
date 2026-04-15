@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       p_tag_ids: (tagIds && tagIds.length > 0) ? tagIds : null,
       p_date_from: `${dateFrom}T00:00:00.000Z`,
       p_date_to: `${dateTo}T23:59:59.999Z`,
-      p_created_by: isSuperAdmin ? null : profile.id,
+      p_created_by: null,
       p_country_codes: (countryCodes && countryCodes.length > 0) ? countryCodes : null,
       p_types: (types && types.length > 0) ? types : null,
     })
