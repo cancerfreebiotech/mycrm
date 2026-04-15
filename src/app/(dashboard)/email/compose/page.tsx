@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import TipTapEditor from '@/components/TipTapEditor'
-import { ArrowLeft, Send, Loader2, Users, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Send, Loader2, Users, AlertCircle, X, Sparkles } from 'lucide-react'
 
 interface Recipient {
   id: string
@@ -28,6 +28,11 @@ export default function EmailComposePage() {
   const [cc, setCc] = useState('')
   const [userId, setUserId] = useState('')
   const [showRecipients, setShowRecipients] = useState(false)
+
+  // AI
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [showAi, setShowAi] = useState(false)
 
   useEffect(() => {
     const raw = sessionStorage.getItem('emailRecipients')
@@ -57,7 +62,6 @@ export default function EmailComposePage() {
       setCc(user.email ?? '')
     }
 
-    // Fetch contacts in batches (Supabase IN limit)
     const all: Recipient[] = []
     for (let i = 0; i < ids.length; i += 200) {
       const batch = ids.slice(i, i + 200)
@@ -71,6 +75,44 @@ export default function EmailComposePage() {
     }
     setRecipients(all)
     setLoading(false)
+  }
+
+  function removeRecipient(id: string) {
+    setRecipients(prev => prev.filter(r => r.id !== id))
+  }
+
+  async function handleAiGenerate() {
+    if (!aiPrompt.trim()) return
+    setAiLoading(true)
+    try {
+      const res = await fetch('/api/ai-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: aiPrompt,
+          templateContent: bodyHtml || undefined,
+          generateSubject: !subject.trim(),
+        }),
+      })
+      const data = await res.json()
+      if (data.error) {
+        alert(data.error)
+        return
+      }
+      // Convert plain text line breaks to HTML paragraphs
+      const html = data.text
+        .split('\n')
+        .map((line: string) => line.trim() ? `<p>${line}</p>` : '<p></p>')
+        .join('')
+      setBodyHtml(html)
+      if (data.subject && !subject.trim()) setSubject(data.subject)
+      setShowAi(false)
+      setAiPrompt('')
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '生成失敗')
+    } finally {
+      setAiLoading(false)
+    }
   }
 
   async function handleSend() {
@@ -153,7 +195,7 @@ export default function EmailComposePage() {
         </span>
       </div>
 
-      {/* Recipients */}
+      {/* BCC Recipients - expandable & editable */}
       <div className="mb-4">
         <button
           onClick={() => setShowRecipients(v => !v)}
@@ -161,18 +203,28 @@ export default function EmailComposePage() {
         >
           <Users size={14} />
           BCC 收件人：{recipients.length} 人
-          <span className="text-xs text-blue-500">{showRecipients ? '收合' : '展開'}</span>
+          <span className="text-xs text-blue-500">{showRecipients ? '收合' : '展開編輯'}</span>
         </button>
         {showRecipients && (
-          <div className="mt-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-gray-50 dark:bg-gray-800/50">
+          <div className="mt-2 max-h-64 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-gray-50 dark:bg-gray-800/50">
             <div className="flex flex-wrap gap-1.5">
               {recipients.map(r => (
-                <span key={r.id} className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-full">
-                  {r.name || r.email}
-                  <span className="text-gray-400">{r.company ? `(${r.company})` : ''}</span>
+                <span key={r.id} className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-full group">
+                  <span>{r.name || r.email}</span>
+                  {r.company && <span className="text-gray-400">({r.company})</span>}
+                  <button
+                    onClick={() => removeRecipient(r.id)}
+                    className="ml-0.5 text-gray-300 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400"
+                    title="移除"
+                  >
+                    <X size={12} />
+                  </button>
                 </span>
               ))}
             </div>
+            {recipients.length === 0 && (
+              <p className="text-xs text-gray-400 text-center py-2">已移除所有收件人</p>
+            )}
           </div>
         )}
       </div>
@@ -184,10 +236,10 @@ export default function EmailComposePage() {
           type="text"
           value={cc}
           onChange={e => setCc(e.target.value)}
-          placeholder="用逗號分隔多個 email"
+          placeholder="用逗號分隔多個 email，例：a@x.com, b@x.com"
           className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
-        <p className="text-xs text-gray-400 mt-1">預設為你自己的 email，可用來確認信件是否寄出</p>
+        <p className="text-xs text-gray-400 mt-1">預設為你自己的 email，可新增多個（逗號分隔）。CC 不會建立互動紀錄。</p>
       </div>
 
       {/* Subject */}
@@ -202,9 +254,44 @@ export default function EmailComposePage() {
         />
       </div>
 
-      {/* Body - TipTap */}
+      {/* Body - TipTap + AI */}
       <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">內文</label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">內文</label>
+          <button
+            onClick={() => setShowAi(v => !v)}
+            className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors ${showAi ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' : 'text-gray-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 dark:hover:text-purple-400'}`}
+          >
+            <Sparkles size={12} />
+            AI 撰寫
+          </button>
+        </div>
+
+        {showAi && (
+          <div className="mb-3 p-3 border border-purple-200 dark:border-purple-800 rounded-lg bg-purple-50 dark:bg-purple-950/30">
+            <textarea
+              value={aiPrompt}
+              onChange={e => setAiPrompt(e.target.value)}
+              placeholder="描述你要寄的信件內容，例如：邀請參加 4/25 的研討會，提供早鳥優惠..."
+              rows={3}
+              className="w-full px-3 py-2 text-sm border border-purple-200 dark:border-purple-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+            />
+            <div className="flex items-center justify-between mt-2">
+              <p className="text-xs text-purple-500 dark:text-purple-400">
+                {bodyHtml ? 'AI 會以目前內文為基礎修改' : '若主旨為空，AI 會一併生成主旨'}
+              </p>
+              <button
+                onClick={handleAiGenerate}
+                disabled={aiLoading || !aiPrompt.trim()}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {aiLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                {aiLoading ? '生成中...' : '生成'}
+              </button>
+            </div>
+          </div>
+        )}
+
         <TipTapEditor
           content={bodyHtml}
           onChange={(html) => setBodyHtml(html)}
@@ -224,7 +311,7 @@ export default function EmailComposePage() {
       <div className="flex items-center gap-3">
         <button
           onClick={handleSend}
-          disabled={sending || !subject.trim() || !bodyHtml.trim()}
+          disabled={sending || !subject.trim() || !bodyHtml.trim() || recipients.length === 0}
           className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
         >
           {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
