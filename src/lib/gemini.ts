@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
 import { createServiceClient } from '@/lib/supabase'
 import { getPrompt } from '@/lib/prompts'
 
@@ -209,6 +209,13 @@ export async function parseVisitNote(
   return JSON.parse(raw) as VisitNoteParsed
 }
 
+const EMAIL_SAFETY: { category: HarmCategory; threshold: HarmBlockThreshold }[] = [
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+]
+
 export async function generateEmailContent(
   description: string,
   templateContent?: string,
@@ -218,7 +225,7 @@ export async function generateEmailContent(
 ): Promise<{ text: string; subject?: string }> {
   const { modelId, apiKey } = await resolveModelConfig(aiModelId)
   const genAI = new GoogleGenerativeAI(apiKey)
-  const geminiModel = genAI.getGenerativeModel({ model: modelId })
+  const geminiModel = genAI.getGenerativeModel({ model: modelId, safetySettings: EMAIL_SAFETY })
 
   const systemPrompt = await getPrompt('email_generate', userId)
 
