@@ -31,6 +31,7 @@ export default function EmailComposePage() {
 
   // AI
   const [aiLoading, setAiLoading] = useState(false)
+  const [editorKey, setEditorKey] = useState(0)
   const [method, setMethod] = useState<'outlook' | 'sendgrid'>('outlook')
 
   useEffect(() => {
@@ -108,6 +109,7 @@ export default function EmailComposePage() {
         .map((line: string) => line.trim() ? `<p>${line}</p>` : '<p></p>')
         .join('')
       setBodyHtml(html)
+      setEditorKey(k => k + 1)
       if (data.subject && !subject.trim()) setSubject(data.subject)
     } catch (e) {
       alert(e instanceof Error ? e.message : '生成失敗')
@@ -283,6 +285,7 @@ export default function EmailComposePage() {
         </div>
 
         <TipTapEditor
+          key={editorKey}
           content={bodyHtml}
           onChange={(html) => setBodyHtml(html)}
           placeholder="先寫草稿，再按「AI 潤稿」自動修飾成正式郵件..."
