@@ -325,7 +325,7 @@ export default function ContactsPage() {
           >
             <Plus size={14} /> {t('batchUpload')}
           </Link>
-          {emailable.length > 0 && (
+          {emailable.length > 0 && (query || metQuery || selectedTags.length > 0 || selectedCountries.length > 0 || selectedImportance || selectedLanguage || selectedEmailStatus) && (
             <button
               onClick={() => {
                 sessionStorage.setItem('emailRecipients', JSON.stringify(emailable.map(c => c.id)))
