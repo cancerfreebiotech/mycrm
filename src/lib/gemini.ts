@@ -221,7 +221,8 @@ export async function generateEmailContent(
   templateContent?: string,
   aiModelId: string | null = null,
   userId?: string,
-  generateSubject = false
+  generateSubject = false,
+  returnHtml = false
 ): Promise<{ text: string; subject?: string }> {
   const { modelId, apiKey } = await resolveModelConfig(aiModelId)
   const genAI = new GoogleGenerativeAI(apiKey)
@@ -231,12 +232,17 @@ export async function generateEmailContent(
 
   const langNote = '請依照使用者的撰寫指示（補充說明或描述）所使用的語言撰寫郵件，不要因範本內容或背景資訊的語言而改變輸出語言。若使用者指示有明確語言要求，則以指示為準。'
   const plainTextNote = '請只回傳純文字內文，不要有任何 HTML 標籤，使用換行（\\n）分段，不要有任何其他說明文字。'
+  const htmlNote = '請回傳乾淨的 HTML 郵件內文（只用 <p>、<br>、<strong>、<em>、<ul>、<li>、<a> 等基本標籤，不要加 <html>/<body>/<head>/<style>）。寫作風格要自然、像真人寫的商業信件，不要有明顯的 AI 痕跡（避免過度客套、避免條列式堆疊、避免每段都用「首先」「其次」「最後」）。段落之間用 <p> 分段即可。不要有任何說明文字，只回傳 HTML 內文。'
+  const formatNote = returnHtml ? htmlNote : plainTextNote
 
   if (generateSubject) {
     const baseContent = templateContent
-      ? `${systemPrompt}\n\n${langNote}\n\n${plainTextNote}\n\n範本內容：\n${templateContent}\n\n補充說明：\n${description}\n\n請合併範本與補充說明，生成最終郵件。`
-      : `${systemPrompt}\n\n${langNote}\n\n${plainTextNote}\n\n描述：\n${description}`
-    const prompt = `${baseContent}\n\n請回傳純 JSON（不要有任何其他文字）：{"subject":"郵件主旨","text":"純文字內文（使用 \\n 換行，不含 HTML）"}`
+      ? `${systemPrompt}\n\n${langNote}\n\n${formatNote}\n\n範本內容：\n${templateContent}\n\n補充說明：\n${description}\n\n請合併範本與補充說明，生成最終郵件。`
+      : `${systemPrompt}\n\n${langNote}\n\n${formatNote}\n\n描述：\n${description}`
+    const jsonFormat = returnHtml
+      ? '請回傳純 JSON（不要有任何其他文字）：{"subject":"郵件主旨","text":"HTML 郵件內文"}'
+      : '請回傳純 JSON（不要有任何其他文字）：{"subject":"郵件主旨","text":"純文字內文（使用 \\n 換行，不含 HTML）"}'
+    const prompt = `${baseContent}\n\n${jsonFormat}`
     const result = await geminiModel.generateContent(prompt)
     const raw = result.response.text().trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
     const parsed = JSON.parse(raw) as { subject: string; text: string }
@@ -244,8 +250,8 @@ export async function generateEmailContent(
   }
 
   const prompt = templateContent
-    ? `${systemPrompt}\n\n${langNote}\n\n${plainTextNote}\n\n範本內容：\n${templateContent}\n\n補充說明：\n${description}\n\n請合併範本與補充說明，生成最終郵件內文。`
-    : `${systemPrompt}\n\n${langNote}\n\n${plainTextNote}\n\n描述：\n${description}`
+    ? `${systemPrompt}\n\n${langNote}\n\n${formatNote}\n\n範本內容：\n${templateContent}\n\n補充說明：\n${description}\n\n請合併範本與補充說明，生成最終郵件內文。`
+    : `${systemPrompt}\n\n${langNote}\n\n${formatNote}\n\n描述：\n${description}`
 
   const result = await geminiModel.generateContent(prompt)
   return { text: result.response.text().trim() }

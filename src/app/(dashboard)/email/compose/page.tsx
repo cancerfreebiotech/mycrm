@@ -97,6 +97,7 @@ export default function EmailComposePage() {
         body: JSON.stringify({
           description,
           generateSubject: !subject.trim(),
+          returnHtml: true,
         }),
       })
       const data = await res.json()
@@ -104,11 +105,7 @@ export default function EmailComposePage() {
         alert(data.error)
         return
       }
-      const html = data.text
-        .split('\n')
-        .map((line: string) => line.trim() ? `<p>${line}</p>` : '<p></p>')
-        .join('')
-      setBodyHtml(html)
+      setBodyHtml(data.text)
       setEditorKey(k => k + 1)
       if (data.subject && !subject.trim()) setSubject(data.subject)
     } catch (e) {
