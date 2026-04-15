@@ -49,10 +49,17 @@ export async function POST(req: NextRequest) {
     method = 'outlook'
     try {
       const accessToken = await getValidProviderToken(userId)
+      // Fetch sender's own email for the To field
+      const { data: sender } = await supabase
+        .from('users')
+        .select('email')
+        .eq('id', userId)
+        .single()
+      const senderEmail = sender?.email ?? emails[0]
       await sendMail({
         accessToken,
-        to: emails[0],
-        bcc: emails.slice(1).join(','),
+        to: senderEmail,
+        bcc: emails.join(','),
         cc: cc || undefined,
         subject,
         body: bodyHtml,
