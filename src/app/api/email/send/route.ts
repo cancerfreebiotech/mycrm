@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
       type: 'email' as const,
       content: `群發郵件（${method === 'outlook' ? 'Outlook' : 'SendGrid'}）：${subject}`,
       email_subject: subject,
-      email_body: bodyHtml,
+      email_body: bodyHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),
       created_by: userId,
     }))
 
