@@ -205,6 +205,9 @@ export default function EmailComposePage() {
         {method === 'outlook' && recipients.length >= 450 && (
           <span className="text-xs text-amber-600 dark:text-amber-400">Outlook 上限 500 人</span>
         )}
+        {method === 'sendgrid' && (
+          <span className="text-xs text-gray-400 dark:text-gray-500">寄件人：Po@CancerFree &lt;Po@CancerFree.io&gt;</span>
+        )}
       </div>
 
       {/* BCC Recipients - expandable & editable */}
