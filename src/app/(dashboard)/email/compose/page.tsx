@@ -4,13 +4,34 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import TipTapEditor from '@/components/TipTapEditor'
-import { ArrowLeft, Send, Loader2, Users, AlertCircle, X, Sparkles } from 'lucide-react'
+import { ArrowLeft, Send, Loader2, Users, AlertCircle, X, Sparkles, FileText, Eye, ChevronDown } from 'lucide-react'
 
 interface Recipient {
   id: string
   name: string | null
   email: string
   company: string | null
+  job_title: string | null
+}
+
+interface Template {
+  id: string
+  title: string
+  subject: string | null
+  body_content: string | null
+}
+
+const VARIABLES = [
+  { label: '姓名', value: '{{name}}' },
+  { label: '公司', value: '{{company}}' },
+  { label: '職稱', value: '{{job_title}}' },
+]
+
+function substituteVariables(html: string, contact: Recipient): string {
+  return html
+    .replace(/\{\{name\}\}/g, contact.name ?? '')
+    .replace(/\{\{company\}\}/g, contact.company ?? '')
+    .replace(/\{\{job_title\}\}/g, contact.job_title ?? '')
 }
 
 export default function EmailComposePage() {
@@ -34,6 +55,14 @@ export default function EmailComposePage() {
   const [editorKey, setEditorKey] = useState(0)
   const [method, setMethod] = useState<'outlook' | 'sendgrid'>('outlook')
 
+  // Templates
+  const [templates, setTemplates] = useState<Template[]>([])
+  const [showTemplates, setShowTemplates] = useState(false)
+
+  // Preview
+  const [previewContact, setPreviewContact] = useState<Recipient | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
+
   useEffect(() => {
     const raw = sessionStorage.getItem('emailRecipients')
     if (!raw) {
@@ -46,7 +75,16 @@ export default function EmailComposePage() {
       return
     }
     loadRecipients(ids)
+    loadTemplates()
   }, [])
+
+  async function loadTemplates() {
+    const { data } = await supabase
+      .from('email_templates')
+      .select('id, title, subject, body_content')
+      .order('created_at', { ascending: false })
+    setTemplates(data ?? [])
+  }
 
   async function loadRecipients(ids: string[]) {
     const { data: { user } } = await supabase.auth.getUser()
@@ -67,7 +105,7 @@ export default function EmailComposePage() {
       const batch = ids.slice(i, i + 200)
       const { data } = await supabase
         .from('contacts')
-        .select('id, name, email, company')
+        .select('id, name, email, company, job_title')
         .in('id', batch)
         .is('deleted_at', null)
         .not('email', 'is', null)
@@ -82,11 +120,19 @@ export default function EmailComposePage() {
     setRecipients(prev => prev.filter(r => r.id !== id))
   }
 
+  function applyTemplate(t: Template) {
+    if (t.subject) setSubject(t.subject)
+    if (t.body_content) {
+      setBodyHtml(t.body_content)
+      setEditorKey(k => k + 1)
+    }
+    setShowTemplates(false)
+  }
+
   async function handleAiGenerate() {
     if (!bodyHtml.trim() && !subject.trim()) return
     setAiLoading(true)
     try {
-      // Strip HTML tags to plain text for AI input
       const plainText = bodyHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
       const description = subject.trim()
         ? `Subject: ${subject}\n\nPolish the following draft into a professional business email. IMPORTANT: reply in the SAME language as the draft below.\n\nDraft:\n${plainText}`
@@ -143,6 +189,8 @@ export default function EmailComposePage() {
     }
   }
 
+  const hasVariables = /\{\{(name|company|job_title)\}\}/.test(bodyHtml) || /\{\{(name|company|job_title)\}\}/.test(subject)
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-400">
@@ -183,7 +231,7 @@ export default function EmailComposePage() {
       </div>
 
       {/* Method selector */}
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
         <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
           <button
             onClick={() => setMethod('outlook')}
@@ -210,7 +258,15 @@ export default function EmailComposePage() {
         )}
       </div>
 
-      {/* BCC Recipients - expandable & editable */}
+      {/* Variable + personalization warning */}
+      {hasVariables && method === 'outlook' && (
+        <div className="flex items-start gap-2 mb-4 px-3 py-2.5 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-sm text-amber-700 dark:text-amber-300">
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <span>Outlook BCC 模式下，變數無法個人化（所有人收到相同內容）。切換到 SendGrid 可讓每封信替換 {'{{name}}'} 等變數。</span>
+        </div>
+      )}
+
+      {/* BCC Recipients */}
       <div className="mb-4">
         <button
           onClick={() => setShowRecipients(v => !v)}
@@ -268,36 +324,110 @@ export default function EmailComposePage() {
           type="text"
           value={subject}
           onChange={e => setSubject(e.target.value)}
-          placeholder="郵件主旨"
+          placeholder="郵件主旨（可用 {{name}} {{company}} {{job_title}} 變數）"
           className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
       </div>
 
-      {/* Body - TipTap + AI */}
+      {/* Body - toolbar row */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-1">
           <label className="text-sm font-medium text-gray-700 dark:text-gray-300">內文</label>
-          <button
-            onClick={handleAiGenerate}
-            disabled={aiLoading || (!bodyHtml.trim() && !subject.trim())}
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            title="AI 會根據目前內文潤飾成正式郵件"
-          >
-            {aiLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-            {aiLoading ? 'AI 潤稿中...' : 'AI 潤稿'}
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Template selector */}
+            <div className="relative">
+              <button
+                onClick={() => setShowTemplates(v => !v)}
+                className="flex items-center gap-1 text-xs px-2 py-1 rounded-md text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 transition-colors"
+              >
+                <FileText size={12} />
+                模板
+                <ChevronDown size={10} />
+              </button>
+              {showTemplates && (
+                <div className="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-20 py-1">
+                  {templates.length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-gray-400">尚無模板</p>
+                  ) : templates.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => applyTemplate(t)}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
+                      <div className="font-medium">{t.title}</div>
+                      {t.subject && <div className="text-xs text-gray-400 truncate">{t.subject}</div>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Preview button */}
+            <button
+              onClick={() => {
+                if (!showPreview && recipients.length > 0) {
+                  setPreviewContact(recipients[0])
+                }
+                setShowPreview(v => !v)
+              }}
+              disabled={!bodyHtml.trim()}
+              className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors ${showPreview ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'text-gray-500 hover:text-green-600 hover:bg-green-50 dark:hover:text-green-400 dark:hover:bg-green-900/20'} disabled:opacity-40 disabled:cursor-not-allowed`}
+            >
+              <Eye size={12} />
+              預覽
+            </button>
+
+            {/* AI button */}
+            <button
+              onClick={handleAiGenerate}
+              disabled={aiLoading || (!bodyHtml.trim() && !subject.trim())}
+              className="flex items-center gap-1 text-xs px-2 py-1 rounded-md text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              title="AI 會根據目前內文潤飾成正式郵件"
+            >
+              {aiLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              {aiLoading ? 'AI 潤稿中...' : 'AI 潤稿'}
+            </button>
+          </div>
         </div>
+
+        {/* Preview panel */}
+        {showPreview && previewContact && (
+          <div className="mb-3 border border-green-200 dark:border-green-800 rounded-lg overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-2 bg-green-50 dark:bg-green-950/30 border-b border-green-200 dark:border-green-800">
+              <span className="text-xs text-green-700 dark:text-green-300 font-medium">預覽模式（模擬收件人）</span>
+              <select
+                value={previewContact.id}
+                onChange={e => {
+                  const c = recipients.find(r => r.id === e.target.value)
+                  if (c) setPreviewContact(c)
+                }}
+                className="text-xs px-2 py-1 border border-green-300 dark:border-green-700 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+              >
+                {recipients.slice(0, 20).map(r => (
+                  <option key={r.id} value={r.id}>{r.name || r.email}</option>
+                ))}
+              </select>
+            </div>
+            <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800/50 border-b border-green-200 dark:border-green-800">
+              <p className="text-xs text-gray-500"><strong>主旨：</strong>{substituteVariables(subject, previewContact)}</p>
+            </div>
+            <div
+              className="prose prose-sm dark:prose-invert max-w-none px-4 py-3 min-h-[120px] bg-white dark:bg-gray-900"
+              dangerouslySetInnerHTML={{ __html: substituteVariables(bodyHtml, previewContact) }}
+            />
+          </div>
+        )}
 
         <TipTapEditor
           key={editorKey}
           content={bodyHtml}
           onChange={(html) => setBodyHtml(html)}
-          placeholder="先寫草稿，再按「AI 潤稿」自動修飾成正式郵件..."
+          placeholder="先寫草稿，再按「AI 潤稿」自動修飾成正式郵件...（可用 {{name}} {{company}} {{job_title}} 變數）"
         />
       </div>
 
       {/* Warning for SendGrid */}
-      {method === 'sendgrid' && (
+      {method === 'sendgrid' && !hasVariables && (
         <div className="flex items-start gap-2 mb-4 px-3 py-2.5 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-sm text-amber-700 dark:text-amber-300">
           <AlertCircle size={16} className="mt-0.5 shrink-0" />
           <span>SendGrid 路徑每位收件人各收到一封獨立信件（非 BCC），寄件人為系統設定的 SendGrid 帳號。</span>

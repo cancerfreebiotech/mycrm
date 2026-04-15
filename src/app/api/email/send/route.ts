@@ -83,12 +83,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'SendGrid 設定缺失' }, { status: 500 })
     }
 
+    // SendGrid substitutions: {{name}} {{company}} {{job_title}} per recipient
+    const hasVars = /\{\{(name|company|job_title)\}\}/.test(bodyHtml) || /\{\{(name|company|job_title)\}\}/.test(subject)
+
     // SendGrid allows max 1000 personalizations per request
     const BATCH = 1000
     for (let i = 0; i < emails.length; i += BATCH) {
       const batch = valid.slice(i, i + BATCH)
+
       const personalizations = batch.map(c => ({
         to: [{ email: c.email!.trim() }],
+        ...(hasVars ? {
+          substitutions: {
+            '{{name}}': c.name ?? '',
+            '{{company}}': c.company ?? '',
+            '{{job_title}}': c.job_title ?? '',
+          },
+        } : {}),
       }))
 
       const payload = {

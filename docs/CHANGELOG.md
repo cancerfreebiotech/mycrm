@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v2.9.0 — Email 編輯器強化：模板、變數、預覽（2026-04-16）
+
+### 變更項目
+- 新增模板選擇器：從 email_templates 載入已存模板，一鍵套用主旨 + 內文
+- 新增個人化變數：內文和主旨支援 `{{name}}`、`{{company}}`、`{{job_title}}`，SendGrid 路徑自動替換每位收件人資料
+- Outlook BCC 模式使用變數時顯示警告（BCC 無法個人化）
+- 新增預覽模式：可選擇模擬收件人，即時看到變數替換後的效果
+- 主旨 placeholder 提示可用變數
+
 ## v2.8.4 — Microsoft OAuth scope 修正（2026-04-15）
 
 ### 變更項目
