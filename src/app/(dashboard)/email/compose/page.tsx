@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import TipTapEditor from '@/components/TipTapEditor'
-import { ArrowLeft, Send, Loader2, Users, AlertCircle, X, Sparkles, FileText, Eye, ChevronDown } from 'lucide-react'
+import { ArrowLeft, Send, Loader2, Users, AlertCircle, X, Sparkles, FileText, Eye, ChevronDown, Paperclip } from 'lucide-react'
 
 interface Recipient {
   id: string
@@ -58,6 +58,13 @@ export default function EmailComposePage() {
   // Templates
   const [templates, setTemplates] = useState<Template[]>([])
   const [showTemplates, setShowTemplates] = useState(false)
+
+  // Attachments
+  const [attachments, setAttachments] = useState<File[]>([])
+  const [attachmentError, setAttachmentError] = useState('')
+
+  // SendGrid sub-mode
+  const [sgMode, setSgMode] = useState<'individual' | 'bcc'>('individual')
 
   // Preview
   const [previewContact, setPreviewContact] = useState<Recipient | null>(null)
@@ -120,6 +127,33 @@ export default function EmailComposePage() {
     setRecipients(prev => prev.filter(r => r.id !== id))
   }
 
+  const MAX_FILES = 5
+  const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB per file
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const incoming = Array.from(e.target.files ?? [])
+    e.target.value = ''
+    if (!incoming.length) return
+
+    const combined = [...attachments, ...incoming]
+    if (combined.length > MAX_FILES) {
+      setAttachmentError(`最多只能附加 ${MAX_FILES} 個檔案`)
+      return
+    }
+    const oversized = incoming.find(f => f.size > MAX_FILE_SIZE)
+    if (oversized) {
+      setAttachmentError(`「${oversized.name}」超過 5 MB 限制`)
+      return
+    }
+    setAttachmentError('')
+    setAttachments(combined)
+  }
+
+  function removeAttachment(index: number) {
+    setAttachments(prev => prev.filter((_, i) => i !== index))
+    setAttachmentError('')
+  }
+
   function applyTemplate(t: Template) {
     if (t.subject) setSubject(t.subject)
     if (t.body_content) {
@@ -165,18 +199,30 @@ export default function EmailComposePage() {
     if (!subject.trim() || !bodyHtml.trim() || recipients.length === 0) return
     setSending(true)
     try {
-      const res = await fetch('/api/email/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contactIds: recipients.map(r => r.id),
-          subject,
-          bodyHtml,
-          cc: cc.trim() || undefined,
-          userId,
-          method,
-        }),
-      })
+      const meta = {
+        contactIds: recipients.map(r => r.id),
+        subject,
+        bodyHtml,
+        cc: cc.trim() || undefined,
+        userId,
+        method,
+        sgMode,
+      }
+
+      let res: Response
+      if (attachments.length > 0) {
+        const fd = new FormData()
+        fd.append('data', JSON.stringify(meta))
+        attachments.forEach(f => fd.append('attachments', f))
+        res = await fetch('/api/email/send', { method: 'POST', body: fd })
+      } else {
+        res = await fetch('/api/email/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(meta),
+        })
+      }
+
       const data = await res.json()
       setResult(data)
       setSent(true)
@@ -231,30 +277,57 @@ export default function EmailComposePage() {
       </div>
 
       {/* Method selector */}
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <button
-            onClick={() => setMethod('outlook')}
-            className={`text-xs px-3 py-1.5 font-medium transition-colors ${method === 'outlook' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-          >
-            Outlook
-          </button>
-          <button
-            onClick={() => setMethod('sendgrid')}
-            className={`text-xs px-3 py-1.5 font-medium transition-colors ${method === 'sendgrid' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-          >
-            SendGrid
-          </button>
+      <div className="flex flex-col gap-2 mb-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <button
+              onClick={() => setMethod('outlook')}
+              className={`text-xs px-3 py-1.5 font-medium transition-colors ${method === 'outlook' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+            >
+              Outlook
+            </button>
+            <button
+              onClick={() => setMethod('sendgrid')}
+              className={`text-xs px-3 py-1.5 font-medium transition-colors ${method === 'sendgrid' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+            >
+              SendGrid
+            </button>
+          </div>
+          <span className="text-sm text-gray-500 dark:text-gray-400">
+            {recipients.length} 位收件人
+            {method === 'outlook'
+              ? '（BCC 群發）'
+              : sgMode === 'bcc'
+              ? '（SendGrid BCC 群發）'
+              : '（每人獨立信件）'}
+          </span>
+          {method === 'outlook' && recipients.length >= 450 && (
+            <span className="text-xs text-amber-600 dark:text-amber-400">Outlook 上限 500 人</span>
+          )}
         </div>
-        <span className="text-sm text-gray-500 dark:text-gray-400">
-          {recipients.length} 位收件人
-          {method === 'outlook' ? '（BCC 群發）' : '（每人獨立信件）'}
-        </span>
-        {method === 'outlook' && recipients.length >= 450 && (
-          <span className="text-xs text-amber-600 dark:text-amber-400">Outlook 上限 500 人</span>
-        )}
+
+        {/* SendGrid sub-mode */}
         {method === 'sendgrid' && (
-          <span className="text-xs text-gray-400 dark:text-gray-500">寄件人：Po@CancerFree &lt;Po@CancerFree.io&gt;</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400 dark:text-gray-500">寄送方式：</span>
+            <div className="inline-flex rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <button
+                onClick={() => setSgMode('individual')}
+                className={`text-xs px-3 py-1 transition-colors ${sgMode === 'individual' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+              >
+                個人化（一人一封）
+              </button>
+              <button
+                onClick={() => setSgMode('bcc')}
+                className={`text-xs px-3 py-1 transition-colors ${sgMode === 'bcc' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+              >
+                BCC 群發
+              </button>
+            </div>
+            {sgMode === 'bcc' && (
+              <span className="text-xs text-gray-400 dark:text-gray-500">變數無法個人化</span>
+            )}
+          </div>
         )}
       </div>
 
@@ -313,8 +386,52 @@ export default function EmailComposePage() {
         <p className="text-xs text-gray-400 mt-1">
           {method === 'outlook'
             ? '預設為你自己的 email，可新增多個（逗號分隔）。CC 不會建立互動紀錄。'
-            : 'SendGrid 路徑不支援 CC（每人獨立信件），此欄位僅作為 Reply-To 地址。'}
+            : sgMode === 'individual'
+            ? 'SendGrid 個人化模式不支援 CC，此欄位作為 Reply-To 地址。'
+            : '此欄位作為 Reply-To 地址。'}
         </p>
+      </div>
+
+      {/* Attachments */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            附件
+            <span className="ml-1.5 text-xs font-normal text-gray-400">最多 {MAX_FILES} 個，每個 5 MB</span>
+          </label>
+          {attachments.length < MAX_FILES && (
+            <label className="flex items-center gap-1 text-xs px-2 py-1 rounded-md text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 cursor-pointer transition-colors">
+              <Paperclip size={12} />
+              新增附件
+              <input
+                type="file"
+                className="hidden"
+                multiple
+                onChange={handleFileChange}
+              />
+            </label>
+          )}
+        </div>
+        {attachments.length > 0 && (
+          <div className="space-y-1">
+            {attachments.map((f, i) => (
+              <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-md">
+                <Paperclip size={12} className="text-gray-400 shrink-0" />
+                <span className="text-xs text-gray-700 dark:text-gray-300 flex-1 truncate">{f.name}</span>
+                <span className="text-xs text-gray-400 shrink-0">{(f.size / 1024 / 1024).toFixed(1)} MB</span>
+                <button
+                  onClick={() => removeAttachment(i)}
+                  className="text-gray-300 hover:text-red-500 dark:text-gray-600 dark:hover:text-red-400 transition-colors"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {attachmentError && (
+          <p className="text-xs text-red-500 mt-1">{attachmentError}</p>
+        )}
       </div>
 
       {/* Subject */}
@@ -427,10 +544,10 @@ export default function EmailComposePage() {
       </div>
 
       {/* Warning for SendGrid */}
-      {method === 'sendgrid' && !hasVariables && (
+      {method === 'sendgrid' && sgMode === 'individual' && !hasVariables && (
         <div className="flex items-start gap-2 mb-4 px-3 py-2.5 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-sm text-amber-700 dark:text-amber-300">
           <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <span>SendGrid 路徑每位收件人各收到一封獨立信件（非 BCC），寄件人為系統設定的 SendGrid 帳號。</span>
+          <span>每位收件人各收到一封獨立信件（非 BCC），寄件人為系統 SendGrid 帳號。</span>
         </div>
       )}
 
