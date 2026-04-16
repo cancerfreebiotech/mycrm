@@ -72,13 +72,26 @@ export async function POST(req: NextRequest) {
 
   // Use client-chosen method, fallback to auto-detect by count
   const chosenMethod = body.method ?? (valid.length < OUTLOOK_MAX ? 'outlook' : 'sendgrid')
+  method = chosenMethod
+
+  // ── Create campaign record ──
+  const { data: campaign } = await supabase
+    .from('email_campaigns')
+    .insert({
+      subject,
+      method: chosenMethod,
+      sg_mode: chosenMethod === 'sendgrid' ? sgMode : null,
+      total_recipients: valid.length,
+      created_by: userId,
+    })
+    .select('id')
+    .single()
+  const campaignId = campaign?.id as string | undefined
 
   if (chosenMethod === 'outlook') {
     // ── Outlook (Graph API) BCC ──
-    method = 'outlook'
     try {
       const accessToken = await getValidProviderToken(userId)
-      // Fetch sender's own email for the To field
       const { data: sender } = await supabase
         .from('users')
         .select('email')
@@ -104,7 +117,6 @@ export async function POST(req: NextRequest) {
     }
   } else {
     // ── SendGrid ──
-    method = 'sendgrid'
     const sgKey = process.env.SENDGRID_API_KEY
     const fromEmail = process.env.SENDGRID_FROM_EMAIL
     const fromName = process.env.SENDGRID_FROM_NAME ?? 'CancerFree Biotech'
@@ -123,7 +135,7 @@ export async function POST(req: NextRequest) {
       : undefined
 
     if (sgMode === 'bcc') {
-      // ── SendGrid BCC mode: one email, all recipients in BCC ──
+      // ── SendGrid BCC: one email, all recipients in BCC (no per-recipient tracking) ──
       const payload: Record<string, unknown> = {
         personalizations: [{
           to: [{ email: fromEmail }],
@@ -132,6 +144,7 @@ export async function POST(req: NextRequest) {
         from: { email: fromEmail, name: fromName },
         subject,
         content: [{ type: 'text/html', value: bodyHtml }],
+        ...(campaignId ? { custom_args: { campaign_id: campaignId } } : {}),
         ...(cc ? { reply_to: { email: cc.split(',')[0].trim() } } : {}),
         ...(sgAttachments ? { attachments: sgAttachments } : {}),
       }
@@ -151,7 +164,7 @@ export async function POST(req: NextRequest) {
         errors.push(e instanceof Error ? e.message : String(e))
       }
     } else {
-      // ── SendGrid personalizations (one per person, batched max 1000) ──
+      // ── SendGrid personalizations (one per person, with contact_id for tracking) ──
       const hasVars = /\{\{(name|company|job_title)\}\}/.test(bodyHtml) || /\{\{(name|company|job_title)\}\}/.test(subject)
 
       const BATCH = 1000
@@ -160,6 +173,13 @@ export async function POST(req: NextRequest) {
 
         const personalizations = batch.map(c => ({
           to: [{ email: c.email!.trim() }],
+          // custom_args are merged into webhook events — used for tracking
+          ...(campaignId ? {
+            custom_args: {
+              campaign_id: campaignId,
+              contact_id: c.id,
+            },
+          } : {}),
           ...(hasVars ? {
             substitutions: {
               '{{name}}': c.name ?? '',
@@ -209,9 +229,9 @@ export async function POST(req: NextRequest) {
       email_subject: subject,
       email_body: bodyHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),
       created_by: userId,
+      campaign_id: campaignId ?? null,
     }))
 
-    // Insert in batches of 500 to avoid payload limits
     for (let i = 0; i < logRows.length; i += 500) {
       await supabase.from('interaction_logs').insert(logRows.slice(i, i + 500))
     }
@@ -220,6 +240,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: errors.length === 0,
     method,
+    campaignId,
     sent: sentCount,
     total: valid.length,
     errors,

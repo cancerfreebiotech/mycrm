@@ -108,6 +108,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/notes', label: t('notes'), icon: Search },
     { href: '/tasks', label: t('tasks'), icon: ClipboardList },
     { href: '/admin/reports', label: t('reports'), icon: BarChart2 },
+    { href: '/email/campaigns', label: t('emailCampaigns'), icon: Mail },
     { href: '/settings', label: t('settings'), icon: Settings },
     { href: docsUrl, label: t('docs'), icon: BookOpen, external: docsUrl.startsWith('http') },
     { href: '/feedback', label: t('feedback'), icon: MessageSquarePlus },
