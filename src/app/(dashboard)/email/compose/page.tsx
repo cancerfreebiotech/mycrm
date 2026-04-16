@@ -209,8 +209,8 @@ export default function EmailComposePage() {
         contactIds: recipients.map(r => r.id),
         subject,
         bodyHtml,
-        // Outlook uses cc as actual CC; SendGrid uses replyTo as reply_to
-        cc: method === 'outlook' ? (cc.trim() || undefined) : (replyTo.trim() || undefined),
+        cc: method === 'outlook' ? (cc.trim() || undefined) : undefined,
+        replyTo: method === 'sendgrid' ? (replyTo.trim() || undefined) : undefined,
         userId,
         method,
         sgMode,

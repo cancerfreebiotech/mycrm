@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { getValidProviderToken } from '@/lib/graph-server'
 import { sendMail } from '@/lib/graph'
+import { generateOptOutToken } from '@/lib/email-optout'
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.cancerfree.io'
+
+function injectOptOutFooter(html: string, optOutUrl: string): string {
+  const footer = `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;color:#9ca3af;">若您希望停止接收相關郵件，<a href="${optOutUrl}" style="color:#9ca3af;text-decoration:underline;">請點此告知我們</a>。</div>`
+  if (html.includes('</body>')) return html.replace('</body>', `${footer}</body>`)
+  return html + footer
+}
 
 const SG_SEND_URL = 'https://api.sendgrid.com/v3/mail/send'
 const OUTLOOK_MAX = 450
@@ -16,7 +25,8 @@ interface SendBody {
   contactIds: string[]
   subject: string
   bodyHtml: string
-  cc?: string
+  cc?: string       // Outlook CC
+  replyTo?: string  // SendGrid Reply-To
   userId: string
   method?: 'outlook' | 'sendgrid'
   sgMode?: 'individual' | 'bcc'
@@ -42,7 +52,7 @@ export async function POST(req: NextRequest) {
     body = (await req.json()) as SendBody
   }
 
-  const { contactIds, subject, bodyHtml, cc, userId, sgMode = 'individual' } = body
+  const { contactIds, subject, bodyHtml, cc, replyTo, userId, sgMode = 'individual' } = body
 
   if (!contactIds?.length || !subject?.trim() || !bodyHtml?.trim() || !userId) {
     return NextResponse.json({ error: '缺少必要欄位' }, { status: 400 })
@@ -50,17 +60,17 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServiceClient()
 
-  // Fetch contacts with valid emails
+  // Fetch contacts with valid emails, excluding opted-out
   const { data: contacts, error: cErr } = await supabase
     .from('contacts')
-    .select('id, name, email, company, job_title')
+    .select('id, name, email, company, job_title, email_opt_out')
     .in('id', contactIds)
     .is('deleted_at', null)
     .not('email', 'is', null)
 
   if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 })
 
-  const valid = (contacts ?? []).filter(c => c.email?.trim())
+  const valid = (contacts ?? []).filter(c => c.email?.trim() && !c.email_opt_out)
   if (valid.length === 0) {
     return NextResponse.json({ error: '沒有有效的收件人' }, { status: 400 })
   }
@@ -145,7 +155,7 @@ export async function POST(req: NextRequest) {
         subject,
         content: [{ type: 'text/html', value: bodyHtml }],
         ...(campaignId ? { custom_args: { campaign_id: campaignId } } : {}),
-        ...(cc ? { reply_to: { email: cc.split(',')[0].trim() } } : {}),
+        ...(replyTo ? { reply_to: { email: replyTo.split(',')[0].trim() } } : {}),
         ...(sgAttachments ? { attachments: sgAttachments } : {}),
       }
       try {
@@ -164,37 +174,49 @@ export async function POST(req: NextRequest) {
         errors.push(e instanceof Error ? e.message : String(e))
       }
     } else {
-      // ── SendGrid personalizations (one per person, with contact_id for tracking) ──
+      // ── SendGrid personalizations (one per person, with contact_id for tracking + opt-out) ──
       const hasVars = /\{\{(name|company|job_title)\}\}/.test(bodyHtml) || /\{\{(name|company|job_title)\}\}/.test(subject)
+
+      // Inject opt-out footer placeholder — substituted per-recipient below
+      const bodyWithFooter = injectOptOutFooter(bodyHtml, '{{optout_url}}')
 
       const BATCH = 1000
       for (let i = 0; i < emails.length; i += BATCH) {
         const batch = valid.slice(i, i + BATCH)
 
-        const personalizations = batch.map(c => ({
-          to: [{ email: c.email!.trim() }],
-          // custom_args are merged into webhook events — used for tracking
-          ...(campaignId ? {
-            custom_args: {
-              campaign_id: campaignId,
-              contact_id: c.id,
-            },
-          } : {}),
-          ...(hasVars ? {
+        const personalizations = batch.map(c => {
+          const optOutToken = generateOptOutToken({
+            email: c.email!.trim(),
+            contactId: c.id,
+            campaignId: campaignId ?? '',
+          })
+          const optOutUrl = `${APP_URL}/email-optout?token=${optOutToken}`
+          return {
+            to: [{ email: c.email!.trim() }],
+            // custom_args are merged into webhook events — used for tracking
+            ...(campaignId ? {
+              custom_args: {
+                campaign_id: campaignId,
+                contact_id: c.id,
+              },
+            } : {}),
             substitutions: {
-              '{{name}}': c.name ?? '',
-              '{{company}}': c.company ?? '',
-              '{{job_title}}': c.job_title ?? '',
+              ...(hasVars ? {
+                '{{name}}': c.name ?? '',
+                '{{company}}': c.company ?? '',
+                '{{job_title}}': c.job_title ?? '',
+              } : {}),
+              '{{optout_url}}': optOutUrl,
             },
-          } : {}),
-        }))
+          }
+        })
 
         const payload: Record<string, unknown> = {
           personalizations,
           from: { email: fromEmail, name: fromName },
           subject,
-          content: [{ type: 'text/html', value: bodyHtml }],
-          ...(cc ? { reply_to: { email: cc.split(',')[0].trim() } } : {}),
+          content: [{ type: 'text/html', value: bodyWithFooter }],
+          ...(replyTo ? { reply_to: { email: replyTo.split(',')[0].trim() } } : {}),
           ...(sgAttachments ? { attachments: sgAttachments } : {}),
         }
 
