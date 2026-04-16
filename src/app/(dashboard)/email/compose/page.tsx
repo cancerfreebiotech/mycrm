@@ -46,9 +46,11 @@ export default function EmailComposePage() {
 
   const [subject, setSubject] = useState('')
   const [bodyHtml, setBodyHtml] = useState('')
-  const [cc, setCc] = useState('')
+  const [cc, setCc] = useState('')          // Outlook CC
+  const [replyTo, setReplyTo] = useState('') // SendGrid Reply-To
   const [userId, setUserId] = useState('')
   const [showRecipients, setShowRecipients] = useState(false)
+  const [canBulkEmail, setCanBulkEmail] = useState(false)
 
   // AI
   const [aiLoading, setAiLoading] = useState(false)
@@ -99,12 +101,16 @@ export default function EmailComposePage() {
 
     const { data: profile } = await supabase
       .from('users')
-      .select('id, email')
+      .select('id, email, role, granted_features')
       .eq('email', user.email!)
       .single()
     if (profile) {
       setUserId(profile.id)
       setCc(user.email ?? '')
+      setReplyTo(user.email ?? '')
+      const isSuperAdmin = profile.role === 'super_admin'
+      const hasFeature = (profile.granted_features ?? []).includes('bulk_email')
+      setCanBulkEmail(isSuperAdmin || hasFeature)
     }
 
     const all: Recipient[] = []
@@ -203,7 +209,8 @@ export default function EmailComposePage() {
         contactIds: recipients.map(r => r.id),
         subject,
         bodyHtml,
-        cc: cc.trim() || undefined,
+        // Outlook uses cc as actual CC; SendGrid uses replyTo as reply_to
+        cc: method === 'outlook' ? (cc.trim() || undefined) : (replyTo.trim() || undefined),
         userId,
         method,
         sgMode,
@@ -373,24 +380,43 @@ export default function EmailComposePage() {
         )}
       </div>
 
-      {/* CC */}
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">CC</label>
-        <input
-          type="text"
-          value={cc}
-          onChange={e => setCc(e.target.value)}
-          placeholder="例：po@cancerfree.io, bob@gmail.com（逗號分隔）"
-          className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
-        <p className="text-xs text-gray-400 mt-1">
-          {method === 'outlook'
-            ? '預設為你自己的 email，可新增多個（逗號分隔）。CC 不會建立互動紀錄。'
-            : sgMode === 'individual'
-            ? 'SendGrid 個人化模式不支援 CC，此欄位作為 Reply-To 地址。'
-            : '此欄位作為 Reply-To 地址。'}
-        </p>
-      </div>
+      {/* Bulk email permission warning */}
+      {recipients.length > 20 && !canBulkEmail && (
+        <div className="flex items-start gap-2 mb-4 px-3 py-2.5 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 text-sm text-red-700 dark:text-red-300">
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <span>收件人超過 20 人，需要管理員授予「群發郵件」權限才能寄送。請聯絡管理員。</span>
+        </div>
+      )}
+
+      {/* CC (Outlook only) */}
+      {method === 'outlook' && (
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">CC</label>
+          <input
+            type="text"
+            value={cc}
+            onChange={e => setCc(e.target.value)}
+            placeholder="例：po@cancerfree.io, bob@gmail.com（逗號分隔）"
+            className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          <p className="text-xs text-gray-400 mt-1">預設為你自己的 email，可新增多個（逗號分隔）。CC 不會建立互動紀錄。</p>
+        </div>
+      )}
+
+      {/* Reply-To (SendGrid only) */}
+      {method === 'sendgrid' && (
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reply-To</label>
+          <input
+            type="email"
+            value={replyTo}
+            onChange={e => setReplyTo(e.target.value)}
+            placeholder="收件人回信時的地址，預設為你自己的 email"
+            className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          <p className="text-xs text-gray-400 mt-1">收件人點「回覆」時寄到此地址（SendGrid 不支援 CC）。</p>
+        </div>
+      )}
 
       {/* Attachments */}
       <div className="mb-4">
@@ -555,7 +581,7 @@ export default function EmailComposePage() {
       <div className="flex items-center gap-3">
         <button
           onClick={handleSend}
-          disabled={sending || !subject.trim() || !bodyHtml.trim() || recipients.length === 0}
+          disabled={sending || !subject.trim() || !bodyHtml.trim() || recipients.length === 0 || (recipients.length > 20 && !canBulkEmail)}
           className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
         >
           {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}

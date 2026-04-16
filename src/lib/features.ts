@@ -14,6 +14,7 @@ export type FeatureKey =
   | 'camcard'
   | 'trash'
   | 'export_contacts'
+  | 'bulk_email'
 
 export const FEATURE_ROUTES: Record<FeatureKey, string> = {
   tags: '/admin/tags',
@@ -27,6 +28,7 @@ export const FEATURE_ROUTES: Record<FeatureKey, string> = {
   camcard: '/admin/camcard',
   trash: '/admin/trash',
   export_contacts: '/contacts',
+  bulk_email: '/email/compose',
 }
 
 export const FEATURE_LABELS: Record<FeatureKey, string> = {
@@ -41,6 +43,7 @@ export const FEATURE_LABELS: Record<FeatureKey, string> = {
   camcard: '名片匯入',
   trash: '資源回收桶',
   export_contacts: '匯出聯絡人',
+  bulk_email: '群發郵件（20人以上）',
 }
 
 export const ALL_FEATURE_KEYS = Object.keys(FEATURE_ROUTES) as FeatureKey[]
