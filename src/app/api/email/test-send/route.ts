@@ -2,8 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { getValidProviderToken } from '@/lib/graph-server'
 import { sendMail } from '@/lib/graph'
+import { generateOptOutToken } from '@/lib/email-optout'
 
 const SG_SEND_URL = 'https://api.sendgrid.com/v3/mail/send'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.cancerfree.io'
+
+function injectOptOutFooter(html: string, optOutUrl: string): string {
+  const footer = `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;color:#9ca3af;">若您希望停止接收相關郵件，<a href="${optOutUrl}" style="color:#9ca3af;text-decoration:underline;">請點此告知我們</a>。</div>`
+  if (html.includes('</body>')) return html.replace('</body>', `${footer}</body>`)
+  return html + footer
+}
 
 export async function POST(req: NextRequest) {
   const { subject, bodyHtml, method, userId, toEmail } = await req.json()
@@ -33,6 +41,9 @@ export async function POST(req: NextRequest) {
 
   try {
     const supabase = createServiceClient()
+    const optOutToken = generateOptOutToken({ email: toEmail, contactId: '', campaignId: '' })
+    const optOutUrl = `${APP_URL}/email-optout?token=${optOutToken}`
+    const bodyWithFooter = injectOptOutFooter(bodyHtml, optOutUrl)
     // Fetch sender name for the "from" display
     const { data: sender } = await supabase.from('users').select('email').eq('id', userId).single()
     const res = await fetch(SG_SEND_URL, {
@@ -43,7 +54,7 @@ export async function POST(req: NextRequest) {
         from: { email: fromEmail, name: fromName },
         reply_to: sender?.email ? { email: sender.email } : undefined,
         subject: testSubject,
-        content: [{ type: 'text/html', value: bodyHtml }],
+        content: [{ type: 'text/html', value: bodyWithFooter }],
       }),
     })
     if (res.ok || res.status === 202) return NextResponse.json({ ok: true })
