@@ -12,7 +12,7 @@ import { useState, useCallback } from 'react'
 import {
   Bold, Italic, UnderlineIcon, Link2, Image as ImageIcon,
   List, ListOrdered, Minus, AlignLeft, AlignCenter, AlignRight,
-  Eye, Edit3, Paperclip, X,
+  Eye, Edit3, Paperclip, X, RemoveFormatting,
 } from 'lucide-react'
 
 export interface TipTapAttachment {
@@ -69,6 +69,17 @@ export default function TipTapEditor({
     editorProps: {
       attributes: {
         class: 'prose prose-sm dark:prose-invert max-w-none min-h-[280px] px-4 py-3 focus:outline-none',
+      },
+      transformPastedHTML(html) {
+        // Strip inline styles, font tags, and class/data attributes —
+        // keep structure (bold, italic, lists, links) but remove all styling
+        return html
+          .replace(/(<[^>]+)\sstyle="[^"]*"/gi, '$1')
+          .replace(/(<[^>]+)\sclass="[^"]*"/gi, '$1')
+          .replace(/(<[^>]+)\sdata-[\w-]+="[^"]*"/gi, '$1')
+          .replace(/<font[^>]*>/gi, '')
+          .replace(/<\/font>/gi, '')
+          .replace(/<span[^>]*>\s*<\/span>/gi, '')
       },
     },
   })
@@ -132,6 +143,10 @@ export default function TipTapEditor({
             <ToolBtn active={editor?.isActive('bulletList')} onClick={() => editor?.chain().focus().toggleBulletList().run()} title="無序清單"><List size={14} /></ToolBtn>
             <ToolBtn active={editor?.isActive('orderedList')} onClick={() => editor?.chain().focus().toggleOrderedList().run()} title="有序清單"><ListOrdered size={14} /></ToolBtn>
             <ToolBtn onClick={() => editor?.chain().focus().setHorizontalRule().run()} title="分隔線"><Minus size={14} /></ToolBtn>
+            <ToolBtn
+              onClick={() => editor?.chain().focus().clearNodes().unsetAllMarks().run()}
+              title="清除格式"
+            ><RemoveFormatting size={14} /></ToolBtn>
             <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
             <ToolBtn
               active={editor?.isActive('link') || showLinkInput}
