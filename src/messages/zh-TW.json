@@ -383,7 +383,19 @@
     "generate": "AI 生成",
     "uploading": "上傳中...",
     "uploadBtn": "上傳附件",
-    "saving": "儲存中..."
+    "saving": "儲存中...",
+    "noTemplates": "尚無範本",
+    "confirmDelete": "確定刪除？",
+    "editTemplate": "編輯範本",
+    "newTemplate": "新增範本",
+    "nameLabel": "範本名稱",
+    "subjectLabel": "郵件主旨",
+    "bodyLabel": "郵件內文（HTML）",
+    "attachLabel": "附件",
+    "aiHint": "生成後可直接編輯內文",
+    "aiError": "生成失敗",
+    "fileSizeErrorFile": "「{name}」超過 2MB 限制",
+    "attachCount": "{count} 個"
   },
   "aiModels": {
     "title": "AI 模型管理",

@@ -383,7 +383,19 @@
     "generate": "AI Generate",
     "uploading": "Uploading...",
     "uploadBtn": "Upload Attachment",
-    "saving": "Saving..."
+    "saving": "Saving...",
+    "noTemplates": "No templates yet",
+    "confirmDelete": "Delete?",
+    "editTemplate": "Edit Template",
+    "newTemplate": "New Template",
+    "nameLabel": "Template Name",
+    "subjectLabel": "Subject",
+    "bodyLabel": "Body (HTML)",
+    "attachLabel": "Attachments",
+    "aiHint": "You can edit the generated content directly",
+    "aiError": "Generation failed",
+    "fileSizeErrorFile": "\"{name}\" exceeds the 2MB limit",
+    "attachCount": "{count}"
   },
   "aiModels": {
     "title": "AI Model Management",

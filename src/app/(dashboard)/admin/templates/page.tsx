@@ -90,7 +90,7 @@ export default function AdminTemplatesPage() {
 
     for (const file of files) {
       if (file.size > MAX_FILE_SIZE) {
-        setFileError(`「${file.name}」超過 2MB 限制`)
+        setFileError(t('fileSizeErrorFile', { name: file.name }))
         continue
       }
       setUploading(true)
@@ -130,7 +130,7 @@ export default function AdminTemplatesPage() {
         }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? '生成失敗')
+      if (!res.ok) throw new Error(json.error ?? t('aiError'))
       setForm((f) => ({ ...f, body_content: json.html }))
       setAiDescription('')
     } catch (err) {
@@ -214,7 +214,7 @@ export default function AdminTemplatesPage() {
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{tpl.subject || '—'}</td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
                     {tpl.attachments.length > 0
-                      ? <span className="flex items-center gap-1"><Paperclip size={13} />{tpl.attachments.length} 個</span>
+                      ? <span className="flex items-center gap-1"><Paperclip size={13} />{t('attachCount', { count: tpl.attachments.length })}</span>
                       : '—'}
                   </td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">

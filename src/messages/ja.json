@@ -383,7 +383,19 @@
     "generate": "AI生成",
     "uploading": "アップロード中...",
     "uploadBtn": "添付ファイルをアップロード",
-    "saving": "保存中..."
+    "saving": "保存中...",
+    "noTemplates": "テンプレートはまだありません",
+    "confirmDelete": "削除しますか？",
+    "editTemplate": "テンプレートを編集",
+    "newTemplate": "新規テンプレート",
+    "nameLabel": "テンプレート名",
+    "subjectLabel": "件名",
+    "bodyLabel": "本文（HTML）",
+    "attachLabel": "添付ファイル",
+    "aiHint": "生成後に内容を直接編集できます",
+    "aiError": "生成に失敗しました",
+    "fileSizeErrorFile": "「{name}」は2MBの制限を超えています",
+    "attachCount": "{count} 件"
   },
   "aiModels": {
     "title": "AIモデル管理",
