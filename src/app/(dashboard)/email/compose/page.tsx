@@ -52,6 +52,8 @@ export default function EmailComposePage() {
   const [cc, setCc] = useState('')
   const [replyTo, setReplyTo] = useState('')
   const [userId, setUserId] = useState('')
+  const [userEmail, setUserEmail] = useState('')
+  const [includeSelf, setIncludeSelf] = useState(true)
   const [showRecipients, setShowRecipients] = useState(false)
   const [canBulkEmail, setCanBulkEmail] = useState(false)
 
@@ -109,6 +111,7 @@ export default function EmailComposePage() {
       .single()
     if (profile) {
       setUserId(profile.id)
+      setUserEmail(user.email ?? '')
       setCc(user.email ?? '')
       setReplyTo(user.email ?? '')
       const isSuperAdmin = profile.role === 'super_admin'
@@ -208,6 +211,7 @@ export default function EmailComposePage() {
     if (!subject.trim() || !bodyHtml.trim() || recipients.length === 0) return
     setSending(true)
     try {
+      const selfActive = method === 'sendgrid' && includeSelf && !!userEmail
       const meta = {
         contactIds: recipients.map(r => r.id),
         subject,
@@ -217,6 +221,7 @@ export default function EmailComposePage() {
         userId,
         method,
         sgMode,
+        selfEmail: selfActive ? userEmail : undefined,
       }
 
       let res: Response
@@ -351,35 +356,55 @@ export default function EmailComposePage() {
 
       {/* BCC Recipients */}
       <div className="mb-4">
-        <button
-          onClick={() => setShowRecipients(v => !v)}
-          className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-        >
-          <Users size={14} />
-          {t('bccRecipients', { count: recipients.length })}
-          <span className="text-xs text-blue-500">{showRecipients ? t('collapse') : t('showEdit')}</span>
-        </button>
-        {showRecipients && (
-          <div className="mt-2 max-h-64 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-gray-50 dark:bg-gray-800/50">
-            <div className="flex flex-wrap gap-1.5">
-              {recipients.map(r => (
-                <span key={r.id} className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-full group">
-                  <span>{r.name || r.email}</span>
-                  {r.company && <span className="text-gray-400">({r.company})</span>}
-                  <button
-                    onClick={() => removeRecipient(r.id)}
-                    className="ml-0.5 text-gray-300 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400"
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              ))}
-            </div>
-            {recipients.length === 0 && (
-              <p className="text-xs text-gray-400 text-center py-2">{t('removeAll')}</p>
-            )}
-          </div>
-        )}
+        {(() => {
+          const selfActive = method === 'sendgrid' && includeSelf && !!userEmail
+          const totalCount = recipients.length + (selfActive ? 1 : 0)
+          return (
+            <>
+              <button
+                onClick={() => setShowRecipients(v => !v)}
+                className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+              >
+                <Users size={14} />
+                {t('bccRecipients', { count: totalCount })}
+                <span className="text-xs text-blue-500">{showRecipients ? t('collapse') : t('showEdit')}</span>
+              </button>
+              {showRecipients && (
+                <div className="mt-2 max-h-64 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-gray-50 dark:bg-gray-800/50">
+                  <div className="flex flex-wrap gap-1.5">
+                    {recipients.map(r => (
+                      <span key={r.id} className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-full">
+                        <span>{r.name || r.email}</span>
+                        {r.company && <span className="text-gray-400">({r.company})</span>}
+                        <button
+                          onClick={() => removeRecipient(r.id)}
+                          className="ml-0.5 text-gray-300 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400"
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                    {selfActive && (
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-full">
+                        <span className="text-[10px] font-semibold text-blue-500 dark:text-blue-400">我</span>
+                        <span className="text-gray-700 dark:text-gray-300">{userEmail}</span>
+                        <button
+                          onClick={() => setIncludeSelf(false)}
+                          className="ml-0.5 text-blue-300 hover:text-red-500 dark:text-blue-600 dark:hover:text-red-400"
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    )}
+                  </div>
+                  {totalCount === 0 && (
+                    <p className="text-xs text-gray-400 text-center py-2">{t('removeAll')}</p>
+                  )}
+                </div>
+              )}
+            </>
+          )
+        })()}
       </div>
 
       {/* Bulk email permission warning */}
@@ -580,14 +605,21 @@ export default function EmailComposePage() {
 
       {/* Send button */}
       <div className="flex items-center gap-3">
-        <button
-          onClick={handleSend}
-          disabled={sending || !subject.trim() || !bodyHtml.trim() || recipients.length === 0 || (recipients.length > 20 && !canBulkEmail)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-        >
-          {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-          {sending ? t('sending') : t('send', { count: recipients.length })}
-        </button>
+        {(() => {
+          const selfActive = method === 'sendgrid' && includeSelf && !!userEmail
+          const totalCount = recipients.length + (selfActive ? 1 : 0)
+          return (
+            <button
+              onClick={handleSend}
+              disabled={sending || !subject.trim() || !bodyHtml.trim() || recipients.length === 0 || (recipients.length > 20 && !canBulkEmail)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+            >
+              {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+              {sending ? t('sending') : t('send', { count: totalCount })}
+            </button>
+          )
+        })()}
+
         <button
           onClick={() => router.back()}
           className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"

@@ -64,11 +64,12 @@ interface SendBody {
   contactIds: string[]
   subject: string
   bodyHtml: string
-  cc?: string       // Outlook CC
-  replyTo?: string  // SendGrid Reply-To
+  cc?: string        // Outlook CC
+  replyTo?: string   // SendGrid Reply-To
   userId: string
   method?: 'outlook' | 'sendgrid'
   sgMode?: 'individual' | 'bcc'
+  selfEmail?: string // sender's own copy — added as real recipient (SendGrid only)
 }
 
 export async function POST(req: NextRequest) {
@@ -91,7 +92,7 @@ export async function POST(req: NextRequest) {
     body = (await req.json()) as SendBody
   }
 
-  const { contactIds, subject, bodyHtml, cc, replyTo, userId, sgMode = 'individual' } = body
+  const { contactIds, subject, bodyHtml, cc, replyTo, userId, sgMode = 'individual', selfEmail } = body
 
   if (!contactIds?.length || !subject?.trim() || !bodyHtml?.trim() || !userId) {
     return NextResponse.json({ error: '缺少必要欄位' }, { status: 400 })
@@ -185,10 +186,14 @@ export async function POST(req: NextRequest) {
 
     if (sgMode === 'bcc') {
       // ── SendGrid BCC: one email, all recipients in BCC (no per-recipient tracking) ──
+      const bccList = [
+        ...emails.map(e => ({ email: e })),
+        ...(selfEmail ? [{ email: selfEmail }] : []),
+      ]
       const payload: Record<string, unknown> = {
         personalizations: [{
           to: [{ email: fromEmail }],
-          bcc: emails.map(e => ({ email: e })),
+          bcc: bccList,
         }],
         from: { email: fromEmail, name: fromName },
         subject,
@@ -273,6 +278,32 @@ export async function POST(req: NextRequest) {
           }
         } catch (e) {
           errors.push(`SendGrid batch ${i}: ${e instanceof Error ? e.message : String(e)}`)
+        }
+      }
+
+      // ── Self-copy (individual mode): send the exact same email to the sender ──
+      if (selfEmail && sentCount > 0) {
+        try {
+          const selfOptOutToken = generateOptOutToken({ email: selfEmail, contactId: '', campaignId: campaignId ?? '' })
+          const selfOptOutUrl = `${APP_URL}/email-optout?token=${selfOptOutToken}`
+          await fetch(SG_SEND_URL, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${sgKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              personalizations: [{
+                to: [{ email: selfEmail }],
+                ...(campaignId ? { custom_args: { campaign_id: campaignId } } : {}),
+                substitutions: { '{{name}}': '', '{{company}}': '', '{{job_title}}': '', '{{optout_url}}': selfOptOutUrl },
+              }],
+              from: { email: fromEmail, name: fromName },
+              subject,
+              content: [{ type: 'text/html', value: bodyWithFooter }],
+              ...(replyTo ? { reply_to: { email: replyTo.split(',')[0].trim() } } : {}),
+              ...(sgAttachments ? { attachments: sgAttachments } : {}),
+            }),
+          })
+        } catch {
+          // self-copy failure is non-fatal
         }
       }
     }
