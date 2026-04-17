@@ -7,7 +7,7 @@ import { generateOptOutToken } from '@/lib/email-optout'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.cancerfree.io'
 
 function injectOptOutFooter(html: string, optOutUrl: string): string {
-  const footer = `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;color:#9ca3af;">若您希望停止接收相關郵件，<a href="${optOutUrl}" style="color:#9ca3af;text-decoration:underline;">請點此告知我們</a>。</div>`
+  const footer = `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;color:#9ca3af;">若您希望停止接收相關郵件，<a href="${optOutUrl}" style="color:#9ca3af;text-decoration:underline;">請點此告知我們</a>。<br>If you wish to unsubscribe, <a href="${optOutUrl}" style="color:#9ca3af;text-decoration:underline;">click here to let us know</a>.</div>`
   if (html.includes('</body>')) return html.replace('</body>', `${footer}</body>`)
   return html + footer
 }
