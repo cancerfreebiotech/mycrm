@@ -70,6 +70,8 @@ export default function NotesPage() {
       .not('contact_id', 'is', null)
       .not('content', 'ilike', '透過 Telegram Bot 新增名片%')
       .not('content', 'ilike', '從名片王匯入%')
+      .not('content', 'ilike', '透過批次上傳新增名片%')
+      .not('content', 'ilike', '名片王名片合併%')
       .order('created_at', { ascending: sortDir === 'asc' })
       .limit(FETCH_LIMIT)
 
