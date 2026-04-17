@@ -104,20 +104,17 @@ export default function TipTapEditor({
 
   async function handleAiFormat() {
     if (!editor || aiFormatLoading) return
-    const plainText = editor.getText()
-    if (!plainText.trim()) return
+    const html = editor.getHTML()
+    if (!html.trim() || html === '<p></p>') return
     setAiFormatLoading(true)
     try {
-      const res = await fetch('/api/ai-email', {
+      const res = await fetch('/api/ai-format', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          description: `Reformat the following email content into clean, well-structured HTML.\nSTRICT RULES:\n- Keep EVERY word exactly as-is — do NOT add, remove, or change any text\n- Convert to proper HTML paragraphs (<p>)\n- Format list items (lines starting with -, *, numbers) as <ul><li> or <ol><li>\n- Remove excessive blank lines\n- Reply in the SAME language as the input\n- Return ONLY the HTML body content, no subject, no code block\n\nContent:\n${plainText}`,
-          returnHtml: true,
-        }),
+        body: JSON.stringify({ html }),
       })
       const data = await res.json()
-      if (data.text) editor.commands.setContent(data.text, true)
+      if (data.html) editor.commands.setContent(data.html, true)
     } catch {
       // silent fail
     } finally {
