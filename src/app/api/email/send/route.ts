@@ -282,11 +282,12 @@ export async function POST(req: NextRequest) {
       }
 
       // ── Self-copy (individual mode): send the exact same email to the sender ──
+      let selfSent = false
       if (selfEmail && sentCount > 0) {
         try {
           const selfOptOutToken = generateOptOutToken({ email: selfEmail, contactId: '', campaignId: campaignId ?? '' })
           const selfOptOutUrl = `${APP_URL}/email-optout?token=${selfOptOutToken}`
-          await fetch(SG_SEND_URL, {
+          const selfRes = await fetch(SG_SEND_URL, {
             method: 'POST',
             headers: { Authorization: `Bearer ${sgKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -302,6 +303,10 @@ export async function POST(req: NextRequest) {
               ...(sgAttachments ? { attachments: sgAttachments } : {}),
             }),
           })
+          if (selfRes.ok || selfRes.status === 202) {
+            selfSent = true
+            sentCount += 1
+          }
         } catch {
           // self-copy failure is non-fatal
         }
@@ -314,7 +319,11 @@ export async function POST(req: NextRequest) {
         const { data: senderData } = await supabase.from('users').select('email').eq('id', userId).single()
         const senderEmail = senderData?.email
         if (senderEmail) {
-          const confirmHtml = buildConfirmationHtml(subject, sentCount, valid, bodyHtml)
+          const selfSent = selfEmail && sentCount > valid.length
+          const confirmRecipients = selfSent
+            ? [...valid, { name: '我', email: selfEmail!, company: null }]
+            : valid
+          const confirmHtml = buildConfirmationHtml(subject, sentCount, confirmRecipients, bodyHtml)
           await fetch(SG_SEND_URL, {
             method: 'POST',
             headers: { Authorization: `Bearer ${sgKey}`, 'Content-Type': 'application/json' },
