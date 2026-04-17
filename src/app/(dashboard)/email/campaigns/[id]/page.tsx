@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { ArrowLeft, Loader2, Mail, CheckCircle, Eye, MousePointerClick, AlertTriangle, Clock, Download } from 'lucide-react'
+import { ArrowLeft, Loader2, Mail, CheckCircle, Eye, MousePointerClick, AlertTriangle, Clock, Download, RefreshCw, Zap } from 'lucide-react'
 import { format } from 'date-fns'
 
 interface Campaign {
@@ -61,6 +61,10 @@ export default function CampaignDetailPage() {
   const [recipients, setRecipients] = useState<Recipient[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>('all')
+  const [backfilling, setBackfilling] = useState(false)
+  const [backfillResult, setBackfillResult] = useState<string | null>(null)
+  const [webhookTesting, setWebhookTesting] = useState(false)
+  const [webhookResult, setWebhookResult] = useState<string | null>(null)
 
   useEffect(() => { loadData() }, [id])
 
@@ -92,6 +96,56 @@ export default function CampaignDetailPage() {
     if (tab === 'bounced')  return !!r.bounced_at
     return true
   })
+
+  async function handleBackfill() {
+    setBackfilling(true)
+    setBackfillResult(null)
+    try {
+      const res = await fetch('/api/email/backfill-events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId: id }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setBackfillResult(`錯誤：${data.error ?? res.status}${data.detail ? ` — ${JSON.stringify(data.detail)}` : ''}`)
+      } else if (data.inserted === 0) {
+        setBackfillResult(data.note ?? '沒有新事件可補入')
+      } else {
+        setBackfillResult(`成功補入 ${data.inserted} 筆事件（共查到 ${data.messages} 封郵件）`)
+        await loadData()
+      }
+    } catch (e) {
+      setBackfillResult(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBackfilling(false)
+    }
+  }
+
+  async function handleWebhookTest() {
+    setWebhookTesting(true)
+    setWebhookResult(null)
+    try {
+      const secret = process.env.NEXT_PUBLIC_WEBHOOK_SECRET  // not available client-side, use a dedicated endpoint
+      // We call a test endpoint that fires a fake event at our own webhook
+      const res = await fetch('/api/email/webhook-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId: id }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setWebhookResult('Webhook 正常運作！測試事件已寫入資料庫。')
+        await loadData()
+      } else {
+        setWebhookResult(`Webhook 錯誤：${data.error ?? JSON.stringify(data)}`)
+      }
+    } catch (e) {
+      setWebhookResult(e instanceof Error ? e.message : String(e))
+    } finally {
+      setWebhookTesting(false)
+    }
+  }
 
   function exportCsv() {
     const rows = [
@@ -163,14 +217,52 @@ export default function CampaignDetailPage() {
             </span>
           </div>
         </div>
-        <button
-          onClick={exportCsv}
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors shrink-0"
-        >
-          <Download size={13} />
-          {t('exportCsv')}
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {isTrackable && (
+            <>
+              <button
+                onClick={handleWebhookTest}
+                disabled={webhookTesting}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+              >
+                {webhookTesting ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
+                測試 Webhook
+              </button>
+              <button
+                onClick={handleBackfill}
+                disabled={backfilling}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors disabled:opacity-50"
+              >
+                {backfilling ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                補回記錄
+              </button>
+            </>
+          )}
+          <button
+            onClick={exportCsv}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
+            <Download size={13} />
+            {t('exportCsv')}
+          </button>
+        </div>
       </div>
+
+      {/* Backfill / webhook test result banners */}
+      {(backfillResult || webhookResult) && (
+        <div className="mb-4 space-y-2">
+          {backfillResult && (
+            <div className={`px-4 py-2.5 rounded-lg text-sm ${backfillResult.startsWith('錯誤') ? 'bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300' : 'bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'}`}>
+              {backfillResult}
+            </div>
+          )}
+          {webhookResult && (
+            <div className={`px-4 py-2.5 rounded-lg text-sm ${webhookResult.includes('錯誤') ? 'bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300' : 'bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'}`}>
+              {webhookResult}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* No tracking notice */}
       {!isTrackable && (
