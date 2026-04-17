@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { ScanSearch, Loader2, Merge, X, ExternalLink } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { PermissionGate } from '@/components/PermissionGate'
 
 interface DupContact {
@@ -31,6 +32,8 @@ interface DupPair {
 type MergeAction = { pairId: string; keepId: string; sourceId: string } | null
 
 export default function DuplicatesPage() {
+  const t = useTranslations('duplicates')
+  const tc = useTranslations('common')
   const supabase = createBrowserSupabaseClient()
 
   const [pairs, setPairs] = useState<DupPair[]>([])
@@ -68,7 +71,7 @@ export default function DuplicatesPage() {
       const res = await fetch('/api/contacts/scan-duplicates', { method: 'POST' })
       const { found } = await res.json()
       await fetchPairs()
-      if (found === 0) alert('未發現重複聯絡人')
+      if (found === 0) alert(t('noDuplicates'))
     } finally {
       setScanning(false)
     }
@@ -99,7 +102,7 @@ export default function DuplicatesPage() {
       ))
       setMergeAction(null)
     } catch (e) {
-      alert(e instanceof Error ? e.message : '合併失敗')
+      alert(e instanceof Error ? e.message : t('mergeFailed'))
     } finally {
       setMergeSaving(false)
     }
@@ -114,15 +117,15 @@ export default function DuplicatesPage() {
       : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900'
     return (
       <div className={`rounded-lg border p-3 ${borderColor}`}>
-        {role === 'keep' && <p className="text-xs font-semibold text-green-600 dark:text-green-400 mb-1.5">✅ 保留</p>}
-        <p className="font-medium text-sm text-gray-900 dark:text-gray-100">{c.name || c.name_en || '（無姓名）'}</p>
+        {role === 'keep' && <p className="text-xs font-semibold text-green-600 dark:text-green-400 mb-1.5">{t('keepLabel')}</p>}
+        <p className="font-medium text-sm text-gray-900 dark:text-gray-100">{c.name || c.name_en || t('noName')}</p>
         {c.company && <p className="text-xs text-gray-500 mt-0.5">{c.company}</p>}
         {c.email && <p className="text-xs text-gray-400 mt-0.5">{c.email}</p>}
         <p className="text-xs text-gray-300 dark:text-gray-600 mt-1">
           {c.source ?? 'web'} · {new Date(c.created_at).toLocaleDateString('zh-TW')}
         </p>
         <Link href={`/contacts/${c.id}`} target="_blank" className="inline-flex items-center gap-1 text-xs text-blue-500 hover:underline mt-1">
-          <ExternalLink size={10} /> 查看
+          <ExternalLink size={10} /> {t('view')}
         </Link>
       </div>
     )
@@ -142,16 +145,14 @@ export default function DuplicatesPage() {
             <button
               onClick={() => setMergeAction({ pairId: pair.id, keepId: a.id, sourceId: b.id })}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-600 text-white rounded-lg hover:bg-orange-700"
-              title="保留左，刪除右"
             >
-              <Merge size={12} /> 保留左
+              <Merge size={12} /> {t('keepLeft')}
             </button>
             <button
               onClick={() => setMergeAction({ pairId: pair.id, keepId: b.id, sourceId: a.id })}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-600 text-white rounded-lg hover:bg-orange-700"
-              title="保留右，刪除左"
             >
-              <Merge size={12} /> 保留右
+              <Merge size={12} /> {t('keepRight')}
             </button>
             <button
               onClick={() => handleIgnore(pair.id)}
@@ -159,12 +160,12 @@ export default function DuplicatesPage() {
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
             >
               {ignoring === pair.id ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
-              不是重複
+              {t('notDuplicate')}
             </button>
           </div>
         </div>
         {pair.match_type === 'similar_name' && pair.similarity_score != null && (
-          <p className="text-xs text-gray-400 mt-2">相似度：{(pair.similarity_score * 100).toFixed(0)}%</p>
+          <p className="text-xs text-gray-400 mt-2">{t('similarity', { pct: (pair.similarity_score * 100).toFixed(0) })}</p>
         )}
       </div>
     )
@@ -176,9 +177,9 @@ export default function DuplicatesPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">重複聯絡人審查</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
           {lastScanned && (
-            <p className="text-sm text-gray-400 mt-1">上次掃描：{new Date(lastScanned).toLocaleString('zh-TW')}</p>
+            <p className="text-sm text-gray-400 mt-1">{t('lastScanned', { time: new Date(lastScanned).toLocaleString() })}</p>
           )}
         </div>
         <button
@@ -187,17 +188,17 @@ export default function DuplicatesPage() {
           className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
         >
           {scanning ? <Loader2 size={15} className="animate-spin" /> : <ScanSearch size={15} />}
-          {scanning ? '掃描中...' : '立即掃描'}
+          {scanning ? t('scanning') : t('scan')}
         </button>
       </div>
 
       {loading ? (
-        <div className="text-sm text-gray-400 text-center py-12"><Loader2 size={20} className="animate-spin mx-auto mb-2" />載入中...</div>
+        <div className="text-sm text-gray-400 text-center py-12"><Loader2 size={20} className="animate-spin mx-auto mb-2" />{tc('loading')}</div>
       ) : pairs.length === 0 ? (
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center">
           <ScanSearch size={32} className="text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-400 text-sm">尚無待審查的重複配對</p>
-          <p className="text-gray-300 text-xs mt-1">點擊「立即掃描」開始偵測重複聯絡人</p>
+          <p className="text-gray-400 text-sm">{t('empty')}</p>
+          <p className="text-gray-300 text-xs mt-1">{t('emptyHint')}</p>
         </div>
       ) : (
         <div className="space-y-6">
@@ -205,7 +206,7 @@ export default function DuplicatesPage() {
             <section>
               <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />
-                完全重複（相同 Email）— {emailPairs.length} 組
+                {t('exactEmail', { count: emailPairs.length })}
               </h2>
               <div className="space-y-3">
                 {emailPairs.map((p) => <PairRow key={p.id} pair={p} />)}
@@ -216,7 +217,7 @@ export default function DuplicatesPage() {
             <section>
               <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />
-                疑似重複（姓名相似）— {namePairs.length} 組
+                {t('similarName', { count: namePairs.length })}
               </h2>
               <div className="space-y-3">
                 {namePairs.map((p) => <PairRow key={p.id} pair={p} />)}
@@ -237,40 +238,40 @@ export default function DuplicatesPage() {
             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg">
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                 <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                  <Merge size={16} /> 確認合併
+                  <Merge size={16} /> {t('mergeTitle')}
                 </h2>
                 <button onClick={() => setMergeAction(null)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
               </div>
               <div className="p-6 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                    <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-2">✅ 保留</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{keep.name || keep.name_en || '（無姓名）'}</p>
+                    <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-2">{t('keepLabel')}</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{keep.name || keep.name_en || t('noName')}</p>
                     <p className="text-sm text-gray-500">{keep.company}</p>
                     <p className="text-xs text-gray-400">{keep.email}</p>
                   </div>
                   <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
-                    <p className="text-xs font-semibold text-red-700 dark:text-red-400 mb-2">🗑 刪除</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{source.name || source.name_en || '（無姓名）'}</p>
+                    <p className="text-xs font-semibold text-red-700 dark:text-red-400 mb-2">{t('deleteLabel')}</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{source.name || source.name_en || t('noName')}</p>
                     <p className="text-sm text-gray-500">{source.company}</p>
                     <p className="text-xs text-gray-400">{source.email}</p>
                   </div>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-xs text-gray-500 space-y-1">
-                  <p>• 保留聯絡人的欄位優先，空白欄位才從來源補入</p>
-                  <p>• 名片、互動紀錄、Tag 全部合併到保留聯絡人</p>
-                  <p>• 來源聯絡人刪除後無法復原</p>
+                  <p>• {t('mergeKeep')}</p>
+                  <p>• {t('mergeAll')}</p>
+                  <p>• {t('mergeIrreversible')}</p>
                 </div>
               </div>
               <div className="flex justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-                <button onClick={() => setMergeAction(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">取消</button>
+                <button onClick={() => setMergeAction(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">{tc('cancel')}</button>
                 <button
                   onClick={handleMerge}
                   disabled={mergeSaving}
                   className="flex items-center gap-2 px-4 py-2 text-sm bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
                 >
                   {mergeSaving ? <Loader2 size={14} className="animate-spin" /> : <Merge size={14} />}
-                  確認合併
+                  {t('confirmMerge')}
                 </button>
               </div>
             </div>

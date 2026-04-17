@@ -564,7 +564,7 @@ export default function ContactsPage() {
             onClick={() => { setEmailStatusDropdownOpen((v) => !v); setTagDropdownOpen(false); setCountryDropdownOpen(false); setImportanceDropdownOpen(false); setLanguageDropdownOpen(false) }}
             className="flex items-center gap-2 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
           >
-            Email 狀態
+            {t('email')}
             {selectedEmailStatus && (
               <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                 selectedEmailStatus === 'bounced' ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300' :
@@ -579,10 +579,10 @@ export default function ContactsPage() {
             <div className="absolute top-full mt-1 left-0 z-10 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-40">
               {[
                 { value: '', label: 'ALL', dot: null },
-                { value: 'ok', label: '✉ 可寄信', dot: 'bg-green-500' },
-                { value: 'bounced', label: '硬退信', dot: 'bg-red-500' },
-                { value: 'unsubscribed', label: '已退訂', dot: 'bg-orange-400' },
-                { value: 'invalid', label: '無效信箱', dot: 'bg-yellow-500' },
+                { value: 'ok', label: t('emailStatusOk'), dot: 'bg-green-500' },
+                { value: 'bounced', label: t('emailStatusBounced'), dot: 'bg-red-500' },
+                { value: 'unsubscribed', label: t('emailStatusUnsubscribed'), dot: 'bg-orange-400' },
+                { value: 'invalid', label: t('emailStatusInvalid'), dot: 'bg-yellow-500' },
               ].map(({ value, label, dot }) => (
                 <button
                   key={value}
@@ -650,9 +650,9 @@ export default function ContactsPage() {
                       <button onClick={() => copyEmail(c.email!)} className="text-gray-400 hover:text-blue-500 shrink-0">
                         {copiedEmail === c.email ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
                       </button>
-                      {c.email_status === 'bounced' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 shrink-0">硬退信</span>}
-                      {c.email_status === 'unsubscribed' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800 shrink-0">已退訂</span>}
-                      {c.email_status === 'invalid' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800 shrink-0">無效信箱</span>}
+                      {c.email_status === 'bounced' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 shrink-0">{t('emailStatusBounced')}</span>}
+                      {c.email_status === 'unsubscribed' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800 shrink-0">{t('emailStatusUnsubscribed')}</span>}
+                      {c.email_status === 'invalid' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800 shrink-0">{t('emailStatusInvalid')}</span>}
                     </div>
                   )}
                 </div>
@@ -757,13 +757,13 @@ export default function ContactsPage() {
                           </button>
                         </span>
                         {c.email_status === 'bounced' && (
-                          <span className="inline-flex w-fit text-xs font-medium px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">硬退信</span>
+                          <span className="inline-flex w-fit text-xs font-medium px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">{t('emailStatusBounced')}</span>
                         )}
                         {c.email_status === 'unsubscribed' && (
-                          <span className="inline-flex w-fit text-xs font-medium px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800">已退訂</span>
+                          <span className="inline-flex w-fit text-xs font-medium px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800">{t('emailStatusUnsubscribed')}</span>
                         )}
                         {c.email_status === 'invalid' && (
-                          <span className="inline-flex w-fit text-xs font-medium px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800">無效信箱</span>
+                          <span className="inline-flex w-fit text-xs font-medium px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800">{t('emailStatusInvalid')}</span>
                         )}
                       </div>
                     ) : '—'}

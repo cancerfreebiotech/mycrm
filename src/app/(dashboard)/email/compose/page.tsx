@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import TipTapEditor from '@/components/TipTapEditor'
 import { ArrowLeft, Send, Loader2, Users, AlertCircle, X, Sparkles, FileText, Eye, ChevronDown, Paperclip } from 'lucide-react'
@@ -21,12 +22,6 @@ interface Template {
   body_content: string | null
 }
 
-const VARIABLES = [
-  { label: '姓名', value: '{{name}}' },
-  { label: '公司', value: '{{company}}' },
-  { label: '職稱', value: '{{job_title}}' },
-]
-
 function substituteVariables(html: string, contact: Recipient): string {
   return html
     .replace(/\{\{name\}\}/g, contact.name ?? '')
@@ -36,7 +31,15 @@ function substituteVariables(html: string, contact: Recipient): string {
 
 export default function EmailComposePage() {
   const router = useRouter()
+  const t = useTranslations('emailCompose')
+  const tc = useTranslations('common')
   const supabase = createBrowserSupabaseClient()
+
+  const VARIABLES = [
+    { label: t('varName'), value: '{{name}}' },
+    { label: t('varCompany'), value: '{{company}}' },
+    { label: t('varJobTitle'), value: '{{job_title}}' },
+  ]
 
   const [recipients, setRecipients] = useState<Recipient[]>([])
   const [loading, setLoading] = useState(true)
@@ -46,8 +49,8 @@ export default function EmailComposePage() {
 
   const [subject, setSubject] = useState('')
   const [bodyHtml, setBodyHtml] = useState('')
-  const [cc, setCc] = useState('')          // Outlook CC
-  const [replyTo, setReplyTo] = useState('') // SendGrid Reply-To
+  const [cc, setCc] = useState('')
+  const [replyTo, setReplyTo] = useState('')
   const [userId, setUserId] = useState('')
   const [showRecipients, setShowRecipients] = useState(false)
   const [canBulkEmail, setCanBulkEmail] = useState(false)
@@ -143,12 +146,12 @@ export default function EmailComposePage() {
 
     const combined = [...attachments, ...incoming]
     if (combined.length > MAX_FILES) {
-      setAttachmentError(`最多只能附加 ${MAX_FILES} 個檔案`)
+      setAttachmentError(t('attachmentTooMany', { max: MAX_FILES }))
       return
     }
     const oversized = incoming.find(f => f.size > MAX_FILE_SIZE)
     if (oversized) {
-      setAttachmentError(`「${oversized.name}」超過 5 MB 限制`)
+      setAttachmentError(t('attachmentTooLarge', { name: oversized.name }))
       return
     }
     setAttachmentError('')
@@ -160,10 +163,10 @@ export default function EmailComposePage() {
     setAttachmentError('')
   }
 
-  function applyTemplate(t: Template) {
-    if (t.subject) setSubject(t.subject)
-    if (t.body_content) {
-      setBodyHtml(t.body_content)
+  function applyTemplate(tmpl: Template) {
+    if (tmpl.subject) setSubject(tmpl.subject)
+    if (tmpl.body_content) {
+      setBodyHtml(tmpl.body_content)
       setEditorKey(k => k + 1)
     }
     setShowTemplates(false)
@@ -195,7 +198,7 @@ export default function EmailComposePage() {
       setEditorKey(k => k + 1)
       if (data.subject && !subject.trim()) setSubject(data.subject)
     } catch (e) {
-      alert(e instanceof Error ? e.message : '生成失敗')
+      alert(e instanceof Error ? e.message : t('aiFailed'))
     } finally {
       setAiLoading(false)
     }
@@ -247,7 +250,7 @@ export default function EmailComposePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-400">
-        <Loader2 className="animate-spin mr-2" size={20} /> 載入收件人...
+        <Loader2 className="animate-spin mr-2" size={20} /> {tc('loading')}
       </div>
     )
   }
@@ -256,7 +259,7 @@ export default function EmailComposePage() {
     return (
       <div className="max-w-2xl mx-auto py-12 text-center">
         <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium mb-4 ${result.ok ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
-          {result.ok ? `已成功寄出 ${result.sent} 封（${result.method}）` : '寄送失敗'}
+          {result.ok ? t('sentSuccess', { sent: result.sent, method: result.method }) : t('sentFailed')}
         </div>
         {result.errors.length > 0 && (
           <div className="text-sm text-red-500 mb-4 space-y-1">
@@ -267,7 +270,7 @@ export default function EmailComposePage() {
           onClick={() => router.push('/contacts')}
           className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
         >
-          返回聯絡人
+          {t('backToContacts')}
         </button>
       </div>
     )
@@ -280,7 +283,7 @@ export default function EmailComposePage() {
         <button onClick={() => router.back()} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
           <ArrowLeft size={20} />
         </button>
-        <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">撰寫群發郵件</h1>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
       </div>
 
       {/* Method selector */}
@@ -291,48 +294,48 @@ export default function EmailComposePage() {
               onClick={() => setMethod('outlook')}
               className={`text-xs px-3 py-1.5 font-medium transition-colors ${method === 'outlook' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
             >
-              Outlook
+              {t('methodOutlook')}
             </button>
             <button
               onClick={() => setMethod('sendgrid')}
               className={`text-xs px-3 py-1.5 font-medium transition-colors ${method === 'sendgrid' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
             >
-              SendGrid
+              {t('methodSendgrid')}
             </button>
           </div>
           <span className="text-sm text-gray-500 dark:text-gray-400">
-            {recipients.length} 位收件人
+            {t('recipients', { count: recipients.length })}
             {method === 'outlook'
-              ? '（BCC 群發）'
+              ? t('methodBcc')
               : sgMode === 'bcc'
-              ? '（SendGrid BCC 群發）'
-              : '（每人獨立信件）'}
+              ? t('methodSgBcc')
+              : t('methodSgIndividual')}
           </span>
           {method === 'outlook' && recipients.length >= 450 && (
-            <span className="text-xs text-amber-600 dark:text-amber-400">Outlook 上限 500 人</span>
+            <span className="text-xs text-amber-600 dark:text-amber-400">{t('outlookLimit')}</span>
           )}
         </div>
 
         {/* SendGrid sub-mode */}
         {method === 'sendgrid' && (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 dark:text-gray-500">寄送方式：</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">{t('sgMode')}</span>
             <div className="inline-flex rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
               <button
                 onClick={() => setSgMode('individual')}
                 className={`text-xs px-3 py-1 transition-colors ${sgMode === 'individual' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
               >
-                個人化（一人一封）
+                {t('sgModeIndividual')}
               </button>
               <button
                 onClick={() => setSgMode('bcc')}
                 className={`text-xs px-3 py-1 transition-colors ${sgMode === 'bcc' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
               >
-                BCC 群發
+                {t('sgModeBcc')}
               </button>
             </div>
             {sgMode === 'bcc' && (
-              <span className="text-xs text-gray-400 dark:text-gray-500">變數無法個人化</span>
+              <span className="text-xs text-gray-400 dark:text-gray-500">{t('sgModeNoteNoVar')}</span>
             )}
           </div>
         )}
@@ -342,7 +345,7 @@ export default function EmailComposePage() {
       {hasVariables && method === 'outlook' && (
         <div className="flex items-start gap-2 mb-4 px-3 py-2.5 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-sm text-amber-700 dark:text-amber-300">
           <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <span>Outlook BCC 模式下，變數無法個人化（所有人收到相同內容）。切換到 SendGrid 可讓每封信替換 {'{{name}}'} 等變數。</span>
+          <span>{t('varWarning')}</span>
         </div>
       )}
 
@@ -353,8 +356,8 @@ export default function EmailComposePage() {
           className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
         >
           <Users size={14} />
-          BCC 收件人：{recipients.length} 人
-          <span className="text-xs text-blue-500">{showRecipients ? '收合' : '展開編輯'}</span>
+          {t('bccRecipients', { count: recipients.length })}
+          <span className="text-xs text-blue-500">{showRecipients ? t('collapse') : t('showEdit')}</span>
         </button>
         {showRecipients && (
           <div className="mt-2 max-h-64 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-gray-50 dark:bg-gray-800/50">
@@ -366,7 +369,6 @@ export default function EmailComposePage() {
                   <button
                     onClick={() => removeRecipient(r.id)}
                     className="ml-0.5 text-gray-300 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400"
-                    title="移除"
                   >
                     <X size={12} />
                   </button>
@@ -374,7 +376,7 @@ export default function EmailComposePage() {
               ))}
             </div>
             {recipients.length === 0 && (
-              <p className="text-xs text-gray-400 text-center py-2">已移除所有收件人</p>
+              <p className="text-xs text-gray-400 text-center py-2">{t('removeAll')}</p>
             )}
           </div>
         )}
@@ -384,37 +386,37 @@ export default function EmailComposePage() {
       {recipients.length > 20 && !canBulkEmail && (
         <div className="flex items-start gap-2 mb-4 px-3 py-2.5 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 text-sm text-red-700 dark:text-red-300">
           <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <span>收件人超過 20 人，需要管理員授予「群發郵件」權限才能寄送。請聯絡管理員。</span>
+          <span>{t('bulkPermissionWarning')}</span>
         </div>
       )}
 
       {/* CC (Outlook only) */}
       {method === 'outlook' && (
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">CC</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('ccLabel')}</label>
           <input
             type="text"
             value={cc}
             onChange={e => setCc(e.target.value)}
-            placeholder="例：po@cancerfree.io, bob@gmail.com（逗號分隔）"
+            placeholder={t('ccPlaceholder')}
             className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
-          <p className="text-xs text-gray-400 mt-1">預設為你自己的 email，可新增多個（逗號分隔）。CC 不會建立互動紀錄。</p>
+          <p className="text-xs text-gray-400 mt-1">{t('ccHint')}</p>
         </div>
       )}
 
       {/* Reply-To (SendGrid only) */}
       {method === 'sendgrid' && (
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reply-To</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('replyToLabel')}</label>
           <input
             type="email"
             value={replyTo}
             onChange={e => setReplyTo(e.target.value)}
-            placeholder="收件人回信時的地址，預設為你自己的 email"
+            placeholder={t('replyToPlaceholder')}
             className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
-          <p className="text-xs text-gray-400 mt-1">收件人點「回覆」時寄到此地址（SendGrid 不支援 CC）。</p>
+          <p className="text-xs text-gray-400 mt-1">{t('replyToHint')}</p>
         </div>
       )}
 
@@ -422,13 +424,13 @@ export default function EmailComposePage() {
       <div className="mb-4">
         <div className="flex items-center justify-between mb-1">
           <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            附件
-            <span className="ml-1.5 text-xs font-normal text-gray-400">最多 {MAX_FILES} 個，每個 5 MB</span>
+            {t('attachments')}
+            <span className="ml-1.5 text-xs font-normal text-gray-400">{t('attachmentsLimit', { max: MAX_FILES })}</span>
           </label>
           {attachments.length < MAX_FILES && (
             <label className="flex items-center gap-1 text-xs px-2 py-1 rounded-md text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 cursor-pointer transition-colors">
               <Paperclip size={12} />
-              新增附件
+              {t('addAttachment')}
               <input
                 type="file"
                 className="hidden"
@@ -462,12 +464,12 @@ export default function EmailComposePage() {
 
       {/* Subject */}
       <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">主旨</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('subjectLabel')}</label>
         <input
           type="text"
           value={subject}
           onChange={e => setSubject(e.target.value)}
-          placeholder="郵件主旨（可用 {{name}} {{company}} {{job_title}} 變數）"
+          placeholder={t('subjectPlaceholder')}
           className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
       </div>
@@ -475,7 +477,7 @@ export default function EmailComposePage() {
       {/* Body - toolbar row */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-1">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">內文</label>
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('bodyLabel')}</label>
           <div className="flex items-center gap-2">
             {/* Template selector */}
             <div className="relative">
@@ -484,21 +486,21 @@ export default function EmailComposePage() {
                 className="flex items-center gap-1 text-xs px-2 py-1 rounded-md text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 transition-colors"
               >
                 <FileText size={12} />
-                模板
+                {t('templates')}
                 <ChevronDown size={10} />
               </button>
               {showTemplates && (
                 <div className="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-20 py-1">
                   {templates.length === 0 ? (
-                    <p className="px-3 py-2 text-xs text-gray-400">尚無模板</p>
-                  ) : templates.map(t => (
+                    <p className="px-3 py-2 text-xs text-gray-400">{t('noTemplates')}</p>
+                  ) : templates.map(tmpl => (
                     <button
-                      key={t.id}
-                      onClick={() => applyTemplate(t)}
+                      key={tmpl.id}
+                      onClick={() => applyTemplate(tmpl)}
                       className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
-                      <div className="font-medium">{t.title}</div>
-                      {t.subject && <div className="text-xs text-gray-400 truncate">{t.subject}</div>}
+                      <div className="font-medium">{tmpl.title}</div>
+                      {tmpl.subject && <div className="text-xs text-gray-400 truncate">{tmpl.subject}</div>}
                     </button>
                   ))}
                 </div>
@@ -517,7 +519,7 @@ export default function EmailComposePage() {
               className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors ${showPreview ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'text-gray-500 hover:text-green-600 hover:bg-green-50 dark:hover:text-green-400 dark:hover:bg-green-900/20'} disabled:opacity-40 disabled:cursor-not-allowed`}
             >
               <Eye size={12} />
-              預覽
+              {t('preview')}
             </button>
 
             {/* AI button */}
@@ -525,10 +527,9 @@ export default function EmailComposePage() {
               onClick={handleAiGenerate}
               disabled={aiLoading || (!bodyHtml.trim() && !subject.trim())}
               className="flex items-center gap-1 text-xs px-2 py-1 rounded-md text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              title="AI 會根據目前內文潤飾成正式郵件"
             >
               {aiLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-              {aiLoading ? 'AI 潤稿中...' : 'AI 潤稿'}
+              {aiLoading ? t('aiPolishing') : t('aiPolish')}
             </button>
           </div>
         </div>
@@ -537,7 +538,7 @@ export default function EmailComposePage() {
         {showPreview && previewContact && (
           <div className="mb-3 border border-green-200 dark:border-green-800 rounded-lg overflow-hidden">
             <div className="flex items-center justify-between px-3 py-2 bg-green-50 dark:bg-green-950/30 border-b border-green-200 dark:border-green-800">
-              <span className="text-xs text-green-700 dark:text-green-300 font-medium">預覽模式（模擬收件人）</span>
+              <span className="text-xs text-green-700 dark:text-green-300 font-medium">{t('previewMode')}</span>
               <select
                 value={previewContact.id}
                 onChange={e => {
@@ -552,7 +553,7 @@ export default function EmailComposePage() {
               </select>
             </div>
             <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800/50 border-b border-green-200 dark:border-green-800">
-              <p className="text-xs text-gray-500"><strong>主旨：</strong>{substituteVariables(subject, previewContact)}</p>
+              <p className="text-xs text-gray-500"><strong>{t('subjectLabel')}：</strong>{substituteVariables(subject, previewContact)}</p>
             </div>
             <div
               className="prose prose-sm dark:prose-invert max-w-none px-4 py-3 min-h-[120px] bg-white dark:bg-gray-900"
@@ -565,7 +566,7 @@ export default function EmailComposePage() {
           key={editorKey}
           content={bodyHtml}
           onChange={(html) => setBodyHtml(html)}
-          placeholder="先寫草稿，再按「AI 潤稿」自動修飾成正式郵件...（可用 {{name}} {{company}} {{job_title}} 變數）"
+          placeholder={`${t('bodyLabel')}... ({{name}} {{company}} {{job_title}})`}
         />
       </div>
 
@@ -573,7 +574,7 @@ export default function EmailComposePage() {
       {method === 'sendgrid' && sgMode === 'individual' && !hasVariables && (
         <div className="flex items-start gap-2 mb-4 px-3 py-2.5 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-sm text-amber-700 dark:text-amber-300">
           <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <span>每位收件人各收到一封獨立信件（非 BCC），寄件人為系統 SendGrid 帳號。</span>
+          <span>{t('sgWarning')}</span>
         </div>
       )}
 
@@ -585,13 +586,13 @@ export default function EmailComposePage() {
           className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
         >
           {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-          {sending ? '寄送中...' : `寄出（${recipients.length} 人）`}
+          {sending ? t('sending') : t('send', { count: recipients.length })}
         </button>
         <button
           onClick={() => router.back()}
           className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
         >
-          取消
+          {t('cancel')}
         </button>
       </div>
     </div>

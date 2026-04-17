@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { Search, X, ZoomIn, ZoomOut, Maximize2, MapPin, Calendar, StickyNote } from 'lucide-react'
 
 interface PhotoRow {
@@ -26,6 +27,8 @@ interface ContactGroup {
 interface LightboxPhoto extends PhotoRow {}
 
 export default function PhotosPage() {
+  const t = useTranslations('photos')
+  const tc = useTranslations('common')
   const [photos, setPhotos] = useState<PhotoRow[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -100,9 +103,9 @@ export default function PhotosPage() {
     <div className="max-w-6xl mx-auto px-4 py-8">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">相簿</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
         {!loading && (
-          <span className="text-sm text-gray-500 dark:text-gray-400">共 {total} 張</span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">{t('results', { n: total })}</span>
         )}
       </div>
 
@@ -113,7 +116,7 @@ export default function PhotosPage() {
           type="text"
           value={keyword}
           onChange={e => setKeyword(e.target.value)}
-          placeholder="搜尋照片（附註、地點、聯絡人）..."
+          placeholder={t('search')}
           className="w-full pl-9 pr-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
         />
         {keyword && (
@@ -125,11 +128,11 @@ export default function PhotosPage() {
 
       {/* Content */}
       {loading ? (
-        <div className="flex items-center justify-center py-20 text-gray-400">載入中...</div>
+        <div className="flex items-center justify-center py-20 text-gray-400">{tc('loading')}</div>
       ) : photos.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-2">
           <Search size={32} className="opacity-30" />
-          <p>{keyword ? '找不到相關照片' : '尚無合照'}</p>
+          <p>{keyword ? t('noResults') : t('noPhotos')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -141,7 +144,7 @@ export default function PhotosPage() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={cover.photo_url}
-                    alt={group.contact_name ?? '合照'}
+                    alt={group.contact_name ?? t('noPhotos')}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                   />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
@@ -160,10 +163,10 @@ export default function PhotosPage() {
                       className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline truncate block"
                       onClick={e => e.stopPropagation()}
                     >
-                      {group.contact_name ?? '未知聯絡人'}
+                      {group.contact_name ?? t('unknownContact')}
                     </Link>
                   ) : (
-                    <span className="text-sm text-gray-400 truncate block">未歸類</span>
+                    <span className="text-sm text-gray-400 truncate block">{t('unassigned')}</span>
                   )}
                   {cover.taken_at && (
                     <p className="text-xs text-gray-400 truncate">
@@ -211,7 +214,7 @@ export default function PhotosPage() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={lightbox.photo_url}
-                alt={lightbox.contact_name ?? '合照'}
+                alt={lightbox.contact_name ?? t('noPhotos')}
                 className="max-h-[85vh] max-w-[75vw] rounded-lg object-contain"
                 draggable={false}
               />
@@ -222,7 +225,7 @@ export default function PhotosPage() {
           <div className="w-64 shrink-0 bg-gray-900/95 border-l border-white/10 flex flex-col p-5 gap-4 overflow-y-auto" onClick={e => e.stopPropagation()}>
             {lightbox.contact_name && lightbox.contact_id && (
               <div>
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">聯絡人</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{t('lbContact')}</p>
                 <Link href={`/contacts/${lightbox.contact_id}`} className="text-blue-400 hover:text-blue-300 font-medium text-sm" onClick={closeLightbox}>
                   {lightbox.contact_name}
                 </Link>
@@ -232,8 +235,8 @@ export default function PhotosPage() {
               <div className="flex items-start gap-2">
                 <Calendar size={14} className="text-gray-500 mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-0.5">拍攝日期</p>
-                  <p className="text-sm text-gray-200">{new Date(lightbox.taken_at).toLocaleDateString('zh-TW')}</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-0.5">{t('lbDate')}</p>
+                  <p className="text-sm text-gray-200">{new Date(lightbox.taken_at).toLocaleDateString()}</p>
                 </div>
               </div>
             )}
@@ -241,7 +244,7 @@ export default function PhotosPage() {
               <div className="flex items-start gap-2">
                 <MapPin size={14} className="text-gray-500 mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-0.5">地點</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-0.5">{t('lbLocation')}</p>
                   <p className="text-sm text-gray-200">{lightbox.location_name}</p>
                 </div>
               </div>
@@ -250,13 +253,13 @@ export default function PhotosPage() {
               <div className="flex items-start gap-2">
                 <StickyNote size={14} className="text-gray-500 mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-0.5">附註</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-0.5">{t('lbNote')}</p>
                   <p className="text-sm text-gray-200 whitespace-pre-wrap">{lightbox.note}</p>
                 </div>
               </div>
             )}
             <div className="mt-auto pt-4 border-t border-white/10">
-              <p className="text-xs text-gray-600">{new Date(lightbox.created_at).toLocaleDateString('zh-TW')} 上傳</p>
+              <p className="text-xs text-gray-600">{t('lbUploaded', { date: new Date(lightbox.created_at).toLocaleDateString() })}</p>
             </div>
           </div>
         </div>

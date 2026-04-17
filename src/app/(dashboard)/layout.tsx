@@ -205,7 +205,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <button
           onClick={toggleCollapsed}
           className="hidden lg:flex items-center justify-center h-8 mx-2 mb-1 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0"
-          title={collapsed ? '展開側邊欄' : '收合側邊欄'}
+          title={collapsed ? t('sidebarExpand') : t('sidebarCollapse')}
         >
           {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
@@ -275,7 +275,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                title={theme === 'dark' ? '切換淺色' : '切換深色'}
+                title={theme === 'dark' ? t('themeLight') : t('themeDark')}
               >
                 {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
               </button>

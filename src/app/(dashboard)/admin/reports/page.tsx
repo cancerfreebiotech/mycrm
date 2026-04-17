@@ -61,9 +61,9 @@ export default function ReportsPage() {
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
   const LOG_TYPES = [
-    { value: 'meeting', label: '拜訪' },
-    { value: 'note', label: '備忘' },
-    { value: 'email', label: 'Email' },
+    { value: 'meeting', label: t('logTypeMeeting') },
+    { value: 'note', label: t('logTypeNote') },
+    { value: 'email', label: t('logTypeEmail') },
   ]
 
   const COUNTRY_LABELS: Record<string, string> = {
@@ -392,7 +392,7 @@ export default function ReportsPage() {
                         <SortTh col="date" label={t('colLogDate')} />
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">時間</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">地點</th>
-                        <SortTh col="creator" label="填寫人" />
+                        <SortTh col="creator" label={t('colCreator')} />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-800">

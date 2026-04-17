@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Mail, ChevronRight, Loader2, BarChart2 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
-import { zhTW } from 'date-fns/locale'
 
 interface Campaign {
   id: string
@@ -31,6 +31,8 @@ function pct(num: number, den: number) {
 
 export default function EmailCampaignsPage() {
   const router = useRouter()
+  const t = useTranslations('campaigns')
+  const tc = useTranslations('common')
   const supabase = createBrowserSupabaseClient()
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
@@ -59,7 +61,7 @@ export default function EmailCampaignsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-400">
-        <Loader2 className="animate-spin mr-2" size={20} /> 載入中...
+        <Loader2 className="animate-spin mr-2" size={20} /> {tc('loading')}
       </div>
     )
   }
@@ -68,14 +70,14 @@ export default function EmailCampaignsPage() {
     <div className="max-w-5xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <BarChart2 size={20} className="text-gray-400" />
-        <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">郵件寄送紀錄</h1>
-        <span className="text-sm text-gray-400">（共 {campaigns.length} 筆）</span>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
+        <span className="text-sm text-gray-400">（{t('total', { count: campaigns.length })}）</span>
       </div>
 
       {campaigns.length === 0 ? (
         <div className="text-center py-20 text-gray-400">
           <Mail size={44} className="mx-auto mb-3 opacity-25" />
-          <p className="text-sm">尚無寄送紀錄</p>
+          <p className="text-sm">{t('empty')}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -99,11 +101,11 @@ export default function EmailCampaignsPage() {
                         ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400'
                         : 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400'
                     }`}>
-                      {c.method === 'outlook' ? 'Outlook BCC' : c.sg_mode === 'bcc' ? 'SendGrid BCC' : 'SendGrid 個人化'}
+                      {c.method === 'outlook' ? t('methodOutlookBcc') : c.sg_mode === 'bcc' ? t('methodSgBcc') : t('methodSgIndividual')}
                     </span>
-                    <span className="text-xs text-gray-400">{c.total_recipients} 人</span>
+                    <span className="text-xs text-gray-400">{t('recipients', { count: c.total_recipients })}</span>
                     <span className="text-xs text-gray-400">
-                      {formatDistanceToNow(new Date(c.created_at), { locale: zhTW, addSuffix: true })}
+                      {formatDistanceToNow(new Date(c.created_at), { addSuffix: true })}
                     </span>
                   </div>
                 </div>
@@ -112,28 +114,28 @@ export default function EmailCampaignsPage() {
                 {isIndividual && s ? (
                   <div className="flex items-center gap-5 text-center shrink-0">
                     <div>
-                      <p className="text-[11px] text-gray-400 mb-0.5">送達</p>
+                      <p className="text-[11px] text-gray-400 mb-0.5">{t('statDelivered')}</p>
                       <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{s.delivered_count}</p>
                     </div>
                     <div>
-                      <p className="text-[11px] text-gray-400 mb-0.5">開信率</p>
+                      <p className="text-[11px] text-gray-400 mb-0.5">{t('statOpenRate')}</p>
                       <p className={`text-sm font-semibold ${openRate !== null ? 'text-green-600 dark:text-green-400' : 'text-gray-300'}`}>
                         {openRate !== null ? `${openRate}%` : '—'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[11px] text-gray-400 mb-0.5">點擊</p>
+                      <p className="text-[11px] text-gray-400 mb-0.5">{t('statClicks')}</p>
                       <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{s.click_count}</p>
                     </div>
                     {s.bounce_count > 0 && (
                       <div>
-                        <p className="text-[11px] text-gray-400 mb-0.5">退信</p>
+                        <p className="text-[11px] text-gray-400 mb-0.5">{t('statBounced')}</p>
                         <p className="text-sm font-semibold text-red-500">{s.bounce_count}</p>
                       </div>
                     )}
                   </div>
                 ) : (
-                  <span className="text-xs text-gray-400 shrink-0">無追蹤資料</span>
+                  <span className="text-xs text-gray-400 shrink-0">{t('noTracking')}</span>
                 )}
 
                 <ChevronRight size={15} className="text-gray-300 dark:text-gray-600 shrink-0 group-hover:text-gray-500 transition-colors" />

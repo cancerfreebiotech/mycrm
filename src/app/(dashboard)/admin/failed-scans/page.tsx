@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Check, Loader2, ExternalLink } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { PermissionGate } from '@/components/PermissionGate'
 import Image from 'next/image'
 
@@ -20,6 +21,8 @@ interface FailedScan {
 }
 
 export default function FailedScansPage() {
+  const t = useTranslations('failedScans')
+  const tc = useTranslations('common')
   const supabase = createBrowserSupabaseClient()
   const [scans, setScans] = useState<FailedScan[]>([])
   const [loading, setLoading] = useState(true)
@@ -56,8 +59,8 @@ export default function FailedScansPage() {
     <div className="max-w-4xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">辨識失敗審查</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">名片辨識失敗（無法識別姓名）的圖片，可手動建立聯絡人後標記完成</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('subtitle')}</p>
         </div>
         <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
           <input
@@ -66,17 +69,17 @@ export default function FailedScansPage() {
             onChange={e => setShowReviewed(e.target.checked)}
             className="rounded"
           />
-          顯示已審查
+          {t('showReviewed')}
         </label>
       </div>
 
       {loading ? (
         <div className="flex items-center gap-2 text-gray-400">
-          <Loader2 size={16} className="animate-spin" /> 載入中...
+          <Loader2 size={16} className="animate-spin" /> {tc('loading')}
         </div>
       ) : scans.length === 0 ? (
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center text-gray-400">
-          {showReviewed ? '沒有審查紀錄' : '✅ 目前沒有待審查的辨識失敗圖片'}
+          {showReviewed ? t('noRecords') : t('allClear')}
         </div>
       ) : (
         <div className="space-y-4">
@@ -91,7 +94,7 @@ export default function FailedScansPage() {
                   <div className="relative w-40 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
                     <Image
                       src={scan.card_img_url}
-                      alt="名片圖片"
+                      alt={t('cardImage')}
                       fill
                       className="object-cover group-hover:opacity-90 transition-opacity"
                       unoptimized
@@ -107,14 +110,14 @@ export default function FailedScansPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        上傳者：{scan.users?.display_name ?? scan.users?.email ?? '—'}
+                        {t('uploadedBy', { name: scan.users?.display_name ?? scan.users?.email ?? '—' })}
                       </p>
                       <p className="text-xs text-gray-400 mt-0.5">
                         {new Date(scan.created_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}
                       </p>
                       {scan.reviewed && scan.reviewed_by && (
                         <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                          ✅ 已審查 by {scan.reviewed_by}（{new Date(scan.reviewed_at!).toLocaleDateString('zh-TW')}）
+                          {t('reviewedBy', { name: scan.reviewed_by, date: new Date(scan.reviewed_at!).toLocaleDateString() })}
                         </p>
                       )}
                     </div>
@@ -128,7 +131,7 @@ export default function FailedScansPage() {
                           ? <Loader2 size={13} className="animate-spin" />
                           : <Check size={13} />
                         }
-                        標記完成
+                        {t('markDone')}
                       </button>
                     )}
                   </div>
@@ -140,13 +143,13 @@ export default function FailedScansPage() {
                       rel="noopener noreferrer"
                       className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
                     >
-                      <ExternalLink size={11} /> 開原圖
+                      <ExternalLink size={11} /> {t('openImage')}
                     </a>
                     <a
                       href={`/contacts/new?card_img_url=${encodeURIComponent(scan.card_img_url)}&storage_path=${encodeURIComponent(scan.storage_path)}&failed_scan_id=${scan.id}`}
                       className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
                     >
-                      → 手動建立聯絡人
+                      → {t('createContact')}
                     </a>
                   </div>
                 </div>
