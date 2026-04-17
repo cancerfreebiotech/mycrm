@@ -15,6 +15,45 @@ function injectOptOutFooter(html: string, optOutUrl: string): string {
 const SG_SEND_URL = 'https://api.sendgrid.com/v3/mail/send'
 const OUTLOOK_MAX = 450
 
+function buildConfirmationHtml(
+  subject: string,
+  sentCount: number,
+  recipients: Array<{ name: string | null; email: string | null; company: string | null }>,
+  bodyHtml: string,
+): string {
+  const now = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })
+  const rows = recipients.slice(0, sentCount).map((c, i) =>
+    `<tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'};">
+      <td style="padding:7px 12px;border-bottom:1px solid #f3f4f6;">${c.name ?? '—'}</td>
+      <td style="padding:7px 12px;border-bottom:1px solid #f3f4f6;color:#6b7280;">${c.company ?? '—'}</td>
+      <td style="padding:7px 12px;border-bottom:1px solid #f3f4f6;color:#3b82f6;">${c.email ?? ''}</td>
+    </tr>`
+  ).join('')
+  return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:640px;margin:0 auto;padding:24px 20px;color:#111827;">
+  <h2 style="font-size:15px;font-weight:600;margin:0 0 6px;">寄件確認</h2>
+  <p style="font-size:13px;color:#6b7280;margin:0 0 20px;">${now} &nbsp;·&nbsp; 已成功寄出 <strong style="color:#111827;">${sentCount} 封</strong></p>
+  <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
+    <p style="margin:0 0 3px;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;">主旨</p>
+    <p style="margin:0;font-size:14px;font-weight:600;">${subject}</p>
+  </div>
+  <p style="font-size:12px;color:#6b7280;font-weight:500;margin:0 0 6px;">收件人名單（${sentCount} 位）</p>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;margin-bottom:28px;">
+    <thead>
+      <tr style="background:#f3f4f6;">
+        <th style="padding:8px 12px;text-align:left;color:#6b7280;font-weight:500;border-bottom:1px solid #e5e7eb;">姓名</th>
+        <th style="padding:8px 12px;text-align:left;color:#6b7280;font-weight:500;border-bottom:1px solid #e5e7eb;">公司</th>
+        <th style="padding:8px 12px;text-align:left;color:#6b7280;font-weight:500;border-bottom:1px solid #e5e7eb;">Email</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <p style="font-size:12px;color:#6b7280;font-weight:500;margin:0 0 8px;">郵件內容預覽</p>
+  <div style="border:1px solid #e5e7eb;border-radius:8px;padding:20px 24px;background:#fff;">
+    ${bodyHtml}
+  </div>
+</div>`
+}
+
 interface FileAttachment {
   name: string
   type: string
@@ -174,7 +213,7 @@ export async function POST(req: NextRequest) {
         errors.push(e instanceof Error ? e.message : String(e))
       }
     } else {
-      // ── SendGrid personalizations (one per person, with contact_id for tracking + opt-out) ──
+      // ── SendGrid individual (one per person, with contact_id for tracking + opt-out) ──
       const hasVars = /\{\{(name|company|job_title)\}\}/.test(bodyHtml) || /\{\{(name|company|job_title)\}\}/.test(subject)
 
       // Inject opt-out footer placeholder — substituted per-recipient below
@@ -235,6 +274,29 @@ export async function POST(req: NextRequest) {
         } catch (e) {
           errors.push(`SendGrid batch ${i}: ${e instanceof Error ? e.message : String(e)}`)
         }
+      }
+    }
+
+    // ── Send confirmation copy to sender ──
+    if (sentCount > 0) {
+      try {
+        const { data: senderData } = await supabase.from('users').select('email').eq('id', userId).single()
+        const senderEmail = senderData?.email
+        if (senderEmail) {
+          const confirmHtml = buildConfirmationHtml(subject, sentCount, valid, bodyHtml)
+          await fetch(SG_SEND_URL, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${sgKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              personalizations: [{ to: [{ email: senderEmail }] }],
+              from: { email: fromEmail, name: fromName },
+              subject: `[寄件確認] ${subject}`,
+              content: [{ type: 'text/html', value: confirmHtml }],
+            }),
+          })
+        }
+      } catch {
+        // confirmation failure is non-fatal
       }
     }
   }
