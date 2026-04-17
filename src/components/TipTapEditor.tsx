@@ -12,8 +12,51 @@ import { useState, useCallback } from 'react'
 import {
   Bold, Italic, UnderlineIcon, Link2, Image as ImageIcon,
   List, ListOrdered, Minus, AlignLeft, AlignCenter, AlignRight,
-  Eye, Edit3, Paperclip, X, RemoveFormatting,
+  Eye, Edit3, Paperclip, X, RemoveFormatting, LayoutList, Wand2, Loader2,
 } from 'lucide-react'
+
+// ── Rule-based formatter ──────────────────────────────────────────────────────
+function applyRuleFormat(html: string): string {
+  // Flatten HTML → structured plain text
+  const text = html
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '\n§ ')   // temp marker
+    .replace(/<\/li>/gi, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+
+  const blocks = text.split(/\n{2,}/)
+  const out: string[] = []
+
+  for (const raw of blocks) {
+    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean)
+    if (!lines.length) continue
+
+    // Lines recovered from <li> via §
+    const fromLi   = lines.every(l => l.startsWith('§ '))
+    const isBullet = !fromLi && lines.every(l => /^[-*•·]\s+/.test(l))
+    const isOrdered = !fromLi && lines.every(l => /^\d+[.)、]\s*/.test(l))
+
+    if (fromLi || isBullet) {
+      const items = lines.map(l => `<li>${l.replace(/^(§ |[-*•·]\s+)/, '')}</li>`).join('')
+      out.push(`<ul>${items}</ul>`)
+    } else if (isOrdered) {
+      const items = lines.map(l => `<li>${l.replace(/^\d+[.)、]\s*/, '')}</li>`).join('')
+      out.push(`<ol>${items}</ol>`)
+    } else {
+      // Each line → its own <p> (preserves intentional breaks)
+      lines.forEach(l => out.push(`<p>${l}</p>`))
+    }
+  }
+
+  return out.join('') || '<p></p>'
+}
 
 export interface TipTapAttachment {
   name: string
@@ -49,8 +92,38 @@ export default function TipTapEditor({
 }: TipTapEditorProps) {
   const [preview, setPreview] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [aiFormatLoading, setAiFormatLoading] = useState(false)
   const [linkUrl, setLinkUrl] = useState('')
   const [showLinkInput, setShowLinkInput] = useState(false)
+
+  function handleRuleFormat() {
+    if (!editor) return
+    const formatted = applyRuleFormat(editor.getHTML())
+    editor.commands.setContent(formatted, true)
+  }
+
+  async function handleAiFormat() {
+    if (!editor || aiFormatLoading) return
+    const plainText = editor.getText()
+    if (!plainText.trim()) return
+    setAiFormatLoading(true)
+    try {
+      const res = await fetch('/api/ai-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: `Reformat the following email content into clean, well-structured HTML.\nSTRICT RULES:\n- Keep EVERY word exactly as-is — do NOT add, remove, or change any text\n- Convert to proper HTML paragraphs (<p>)\n- Format list items (lines starting with -, *, numbers) as <ul><li> or <ol><li>\n- Remove excessive blank lines\n- Reply in the SAME language as the input\n- Return ONLY the HTML body content, no subject, no code block\n\nContent:\n${plainText}`,
+          returnHtml: true,
+        }),
+      })
+      const data = await res.json()
+      if (data.text) editor.commands.setContent(data.text, true)
+    } catch {
+      // silent fail
+    } finally {
+      setAiFormatLoading(false)
+    }
+  }
 
   const editor = useEditor({
     extensions: [
@@ -147,6 +220,12 @@ export default function TipTapEditor({
               onClick={() => editor?.chain().focus().clearNodes().unsetAllMarks().run()}
               title="清除格式"
             ><RemoveFormatting size={14} /></ToolBtn>
+            <ToolBtn onClick={handleRuleFormat} title="自動排版（規則）">
+              <LayoutList size={14} />
+            </ToolBtn>
+            <ToolBtn onClick={handleAiFormat} title="AI 自動排版" disabled={aiFormatLoading}>
+              {aiFormatLoading ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+            </ToolBtn>
             <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
             <ToolBtn
               active={editor?.isActive('link') || showLinkInput}
@@ -234,10 +313,11 @@ export default function TipTapEditor({
   )
 }
 
-function ToolBtn({ onClick, active, title, children }: {
+function ToolBtn({ onClick, active, title, disabled, children }: {
   onClick: () => void
   active?: boolean
   title?: string
+  disabled?: boolean
   children: React.ReactNode
 }) {
   return (
@@ -245,7 +325,8 @@ function ToolBtn({ onClick, active, title, children }: {
       type="button"
       onClick={onClick}
       title={title}
-      className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors ${
+      disabled={disabled}
+      className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
         active ? 'bg-gray-200 dark:bg-gray-600 text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'
       }`}
     >
