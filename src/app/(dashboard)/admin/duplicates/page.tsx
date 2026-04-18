@@ -69,9 +69,16 @@ export default function DuplicatesPage() {
     setScanning(true)
     try {
       const res = await fetch('/api/contacts/scan-duplicates', { method: 'POST' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert(`掃描失敗：${err.error ?? res.status}`)
+        return
+      }
       const { found } = await res.json()
       await fetchPairs()
       if (found === 0) alert(t('noDuplicates'))
+    } catch (e) {
+      alert(`掃描失敗：${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setScanning(false)
     }
