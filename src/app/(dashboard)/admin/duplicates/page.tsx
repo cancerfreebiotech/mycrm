@@ -15,6 +15,8 @@ interface DupContact {
   email: string | null
   created_at: string
   source: string | null
+  language: string | null
+  contact_tags: Array<{ tag: { name: string } | null }>
 }
 
 interface DupPair {
@@ -54,8 +56,8 @@ export default function DuplicatesPage() {
       .from('duplicate_pairs')
       .select(`
         id, contact_id_a, contact_id_b, match_type, similarity_score, is_ignored, scanned_at,
-        contact_a:contacts!contact_id_a(id, name, name_en, company, email, created_at, source),
-        contact_b:contacts!contact_id_b(id, name, name_en, company, email, created_at, source)
+        contact_a:contacts!contact_id_a(id, name, name_en, company, email, created_at, source, language, contact_tags(tag:tags(name))),
+        contact_b:contacts!contact_id_b(id, name, name_en, company, email, created_at, source, language, contact_tags(tag:tags(name)))
       `)
       .eq('is_ignored', false)
       .order('match_type')
@@ -104,7 +106,6 @@ export default function DuplicatesPage() {
         body: JSON.stringify({ sourceId: mergeAction.sourceId }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
-      // Remove this pair and any pair involving the deleted source
       setPairs((prev) => prev.filter((p) =>
         p.id !== mergeAction.pairId &&
         p.contact_id_a !== mergeAction.sourceId &&
@@ -121,17 +122,26 @@ export default function DuplicatesPage() {
   const emailPairs = pairs.filter((p) => p.match_type === 'exact_email')
   const namePairs = pairs.filter((p) => p.match_type === 'similar_name')
 
-  function ContactCard({ c, role }: { c: DupContact; role: 'keep' | 'source' }) {
-    const borderColor = role === 'keep'
-      ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/20'
-      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900'
+  function ContactCard({ c }: { c: DupContact }) {
+    const tags = c.contact_tags?.flatMap(ct => ct.tag ? [ct.tag.name] : []) ?? []
     return (
-      <div className={`rounded-lg border p-3 ${borderColor}`}>
-        {role === 'keep' && <p className="text-xs font-semibold text-green-600 dark:text-green-400 mb-1.5">{t('keepLabel')}</p>}
+      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
         <p className="font-medium text-sm text-gray-900 dark:text-gray-100">{c.name || c.name_en || t('noName')}</p>
         {c.company && <p className="text-xs text-gray-500 mt-0.5">{c.company}</p>}
         {c.email && <p className="text-xs text-gray-400 mt-0.5">{c.email}</p>}
-        <p className="text-xs text-gray-300 dark:text-gray-600 mt-1">
+        <div className="flex flex-wrap items-center gap-1 mt-1.5">
+          {c.language && (
+            <span className="px-1.5 py-0.5 text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded">
+              {c.language}
+            </span>
+          )}
+          {tags.map((tag) => (
+            <span key={tag} className="px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded">
+              {tag}
+            </span>
+          ))}
+        </div>
+        <p className="text-xs text-gray-300 dark:text-gray-600 mt-1.5">
           {c.source ?? 'web'} · {new Date(c.created_at).toLocaleDateString('zh-TW')}
         </p>
         <Link href={`/contacts/${c.id}`} target="_blank" className="inline-flex items-center gap-1 text-xs text-blue-500 hover:underline mt-1">
@@ -148,8 +158,8 @@ export default function DuplicatesPage() {
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
         <div className="flex items-start gap-3">
           <div className="flex-1 grid grid-cols-2 gap-3">
-            <ContactCard c={a} role="keep" />
-            <ContactCard c={b} role="source" />
+            <ContactCard c={a} />
+            <ContactCard c={b} />
           </div>
           <div className="flex flex-col gap-2 shrink-0 mt-1">
             <button
