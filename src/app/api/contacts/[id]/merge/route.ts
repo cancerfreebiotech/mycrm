@@ -74,10 +74,31 @@ export async function POST(
   // 2. Move contact_cards from source to keep
   await supabase.from('contact_cards').update({ contact_id: keepId }).eq('contact_id', sourceId)
 
-  // 3. Move interaction_logs from source to keep
+  // 3. Move contact_photos from source to keep
+  await supabase.from('contact_photos').update({ contact_id: keepId }).eq('contact_id', sourceId)
+
+  // 4. Move interaction_logs from source to keep
   await supabase.from('interaction_logs').update({ contact_id: keepId }).eq('contact_id', sourceId)
 
-  // 4. Merge contact_tags (union — upsert ignores conflicts)
+  // 5. Move tasks from source to keep
+  await supabase.from('tasks').update({ contact_id: keepId }).eq('contact_id', sourceId)
+
+  // 6. Move email_events from source to keep
+  await supabase.from('email_events').update({ contact_id: keepId }).eq('contact_id', sourceId)
+
+  // 7. Move newsletter tables (skip rows that already exist for keep)
+  for (const table of ['newsletter_blacklist', 'newsletter_recipients', 'newsletter_unsubscribes'] as const) {
+    const { data: sourceRows } = await supabase.from(table).select('*').eq('contact_id', sourceId)
+    if (sourceRows && sourceRows.length > 0) {
+      await supabase.from(table).upsert(
+        sourceRows.map((r) => ({ ...r, contact_id: keepId })),
+        { ignoreDuplicates: true }
+      )
+      await supabase.from(table).delete().eq('contact_id', sourceId)
+    }
+  }
+
+  // 8. Merge contact_tags (union — upsert ignores conflicts)
   const { data: sourceTags } = await supabase
     .from('contact_tags')
     .select('tag_id')
@@ -91,7 +112,10 @@ export async function POST(
     await supabase.from('contact_tags').upsert(tagInserts, { onConflict: 'contact_id,tag_id' })
   }
 
-  // 5. Write system interaction_log
+  // 9. Remove all duplicate_pairs involving source contact
+  await supabase.from('duplicate_pairs').delete().or(`contact_id_a.eq.${sourceId},contact_id_b.eq.${sourceId}`)
+
+  // 10. Write system interaction_log
   const sourceName = sourceContact.name || sourceContact.name_en || sourceId
   const sourceCompany = sourceContact.company || sourceContact.company_en || ''
   await supabase.from('interaction_logs').insert({
@@ -100,7 +124,7 @@ export async function POST(
     content: `合併聯絡人：${sourceName}${sourceCompany ? `（${sourceCompany}）` : ''}`,
   })
 
-  // 6. Delete source contact (cascades contact_tags)
+  // 11. Delete source contact (cascades contact_tags)
   await supabase.from('contacts').delete().eq('id', sourceId)
 
   return NextResponse.json({ ok: true })
