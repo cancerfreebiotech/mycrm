@@ -61,5 +61,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  // Update contacts.email_status for bounce / unsubscribe events
+  const statusUpdates = rows.filter(r => r.contact_id && (r.event === 'bounce' || r.event === 'spamreport' || r.event === 'unsubscribe'))
+  for (const ev of statusUpdates) {
+    const newStatus = ev.event === 'bounce' ? 'bounced' : 'unsubscribed'
+    await supabase.from('contacts').update({ email_status: newStatus }).eq('id', ev.contact_id!)
+  }
+
   return NextResponse.json({ ok: true, inserted: rows.length })
 }
