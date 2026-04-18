@@ -38,6 +38,7 @@ export default function DuplicatesPage() {
 
   const [pairs, setPairs] = useState<DupPair[]>([])
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
   const [lastScanned, setLastScanned] = useState<string | null>(null)
   const [mergeAction, setMergeAction] = useState<MergeAction>(null)
@@ -48,7 +49,8 @@ export default function DuplicatesPage() {
 
   async function fetchPairs() {
     setLoading(true)
-    const { data } = await supabase
+    setFetchError(null)
+    const { data, error } = await supabase
       .from('duplicate_pairs')
       .select(`
         id, contact_id_a, contact_id_b, match_type, similarity_score, is_ignored, scanned_at,
@@ -58,6 +60,7 @@ export default function DuplicatesPage() {
       .eq('is_ignored', false)
       .order('match_type')
       .order('scanned_at', { ascending: false })
+    if (error) setFetchError(error.message)
     setPairs((data ?? []) as unknown as DupPair[])
     if (data && data.length > 0) {
       setLastScanned((data[0] as unknown as DupPair).scanned_at)
@@ -199,6 +202,11 @@ export default function DuplicatesPage() {
         </button>
       </div>
 
+      {fetchError && (
+        <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-4 text-sm text-red-700 dark:text-red-400">
+          查詢失敗：{fetchError}
+        </div>
+      )}
       {loading ? (
         <div className="text-sm text-gray-400 text-center py-12"><Loader2 size={20} className="animate-spin mx-auto mb-2" />{tc('loading')}</div>
       ) : pairs.length === 0 ? (
