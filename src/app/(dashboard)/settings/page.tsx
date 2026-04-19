@@ -288,7 +288,7 @@ export default function SettingsPage() {
       })
       if (!res.ok) {
         const data = await res.json()
-        setAssistantError(data.error ?? '新增失敗')
+        setAssistantError(data.error ?? t('addFailed'))
         return
       }
     }
@@ -307,7 +307,7 @@ export default function SettingsPage() {
 
     const parsed = telegramId.trim() ? Number(telegramId.trim()) : null
     if (telegramId.trim() && (isNaN(parsed!) || !Number.isInteger(parsed))) {
-      setError('Telegram ID 必須為數字'); return
+      setError(t('telegramIdNumeric')); return
     }
 
     setSaving(true)
@@ -379,7 +379,7 @@ export default function SettingsPage() {
             type="text"
             value={telegramId}
             onChange={(e) => setTelegramId(e.target.value)}
-            placeholder="例：123456789"
+            placeholder={t('telegramIdPlaceholder')}
             className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">{t('telegramHint')}</p>
@@ -516,7 +516,7 @@ export default function SettingsPage() {
                   type="button"
                   onClick={() => handleToggleAssistant(a.assistant_email)}
                   className="ml-0.5 hover:text-blue-900 dark:hover:text-blue-100"
-                  title="移除"
+                  title={t('remove')}
                 >
                   <X size={12} />
                 </button>
@@ -679,9 +679,9 @@ export default function SettingsPage() {
               <button
                 onClick={() => setEmailPrompt('')}
                 className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                title="還原為組織預設"
+                title={t('resetToDefault')}
               >
-                <RotateCcw size={12} /> 還原組織預設
+                <RotateCcw size={12} /> {t('resetToDefault')}
               </button>
               <button
                 onClick={handleSaveEmailPrompt}
@@ -689,7 +689,7 @@ export default function SettingsPage() {
                 className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
                 {savedEmailPromptFlag ? <Check size={12} /> : null}
-                {savingEmailPrompt ? '儲存中…' : savedEmailPromptFlag ? '已儲存' : '儲存'}
+                {savingEmailPrompt ? t('saving') : savedEmailPromptFlag ? t('saved') : tc('save')}
               </button>
             </div>
           </div>
@@ -700,12 +700,12 @@ export default function SettingsPage() {
             value={emailPrompt}
             onChange={(e) => setEmailPrompt(e.target.value)}
             rows={5}
-            placeholder="留空則使用組織/系統預設"
+            placeholder={t('emailPromptPlaceholder')}
             className="w-full text-sm font-mono bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
           />
           {emailPrompt === '' && (
             <div className="mt-2 space-y-1">
-              <p className="text-xs text-gray-400 dark:text-gray-500">目前生效的系統預設：</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500">{t('systemDefaultInEffect')}</p>
               <pre className="text-xs font-mono bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-500 dark:text-gray-400 whitespace-pre-wrap overflow-auto max-h-24">
                 {SYSTEM_PROMPTS.email_generate}
               </pre>

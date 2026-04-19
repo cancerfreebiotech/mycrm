@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import {
@@ -40,6 +41,8 @@ type MergeAction = { pendingId: string; contactId: string; contactName: string }
 type ContactSearchResult = { id: string; name: string | null; name_en: string | null; company: string | null; email: string | null }
 
 export default function CamcardPage() {
+  const t = useTranslations('camcard')
+  const tc = useTranslations('common')
   const supabase = createBrowserSupabaseClient()  // used for contact search only
 
   const PAGE_SIZE = 20
@@ -121,7 +124,7 @@ export default function CamcardPage() {
     // Group by company
     const map = new Map<string, PendingCard[]>()
     for (const card of cards) {
-      const company = card.ocr_data?.company || card.ocr_data?.company_en || '（未知公司）'
+      const company = card.ocr_data?.company || card.ocr_data?.company_en || t('unknownCompany')
       if (!map.has(company)) map.set(company, [])
       map.get(company)!.push(card)
     }
@@ -210,7 +213,7 @@ export default function CamcardPage() {
       if (!res.ok) throw new Error((await res.json()).error)
       removeCard(cardId)
     } catch (e) {
-      alert(e instanceof Error ? e.message : '操作失敗')
+      alert(e instanceof Error ? e.message : t('operationFailed'))
     } finally {
       setActionLoading(null)
     }
@@ -223,7 +226,7 @@ export default function CamcardPage() {
       if (!res.ok) throw new Error((await res.json()).error)
       removeCard(cardId)
     } catch (e) {
-      alert(e instanceof Error ? e.message : '操作失敗')
+      alert(e instanceof Error ? e.message : t('operationFailed'))
     } finally {
       setActionLoading(null)
     }
@@ -273,7 +276,7 @@ export default function CamcardPage() {
       removeCard(mergeAction.pendingId)
       setMergeAction(null)
     } catch (e) {
-      alert(e instanceof Error ? e.message : '合併失敗')
+      alert(e instanceof Error ? e.message : t('mergeFailed'))
     } finally {
       setMergeSaving(false)
     }
@@ -284,7 +287,7 @@ export default function CamcardPage() {
     if (!group) return
     // Only confirm cards with no duplicate detected
     const toConfirm = group.cards.filter((c) => !c.duplicate_contact_id)
-    if (toConfirm.length === 0) { alert('此群組無可直接確認的名片（重複聯絡人需手動處理）'); return }
+    if (toConfirm.length === 0) { alert(t('bulkNoConfirmable')); return }
 
     setBatchConfirming(company)
     const user = await resolveUser()
@@ -338,7 +341,7 @@ export default function CamcardPage() {
       })))
       setEditCard(null)
     } catch (e) {
-      alert(e instanceof Error ? e.message : '儲存失敗')
+      alert(e instanceof Error ? e.message : t('saveFailed'))
     } finally {
       setEditSaving(false)
     }
@@ -402,7 +405,7 @@ export default function CamcardPage() {
       return (
         <div className="w-28 h-16 bg-gray-100 dark:bg-gray-800 rounded-lg flex flex-col items-center justify-center gap-1">
           <FolderInput size={16} className="text-gray-300" />
-          {broken && <span className="text-xs text-gray-300">載入失敗</span>}
+          {broken && <span className="text-xs text-gray-300">{t('loadFailed')}</span>}
         </div>
       )
     }
@@ -410,7 +413,7 @@ export default function CamcardPage() {
       <button
         onClick={() => onPreview(url)}
         className="relative w-28 h-16 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 group shrink-0"
-        title={`點擊放大 (${alt})`}
+        title={t('clickToEnlarge', { alt })}
       >
         <img
           src={url}
@@ -445,7 +448,7 @@ export default function CamcardPage() {
 
   function CardItem({ card }: { card: PendingCard }) {
     const ocr = card.ocr_data ?? {}
-    const name = ocr.name || ocr.name_en || '（無姓名）'
+    const name = ocr.name || ocr.name_en || t('noName')
     const hasDup = !!card.duplicate_contact_id
     const dup = card.duplicate_contact
     const isLoading = actionLoading === card.id
@@ -475,9 +478,9 @@ export default function CamcardPage() {
 
           {/* Card images: front + back stacked, click to enlarge */}
           <div className="flex flex-col gap-1 shrink-0">
-            <CardThumb url={card.card_img_url} alt="正面" onPreview={setPreviewUrl} />
+            <CardThumb url={card.card_img_url} alt={t('sideFront')} onPreview={setPreviewUrl} />
             {card.back_img_url && (
-              <CardThumb url={card.back_img_url} alt="背面" onPreview={setPreviewUrl} />
+              <CardThumb url={card.back_img_url} alt={t('sideBack')} onPreview={setPreviewUrl} />
             )}
           </div>
 
@@ -486,16 +489,16 @@ export default function CamcardPage() {
             <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{name}</p>
             {ocr.job_title && <p className="text-xs text-gray-500 mt-0.5">{ocr.job_title}</p>}
             <div className="mt-2 text-xs space-y-0.5">
-              {ocr.name_en && ocr.name_en !== ocr.name && <OcrField label="英文名" value={ocr.name_en} />}
-              <OcrField label="公司" value={ocr.company || ocr.company_en} />
-              <OcrField label="部門" value={ocr.department} />
+              {ocr.name_en && ocr.name_en !== ocr.name && <OcrField label={t('fieldNameEn')} value={ocr.name_en} />}
+              <OcrField label={t('fieldCompany')} value={ocr.company || ocr.company_en} />
+              <OcrField label={t('fieldDepartment')} value={ocr.department} />
               <OcrField label="Email" value={ocr.email} />
-              <OcrField label="電話" value={ocr.phone} />
-              <OcrField label="傳真" value={ocr.fax} />
-              <OcrField label="地址" value={ocr.address} />
-              <OcrField label="英文址" value={ocr.address_en} />
-              <OcrField label="網站" value={ocr.website} href={ocr.website ? ensureHttp(ocr.website) : undefined} />
-              {ocr.country_code && <OcrField label="國家" value={ocr.country_code} />}
+              <OcrField label={t('fieldPhone')} value={ocr.phone} />
+              <OcrField label={t('fieldFax')} value={ocr.fax} />
+              <OcrField label={t('fieldAddress')} value={ocr.address} />
+              <OcrField label={t('fieldAddressEn')} value={ocr.address_en} />
+              <OcrField label={t('fieldWebsite')} value={ocr.website} href={ocr.website ? ensureHttp(ocr.website) : undefined} />
+              {ocr.country_code && <OcrField label={t('fieldCountry')} value={ocr.country_code} />}
             </div>
             {card.image_filename && (
               <p className="text-xs text-gray-300 dark:text-gray-600 mt-1.5">{card.image_filename}</p>
@@ -507,32 +510,32 @@ export default function CamcardPage() {
             <button
               onClick={() => handleConfirm(card.id)}
               disabled={isLoading || hasDup}
-              title={hasDup ? '偵測到重複聯絡人，請先處理' : '確認新增'}
+              title={hasDup ? t('hasDupWarn') : t('confirmAddTitle')}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {isLoading ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-              新增
+              {t('addAction')}
             </button>
             <button
               onClick={() => openEdit(card)}
               disabled={isLoading}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40"
             >
-              <Pencil size={12} /> 編輯
+              <Pencil size={12} /> {t('editAction')}
             </button>
             <button
               onClick={() => openMerge(card)}
               disabled={isLoading}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-40"
             >
-              <Merge size={12} /> 合併
+              <Merge size={12} /> {t('mergeAction')}
             </button>
             <button
               onClick={() => handleSkip(card.id)}
               disabled={isLoading}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-700 text-gray-500 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
             >
-              <X size={12} /> 略過
+              <X size={12} /> {t('skipAction')}
             </button>
           </div>
         </div>
@@ -542,7 +545,7 @@ export default function CamcardPage() {
           <div className="mt-3 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded-lg px-3 py-2 flex items-center gap-2">
             <AlertTriangle size={13} className="text-yellow-500 shrink-0" />
             <p className="text-xs text-yellow-700 dark:text-yellow-400">
-              {card.match_type === 'exact_email' ? '相同 Email：' : '姓名相似：'}
+              {card.match_type === 'exact_email' ? t('sameEmail') : t('similarName')}
               <span className="font-medium">{dup.name || dup.name_en}</span>
               {dup.company && <span>（{dup.company}）</span>}
               <Link
@@ -550,7 +553,7 @@ export default function CamcardPage() {
                 target="_blank"
                 className="ml-1.5 inline-flex items-center gap-0.5 text-blue-500 hover:underline"
               >
-                <ExternalLink size={10} /> 查看
+                <ExternalLink size={10} /> {t('view')}
               </Link>
             </p>
           </div>
@@ -559,7 +562,7 @@ export default function CamcardPage() {
         {/* Importance + Tag picker */}
         <div className="mt-3 flex flex-wrap gap-3 items-center">
           <div className="flex items-center gap-1">
-            <span className="text-xs text-gray-400 shrink-0">重要性：</span>
+            <span className="text-xs text-gray-400 shrink-0">{t('importanceLabel')}</span>
             {(['high', 'medium', 'low'] as const).map((v) => (
               <button
                 key={v}
@@ -575,8 +578,8 @@ export default function CamcardPage() {
             ))}
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-xs text-gray-400 shrink-0">語言：</span>
-            {([['chinese', '中'], ['english', 'EN'], ['japanese', '日']] as const).map(([v, label]) => (
+            <span className="text-xs text-gray-400 shrink-0">{t('languageLabel')}</span>
+            {([['chinese', t('langZh')], ['english', 'EN'], ['japanese', t('langJa')]] as const).map(([v, label]) => (
               <button
                 key={v}
                 onClick={() => setCardLanguage((prev) => ({ ...prev, [card.id]: v }))}
@@ -592,7 +595,7 @@ export default function CamcardPage() {
           </div>
           {allTags.length > 0 && (
             <div className="flex flex-wrap gap-1 items-center">
-              <span className="text-xs text-gray-400 shrink-0">標籤：</span>
+              <span className="text-xs text-gray-400 shrink-0">{t('tagsLabel')}</span>
               {allTags.map((tag) => {
                 const isSelected = (cardTags[card.id] ?? []).includes(tag.id)
                 return (
@@ -622,9 +625,9 @@ export default function CamcardPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">名片王匯入審查</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('pageTitle')}</h1>
           <p className="text-sm text-gray-400 mt-1">
-            待審查：{totalPending} 張 · 按公司分組顯示
+            {t('pageDesc', { count: totalPending })}
           </p>
         </div>
         {totalPending > PAGE_SIZE && (
@@ -637,7 +640,7 @@ export default function CamcardPage() {
               <ChevronLeft size={16} />
             </button>
             <span className="text-sm text-gray-600 dark:text-gray-400 tabular-nums">
-              第 {page} / {Math.ceil(totalPending / PAGE_SIZE)} 頁
+              {tc('page', { current: page, total: Math.ceil(totalPending / PAGE_SIZE) })}
             </span>
             <button
               onClick={() => setPage((p) => Math.min(Math.ceil(totalPending / PAGE_SIZE), p + 1))}
@@ -664,7 +667,7 @@ export default function CamcardPage() {
                 max={Math.ceil(totalPending / PAGE_SIZE)}
                 value={jumpInput}
                 onChange={(e) => setJumpInput(e.target.value)}
-                placeholder="跳至"
+                placeholder={t('jumpPlaceholder')}
                 className="w-16 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1 text-xs text-center bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
               <button
@@ -687,27 +690,27 @@ export default function CamcardPage() {
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="搜尋姓名、公司..."
+            placeholder={t('searchPlaceholder')}
             className="w-full pl-7 pr-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
         {/* Country code */}
         <div className="flex items-center gap-1.5">
-          <label className="text-xs text-gray-400 shrink-0">國家</label>
+          <label className="text-xs text-gray-400 shrink-0">{t('fieldCountry')}</label>
           <div className="relative">
             <select
               value={countryCodeFilter}
               onChange={(e) => setCountryCodeFilter(e.target.value)}
               className="appearance-none pl-2 pr-6 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
-              <option value="">全部</option>
-              <option value="TW">TW 台灣</option>
-              <option value="JP">JP 日本</option>
-              <option value="SG">SG 新加坡</option>
-              <option value="HK">HK 香港</option>
-              <option value="CN">CN 中國</option>
-              <option value="US">US 美國</option>
+              <option value="">{t('countryAll')}</option>
+              <option value="TW">{t('countryTW')}</option>
+              <option value="JP">{t('countryJP')}</option>
+              <option value="SG">{t('countrySG')}</option>
+              <option value="HK">{t('countryHK')}</option>
+              <option value="CN">{t('countryCN')}</option>
+              <option value="US">{t('countryUS')}</option>
             </select>
             <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
@@ -721,7 +724,7 @@ export default function CamcardPage() {
             onChange={(e) => setHasDuplicateFilter(e.target.checked)}
             className="w-3.5 h-3.5 rounded border-gray-300 text-orange-500 focus:ring-orange-400"
           />
-          <span className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">⚠️ 有重複</span>
+          <span className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">{t('filterHasDup')}</span>
         </label>
 
         {/* Has email */}
@@ -732,20 +735,20 @@ export default function CamcardPage() {
             onChange={(e) => setHasEmailFilter(e.target.checked)}
             className="w-3.5 h-3.5 rounded border-gray-300 text-blue-500 focus:ring-blue-400"
           />
-          <span className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">✉ 有 Email</span>
+          <span className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">{t('filterHasEmail')}</span>
         </label>
 
         {/* Sort */}
         <div className="flex items-center gap-1.5">
-          <label className="text-xs text-gray-400 shrink-0">排序</label>
+          <label className="text-xs text-gray-400 shrink-0">{t('sortLabel')}</label>
           <div className="relative">
             <select
               value={sortFilter}
               onChange={(e) => setSortFilter(e.target.value as 'newest' | 'oldest')}
               className="appearance-none pl-2 pr-6 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
-              <option value="newest">最新優先</option>
-              <option value="oldest">最舊優先</option>
+              <option value="newest">{t('sortNewest')}</option>
+              <option value="oldest">{t('sortOldest')}</option>
             </select>
             <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
@@ -760,14 +763,14 @@ export default function CamcardPage() {
             }}
             className="text-xs text-blue-500 hover:text-blue-700 dark:hover:text-blue-300 whitespace-nowrap"
           >
-            全選
+            {t('selectAll')}
           </button>
           <span className="text-gray-300 dark:text-gray-600 text-xs">·</span>
           <button
             onClick={() => setSelectedCards(new Set())}
             className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap"
           >
-            取消全選
+            {t('deselectAll')}
           </button>
         </div>
 
@@ -777,7 +780,7 @@ export default function CamcardPage() {
             onClick={() => { setSearchInput(''); setHasDuplicateFilter(false); setCountryCodeFilter(''); setHasEmailFilter(false); setSortFilter('newest') }}
             className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-gray-500 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
           >
-            <RotateCcw size={11} /> 清除
+            <RotateCcw size={11} /> {t('clear')}
           </button>
         )}
       </div>
@@ -785,12 +788,12 @@ export default function CamcardPage() {
       {loading ? (
         <div className="text-center py-16">
           <Loader2 size={24} className="animate-spin mx-auto mb-3 text-gray-400" />
-          <p className="text-sm text-gray-400">載入中...</p>
+          <p className="text-sm text-gray-400">{tc('loading')}</p>
         </div>
       ) : groups.length === 0 ? (
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center">
           <FolderInput size={36} className="text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 font-medium">目前無待審查名片</p>
+          <p className="text-gray-500 font-medium">{t('emptyPending')}</p>
           <p className="text-gray-300 text-sm mt-1">
             使用 <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">scripts/camcard-import/import.ts</code> 匯入名片後，在此審查
           </p>
@@ -860,7 +863,7 @@ export default function CamcardPage() {
           </button>
           <img
             src={previewUrl}
-            alt="名片預覽"
+            alt={t('cardPreview')}
             className="max-w-full max-h-full rounded-xl shadow-2xl object-contain"
             onClick={(e) => e.stopPropagation()}
           />
@@ -881,20 +884,20 @@ export default function CamcardPage() {
             <div className="p-6 overflow-y-auto flex-1">
               <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                 {([
-                  ['name', '中文名'],
-                  ['name_en', '英文名'],
-                  ['name_local', '日文名'],
-                  ['company', '公司（中文）'],
-                  ['company_en', '公司（英文）'],
-                  ['job_title', '職稱'],
-                  ['department', '部門'],
+                  ['name', t('fieldCnName')],
+                  ['name_en', t('fieldNameEn')],
+                  ['name_local', t('fieldNameLocal')],
+                  ['company', t('fieldCompanyZh')],
+                  ['company_en', t('fieldCompanyEn')],
+                  ['job_title', t('fieldJobTitle')],
+                  ['department', t('fieldDepartment')],
                   ['email', 'Email'],
                   ['second_email', 'Email 2'],
-                  ['phone', '電話'],
-                  ['second_phone', '電話 2'],
-                  ['fax', '傳真'],
-                  ['country_code', '國家碼'],
-                  ['website', '網站'],
+                  ['phone', t('fieldPhone')],
+                  ['second_phone', t('fieldSecondPhone')],
+                  ['fax', t('fieldFax')],
+                  ['country_code', t('fieldCountryCode')],
+                  ['website', t('fieldWebsite')],
                   ['linkedin_url', 'LinkedIn'],
                   ['facebook_url', 'Facebook'],
                 ] as [string, string][]).map(([key, label]) => (
@@ -909,7 +912,7 @@ export default function CamcardPage() {
                   </div>
                 ))}
                 <div className="col-span-2">
-                  <label className="block text-xs text-gray-400 mb-1">地址（中文）</label>
+                  <label className="block text-xs text-gray-400 mb-1">{t('fieldAddressZhLabel')}</label>
                   <input
                     type="text"
                     value={editData.address ?? ''}
@@ -918,7 +921,7 @@ export default function CamcardPage() {
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-xs text-gray-400 mb-1">地址（英文）</label>
+                  <label className="block text-xs text-gray-400 mb-1">{t('fieldAddressEnLabel')}</label>
                   <input
                     type="text"
                     value={editData.address_en ?? ''}
@@ -930,14 +933,14 @@ export default function CamcardPage() {
             </div>
 
             <div className="flex justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-              <button onClick={() => setEditCard(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">取消</button>
+              <button onClick={() => setEditCard(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">{tc('cancel')}</button>
               <button
                 onClick={handleSaveEdit}
                 disabled={editSaving}
                 className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
                 {editSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                儲存
+                {tc('save')}
               </button>
             </div>
           </div>
@@ -950,7 +953,7 @@ export default function CamcardPage() {
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                <Merge size={16} /> 合併至現有聯絡人
+                <Merge size={16} /> {t('mergeToExisting')}
               </h2>
               <button onClick={() => setMergeAction(null)} className="text-gray-400 hover:text-gray-600">
                 <X size={18} />
@@ -958,7 +961,7 @@ export default function CamcardPage() {
             </div>
 
             <div className="p-6 space-y-4">
-              <p className="text-sm text-gray-500">搜尋要合併的現有聯絡人，名片中的空白欄位將補入此聯絡人：</p>
+              <p className="text-sm text-gray-500">{t('mergeSearchDesc')}</p>
 
               {/* Search */}
               <input
@@ -969,7 +972,7 @@ export default function CamcardPage() {
                   if (e.target.value.length >= 1) searchContacts(e.target.value)
                   else setMergeResults([])
                 }}
-                placeholder="輸入姓名、公司或 Email..."
+                placeholder={t('mergeSearchPlaceholder')}
                 className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
 
@@ -995,7 +998,7 @@ export default function CamcardPage() {
               {/* Selected contact */}
               {mergeSelectedContact && (
                 <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-lg p-3">
-                  <p className="text-xs font-semibold text-orange-600 dark:text-orange-400 mb-1">已選擇：</p>
+                  <p className="text-xs font-semibold text-orange-600 dark:text-orange-400 mb-1">{t('selected')}</p>
                   <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{mergeSelectedContact.name || mergeSelectedContact.name_en}</p>
                   <p className="text-xs text-gray-500">{mergeSelectedContact.company}</p>
                   {mergeSelectedContact.email && <p className="text-xs text-gray-400">{mergeSelectedContact.email}</p>}
@@ -1004,20 +1007,20 @@ export default function CamcardPage() {
                     target="_blank"
                     className="inline-flex items-center gap-1 text-xs text-blue-500 hover:underline mt-1"
                   >
-                    <ExternalLink size={10} /> 查看聯絡人
+                    <ExternalLink size={10} /> {t('view')}聯絡人
                   </Link>
                 </div>
               )}
 
               <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-xs text-gray-500 space-y-1">
-                <p>• 名片的空白欄位將補入所選聯絡人</p>
-                <p>• 名片圖片會加入聯絡人的名片圖庫</p>
-                <p>• 名片暫存記錄標記為已確認</p>
+                <p>{t('mergeRule1')}</p>
+                <p>{t('mergeRule2')}</p>
+                <p>{t('mergeRule3')}</p>
               </div>
             </div>
 
             <div className="flex justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-              <button onClick={() => setMergeAction(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">取消</button>
+              <button onClick={() => setMergeAction(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">{tc('cancel')}</button>
               <button
                 onClick={handleMergeConfirm}
                 disabled={mergeSaving || !mergeSelectedContact}
@@ -1046,19 +1049,19 @@ export default function CamcardPage() {
             </>
           ) : (
             <>
-              <span className="text-sm whitespace-nowrap">已選取 <b>{selectedCards.size}</b> 張</span>
+              <span className="text-sm whitespace-nowrap">{t.rich('bulkSelectedCount', { count: selectedCards.size, b: (chunks) => <b>{chunks}</b> })}</span>
               <button
                 onClick={handleBulkConfirm}
                 disabled={bulkConfirming}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 font-medium whitespace-nowrap"
               >
-                <Check size={13} /> 確認選取（{selectedCards.size}）張
+                <Check size={13} /> {t('bulkConfirmSelected', { count: selectedCards.size })}
               </button>
               <button
                 onClick={() => setSelectedCards(new Set())}
                 className="text-xs text-gray-400 dark:text-gray-500 hover:text-white dark:hover:text-gray-800 whitespace-nowrap"
               >
-                取消選取
+                {t('bulkDeselect')}
               </button>
             </>
           )}

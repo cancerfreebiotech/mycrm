@@ -216,7 +216,7 @@ export default function AdminCountriesPage() {
           <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <tr>
               <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 w-16 cursor-pointer hover:text-blue-500 select-none" onClick={() => handleSort('code')}>{t('colCode')}<SortIcon field="code" /></th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 w-8">旗</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 w-8">{t('colFlag')}</th>
               <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-500 select-none" onClick={() => handleSort('name_zh')}>{t('colNameZh')}<SortIcon field="name_zh" /></th>
               <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 hidden sm:table-cell cursor-pointer hover:text-blue-500 select-none" onClick={() => handleSort('name_en')}>{t('colNameEn')}<SortIcon field="name_en" /></th>
               <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 hidden md:table-cell">{t('colNameJa')}</th>
@@ -364,7 +364,7 @@ export default function AdminCountriesPage() {
                   type="text"
                   value={form.name_ja}
                   onChange={(e) => setForm((p) => ({ ...p, name_ja: e.target.value }))}
-                  placeholder="例：台湾"
+                  placeholder={t('nameJaPlaceholder')}
                   className={inputClass}
                   onKeyDown={(e) => e.key === 'Enter' && handleSave()}
                 />

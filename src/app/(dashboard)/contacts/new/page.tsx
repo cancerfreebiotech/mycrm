@@ -45,14 +45,6 @@ function countryToLanguage(code: string | null | undefined): string {
   return 'english'
 }
 
-const FIELD_LABELS: Record<string, string> = {
-  name: '姓名', name_en: '英文姓名', name_local: '當地語言姓名',
-  company: '公司', company_en: '英文公司', company_local: '當地語言公司',
-  job_title: '職稱', email: 'Email', second_email: '第二 Email',
-  phone: '電話', second_phone: '第二電話', address: '地址', website: '網站',
-  linkedin_url: 'LinkedIn', facebook_url: 'Facebook',
-}
-
 const inputClass = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
 const labelClass = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1'
 
@@ -77,6 +69,13 @@ export default function NewContactPage() {
   const searchParams = useSearchParams()
   const t = useTranslations('contacts')
   const tc = useTranslations('common')
+  const FIELD_LABELS: Record<string, string> = {
+    name: t('name'), name_en: t('nameEn'), name_local: t('nameLocal'),
+    company: t('company'), company_en: t('companyEn'), company_local: t('companyLocal'),
+    job_title: t('jobTitle'), email: 'Email', second_email: t('secondEmail'),
+    phone: t('phone'), second_phone: t('secondPhone'), address: t('address'), website: t('website'),
+    linkedin_url: 'LinkedIn', facebook_url: 'Facebook',
+  }
   const supabase = createBrowserSupabaseClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -222,7 +221,7 @@ export default function NewContactPage() {
       if (!res.ok) throw new Error(data.error)
       setOcrResult(data as Partial<OcrFields>)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '辨識失敗')
+      setError(err instanceof Error ? err.message : t('recognitionFailed'))
     } finally {
       setOcring(false)
     }
@@ -251,7 +250,7 @@ export default function NewContactPage() {
       if (!res.ok) throw new Error(data.error)
       setOcrResult(data as Partial<OcrFields>)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '辨識失敗')
+      setError(err instanceof Error ? err.message : t('recognitionFailed'))
     } finally {
       setOcring(false)
     }
@@ -281,10 +280,10 @@ export default function NewContactPage() {
     setError(null)
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('未登入')
+      if (!user) throw new Error(t('notLoggedIn'))
 
       const { data: profile } = await supabase.from('users').select('id').eq('email', user.email!).single()
-      if (!profile) throw new Error('找不到使用者')
+      if (!profile) throw new Error(t('userNotFound'))
 
       const payload = Object.fromEntries(
         Object.entries(form).map(([k, v]) => [k, v.trim() || null])
@@ -317,7 +316,7 @@ export default function NewContactPage() {
               })
               if (!res.ok) {
                 const err = await res.json().catch(() => ({}))
-                throw new Error(`照片 ${i + 1} 上傳失敗：${err.error ?? res.status}`)
+                throw new Error(t('photoUploadFailed', { index: i + 1, error: err.error ?? res.status }))
               }
             })
           )
@@ -346,13 +345,13 @@ export default function NewContactPage() {
       await supabase.from('interaction_logs').insert({
         contact_id: inserted.id,
         type: 'note',
-        content: '透過網頁手動新增聯絡人',
+        content: t('logManualAdd'),
         created_by: profile.id,
       })
 
       router.push(`/contacts/${inserted.id}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '儲存失敗')
+      setError(err instanceof Error ? err.message : t('saveFailed'))
       setSaving(false)
     }
   }
@@ -396,7 +395,7 @@ export default function NewContactPage() {
               </p>
               <div className="flex items-start gap-3">
                 <div className="relative w-40 h-24 rounded-lg overflow-hidden border border-amber-200 dark:border-amber-700 shrink-0">
-                  <Image src={preloadedCardUrl} alt="名片" fill className="object-cover" unoptimized />
+                  <Image src={preloadedCardUrl} alt={t('cardAlt')} fill className="object-cover" unoptimized />
                 </div>
                 {!ocring && ocrResult === null && (
                   <button
@@ -421,7 +420,7 @@ export default function NewContactPage() {
               <div className="py-2 text-gray-400 dark:text-gray-500">
                 <Upload size={28} className="mx-auto mb-2" />
                 <p className="text-sm">{t('uploadCardHint')}</p>
-                <p className="text-xs mt-1 text-gray-300 dark:text-gray-600">最多 6 張</p>
+                <p className="text-xs mt-1 text-gray-300 dark:text-gray-600">{t('maxSixPhotos')}</p>
               </div>
             </div>
           ) : (
@@ -465,7 +464,7 @@ export default function NewContactPage() {
         {ocrResult !== null && (
           <div className="bg-white dark:bg-gray-900 border border-blue-200 dark:border-blue-800 rounded-xl overflow-hidden">
             <div className="px-5 py-3 bg-blue-50 dark:bg-blue-950/40 border-b border-blue-200 dark:border-blue-800 flex items-center justify-between">
-              <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">OCR 辨識結果確認</span>
+              <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">{t('ocrResultConfirm')}</span>
               <button type="button" onClick={() => setOcrResult(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                 <X size={16} />
               </button>
@@ -487,7 +486,7 @@ export default function NewContactPage() {
 
               {/* Right: OCR fields */}
               <div className="p-4">
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">辨識欄位</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{t('ocrFields')}</p>
                 {ocrHasValues ? (
                   <div className="space-y-1.5">
                     {(Object.keys(FIELD_LABELS) as (keyof OcrFields)[]).map((field) => {
@@ -502,7 +501,7 @@ export default function NewContactPage() {
                     })}
                   </div>
                 ) : (
-                  <p className="text-xs text-gray-400">未辨識到任何欄位</p>
+                  <p className="text-xs text-gray-400">{t('noFieldsRecognized')}</p>
                 )}
               </div>
             </div>

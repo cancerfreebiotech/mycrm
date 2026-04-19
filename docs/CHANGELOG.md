@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v2.17.0 — i18n 大規模遷移 + CLAUDE.md 整合 flightpath 規範（2026-04-19）
+
+### 變更項目
+- **i18n 遷移**：將 13 個頁面從 hardcode 繁中改為 `next-intl` `t()` 呼叫
+  - contacts/[id]、admin/newsletter、admin/camcard、admin/trash
+  - contacts/new、email/campaigns/[id]、settings、admin/health
+  - contacts/page、TipTapEditor、docs、admin/countries、email-optout Suspense fallback
+- 三語 JSON（zh-TW/en/ja）同步新增 334 keys（768 → 1102），en/ja 翻譯已寫入
+- 跳過項：DB 字串比對（`.includes('新增名片')` 等）、公開頁自帶 3 語 dict（email-optout、unsubscribe、docs）
+- 新增輔助腳本（`scripts/`）：`audit-i18n-darkmode.mjs` 盤點、`extract-zh.mjs` 單檔提取、`add-*-keys.mjs` 批次加入 key
+- **CLAUDE.md 整合**：從 flightpath 整合 Behavioral Guidelines、Dark mode 強制、Mobile-first、i18n 三語同步、MFA 強制、RLS、Conventional Commits、效能標準、Vitest/Playwright 測試等章節；移除 DrAva Bot Engine、pnpm 禁令、`{ success, data }` API 格式等不適用 myCRM 的規定
+
 ## v2.9.0 — Email 編輯器強化：模板、變數、預覽（2026-04-16）
 
 ### 變更項目

@@ -9,6 +9,7 @@ import Placeholder from '@tiptap/extension-placeholder'
 import TextAlign from '@tiptap/extension-text-align'
 import HorizontalRule from '@tiptap/extension-horizontal-rule'
 import { useState, useCallback } from 'react'
+import { useTranslations } from 'next-intl'
 import {
   Bold, Italic, UnderlineIcon, Link2, Image as ImageIcon,
   List, ListOrdered, Minus, AlignLeft, AlignCenter, AlignRight,
@@ -75,21 +76,23 @@ interface TipTapEditorProps {
   unsubscribeUrl?: string  // auto-appended footer
 }
 
-const VARIABLES = [
-  { label: '姓名', value: '{{name}}' },
-  { label: '公司', value: '{{company}}' },
-  { label: '職稱', value: '{{job_title}}' },
-]
-
 export default function TipTapEditor({
   content,
   onChange,
   onAttachmentsChange,
   attachments = [],
   uploadAttachment,
-  placeholder = '撰寫郵件內容...',
+  placeholder,
   unsubscribeUrl,
 }: TipTapEditorProps) {
+  const t = useTranslations('tiptap')
+  const tc = useTranslations('common')
+  const effectivePlaceholder = placeholder ?? t('bodyPlaceholder')
+  const VARIABLES = [
+    { label: t('varName'), value: '{{name}}' },
+    { label: t('varCompany'), value: '{{company}}' },
+    { label: t('varJobTitle'), value: '{{job_title}}' },
+  ]
   const [preview, setPreview] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [aiFormatLoading, setAiFormatLoading] = useState(false)
@@ -130,7 +133,7 @@ export default function TipTapEditor({
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Link.configure({ openOnClick: false, HTMLAttributes: { class: 'text-blue-600 underline' } }),
       Image.configure({ HTMLAttributes: { class: 'max-w-full rounded' } }),
-      Placeholder.configure({ placeholder }),
+      Placeholder.configure({ placeholder: effectivePlaceholder }),
     ],
     content,
     onUpdate: ({ editor }) => {
@@ -188,7 +191,7 @@ export default function TipTapEditor({
 
   const previewHtml = content + (unsubscribeUrl
     ? `<p style="margin-top:24px;font-size:12px;color:#888;">
-        <a href="${unsubscribeUrl}">取消訂閱 | Unsubscribe</a>
+        <a href="${unsubscribeUrl}">${t('unsubscribeText')}</a>
        </p>`
     : '')
 
@@ -196,49 +199,49 @@ export default function TipTapEditor({
     <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-1 px-2 py-1.5 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <ToolBtn active={!preview} onClick={() => setPreview(false)} title="編輯"><Edit3 size={14} /></ToolBtn>
-        <ToolBtn active={preview} onClick={() => setPreview(true)} title="預覽"><Eye size={14} /></ToolBtn>
+        <ToolBtn active={!preview} onClick={() => setPreview(false)} title={t('edit')}><Edit3 size={14} /></ToolBtn>
+        <ToolBtn active={preview} onClick={() => setPreview(true)} title={t('preview')}><Eye size={14} /></ToolBtn>
         <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
 
         {!preview && (
           <>
-            <ToolBtn active={editor?.isActive('bold')} onClick={() => editor?.chain().focus().toggleBold().run()} title="粗體"><Bold size={14} /></ToolBtn>
-            <ToolBtn active={editor?.isActive('italic')} onClick={() => editor?.chain().focus().toggleItalic().run()} title="斜體"><Italic size={14} /></ToolBtn>
-            <ToolBtn active={editor?.isActive('underline')} onClick={() => editor?.chain().focus().toggleUnderline().run()} title="底線"><UnderlineIcon size={14} /></ToolBtn>
+            <ToolBtn active={editor?.isActive('bold')} onClick={() => editor?.chain().focus().toggleBold().run()} title={t('bold')}><Bold size={14} /></ToolBtn>
+            <ToolBtn active={editor?.isActive('italic')} onClick={() => editor?.chain().focus().toggleItalic().run()} title={t('italic')}><Italic size={14} /></ToolBtn>
+            <ToolBtn active={editor?.isActive('underline')} onClick={() => editor?.chain().focus().toggleUnderline().run()} title={t('underline')}><UnderlineIcon size={14} /></ToolBtn>
             <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
-            <ToolBtn active={editor?.isActive({ textAlign: 'left' })} onClick={() => editor?.chain().focus().setTextAlign('left').run()} title="左對齊"><AlignLeft size={14} /></ToolBtn>
-            <ToolBtn active={editor?.isActive({ textAlign: 'center' })} onClick={() => editor?.chain().focus().setTextAlign('center').run()} title="置中"><AlignCenter size={14} /></ToolBtn>
-            <ToolBtn active={editor?.isActive({ textAlign: 'right' })} onClick={() => editor?.chain().focus().setTextAlign('right').run()} title="右對齊"><AlignRight size={14} /></ToolBtn>
+            <ToolBtn active={editor?.isActive({ textAlign: 'left' })} onClick={() => editor?.chain().focus().setTextAlign('left').run()} title={t('alignLeft')}><AlignLeft size={14} /></ToolBtn>
+            <ToolBtn active={editor?.isActive({ textAlign: 'center' })} onClick={() => editor?.chain().focus().setTextAlign('center').run()} title={t('alignCenter')}><AlignCenter size={14} /></ToolBtn>
+            <ToolBtn active={editor?.isActive({ textAlign: 'right' })} onClick={() => editor?.chain().focus().setTextAlign('right').run()} title={t('alignRight')}><AlignRight size={14} /></ToolBtn>
             <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
-            <ToolBtn active={editor?.isActive('bulletList')} onClick={() => editor?.chain().focus().toggleBulletList().run()} title="無序清單"><List size={14} /></ToolBtn>
-            <ToolBtn active={editor?.isActive('orderedList')} onClick={() => editor?.chain().focus().toggleOrderedList().run()} title="有序清單"><ListOrdered size={14} /></ToolBtn>
-            <ToolBtn onClick={() => editor?.chain().focus().setHorizontalRule().run()} title="分隔線"><Minus size={14} /></ToolBtn>
+            <ToolBtn active={editor?.isActive('bulletList')} onClick={() => editor?.chain().focus().toggleBulletList().run()} title={t('bulletList')}><List size={14} /></ToolBtn>
+            <ToolBtn active={editor?.isActive('orderedList')} onClick={() => editor?.chain().focus().toggleOrderedList().run()} title={t('orderedList')}><ListOrdered size={14} /></ToolBtn>
+            <ToolBtn onClick={() => editor?.chain().focus().setHorizontalRule().run()} title={t('divider')}><Minus size={14} /></ToolBtn>
             <ToolBtn
               onClick={() => editor?.chain().focus().clearNodes().unsetAllMarks().run()}
-              title="清除格式"
+              title={t('clearFormat')}
             ><RemoveFormatting size={14} /></ToolBtn>
-            <ToolBtn onClick={handleRuleFormat} title="自動排版（規則）">
+            <ToolBtn onClick={handleRuleFormat} title={t('autoFormatRule')}>
               <LayoutList size={14} />
             </ToolBtn>
-            <ToolBtn onClick={handleAiFormat} title="AI 自動排版" disabled={aiFormatLoading}>
+            <ToolBtn onClick={handleAiFormat} title={t('autoFormatAi')} disabled={aiFormatLoading}>
               {aiFormatLoading ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
             </ToolBtn>
             <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
             <ToolBtn
               active={editor?.isActive('link') || showLinkInput}
               onClick={() => { setShowLinkInput(v => !v); setLinkUrl(editor?.getAttributes('link').href ?? '') }}
-              title="連結"
+              title={t('link')}
             ><Link2 size={14} /></ToolBtn>
             <ToolBtn
               onClick={() => {
-                const url = prompt('圖片網址：')
+                const url = prompt(t('imageUrlPrompt'))
                 if (url) editor?.chain().focus().setImage({ src: url }).run()
               }}
-              title="插入圖片"
+              title={t('insertImage')}
             ><ImageIcon size={14} /></ToolBtn>
             <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
             {/* Variables */}
-            <span className="text-xs text-gray-400 dark:text-gray-500 mr-1">插入變數：</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500 mr-1">{t('insertVariable')}</span>
             {VARIABLES.map(v => (
               <button
                 key={v.value}
@@ -265,7 +268,7 @@ export default function TipTapEditor({
             className="flex-1 text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 outline-none"
             autoFocus
           />
-          <button type="button" onClick={setLink} className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">確認</button>
+          <button type="button" onClick={setLink} className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">{tc('confirm')}</button>
           <button type="button" onClick={() => setShowLinkInput(false)} className="text-gray-400 hover:text-gray-600"><X size={14} /></button>
         </div>
       )}
@@ -301,7 +304,7 @@ export default function TipTapEditor({
           </div>
           <label className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:underline w-fit">
             <Paperclip size={12} />
-            {uploading ? '上傳中...' : '新增附件'}
+            {uploading ? t('uploading') : t('addAttachment')}
             <input type="file" className="hidden" onChange={handleAttachFile} disabled={uploading} />
           </label>
         </div>

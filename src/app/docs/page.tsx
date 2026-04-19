@@ -35,6 +35,12 @@ const TOC_LABEL: Record<Locale, string> = {
   'ja': 'このページ',
 }
 
+const UI_LABELS: Record<Locale, { title: string; sections: string; login: string; loading: string; notAvailable: string; backToSystem: string }> = {
+  'zh-TW': { title: 'myCRM 使用說明', sections: '章節', login: '登入', loading: '載入中…', notAvailable: '此語言的文件尚未生成。', backToSystem: '返回系統' },
+  'en': { title: 'myCRM Documentation', sections: 'Sections', login: 'Sign in', loading: 'Loading…', notAvailable: 'Documentation for this language is not available yet.', backToSystem: 'Back to app' },
+  'ja': { title: 'myCRM ドキュメント', sections: 'セクション', login: 'サインイン', loading: '読み込み中…', notAvailable: 'この言語のドキュメントはまだ生成されていません。', backToSystem: 'システムに戻る' },
+}
+
 interface TocItem {
   id: string
   text: string
@@ -196,10 +202,10 @@ export default function DocsPage() {
       <header className="sticky top-0 z-20 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 h-14 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link href="/" className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
-            <ArrowLeft size={16} /> 返回系統
+            <ArrowLeft size={16} /> {UI_LABELS[locale].backToSystem}
           </Link>
           <span className="text-gray-300 dark:text-gray-600">|</span>
-          <span className="text-base font-bold text-gray-900 dark:text-gray-100">myCRM 使用說明</span>
+          <span className="text-base font-bold text-gray-900 dark:text-gray-100">{UI_LABELS[locale].title}</span>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1 border border-gray-200 dark:border-gray-700 rounded-lg px-1 py-0.5">
@@ -236,7 +242,7 @@ export default function DocsPage() {
 
             {/* Section nav */}
             <div>
-              <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3 px-2">章節</p>
+              <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3 px-2">{UI_LABELS[locale].sections}</p>
               {(['quick_start', ...(isLoggedIn ? ['user', 'super_admin'] : [])] as Section[]).map((s) => (
                 <button
                   key={s}
@@ -252,7 +258,7 @@ export default function DocsPage() {
               ))}
               {!isLoggedIn && (
                 <div className="mt-3 px-3 py-2 text-xs text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                  <Link href="/login" className="text-blue-500 hover:underline font-medium">登入</Link>
+                  <Link href="/login" className="text-blue-500 hover:underline font-medium">{UI_LABELS[locale].login}</Link>
                   {' '}後可查看完整說明
                 </div>
               )}
@@ -345,7 +351,7 @@ export default function DocsPage() {
           </div>
 
           {loading ? (
-            <div className="text-sm text-gray-400 dark:text-gray-500 py-20 text-center">載入中…</div>
+            <div className="text-sm text-gray-400 dark:text-gray-500 py-20 text-center">{UI_LABELS[locale].loading}</div>
           ) : html ? (
             <div ref={contentRef}>
               <article
@@ -355,7 +361,7 @@ export default function DocsPage() {
             </div>
           ) : (
             <div className="text-center py-20">
-              <p className="text-sm text-gray-400 dark:text-gray-500">此語言的文件尚未生成。</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500">{UI_LABELS[locale].notAvailable}</p>
             </div>
           )}
 

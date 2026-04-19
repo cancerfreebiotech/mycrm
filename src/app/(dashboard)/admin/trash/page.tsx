@@ -58,7 +58,10 @@ function InfoRow({ label, value }: { label: string; value: string | null | undef
 }
 
 export default function TrashPage() {
-  const t = useTranslations('nav')
+  const t = useTranslations('trash')
+  const tn = useTranslations('nav')
+  const tc = useTranslations('common')
+  const tcnt = useTranslations('contacts')
   const [contacts, setContacts] = useState<TrashedContact[]>([])
   const [loading, setLoading] = useState(true)
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
@@ -115,7 +118,7 @@ export default function TrashPage() {
   }
 
   async function handleRestore(id: string) {
-    if (!confirm('確定要還原此聯絡人？')) return
+    if (!confirm(t('confirmRestore'))) return
     setActionId(id)
     const res = await fetch(`/api/contacts/${id}/restore`, { method: 'POST' })
     if (res.ok) {
@@ -123,13 +126,13 @@ export default function TrashPage() {
       setDetailContact(null)
     } else {
       const body = await res.json()
-      alert(body.error ?? '還原失敗')
+      alert(body.error ?? t('restoreFailed'))
     }
     setActionId(null)
   }
 
   async function handlePermanentDelete(id: string, name: string | null) {
-    if (!confirm(`確定要永久刪除「${name || '此聯絡人'}」？此操作無法復原，相關名片圖片也會一併刪除。`)) return
+    if (!confirm(t('confirmPermanentDelete', { name: name || tcnt('unnamedContact') }))) return
     setActionId(id)
     const res = await fetch(`/api/contacts/${id}/permanent`, { method: 'DELETE' })
     if (res.ok) {
@@ -137,7 +140,7 @@ export default function TrashPage() {
       setDetailContact(null)
     } else {
       const body = await res.json()
-      alert(body.error ?? '永久刪除失敗')
+      alert(body.error ?? t('permanentDeleteFailed'))
     }
     setActionId(null)
   }
@@ -157,7 +160,7 @@ export default function TrashPage() {
       <div className="flex items-center gap-3 mb-6">
         <Trash2 size={22} className="text-red-500" />
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">回收區</h1>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t('pageTitle')}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
             已移至回收區的聯絡人可以還原，或由 Super Admin 永久刪除
           </p>
@@ -171,7 +174,7 @@ export default function TrashPage() {
       ) : contacts.length === 0 ? (
         <div className="text-center py-16 text-gray-400 dark:text-gray-500">
           <Trash2 size={40} className="mx-auto mb-3 opacity-30" />
-          <p>回收區是空的</p>
+          <p>{t('emptyTrash')}</p>
         </div>
       ) : (
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
@@ -186,17 +189,17 @@ export default function TrashPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">姓名</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 hidden sm:table-cell">公司</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 hidden md:table-cell">刪除者</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">刪除時間</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">{tcnt('name')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 hidden sm:table-cell">{tcnt('company')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 hidden md:table-cell">{t('colDeletedBy')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">{t('colDeletedAt')}</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody>
                 {contacts.map((contact) => {
                   const isActing = actionId === contact.id
-                  const displayName = contact.name || contact.name_en || '（無姓名）'
+                  const displayName = contact.name || contact.name_en || tcnt('noName')
                   return (
                     <tr
                       key={contact.id}
@@ -258,7 +261,7 @@ export default function TrashPage() {
             {/* Modal header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
               <h2 className="font-semibold text-gray-900 dark:text-gray-100">
-                {detailContact ? (detailContact.name || detailContact.name_en || '（無姓名）') : '載入中...'}
+                {detailContact ? (detailContact.name || detailContact.name_en || tcnt('noName')) : tc('loading')}
               </h2>
               <button
                 onClick={() => setDetailContact(null)}
@@ -276,24 +279,24 @@ export default function TrashPage() {
               <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
                 {/* Basic info */}
                 <div className="space-y-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">基本資料</h3>
-                  <InfoRow label="姓名" value={detailContact.name} />
-                  <InfoRow label="英文名" value={detailContact.name_en} />
-                  <InfoRow label="當地語名" value={detailContact.name_local} />
-                  <InfoRow label="公司" value={detailContact.company} />
-                  <InfoRow label="公司（英）" value={detailContact.company_en} />
-                  <InfoRow label="職稱" value={detailContact.job_title} />
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">{t('sectionBasic')}</h3>
+                  <InfoRow label={tcnt('name')} value={detailContact.name} />
+                  <InfoRow label={tcnt('nameEn')} value={detailContact.name_en} />
+                  <InfoRow label={tcnt('nameLocal')} value={detailContact.name_local} />
+                  <InfoRow label={tcnt('company')} value={detailContact.company} />
+                  <InfoRow label={tcnt('companyEn')} value={detailContact.company_en} />
+                  <InfoRow label={tcnt('jobTitle')} value={detailContact.job_title} />
                   <InfoRow label="Email" value={detailContact.email} />
                   <InfoRow label="Email 2" value={detailContact.second_email} />
-                  <InfoRow label="電話" value={detailContact.phone} />
-                  <InfoRow label="電話 2" value={detailContact.second_phone} />
-                  <InfoRow label="地址" value={detailContact.address} />
-                  <InfoRow label="網站" value={detailContact.website} />
-                  <InfoRow label="語文" value={detailContact.language} />
-                  <InfoRow label="醫院" value={detailContact.hospital} />
-                  <InfoRow label="科別" value={detailContact.department} />
-                  <InfoRow label="備註" value={detailContact.notes} />
-                  <div className="text-xs text-gray-400 mt-1">刪除時間：{formatDate(detailContact.deleted_at)}</div>
+                  <InfoRow label={tcnt('phone')} value={detailContact.phone} />
+                  <InfoRow label={tcnt('secondPhone')} value={detailContact.second_phone} />
+                  <InfoRow label={tcnt('address')} value={detailContact.address} />
+                  <InfoRow label={tcnt('website')} value={detailContact.website} />
+                  <InfoRow label={tcnt('language')} value={detailContact.language} />
+                  <InfoRow label={tcnt('hospital')} value={detailContact.hospital} />
+                  <InfoRow label={tcnt('department')} value={detailContact.department} />
+                  <InfoRow label={tcnt('notes')} value={detailContact.notes} />
+                  <div className="text-xs text-gray-400 mt-1">{t('deletedAtLabel', { date: formatDate(detailContact.deleted_at) })}</div>
                 </div>
 
                 {/* Tags */}
@@ -322,7 +325,7 @@ export default function TrashPage() {
                           <img
                             key={card.id}
                             src={card.card_img_url}
-                            alt={card.label ?? '名片'}
+                            alt={card.label ?? t('cardDefaultAlt')}
                             className="h-24 rounded border border-gray-200 dark:border-gray-700 object-cover"
                           />
                         ) : null

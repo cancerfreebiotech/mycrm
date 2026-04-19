@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import TipTapEditor, { TipTapAttachment } from '@/components/TipTapEditor'
 import {
@@ -60,8 +61,8 @@ interface ContactOption { id: string; name: string | null; email: string; compan
 type View = 'list' | 'wizard' | 'detail' | 'unsubscribes' | 'blacklist'
 type WizardStep = 1 | 2 | 3 | 4
 
-const STATUS_LABEL: Record<Campaign['status'], string> = {
-  draft: '草稿', scheduled: '已排程', sending: '寄送中', paused: '已暫停', sent: '已完成',
+const STATUS_I18N_KEY: Record<Campaign['status'], string> = {
+  draft: 'statusDraft', scheduled: 'statusScheduled', sending: 'statusSending', paused: 'statusPaused', sent: 'statusSent',
 }
 const STATUS_COLOR: Record<Campaign['status'], string> = {
   draft: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
@@ -86,6 +87,8 @@ function estimateDays(total: number, limit: number) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function NewsletterPage() {
+  const t = useTranslations('newsletter')
+  const tc = useTranslations('common')
   const supabase = createBrowserSupabaseClient()
   const [view, setView] = useState<View>('list')
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
@@ -119,7 +122,7 @@ export default function NewsletterPage() {
 
   async function duplicateCampaign(c: Campaign) {
     const { data } = await supabase.from('newsletter_campaigns').insert({
-      title: `${c.title}（複本）`,
+      title: t('copyTitle', { title: c.title }),
       subject: c.subject,
       preview_text: c.preview_text,
       content_html: c.content_html,
@@ -133,14 +136,14 @@ export default function NewsletterPage() {
   }
 
   async function deleteCampaign(id: string) {
-    if (!confirm('確定刪除此 Campaign？')) return
+    if (!confirm(t('confirmDelete'))) return
     await supabase.from('newsletter_campaigns').delete().eq('id', id)
     setCampaigns(prev => prev.filter(x => x.id !== id))
   }
 
   // ── Views ─────────────────────────────────────────────────────────────────
 
-  if (loading) return <div className="p-8 text-center text-gray-400">載入中...</div>
+  if (loading) return <div className="p-8 text-center text-gray-400">{tc('loading')}</div>
 
   if (view === 'wizard') return (
     <WizardView
@@ -182,17 +185,17 @@ export default function NewsletterPage() {
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Newsletter 管理</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">建立、排程並追蹤電子報活動</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('pageTitle')}</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('pageDesc')}</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setView('unsubscribes')} className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400">退訂管理</button>
-          <button onClick={() => setView('blacklist')} className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400">黑名單</button>
+          <button onClick={() => setView('unsubscribes')} className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400">{t('unsubscribeManagement')}</button>
+          <button onClick={() => setView('blacklist')} className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400">{t('blacklistManagement')}</button>
           <button
             onClick={() => { setSelectedCampaign(null); setView('wizard') }}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
           >
-            <Plus size={16} /> 新增 Campaign
+            <Plus size={16} /> {t('newCampaign')}
           </button>
         </div>
       </div>
@@ -200,7 +203,7 @@ export default function NewsletterPage() {
       {campaigns.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <Mail size={40} className="mx-auto mb-3 opacity-30" />
-          <p>尚無 Campaign，點擊「新增 Campaign」開始</p>
+          <p>{t('emptyCampaigns')}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -208,7 +211,7 @@ export default function NewsletterPage() {
             <div key={c.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex items-center gap-4">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[c.status]}`}>{STATUS_LABEL[c.status]}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[c.status]}`}>{t(STATUS_I18N_KEY[c.status])}</span>
                   <h3 className="font-medium text-gray-900 dark:text-gray-100 truncate">{c.title}</h3>
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{c.subject}</p>
@@ -228,18 +231,18 @@ export default function NewsletterPage() {
               <div className="text-xs text-gray-400 shrink-0 hidden sm:block">{fmt(c.scheduled_at ?? c.created_at)}</div>
               <div className="flex items-center gap-1 shrink-0">
                 {(c.status === 'sending' || c.status === 'paused') && (
-                  <button onClick={() => togglePause(c)} title={c.status === 'paused' ? '繼續' : '暫停'} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-500">
+                  <button onClick={() => togglePause(c)} title={c.status === 'paused' ? t('resumeAction') : t('pauseAction')} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-500">
                     {c.status === 'paused' ? <Play size={15} /> : <Pause size={15} />}
                   </button>
                 )}
                 {c.status === 'draft' && (
-                  <button onClick={() => { setSelectedCampaign(c); setView('wizard') }} title="編輯" className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-500">
+                  <button onClick={() => { setSelectedCampaign(c); setView('wizard') }} title={tc('edit')} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-500">
                     <ChevronRight size={15} />
                   </button>
                 )}
-                <button onClick={() => duplicateCampaign(c)} title="複製" className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-500"><Copy size={15} /></button>
+                <button onClick={() => duplicateCampaign(c)} title={tc('copy')} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-500"><Copy size={15} /></button>
                 {c.status === 'draft' && (
-                  <button onClick={() => deleteCampaign(c.id)} title="刪除" className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded text-gray-400 hover:text-red-500"><Trash2 size={15} /></button>
+                  <button onClick={() => deleteCampaign(c.id)} title={tc('delete')} className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded text-gray-400 hover:text-red-500"><Trash2 size={15} /></button>
                 )}
                 <button onClick={() => { setSelectedCampaign(c); setView('detail') }} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-500"><BarChart2 size={15} /></button>
               </div>
@@ -264,6 +267,8 @@ function WizardView({
   onSave: (c: Campaign) => void
   onCancel: () => void
 }) {
+  const t = useTranslations('newsletter')
+  const tc = useTranslations('common')
   const [step, setStep] = useState<WizardStep>(1)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -351,7 +356,7 @@ function WizardView({
   }
 
   async function handleSubmit() {
-    if (!title || !subject || !contentHtml) { setError('請填寫必要欄位'); return }
+    if (!title || !subject || !contentHtml) { setError(t('errorFillRequired')); return }
     setSaving(true); setError('')
     try {
       // Compute recipients snapshot
@@ -408,7 +413,7 @@ function WizardView({
 
       onSave(savedCampaign)
     } catch (e) {
-      setError(e instanceof Error ? e.message : '儲存失敗')
+      setError(e instanceof Error ? e.message : t('errorSaveFailed'))
     } finally {
       setSaving(false)
     }
@@ -422,7 +427,7 @@ function WizardView({
       ).slice(0, 10)
     : []
 
-  const STEPS = ['基本設定', '編輯內容', '選擇收件人', '排程設定']
+  const STEPS = [t('stepBasic'), t('stepContent'), t('stepRecipients'), t('stepSchedule')]
   const days = estimateDays(recipientCount ?? 0, dailyLimit)
 
   return (
@@ -445,18 +450,18 @@ function WizardView({
       {/* Step 1 */}
       {step === 1 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">基本設定</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('stepBasic')}</h2>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Campaign 名稱 *</label>
-            <input value={title} onChange={e => setTitle(e.target.value)} className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="內部識別用名稱" />
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('campaignName')}</label>
+            <input value={title} onChange={e => setTitle(e.target.value)} className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder={t('campaignNamePlaceholder')} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">郵件主旨 *</label>
-            <input value={subject} onChange={e => setSubject(e.target.value)} className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="收件人看到的主旨" />
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('emailSubjectLabel')}</label>
+            <input value={subject} onChange={e => setSubject(e.target.value)} className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder={t('emailSubjectPlaceholder')} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">預覽文字</label>
-            <input value={previewText} onChange={e => setPreviewText(e.target.value)} className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="信箱收件匣顯示的摘要文字（選填）" />
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('previewText')}</label>
+            <input value={previewText} onChange={e => setPreviewText(e.target.value)} className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder={t('previewTextPlaceholder')} />
           </div>
         </div>
       )}
@@ -464,19 +469,19 @@ function WizardView({
       {/* Step 2 */}
       {step === 2 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">編輯內容</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('stepContent')}</h2>
           <TipTapEditor
             content={contentHtml}
             onChange={(html, json) => { setContentHtml(html); setContentJson(json) }}
             attachments={attachments}
             onAttachmentsChange={setAttachments}
-            placeholder="撰寫電子報內容..."
+            placeholder={t('contentPlaceholder')}
             unsubscribeUrl="#"
           />
           <div className="flex items-center gap-2 pt-2">
-            <input value={testEmail} onChange={e => setTestEmail(e.target.value)} className="flex-1 px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none" placeholder="寄測試信到..." />
+            <input value={testEmail} onChange={e => setTestEmail(e.target.value)} className="flex-1 px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none" placeholder={t('testEmailPlaceholder')} />
             <button onClick={sendTest} disabled={testSending || !testEmail.trim()} className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg disabled:opacity-50 flex items-center gap-1">
-              <Send size={13} /> {testSending ? '寄送中...' : '測試'}
+              <Send size={13} /> {testSending ? t('testSending') : t('testAction')}
             </button>
           </div>
         </div>
@@ -485,10 +490,10 @@ function WizardView({
       {/* Step 3 */}
       {step === 3 && (
         <div className="space-y-5">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">選擇收件人</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('stepRecipients')}</h2>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">依 Tag 選取</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('tagSelection')}</label>
             <div className="flex flex-wrap gap-2">
               {tags.map(t => (
                 <button
@@ -508,12 +513,12 @@ function WizardView({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">手動加選聯絡人</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('manualSelection')}</label>
             <input
               value={contactSearch}
               onChange={e => setContactSearch(e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none mb-2"
-              placeholder="搜尋姓名或 email..."
+              placeholder={t('searchContactPlaceholder')}
             />
             {filteredContacts.map(c => (
               <button
@@ -544,7 +549,10 @@ function WizardView({
           <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg px-4 py-3 flex items-center gap-2">
             <Users size={16} className="text-blue-500 shrink-0" />
             <span className="text-sm text-blue-700 dark:text-blue-300">
-              預計寄送：<b>{recipientCount ?? '計算中...'}</b> 人（已排除退訂與黑名單）
+              {t.rich('estimatedRecipients', {
+                count: recipientCount ?? t('calculatingCount'),
+                b: (chunks) => <b>{chunks}</b>,
+              })}
             </span>
           </div>
         </div>
@@ -553,32 +561,39 @@ function WizardView({
       {/* Step 4 */}
       {step === 4 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">排程設定</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('stepSchedule')}</h2>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">開始寄送時間（台灣時間）</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('startTime')}</label>
             <input type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">每天寄幾封（1–500）</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('dailyLimit')}</label>
               <input type="number" min={1} max={500} value={dailyLimit} onChange={e => setDailyLimit(Number(e.target.value))}
                 className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">每天幾點寄（UTC+8，0-23）</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('sendHour')}</label>
               <input type="number" min={0} max={23} value={sendHour} onChange={e => setSendHour(Number(e.target.value))}
                 className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
           {recipientCount !== null && recipientCount > 0 && (
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-              預計收件人 <b>{recipientCount}</b> 人，每天 <b>{dailyLimit}</b> 封 →
-              約 <b>{days}</b> 天完成
+              {t.rich('scheduleSummary', {
+                count: recipientCount,
+                limit: dailyLimit,
+                b: (chunks) => <b>{chunks}</b>,
+              })}
+              {' '}{t.rich('daysToComplete', {
+                days: days ?? 0,
+                b: (chunks) => <b>{chunks}</b>,
+              })}
               {days && scheduledAt && (() => {
                 const end = new Date(scheduledAt)
                 end.setDate(end.getDate() + days)
-                return `，預計完成日：${end.toLocaleDateString('zh-TW')}`
+                return t('estimatedCompletionDate', { date: end.toLocaleDateString(undefined) })
               })()}
             </div>
           )}
@@ -597,22 +612,22 @@ function WizardView({
           onClick={step === 1 ? onCancel : () => setStep(s => (s - 1) as WizardStep)}
           className="flex items-center gap-1 px-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
         >
-          <ChevronLeft size={15} /> {step === 1 ? '取消' : '上一步'}
+          <ChevronLeft size={15} /> {step === 1 ? tc('cancel') : t('previousStep')}
         </button>
         {step < 4 ? (
           <button
             onClick={() => {
-              if (step === 1 && (!title || !subject)) { setError('請填寫名稱與主旨'); return }
+              if (step === 1 && (!title || !subject)) { setError(t('errorFillNameSubject')); return }
               setError(''); setStep(s => (s + 1) as WizardStep)
             }}
             className="flex items-center gap-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
-            下一步 <ChevronRight size={15} />
+            {t('nextStep')} <ChevronRight size={15} />
           </button>
         ) : (
           <button onClick={handleSubmit} disabled={saving}
             className="flex items-center gap-1 px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
-            <Check size={15} /> {saving ? '儲存中...' : '確認排程'}
+            <Check size={15} /> {saving ? t('saving') : t('confirmSchedule')}
           </button>
         )}
       </div>
@@ -630,6 +645,8 @@ function DetailView({
   onBack: () => void
   onTogglePause: (c: Campaign) => void
 }) {
+  const t = useTranslations('newsletter')
+  const tc = useTranslations('common')
   const [recipients, setRecipients] = useState<Recipient[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -660,12 +677,12 @@ function DetailView({
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 mb-4"><ChevronLeft size={15} /> 返回列表</button>
+      <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 mb-4"><ChevronLeft size={15} /> {t('backToList')}</button>
 
       <div className="flex items-start justify-between mb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[campaign.status]}`}>{STATUS_LABEL[campaign.status]}</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[campaign.status]}`}>{t(STATUS_I18N_KEY[campaign.status])}</span>
             <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{campaign.title}</h1>
           </div>
           <p className="text-sm text-gray-500 dark:text-gray-400">{campaign.subject}</p>
@@ -673,7 +690,7 @@ function DetailView({
         {(campaign.status === 'sending' || campaign.status === 'paused') && (
           <button onClick={() => onTogglePause(campaign)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
-            {campaign.status === 'paused' ? <><Play size={14} /> 繼續</> : <><Pause size={14} /> 暫停</>}
+            {campaign.status === 'paused' ? <><Play size={14} /> {t('resumeAction')}</> : <><Pause size={14} /> {t('pauseAction')}</>}
           </button>
         )}
       </div>
@@ -681,10 +698,10 @@ function DetailView({
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
-          { label: '已寄送', value: `${campaign.sent_count} / ${campaign.total_recipients}` },
-          { label: '開信率', value: `${openRate}%` },
-          { label: '點擊率', value: `${clickRate}%` },
-          { label: '完成時間', value: fmt(campaign.sent_at) },
+          { label: t('statSent'), value: `${campaign.sent_count} / ${campaign.total_recipients}` },
+          { label: t('statOpenRate'), value: `${openRate}%` },
+          { label: t('statClickRate'), value: `${clickRate}%` },
+          { label: t('statCompletedAt'), value: fmt(campaign.sent_at) },
         ].map(s => (
           <div key={s.label} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
             <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{s.label}</div>
@@ -697,7 +714,7 @@ function DetailView({
       {campaign.total_recipients > 0 && (
         <div className="mb-6">
           <div className="flex justify-between text-xs text-gray-500 mb-1">
-            <span>寄送進度</span>
+            <span>{t('sendProgress')}</span>
             <span>{Math.round(campaign.sent_count / campaign.total_recipients * 100)}%</span>
           </div>
           <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2">
@@ -710,10 +727,10 @@ function DetailView({
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
           <Search size={14} className="text-gray-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋收件人..." className="flex-1 text-sm bg-transparent outline-none text-gray-900 dark:text-gray-100" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('searchRecipientPlaceholder')} className="flex-1 text-sm bg-transparent outline-none text-gray-900 dark:text-gray-100" />
         </div>
         {loading ? (
-          <div className="py-8 text-center text-gray-400 text-sm">載入中...</div>
+          <div className="py-8 text-center text-gray-400 text-sm">{tc('loading')}</div>
         ) : (
           <div className="divide-y divide-gray-100 dark:divide-gray-700 max-h-96 overflow-y-auto">
             {filtered.map(r => (
@@ -723,11 +740,11 @@ function DetailView({
                   {r.contacts?.name && <div className="text-xs text-gray-400 truncate">{r.email}</div>}
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-2">
-                  {r.status === 'sent' && <span className="text-xs text-green-600 dark:text-green-400">已寄</span>}
-                  {r.status === 'pending' && <span className="text-xs text-gray-400">待寄</span>}
-                  {r.status === 'failed' && <span className="text-xs text-red-500">失敗</span>}
-                  {r.opened_at && <span className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded">已開信</span>}
-                  {r.clicked_at && <span className="text-xs bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-1.5 py-0.5 rounded">已點擊</span>}
+                  {r.status === 'sent' && <span className="text-xs text-green-600 dark:text-green-400">{t('recipientStatusSent')}</span>}
+                  {r.status === 'pending' && <span className="text-xs text-gray-400">{t('recipientStatusPending')}</span>}
+                  {r.status === 'failed' && <span className="text-xs text-red-500">{t('recipientStatusFailed')}</span>}
+                  {r.opened_at && <span className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded">{t('recipientOpened')}</span>}
+                  {r.clicked_at && <span className="text-xs bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-1.5 py-0.5 rounded">{t('recipientClicked')}</span>}
                 </div>
               </div>
             ))}
@@ -743,6 +760,8 @@ function DetailView({
 const PAGE_SIZE = 50
 
 function UnsubscribesView({ supabase, onBack }: { supabase: ReturnType<typeof createBrowserSupabaseClient>; onBack: () => void }) {
+  const t = useTranslations('newsletter')
+  const tc = useTranslations('common')
   const [rows, setRows] = useState<Unsubscribe[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(0)
@@ -778,10 +797,10 @@ function UnsubscribesView({ supabase, onBack }: { supabase: ReturnType<typeof cr
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
-      <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 mb-4"><ChevronLeft size={15} /> 返回</button>
+      <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 mb-4"><ChevronLeft size={15} /> {tc('back')}</button>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">退訂管理</h2>
-        <span className="text-sm text-gray-400">共 {total} 筆</span>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t('unsubscribeManagement')}</h2>
+        <span className="text-sm text-gray-400">{tc('total', { count: total })}</span>
       </div>
       <div className="flex gap-2 mb-4">
         <div className="flex-1 relative">
@@ -790,26 +809,26 @@ function UnsubscribesView({ supabase, onBack }: { supabase: ReturnType<typeof cr
             value={search}
             onChange={e => setSearch(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            placeholder="搜尋 email..."
+            placeholder={t('searchEmailPlaceholder')}
             className="w-full pl-8 pr-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <button onClick={handleSearch} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-200 dark:hover:bg-gray-600">搜尋</button>
+        <button onClick={handleSearch} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-200 dark:hover:bg-gray-600">{tc('search')}</button>
       </div>
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
         {loading ? (
-          <div className="py-10 text-center text-gray-400 text-sm">載入中...</div>
+          <div className="py-10 text-center text-gray-400 text-sm">{tc('loading')}</div>
         ) : rows.length === 0 ? (
-          <div className="py-10 text-center text-gray-400 text-sm">{query ? '無符合結果' : '暫無退訂紀錄'}</div>
+          <div className="py-10 text-center text-gray-400 text-sm">{query ? tc('noResults') : t('emptyUnsubs')}</div>
         ) : (
           <div className="divide-y divide-gray-100 dark:divide-gray-700">
             {rows.map(r => (
               <div key={r.id} className="flex items-center px-4 py-3 text-sm">
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-gray-900 dark:text-gray-100">{r.email}</div>
-                  <div className="text-xs text-gray-400">{r.reason ?? '未填原因'} · {fmt(r.unsubscribed_at)} · {r.source}</div>
+                  <div className="text-xs text-gray-400">{r.reason ?? t('noReason')} · {fmt(r.unsubscribed_at)} · {r.source}</div>
                 </div>
-                <button onClick={() => remove(r.id)} title="移除退訂（重新加回名單）" className="p-1 hover:text-red-500 text-gray-400"><Trash2 size={14} /></button>
+                <button onClick={() => remove(r.id)} title={t('removeUnsub')} className="p-1 hover:text-red-500 text-gray-400"><Trash2 size={14} /></button>
               </div>
             ))}
           </div>
@@ -817,9 +836,9 @@ function UnsubscribesView({ supabase, onBack }: { supabase: ReturnType<typeof cr
       </div>
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4 text-sm text-gray-500">
-          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800">← 上一頁</button>
-          <span>第 {page + 1} / {totalPages} 頁</span>
-          <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800">下一頁 →</button>
+          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800">{t('prevPage')}</button>
+          <span>{tc('page', { current: page + 1, total: totalPages })}</span>
+          <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800">{t('nextPage')}</button>
         </div>
       )}
     </div>
@@ -829,6 +848,8 @@ function UnsubscribesView({ supabase, onBack }: { supabase: ReturnType<typeof cr
 // ── Blacklist ─────────────────────────────────────────────────────────────────
 
 function BlacklistView({ supabase, onBack }: { supabase: ReturnType<typeof createBrowserSupabaseClient>; onBack: () => void }) {
+  const t = useTranslations('newsletter')
+  const tc = useTranslations('common')
   const [rows, setRows] = useState<Blacklist[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(0)
@@ -864,12 +885,12 @@ function BlacklistView({ supabase, onBack }: { supabase: ReturnType<typeof creat
     try {
       const res = await fetch('/api/sendgrid/import-suppressions', { method: 'POST' })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? '匯入失敗')
-      setImportResult(`✅ 匯入完成：hard bounce ${json.bounces} 筆、invalid email ${json.invalidEmails} 筆、退訂 ${json.unsubscribes} 筆`)
+      if (!res.ok) throw new Error(json.error ?? t('importFailed'))
+      setImportResult(t('importResultSuccess', { bounces: json.bounces, invalid: json.invalidEmails, unsubs: json.unsubscribes }))
       setPage(0); setQuery(''); setSearch('')
       fetchRows('', 0)
     } catch (e) {
-      setImportResult(`❌ ${e instanceof Error ? e.message : '匯入失敗'}`)
+      setImportResult(t('importResultError', { error: e instanceof Error ? e.message : t('importFailed') }))
     } finally {
       setImporting(false)
     }
@@ -899,19 +920,19 @@ function BlacklistView({ supabase, onBack }: { supabase: ReturnType<typeof creat
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
-      <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 mb-4"><ChevronLeft size={15} /> 返回</button>
+      <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 mb-4"><ChevronLeft size={15} /> {tc('back')}</button>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">黑名單管理</h2>
-          <p className="text-sm text-gray-400 mt-0.5">共 {total} 筆</p>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t('blacklistTitle')}</h2>
+          <p className="text-sm text-gray-400 mt-0.5">{tc('total', { count: total })}</p>
         </div>
         <button
           onClick={importSuppressions}
           disabled={importing}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 disabled:opacity-50"
-          title="從 SendGrid 匯入 hard bounce、invalid email、全域退訂名單"
+          title={t('importFromSendgridTitle')}
         >
-          {importing ? <><AlertCircle size={13} className="animate-pulse" /> 匯入中...</> : '↓ 從 SendGrid 匯入抑制名單'}
+          {importing ? <><AlertCircle size={13} className="animate-pulse" /> {t('importing')}</> : t('importFromSendgrid')}
         </button>
       </div>
       {importResult && (
@@ -926,21 +947,21 @@ function BlacklistView({ supabase, onBack }: { supabase: ReturnType<typeof creat
             value={search}
             onChange={e => setSearch(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            placeholder="搜尋 email..."
+            placeholder={t('searchEmailPlaceholder')}
             className="w-full pl-8 pr-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <button onClick={handleSearch} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-200 dark:hover:bg-gray-600">搜尋</button>
+        <button onClick={handleSearch} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-200 dark:hover:bg-gray-600">{tc('search')}</button>
       </div>
       <div className="flex gap-2 mb-4">
-        <input value={newEmail} onChange={e => setNewEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} placeholder="新增 email 到黑名單..." className="flex-1 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-        <button onClick={add} disabled={adding || !newEmail.trim()} className="px-4 py-2 bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900 rounded-lg text-sm hover:opacity-90 disabled:opacity-50">新增</button>
+        <input value={newEmail} onChange={e => setNewEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} placeholder={t('newBlacklistEmailPlaceholder')} className="flex-1 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+        <button onClick={add} disabled={adding || !newEmail.trim()} className="px-4 py-2 bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900 rounded-lg text-sm hover:opacity-90 disabled:opacity-50">{tc('add')}</button>
       </div>
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
         {loading ? (
-          <div className="py-10 text-center text-gray-400 text-sm">載入中...</div>
+          <div className="py-10 text-center text-gray-400 text-sm">{tc('loading')}</div>
         ) : rows.length === 0 ? (
-          <div className="py-10 text-center text-gray-400 text-sm">{query ? '無符合結果' : '黑名單為空'}</div>
+          <div className="py-10 text-center text-gray-400 text-sm">{query ? tc('noResults') : t('emptyBlacklist')}</div>
         ) : (
           <div className="divide-y divide-gray-100 dark:divide-gray-700">
             {rows.map(r => (
@@ -949,7 +970,7 @@ function BlacklistView({ supabase, onBack }: { supabase: ReturnType<typeof creat
                   <div className="font-medium text-gray-900 dark:text-gray-100">{r.email}</div>
                   <div className="text-xs text-gray-400">{r.reason ?? '—'} · {fmt(r.created_at)}</div>
                 </div>
-                <button onClick={() => remove(r.id)} title="移除黑名單" className="p-1 hover:text-red-500 text-gray-400"><Trash2 size={14} /></button>
+                <button onClick={() => remove(r.id)} title={t('removeFromBlacklist')} className="p-1 hover:text-red-500 text-gray-400"><Trash2 size={14} /></button>
               </div>
             ))}
           </div>
@@ -957,9 +978,9 @@ function BlacklistView({ supabase, onBack }: { supabase: ReturnType<typeof creat
       </div>
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4 text-sm text-gray-500">
-          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800">← 上一頁</button>
-          <span>第 {page + 1} / {totalPages} 頁</span>
-          <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800">下一頁 →</button>
+          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800">{t('prevPage')}</button>
+          <span>{tc('page', { current: page + 1, total: totalPages })}</span>
+          <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800">{t('nextPage')}</button>
         </div>
       )}
     </div>

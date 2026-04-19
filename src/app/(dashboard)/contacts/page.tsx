@@ -238,8 +238,8 @@ export default function ContactsPage() {
       referred_by: batchForm.referred_by || null,
     }).in('id', ids)
     const logContent =
-      `認識於：${batchForm.met_at || '—'}（${batchForm.met_date}）` +
-      (batchForm.referred_by ? `，介紹人：${batchForm.referred_by}` : '')
+      t('batchLogMet', { at: batchForm.met_at || '—', date: batchForm.met_date }) +
+      (batchForm.referred_by ? t('batchLogReferredBy', { name: batchForm.referred_by }) : '')
     await supabase.from('interaction_logs').insert(
       ids.map((contact_id) => ({ contact_id, type: 'meeting', content: logContent, created_by: profile!.id }))
     )
@@ -274,12 +274,12 @@ export default function ContactsPage() {
         body: JSON.stringify({ image: base64 }),
       })
       const data = await res.json()
-      if (!res.ok || data.error) throw new Error(data.error ?? '解析失敗')
+      if (!res.ok || data.error) throw new Error(data.error ?? t('parseFailed'))
       sessionStorage.setItem('linkedin_prefill', JSON.stringify(data))
       const cardParam = data.card_img_url ? `&card_img_url=${encodeURIComponent(data.card_img_url)}` : ''
       router.push(`/contacts/new?source=linkedin${cardParam}`)
     } catch (err) {
-      alert('LinkedIn 截圖解析失敗：' + (err instanceof Error ? err.message : String(err)))
+      alert(t('linkedinParseFailed') + (err instanceof Error ? err.message : String(err)))
     } finally {
       setLiParsing(false)
       if (liInputRef.current) liInputRef.current.value = ''
@@ -358,7 +358,7 @@ export default function ContactsPage() {
               disabled={liParsing}
             >
               {liParsing ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-              {liParsing ? '解析中...' : t('new')}
+              {liParsing ? t('parsing') : t('new')}
               <ChevronDown size={12} className={`transition-transform ${addDropOpen ? 'rotate-180' : ''}`} />
             </button>
             {addDropOpen && (
@@ -751,7 +751,7 @@ export default function ContactsPage() {
                           <button
                             onClick={() => copyEmail(c.email!)}
                             className="text-gray-400 hover:text-blue-500 transition-colors flex-shrink-0"
-                            title="複製 Email"
+                            title={t('copyEmail')}
                           >
                             {copiedEmail === c.email ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
                           </button>
@@ -858,7 +858,7 @@ export default function ContactsPage() {
               <div>
                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('metAt')}</label>
                 <input type="text" value={batchForm.met_at} onChange={(e) => setBatchForm((p) => ({ ...p, met_at: e.target.value }))}
-                  placeholder="e.g. 台北生技展 2026"
+                  placeholder={t('metAtPlaceholder')}
                   className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
@@ -869,7 +869,7 @@ export default function ContactsPage() {
               <div>
                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('referredBy')}</label>
                 <input type="text" value={batchForm.referred_by} onChange={(e) => setBatchForm((p) => ({ ...p, referred_by: e.target.value }))}
-                  placeholder="e.g. 王小明"
+                  placeholder={t('referredByPlaceholder')}
                   className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
             </div>

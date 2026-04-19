@@ -79,6 +79,7 @@ export default function CampaignDetailPage() {
   const router = useRouter()
   const t = useTranslations('campaigns')
   const tc = useTranslations('common')
+  const tcnt = useTranslations('contacts')
   const supabase = createBrowserSupabaseClient()
 
   const [campaign, setCampaign] = useState<Campaign | null>(null)
@@ -141,11 +142,15 @@ export default function CampaignDetailPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        setBackfillResult(`錯誤：${data.error ?? res.status}${data.detail ? ` — ${JSON.stringify(data.detail)}` : ''}`)
+        setBackfillResult(
+          data.detail
+            ? t('backfillErrorWithDetail', { error: data.error ?? res.status, detail: JSON.stringify(data.detail) })
+            : t('backfillError', { error: data.error ?? res.status })
+        )
       } else if (data.inserted === 0) {
-        setBackfillResult(data.note ?? '沒有新事件可補入')
+        setBackfillResult(data.note ?? t('noNewEvents'))
       } else {
-        setBackfillResult(`成功補入 ${data.inserted} 筆事件（共查到 ${data.messages} 封郵件）`)
+        setBackfillResult(t('backfillSuccess', { inserted: data.inserted, messages: data.messages }))
         await loadData()
       }
     } catch (e) {
@@ -166,10 +171,10 @@ export default function CampaignDetailPage() {
       })
       const data = await res.json()
       if (data.ok) {
-        setWebhookResult('Webhook 正常運作！測試事件已寫入資料庫。')
+        setWebhookResult(t('webhookOk'))
         await loadData()
       } else {
-        setWebhookResult(`Webhook 錯誤：${data.error ?? JSON.stringify(data)}`)
+        setWebhookResult(t('webhookError', { error: data.error ?? JSON.stringify(data) }))
       }
     } catch (e) {
       setWebhookResult(e instanceof Error ? e.message : String(e))
@@ -368,12 +373,12 @@ export default function CampaignDetailPage() {
       {(backfillResult || webhookResult) && (
         <div className="mb-4 space-y-2">
           {backfillResult && (
-            <div className={`px-4 py-2.5 rounded-lg text-sm ${backfillResult.startsWith('錯誤') ? 'bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300' : 'bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'}`}>
+            <div className={`px-4 py-2.5 rounded-lg text-sm ${backfillResult.startsWith(t('errorWord')) ? 'bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300' : 'bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'}`}>
               {backfillResult}
             </div>
           )}
           {webhookResult && (
-            <div className={`px-4 py-2.5 rounded-lg text-sm ${webhookResult.includes('錯誤') ? 'bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300' : 'bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'}`}>
+            <div className={`px-4 py-2.5 rounded-lg text-sm ${webhookResult.includes(t('errorWord')) ? 'bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300' : 'bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'}`}>
               {webhookResult}
             </div>
           )}
@@ -515,11 +520,11 @@ export default function CampaignDetailPage() {
             {/* Modal header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <div>
-                <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">批量 OCR 重新掃描退信名單</h2>
+                <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">{t('bulkOcrTitle')}</h2>
                 <p className="text-xs text-gray-400 mt-0.5">
                   {ocrPending
-                    ? `處理中 ${ocrDone} / ${ocrTotal}…`
-                    : `掃描完成 — ${ocrChanged.length} 人 email 與現有不同`}
+                    ? t('ocrProcessing', { done: ocrDone, total: ocrTotal })
+                    : t('ocrScanDone', { count: ocrChanged.length })}
                 </p>
               </div>
               <button
@@ -548,10 +553,10 @@ export default function CampaignDetailPage() {
                 <thead>
                   <tr className="text-xs text-gray-400 font-medium">
                     <th className="text-left pb-2 pl-2 w-6"></th>
-                    <th className="text-left pb-2">姓名</th>
-                    <th className="text-left pb-2">現有 Email</th>
-                    <th className="text-left pb-2">OCR 建議</th>
-                    <th className="text-center pb-2 w-16">狀態</th>
+                    <th className="text-left pb-2">{tcnt('name')}</th>
+                    <th className="text-left pb-2">{t('colCurrentEmail')}</th>
+                    <th className="text-left pb-2">{t('colOcrSuggest')}</th>
+                    <th className="text-center pb-2 w-16">{tc('status')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -584,10 +589,10 @@ export default function CampaignDetailPage() {
                           {row.status === 'done' && row.suggestedEmail ? (
                             <span className={`font-mono text-xs ${isDiff ? 'text-orange-600 dark:text-orange-400 font-semibold' : 'text-gray-400'}`}>
                               {row.suggestedEmail}
-                              {!isDiff && <span className="ml-1 text-gray-300">(同)</span>}
+                              {!isDiff && <span className="ml-1 text-gray-300">{t('sameValue')}</span>}
                             </span>
                           ) : row.status === 'no_image' ? (
-                            <span className="text-xs text-gray-300">無名片圖片</span>
+                            <span className="text-xs text-gray-300">{t('noCardImage')}</span>
                           ) : row.status === 'error' ? (
                             <span className="text-xs text-red-400">{row.error}</span>
                           ) : null}
@@ -598,7 +603,7 @@ export default function CampaignDetailPage() {
                           {row.status === 'done' && !isDiff && <Check size={14} className="text-green-400 mx-auto" />}
                           {row.status === 'no_image' && <span className="text-xs text-gray-300">—</span>}
                           {row.status === 'error' && <X size={14} className="text-red-400 mx-auto" />}
-                          {row.status === 'pending' && <span className="text-xs text-gray-300">待處理</span>}
+                          {row.status === 'pending' && <span className="text-xs text-gray-300">{t('statusPending')}</span>}
                         </td>
                       </tr>
                     )

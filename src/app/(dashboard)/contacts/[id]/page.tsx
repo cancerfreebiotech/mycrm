@@ -92,17 +92,6 @@ const EMPTY_EDIT = {
   language: 'english',
 }
 
-const OCR_FIELD_LABELS: Record<string, string> = {
-  name: '姓名', name_en: '英文姓名', name_local: '當地語言姓名',
-  company: '公司', company_en: '英文公司', company_local: '當地語言公司',
-  job_title: '職稱',
-  email: 'Email', second_email: '第二 Email',
-  phone: '電話', second_phone: '第二電話',
-  address: '地址', address_en: '英文地址', fax: '傳真', hospital: '醫院', department: '部門',
-  website: '網站',
-  linkedin_url: 'LinkedIn', facebook_url: 'Facebook',
-}
-
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes}B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
@@ -204,6 +193,17 @@ export default function ContactDetailPage() {
   const t = useTranslations('contacts')
   const tm = useTranslations('mail')
   const tc = useTranslations('common')
+  const tt = useTranslations('interactionLogs')
+  const OCR_FIELD_LABELS: Record<string, string> = {
+    name: t('name'), name_en: t('nameEn'), name_local: t('nameLocal'),
+    company: t('company'), company_en: t('companyEn'), company_local: t('companyLocal'),
+    job_title: t('jobTitle'),
+    email: t('email'), second_email: t('secondEmail'),
+    phone: t('phone'), second_phone: t('secondPhone'),
+    address: t('address'), address_en: t('addressEn'), fax: t('fax'), hospital: t('hospital'), department: t('department'),
+    website: t('website'),
+    linkedin_url: t('linkedin'), facebook_url: t('facebook'),
+  }
   const supabase = createBrowserSupabaseClient()
   const editFileRef = useRef<HTMLInputElement>(null)
   const cardFilesRef = useRef<HTMLInputElement>(null)
@@ -628,7 +628,7 @@ export default function ContactDetailPage() {
         await supabase.from('interaction_logs').insert({
           contact_id: id,
           type: 'note',
-          content: `【名片新資料】\n${noteLines}`,
+          content: t('logCardUpdated', { content: noteLines }),
         })
       }
       cancelCardUpload()
@@ -711,7 +711,7 @@ export default function ContactDetailPage() {
   }
 
   async function deletePhoto(photoId: string) {
-    if (!confirm('確定要刪除此照片？')) return
+    if (!confirm(t('confirmDeletePhoto'))) return
     await supabase.from('contact_photos').delete().eq('id', photoId)
     load()
   }
@@ -723,7 +723,7 @@ export default function ContactDetailPage() {
       await supabase.from('interaction_logs').insert({
         contact_id: id,
         type: 'note',
-        content: `【合照附註】${trimmed}`,
+        content: t('logPhotoNote', { content: trimmed }),
       })
     }
     setEditingNoteId(null)
@@ -731,7 +731,7 @@ export default function ContactDetailPage() {
   }
 
   async function deleteCard(cardId: string) {
-    if (!confirm('確定要刪除此名片圖？')) return
+    if (!confirm(t('confirmDeleteCard'))) return
     await supabase.from('contact_cards').delete().eq('id', cardId)
     load()
   }
@@ -744,14 +744,14 @@ export default function ContactDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deg, side }),
       })
-      if (!res.ok) throw new Error('旋轉失敗')
+      if (!res.ok) throw new Error(t('rotateFailed'))
       const { url } = await res.json()
       setContactCards((prev) => prev.map((c) => {
         if (c.id !== cardId) return c
         return side === 'front' ? { ...c, card_img_url: url } : { ...c, card_img_back_url: url }
       }))
     } catch (e) {
-      alert(e instanceof Error ? e.message : '旋轉失敗')
+      alert(e instanceof Error ? e.message : t('rotateFailed'))
     } finally {
       setRotatingCard(null)
     }
@@ -788,7 +788,7 @@ export default function ContactDetailPage() {
   }
 
   async function deleteLog(logId: string) {
-    if (!confirm('確定刪除這筆互動紀錄？')) return
+    if (!confirm(t('confirmDeleteLog'))) return
     setDeletingLogId(logId)
     await supabase.from('interaction_logs').delete().eq('id', logId)
     setLogs((prev) => prev.filter((l) => l.id !== logId))
@@ -875,9 +875,11 @@ export default function ContactDetailPage() {
     setMailAiGenerating(true)
     setMailError(null)
     try {
-      // Ignore Telegram scan logs ("透過 Telegram Bot 新增名片")
+      // i18n: '新增名片' literal is a DB filter matching system-generated Chinese log content
+      // saved by bot/route.ts and batch-upload/page.tsx. Cannot be translated here without
+      // coordinating with the log creators. Tracked as a refactor to use a log `type` field.
       const lastLog = logs.find(l => l.type !== 'scan' && !l.content?.includes('新增名片'))?.content ?? ''
-      const description = lastLog ? `${mailAiDesc}\n\n最近互動：${lastLog}` : mailAiDesc
+      const description = lastLog ? `${mailAiDesc}\n\n${t('aiRecentInteractionPrefix')}${lastLog}` : mailAiDesc
       // Pass current body (template or manually typed) as reference content
       const existingBody = mailBody.trim() || undefined
       const res = await fetch('/api/ai-email', {
@@ -890,7 +892,7 @@ export default function ContactDetailPage() {
       setMailBody(data.text ?? data.html ?? '')
       if (data.subject) setMailSubject(data.subject)
     } catch (e) {
-      setMailError(e instanceof Error ? e.message : 'AI 生成失敗')
+      setMailError(e instanceof Error ? e.message : t('aiGenerateFailed'))
     } finally {
       setMailAiGenerating(false)
     }
@@ -903,7 +905,7 @@ export default function ContactDetailPage() {
     setMailError(null)
     for (const file of files) {
       if (file.size > MAX) {
-        setMailError(`「${file.name}」超過 5MB 限制`)
+        setMailError(t('fileTooLarge5mb', { name: file.name }))
         continue
       }
       const base64 = await new Promise<string>((resolve) => {
@@ -932,7 +934,7 @@ export default function ContactDetailPage() {
       const tokenRes = await fetch('/api/provider-token')
       if (!tokenRes.ok) {
         const err = await tokenRes.json().catch(() => ({}))
-        throw new Error(err?.error ?? '找不到 Microsoft 存取權限，請重新登入')
+        throw new Error(err?.error ?? t('noMicrosoftAuth'))
       }
       const { token: accessToken } = await tokenRes.json()
 
@@ -964,7 +966,7 @@ export default function ContactDetailPage() {
       const allRecipients = [...mailToList, ...mailCcList, ...mailBccList]
       const uniqueContactIds = [...new Set(allRecipients.filter(r => r.contactId).map(r => r.contactId!))]
       const attachmentNames = attachments.map(a => a.name)
-      const logContent = `寄送郵件：${mailSubject}`
+      const logContent = t('logSentEmail', { subject: mailSubject })
       if (uniqueContactIds.length > 0) {
         const inserts = uniqueContactIds.map(cid => ({
           contact_id: cid, content: logContent, type: 'email', created_by: currentUserId,
@@ -983,7 +985,7 @@ export default function ContactDetailPage() {
 
       setMailOpen(false)
     } catch (e) {
-      setMailError(e instanceof Error ? e.message : '寄送失敗，請稍後再試')
+      setMailError(e instanceof Error ? e.message : t('sendFailed'))
     } finally { setMailSending(false) }
   }
 
@@ -1006,7 +1008,10 @@ export default function ContactDetailPage() {
 
   async function handleMerge() {
     if (!mergeTarget) return
-    if (!confirm(`確定要將「${mergeTarget.name || mergeTarget.name_en}」合併進「${contact?.name || contact?.name_en}」？\n\n來源聯絡人將被刪除，此操作無法復原。`)) return
+    if (!confirm(t('confirmMergeContact', {
+      source: mergeTarget.name || mergeTarget.name_en || '',
+      target: contact?.name || contact?.name_en || '',
+    }))) return
     setMergeSaving(true)
     try {
       const res = await fetch(`/api/contacts/${id}/merge`, {
@@ -1021,24 +1026,24 @@ export default function ContactDetailPage() {
       setMergeResults([])
       load()
     } catch (e) {
-      alert(e instanceof Error ? e.message : '合併失敗')
+      alert(e instanceof Error ? e.message : t('mergeFailed'))
     } finally {
       setMergeSaving(false)
     }
   }
 
   async function handleDelete() {
-    if (!confirm(`確定要將「${contact?.name || contact?.name_en || '此聯絡人'}」移至回收區？Super Admin 可在回收區還原或永久刪除。`)) return
+    if (!confirm(t('confirmMoveToTrash', { name: contact?.name || contact?.name_en || t('unnamedContact') }))) return
     setDeleting(true)
     try {
       const res = await fetch(`/api/contacts/${id}`, { method: 'DELETE' })
       if (!res.ok) {
         const body = await res.json()
-        throw new Error(body.error ?? '刪除失敗')
+        throw new Error(body.error ?? t('deleteFailed'))
       }
       router.push('/contacts')
     } catch (e) {
-      alert(e instanceof Error ? e.message : '刪除失敗')
+      alert(e instanceof Error ? e.message : t('deleteFailed'))
       setDeleting(false)
     }
   }
@@ -1069,7 +1074,7 @@ export default function ContactDetailPage() {
             <button
               onClick={() => copyEmail(value)}
               className="text-gray-400 hover:text-blue-500 transition-colors flex-shrink-0"
-              title="複製"
+              title={tc('copy')}
             >
               {copiedEmail === value ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
             </button>
@@ -1087,13 +1092,13 @@ export default function ContactDetailPage() {
     return (
       <>
         {sup.blacklisted && (
-          <span className="inline-flex items-center text-xs font-medium px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800" title="此 Email 在黑名單中（hard bounce 或手動加入）">
-            黑名單
+          <span className="inline-flex items-center text-xs font-medium px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800" title={t('emailBounceBadgeTitle')}>
+            {t('emailBlacklistBadge')}
           </span>
         )}
         {sup.unsubscribed && (
-          <span className="inline-flex items-center text-xs font-medium px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800" title="此 Email 已退訂 Newsletter">
-            已退訂
+          <span className="inline-flex items-center text-xs font-medium px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800" title={t('emailUnsubBadgeTitle')}>
+            {t('emailStatusUnsubscribed')}
           </span>
         )}
       </>
@@ -1103,7 +1108,7 @@ export default function ContactDetailPage() {
   // All card images: from contact_cards table + legacy fields
   const legacyCards: ContactCard[] = []
   if (contact.card_img_url && contactCards.length === 0) {
-    legacyCards.push({ id: 'legacy-front', card_img_url: contact.card_img_url, card_img_back_url: contact.card_img_back_url ?? null, label: '正面', created_at: contact.created_at })
+    legacyCards.push({ id: 'legacy-front', card_img_url: contact.card_img_url, card_img_back_url: contact.card_img_back_url ?? null, label: t('legacyCardFront'), created_at: contact.created_at })
   }
   const allCards = contactCards.length > 0 ? contactCards : legacyCards
 
@@ -1203,7 +1208,7 @@ export default function ContactDetailPage() {
               </button>
               {tagDropOpen && (
                 <div className="absolute top-full mt-1 left-0 z-10 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-2 min-w-40">
-                  <input autoFocus value={tagInput} onChange={(e) => setTagInput(e.target.value)} placeholder="搜尋 tag..." className="w-full text-xs px-2 py-1 border border-gray-200 dark:border-gray-700 rounded mb-1 bg-white dark:bg-gray-800" />
+                  <input autoFocus value={tagInput} onChange={(e) => setTagInput(e.target.value)} placeholder={t('searchTagPlaceholder')} className="w-full text-xs px-2 py-1 border border-gray-200 dark:border-gray-700 rounded mb-1 bg-white dark:bg-gray-800" />
                   {filteredTags.map((tag) => (
                     <button key={tag.id} onClick={() => addTag(tag)} className="w-full text-left text-xs px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 rounded text-gray-700 dark:text-gray-300">{tag.name}</button>
                   ))}
@@ -1256,7 +1261,7 @@ export default function ContactDetailPage() {
                   {/* Front */}
                   <div className="relative">
                     <div className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative" onClick={() => openLightbox(card.card_img_url)}>
-                      <Image src={card.card_img_url} alt={card.label ?? '名片正面'} width={144} height={96} className="object-cover w-full h-full" />
+                      <Image src={card.card_img_url} alt={card.label ?? t('cardFront')} width={144} height={96} className="object-cover w-full h-full" />
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
                         <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
                       </div>
@@ -1264,7 +1269,7 @@ export default function ContactDetailPage() {
                     <button
                       onClick={(e) => { e.stopPropagation(); rotateCard(card.id, 90, 'front') }}
                       disabled={rotatingCard === `${card.id}-front`}
-                      title="順時針旋轉 90°"
+                      title={t('rotate90cw')}
                       className="absolute bottom-1 left-1 bg-black/60 text-white rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 disabled:opacity-50"
                     >
                       {rotatingCard === `${card.id}-front` ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
@@ -1274,7 +1279,7 @@ export default function ContactDetailPage() {
                   {card.card_img_back_url && (
                     <div className="relative">
                       <div className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative" onClick={() => openLightbox(card.card_img_back_url!)}>
-                        <Image src={card.card_img_back_url} alt={card.label ? `${card.label} 反面` : '名片反面'} width={144} height={96} className="object-cover w-full h-full" />
+                        <Image src={card.card_img_back_url} alt={card.label ? `${card.label} ${t('backSuffix')}` : t('cardBack')} width={144} height={96} className="object-cover w-full h-full" />
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
                           <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
                         </div>
@@ -1282,7 +1287,7 @@ export default function ContactDetailPage() {
                       <button
                         onClick={(e) => { e.stopPropagation(); rotateCard(card.id, 90, 'back') }}
                         disabled={rotatingCard === `${card.id}-back`}
-                        title="順時針旋轉 90°"
+                        title={t('rotate90cw')}
                         className="absolute bottom-1 left-1 bg-black/60 text-white rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 disabled:opacity-50"
                       >
                         {rotatingCard === `${card.id}-back` ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
@@ -1314,13 +1319,13 @@ export default function ContactDetailPage() {
         {/* Staged files preview + actions */}
         {stagedFiles.length > 0 && (
           <div className="mb-4">
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">待上傳（{stagedFiles.length} 張）</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t('pendingUploadCount', { count: stagedFiles.length })}</p>
             <div className="flex flex-wrap gap-3 mb-3">
               {stagedPreviews.map((src, i) => (
                 <div key={i} className="relative group">
                   <div className="w-36 h-24 rounded-lg overflow-hidden border-2 border-dashed border-blue-400">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={src} alt={`待上傳-${i + 1}`} className="object-cover w-full h-full" />
+                    <img src={src} alt={t('stagedPreviewAlt', { index: i + 1 })} className="object-cover w-full h-full" />
                   </div>
                   <button
                     onClick={() => {
@@ -1342,7 +1347,7 @@ export default function ContactDetailPage() {
               <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg text-sm mb-3">
                 {Object.keys(cardOcrDiff).length > 0 ? (
                   <>
-                    <p className="text-xs font-medium text-blue-700 dark:text-blue-400 mb-2">以下空白欄位將補上 OCR 識別結果：</p>
+                    <p className="text-xs font-medium text-blue-700 dark:text-blue-400 mb-2">{t('ocrFillHint')}</p>
                     <div className="space-y-1">
                       {Object.entries(cardOcrDiff).map(([field, value]) => (
                         <div key={field} className="flex gap-2 text-xs">
@@ -1353,17 +1358,17 @@ export default function ContactDetailPage() {
                     </div>
                   </>
                 ) : (
-                  <p className="text-xs text-gray-500 dark:text-gray-400">OCR 未找到可補充的空白欄位，仍可儲存名片圖</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('ocrNoFill')}</p>
                 )}
                 {Object.keys(cardOcrConflicts).length > 0 && (
                   <div className="mt-2">
-                    <p className="text-xs font-medium text-amber-600 dark:text-amber-400 mb-1">⚠️ 與現有資料不同（確認後存入備註）：</p>
+                    <p className="text-xs font-medium text-amber-600 dark:text-amber-400 mb-1">{t('ocrDiffWarn')}</p>
                     <div className="space-y-1">
                       {Object.entries(cardOcrConflicts).map(([field, v]) => (
                         <div key={field} className="flex gap-2 text-xs">
                           <span className="text-gray-500 dark:text-gray-400 w-28 shrink-0">{OCR_FIELD_LABELS[field] ?? field}</span>
                           <span className="text-amber-700 dark:text-amber-300">{v.newVal}</span>
-                          <span className="text-gray-400">（現有：{v.oldVal}）</span>
+                          <span className="text-gray-400">{t('ocrExistingValue', { value: v.oldVal })}</span>
                         </div>
                       ))}
                     </div>
@@ -1423,7 +1428,7 @@ export default function ContactDetailPage() {
 
       {/* Photos */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-4">
-        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">合照</h2>
+        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('groupPhoto')}</h2>
 
         {/* Photos gallery */}
         {contactPhotos.length > 0 && (
@@ -1434,7 +1439,7 @@ export default function ContactDetailPage() {
                   className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative"
                   onClick={() => openLightbox(photo.photo_url)}
                 >
-                  <Image src={photo.photo_url} alt="合照" width={144} height={96} className="object-cover w-full h-full" />
+                  <Image src={photo.photo_url} alt={t('groupPhoto')} width={144} height={96} className="object-cover w-full h-full" />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
                     <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
                   </div>
@@ -1462,20 +1467,20 @@ export default function ContactDetailPage() {
                           if (e.key === 'Escape') setEditingNoteId(null)
                         }}
                         className="text-xs px-1.5 py-0.5 border border-blue-400 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 w-full"
-                        placeholder="附註..."
+                        placeholder={t('photoNotePlaceholder')}
                       />
                       <div className="flex gap-1">
-                        <button onClick={() => savePhotoNote(photo.id, editingNoteText)} className="text-xs text-blue-600 hover:underline">儲存</button>
-                        <button onClick={() => setEditingNoteId(null)} className="text-xs text-gray-400 hover:underline">取消</button>
+                        <button onClick={() => savePhotoNote(photo.id, editingNoteText)} className="text-xs text-blue-600 hover:underline">{tc('save')}</button>
+                        <button onClick={() => setEditingNoteId(null)} className="text-xs text-gray-400 hover:underline">{tc('cancel')}</button>
                       </div>
                     </div>
                   ) : (
                     <p
                       className="text-xs text-gray-500 dark:text-gray-400 mt-1 cursor-pointer hover:text-blue-500 truncate"
-                      title={photo.note ?? '點擊加入附註'}
+                      title={photo.note ?? t('clickToAddNote')}
                       onClick={() => { setEditingNoteId(photo.id); setEditingNoteText(photo.note ?? '') }}
                     >
-                      {photo.note ? `📝 ${photo.note}` : <span className="opacity-40">+ 附註</span>}
+                      {photo.note ? `📝 ${photo.note}` : <span className="opacity-40">{t('addNote')}</span>}
                     </p>
                   )}
                 </div>
@@ -1505,12 +1510,12 @@ export default function ContactDetailPage() {
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
           >
             {photoSaving ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-            {photoSaving ? '上傳中...' : '新增合照'}
+            {photoSaving ? t('uploading') : t('addGroupPhoto')}
           </button>
           {photoSaving && photoExifPreview && (photoExifPreview.date || photoExifPreview.location) && (
             <div className="mt-1.5 text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
-              {photoExifPreview.date && <p>拍攝日期：{photoExifPreview.date}</p>}
-              {photoExifPreview.location && <p>地點：{photoExifPreview.location}</p>}
+              {photoExifPreview.date && <p>{t('photoCaptureDate', { date: photoExifPreview.date })}</p>}
+              {photoExifPreview.location && <p>{t('photoLocation', { location: photoExifPreview.location })}</p>}
             </div>
           )}
           <input ref={photoFilesRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />
@@ -1532,21 +1537,21 @@ export default function ContactDetailPage() {
           }`}>
             <div className="flex items-start gap-2">
               <span className="font-semibold shrink-0">
-                {contact.email_status === 'bounced' && '硬退信'}
-                {contact.email_status === 'unsubscribed' && '已退訂'}
-                {contact.email_status === 'invalid' && '無效信箱'}
+                {contact.email_status === 'bounced' && t('emailStatusBounced')}
+                {contact.email_status === 'unsubscribed' && t('emailStatusUnsubscribed')}
+                {contact.email_status === 'invalid' && t('emailStatusInvalid')}
               </span>
               <span className="text-xs opacity-75">
-                {contact.email_status === 'bounced' && '此 Email 曾退信，群發郵件不會選到此人。'}
-                {contact.email_status === 'unsubscribed' && '此聯絡人已退訂，電子報不會發送。'}
-                {contact.email_status === 'invalid' && '此 Email 格式或網域有誤，無法寄送。'}
+                {contact.email_status === 'bounced' && t('emailStatusBouncedDesc')}
+                {contact.email_status === 'unsubscribed' && t('emailStatusUnsubscribedDesc')}
+                {contact.email_status === 'invalid' && t('emailStatusInvalidDesc')}
               </span>
             </div>
             <button
               onClick={() => patchEmailStatus(null)}
               className="text-xs px-2 py-1 rounded border border-current opacity-60 hover:opacity-100 shrink-0"
             >
-              清除標記
+              {t('clearStatusBadge')}
             </button>
           </div>
         ) : contact.email && (
@@ -1555,13 +1560,13 @@ export default function ContactDetailPage() {
               onClick={() => patchEmailStatus('bounced')}
               className="text-xs px-2 py-1 rounded border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
             >
-              標記硬退信
+              {t('markAsBounced')}
             </button>
             <button
               onClick={() => patchEmailStatus('invalid')}
               className="text-xs px-2 py-1 rounded border border-yellow-300 dark:border-yellow-700 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
             >
-              標記無效信箱
+              {t('markAsInvalid')}
             </button>
           </div>
         )}
@@ -1581,7 +1586,7 @@ export default function ContactDetailPage() {
                 <input type="time" value={logTime} onChange={(e) => setLogTime(e.target.value)}
                   className="text-sm px-2 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-28" />
                 <input type="text" value={logLocation} onChange={(e) => setLogLocation(e.target.value)}
-                  placeholder="地點" className="text-sm px-2 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex-1" />
+                  placeholder={t('meetingLocationPlaceholder')} className="text-sm px-2 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex-1" />
               </>
             )}
           </div>
@@ -1620,7 +1625,7 @@ export default function ContactDetailPage() {
                         className="flex items-center gap-0.5 text-xs text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                       >
                         <ChevronDown size={13} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
-                        {expanded ? '收起' : '展開'}
+                        {expanded ? t('collapse') : t('expand')}
                       </button>
                     )}
                   </div>
@@ -1635,17 +1640,17 @@ export default function ContactDetailPage() {
                       {log.type === 'meeting' && (
                         <div className="space-y-1.5">
                           <div className="flex items-center gap-2">
-                            <label className="text-xs text-gray-500 dark:text-gray-400 shrink-0">📅 日期</label>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 shrink-0">📅 {t('meetingDateShort')}</label>
                             <input type="date" value={editingLogMeetingDate} onChange={(e) => setEditingLogMeetingDate(e.target.value)}
                               className="px-2 py-1 text-sm border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800" />
-                            <label className="text-xs text-gray-500 dark:text-gray-400 shrink-0">時間</label>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 shrink-0">{tt('meetingTime')}</label>
                             <input type="time" value={editingLogMeetingTime} onChange={(e) => setEditingLogMeetingTime(e.target.value)}
                               className="px-2 py-1 text-sm border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 w-28" />
                           </div>
                           <div className="flex items-center gap-2">
-                            <label className="text-xs text-gray-500 dark:text-gray-400 shrink-0">📍 地點</label>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 shrink-0">📍 {tt('meetingLocation')}</label>
                             <input type="text" value={editingLogMeetingLocation} onChange={(e) => setEditingLogMeetingLocation(e.target.value)}
-                              placeholder="地點" className="flex-1 px-2 py-1 text-sm border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800" />
+                              placeholder={tt('meetingLocation')} className="flex-1 px-2 py-1 text-sm border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800" />
                           </div>
                         </div>
                       )}
@@ -1656,10 +1661,10 @@ export default function ContactDetailPage() {
                           className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                         >
                           {savingLogId === log.id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
-                          儲存
+                          {tc('save')}
                         </button>
                         <button onClick={() => setEditingLogId(null)} className="px-3 py-1 text-xs text-gray-500 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
-                          取消
+                          {tc('cancel')}
                         </button>
                       </div>
                     </div>
@@ -1670,19 +1675,19 @@ export default function ContactDetailPage() {
                     <div className="mt-2 ml-0.5 space-y-2 border-l-2 border-green-200 dark:border-green-800 pl-3">
                       {log.email_subject && (
                         <div>
-                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">主旨</span>
+                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{t('subject')}</span>
                           <p className="text-sm text-gray-800 dark:text-gray-200">{log.email_subject}</p>
                         </div>
                       )}
                       {log.email_body && (
                         <div>
-                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">內容</span>
+                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{t('content')}</span>
                           <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">{log.email_body}</p>
                         </div>
                       )}
                       {log.email_attachments && log.email_attachments.length > 0 && (
                         <div>
-                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">附件</span>
+                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{tt('emailAttachments')}</span>
                           <ul className="mt-0.5 space-y-0.5">
                             {log.email_attachments.map((name, i) => (
                               <li key={i} className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
@@ -1709,7 +1714,7 @@ export default function ContactDetailPage() {
                               setEditingLogMeetingLocation(log.meeting_location ?? '')
                             }}
                             className="text-gray-300 hover:text-gray-500 dark:hover:text-gray-400 ml-1"
-                            title="編輯"
+                            title={tc('edit')}
                           >
                             <Pencil size={11} />
                           </button>
@@ -1718,7 +1723,7 @@ export default function ContactDetailPage() {
                           onClick={() => deleteLog(log.id)}
                           disabled={deletingLogId === log.id}
                           className="text-gray-300 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40"
-                          title="刪除"
+                          title={tc('delete')}
                         >
                           {deletingLogId === log.id ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
                         </button>
@@ -1753,22 +1758,22 @@ export default function ContactDetailPage() {
             <button
               className="text-white/80 hover:text-white bg-black/40 rounded-full p-2 transition-colors"
               onClick={() => lbZoom(0.25)}
-              title="放大"
+              title={t('zoomIn')}
             ><ZoomIn size={18} /></button>
             <button
               className="text-white/80 hover:text-white bg-black/40 rounded-full p-2 transition-colors"
               onClick={() => lbZoom(-0.25)}
-              title="縮小"
+              title={t('zoomOut')}
             ><ZoomOut size={18} /></button>
             <button
               className="text-white/80 hover:text-white bg-black/40 rounded-full p-2 transition-colors"
               onClick={lbReset}
-              title="重置"
+              title={t('zoomReset')}
             ><Maximize2 size={18} /></button>
             <button
               className="text-white/80 hover:text-white bg-black/40 rounded-full p-2 transition-colors"
               onClick={closeLightbox}
-              title="關閉"
+              title={t('close')}
             ><X size={18} /></button>
           </div>
 
@@ -1799,7 +1804,7 @@ export default function ContactDetailPage() {
           >
             <Image
               src={lightbox}
-              alt="名片大圖"
+              alt={t('cardLargeAlt')}
               width={1200}
               height={800}
               className="max-w-[92vw] max-h-[88vh] object-contain rounded-lg shadow-2xl pointer-events-none"
@@ -1823,7 +1828,7 @@ export default function ContactDetailPage() {
                 <input ref={editFileRef} type="file" accept="image/*" className="hidden" onChange={handleEditImage} />
                 {editOcring ? (
                   <div className="flex items-center justify-center gap-2 py-3 text-sm text-blue-500">
-                    <Loader2 size={16} className="animate-spin" /> AI 辨識中...
+                    <Loader2 size={16} className="animate-spin" /> {t('recognizing')}
                   </div>
                 ) : (
                   <p className="text-sm text-gray-400 py-2">{t('scanCard')}</p>
@@ -1952,7 +1957,7 @@ export default function ContactDetailPage() {
                   <div>
                     <label className={labelClass}>{t('metAt')}</label>
                     <input type="text" value={editForm.met_at} onChange={(e) => setEditForm((prev) => ({ ...prev, met_at: e.target.value }))}
-                      placeholder="e.g. 台北生技展 2026" className={inputClass} />
+                      placeholder={t('metAtPlaceholder')} className={inputClass} />
                   </div>
                   <div>
                     <label className={labelClass}>{t('metDate')}</label>
@@ -1962,7 +1967,7 @@ export default function ContactDetailPage() {
                   <div>
                     <label className={labelClass}>{t('referredBy')}</label>
                     <input type="text" value={editForm.referred_by} onChange={(e) => setEditForm((prev) => ({ ...prev, referred_by: e.target.value }))}
-                      placeholder="e.g. 王小明" className={inputClass} />
+                      placeholder={t('referredByPlaceholder')} className={inputClass} />
                   </div>
                 </div>
               </div>
@@ -1990,17 +1995,17 @@ export default function ContactDetailPage() {
               {/* To / CC / BCC */}
               <div className="space-y-2">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">{tm('recipient')} <span className="text-gray-400 font-normal">（打名字或 email 搜尋聯絡人，或直接輸入 email 後按 Enter）</span></label>
-                  <RecipientChipInput recipients={mailToList} onChange={setMailToList} contacts={contactOptions} placeholder="搜尋聯絡人或輸入 email…" />
+                  <label className="block text-xs font-medium text-gray-500 mb-1">{tm('recipient')} <span className="text-gray-400 font-normal">{tm('recipientHint')}</span></label>
+                  <RecipientChipInput recipients={mailToList} onChange={setMailToList} contacts={contactOptions} placeholder={tm('searchContactPlaceholder')} />
                 </div>
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <label className="block text-xs font-medium text-gray-500 mb-1">CC <span className="text-gray-400 font-normal">（副本）</span></label>
-                    <RecipientChipInput recipients={mailCcList} onChange={setMailCcList} contacts={contactOptions} placeholder="搜尋或輸入 email…" />
+                    <label className="block text-xs font-medium text-gray-500 mb-1">CC <span className="text-gray-400 font-normal">{tm('ccHint')}</span></label>
+                    <RecipientChipInput recipients={mailCcList} onChange={setMailCcList} contacts={contactOptions} placeholder={tm('searchOrEmailPlaceholder')} />
                   </div>
                   <div className="flex-1">
-                    <label className="block text-xs font-medium text-gray-500 mb-1">BCC <span className="text-gray-400 font-normal">（密件副本）</span></label>
-                    <RecipientChipInput recipients={mailBccList} onChange={setMailBccList} contacts={contactOptions} placeholder="搜尋或輸入 email…" />
+                    <label className="block text-xs font-medium text-gray-500 mb-1">BCC <span className="text-gray-400 font-normal">{tm('bccHint')}</span></label>
+                    <RecipientChipInput recipients={mailBccList} onChange={setMailBccList} contacts={contactOptions} placeholder={tm('searchOrEmailPlaceholder')} />
                   </div>
                 </div>
               </div>
@@ -2023,7 +2028,7 @@ export default function ContactDetailPage() {
               {/* Template attachments (read-only) */}
               {templateAttachments.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-gray-500 mb-1.5">範本附件</p>
+                  <p className="text-xs font-medium text-gray-500 mb-1.5">{tm('templateAttachments')}</p>
                   <div className="flex flex-wrap gap-1.5">
                     {templateAttachments.map((a) => (
                       <span key={a.id} className="flex items-center gap-1 text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded-lg">
@@ -2036,14 +2041,14 @@ export default function ContactDetailPage() {
 
               {/* AI generate */}
               <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg space-y-2">
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">AI 生成信件內文</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">{tm('aiGeneratedBody')}</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={mailAiDesc}
                     onChange={(e) => setMailAiDesc(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleAiGenerateMail()}
-                    placeholder="描述信件目的（如：感謝上次會面，介紹新產品）"
+                    placeholder={tm('aiPromptPlaceholder')}
                     className="flex-1 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <button
@@ -2052,7 +2057,7 @@ export default function ContactDetailPage() {
                     className="flex items-center gap-1.5 px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-40"
                   >
                     {mailAiGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                    生成
+                    {t('generate')}
                   </button>
                 </div>
               </div>
@@ -2074,12 +2079,12 @@ export default function ContactDetailPage() {
               {/* Temp attachments */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-medium text-gray-500">額外附件（最大 5MB）</label>
+                  <label className="text-xs font-medium text-gray-500">{tm('extraAttachments')}</label>
                   <button
                     onClick={() => tempAttachRef.current?.click()}
                     className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
                   >
-                    <Paperclip size={11} /> 新增
+                    <Paperclip size={11} /> {tc('add')}
                   </button>
                   <input ref={tempAttachRef} type="file" multiple className="hidden" onChange={handleAddTempAttach} />
                 </div>
@@ -2116,13 +2121,16 @@ export default function ContactDetailPage() {
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                <Merge size={16} /> 選擇要合併的聯絡人
+                <Merge size={16} /> {t('selectMergeContact')}
               </h2>
               <button onClick={() => setMergeSearchOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={18} /></button>
             </div>
             <div className="p-6 space-y-4">
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                搜尋要被合併（刪除）的聯絡人。目前聯絡人「<strong>{contact?.name || contact?.name_en}</strong>」將保留。
+                {t.rich('mergeSearchDesc', {
+                  name: contact?.name || contact?.name_en || '',
+                  strong: (chunks) => <strong>{chunks}</strong>,
+                })}
               </p>
               <div className="relative">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -2131,7 +2139,7 @@ export default function ContactDetailPage() {
                   type="text"
                   value={mergeQuery}
                   onChange={(e) => searchMergeContacts(e.target.value)}
-                  placeholder="搜尋姓名、公司、Email..."
+                  placeholder={tm('searchContactsPlaceholder')}
                   className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -2144,14 +2152,14 @@ export default function ContactDetailPage() {
                       onClick={() => setMergeTarget({ id: r.id, name: r.name, name_en: r.name_en, company: r.company, company_en: null, email: r.email })}
                       className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-gray-100 dark:border-gray-800 transition-colors"
                     >
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{r.name || r.name_en || '（無姓名）'}</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{r.name || r.name_en || t('noName')}</p>
                       <p className="text-xs text-gray-400">{[r.company, r.email].filter(Boolean).join(' · ')}</p>
                     </button>
                   ))}
                 </div>
               )}
               {!mergeSearching && mergeQuery.length > 0 && mergeResults.length === 0 && (
-                <p className="text-sm text-gray-400 text-center py-2">找不到符合的聯絡人</p>
+                <p className="text-sm text-gray-400 text-center py-2">{tm('noContactFound')}</p>
               )}
             </div>
           </div>
@@ -2164,34 +2172,34 @@ export default function ContactDetailPage() {
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                <Merge size={16} /> 確認合併
+                <Merge size={16} /> {t('mergeConfirm')}
               </h2>
               <button onClick={() => setMergeTarget(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={18} /></button>
             </div>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                  <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-2 uppercase tracking-wide">✅ 保留</p>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">{contact?.name || contact?.name_en || '（無姓名）'}</p>
+                  <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-2 uppercase tracking-wide">{t('mergeKeepLabel')}</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{contact?.name || contact?.name_en || t('noName')}</p>
                   <p className="text-sm text-gray-500">{contact?.company}</p>
                   <p className="text-xs text-gray-400">{contact?.email}</p>
                 </div>
                 <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
-                  <p className="text-xs font-semibold text-red-700 dark:text-red-400 mb-2 uppercase tracking-wide">🗑 刪除</p>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">{mergeTarget.name || mergeTarget.name_en || '（無姓名）'}</p>
+                  <p className="text-xs font-semibold text-red-700 dark:text-red-400 mb-2 uppercase tracking-wide">{t('mergeDeleteLabel')}</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{mergeTarget.name || mergeTarget.name_en || t('noName')}</p>
                   <p className="text-sm text-gray-500">{mergeTarget.company}</p>
                   <p className="text-xs text-gray-400">{mergeTarget.email}</p>
                 </div>
               </div>
               <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                <p>• 保留聯絡人的欄位優先，右側空白欄位才補入</p>
-                <p>• 名片、互動紀錄、Tag 全部合併到保留聯絡人</p>
-                <p>• 來源聯絡人刪除後無法復原</p>
+                <p>{t('mergeRule1')}</p>
+                <p>{t('mergeRule2')}</p>
+                <p>{t('mergeRule3')}</p>
               </div>
             </div>
             <div className="flex justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
               <button onClick={() => setMergeTarget(null)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900">
-                ← 重新選擇
+                {t('reselect')}
               </button>
               <button
                 onClick={handleMerge}

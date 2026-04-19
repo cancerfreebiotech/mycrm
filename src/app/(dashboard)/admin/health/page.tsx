@@ -271,6 +271,7 @@ function HunterSection() {
 }
 
 export default function HealthPage() {
+  const t = useTranslations('health')
   const [result, setResult] = useState<HealthResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [lastChecked, setLastChecked] = useState<string | null>(null)
@@ -332,7 +333,7 @@ export default function HealthPage() {
             className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
             {loading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-            {loading ? '檢查中...' : '立即檢查'}
+            {loading ? t('checking') : t('checkNow')}
           </button>
         </div>
       </div>
@@ -352,8 +353,8 @@ export default function HealthPage() {
           <div>
             <p className={`font-semibold text-sm ${errorCount > 0 ? 'text-red-700 dark:text-red-400' : 'text-green-700 dark:text-green-400'}`}>
               {errorCount > 0
-                ? `⚠️ ${errorCount} 個服務異常`
-                : '✅ 所有服務運作正常'}
+                ? t('servicesDown', { count: errorCount })
+                : t('allHealthy')}
             </p>
             <p className="text-xs text-gray-500 mt-0.5">
               {okCount} 個正常 · {errorCount} 個異常 · {result.services.filter((s) => s.status === 'unconfigured').length} 個未設定
@@ -366,7 +367,7 @@ export default function HealthPage() {
       {loading && !result ? (
         <div className="text-center py-16">
           <Loader2 size={28} className="animate-spin mx-auto mb-3 text-gray-400" />
-          <p className="text-sm text-gray-400">正在檢查各服務狀態...</p>
+          <p className="text-sm text-gray-400">{t('checkingStatus')}</p>
         </div>
       ) : result ? (
         <div className="space-y-3">
@@ -413,11 +414,11 @@ export default function HealthPage() {
 
       {/* Legend */}
       <div className="mt-6 bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 text-xs text-gray-500 space-y-1">
-        <p className="font-semibold text-gray-600 dark:text-gray-400 mb-2">延遲指示燈說明</p>
+        <p className="font-semibold text-gray-600 dark:text-gray-400 mb-2">{t('latencyLegend')}</p>
         <div className="flex gap-4">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded bg-green-400 inline-block" /> &lt; 500 ms — 正常</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded bg-yellow-400 inline-block" /> 500–2000 ms — 緩慢</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded bg-red-400 inline-block" /> &gt; 2000 ms — 異常慢</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded bg-green-400 inline-block" /> {t('latencyNormal')}</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded bg-yellow-400 inline-block" /> {t('latencySlow')}</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded bg-red-400 inline-block" /> {t('latencyCritical')}</span>
         </div>
       </div>
 
