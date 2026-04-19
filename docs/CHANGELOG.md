@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## v3.2.0 — Newsletter subscriber schema + import 腳本鋪底（2026-04-20）
+
+### 變更項目
+- `supabase/newsletter_subscribers.sql`：新增 3 張表 + trigger，可手動在 Supabase Dashboard SQL Editor 執行
+  - `newsletter_subscribers`（獨立於 contacts 的訂閱戶池）
+  - `newsletter_lists`（群組；預先 seed 4 個：`zh-TW / en / ja / zh-TW-marketing`）
+  - `newsletter_subscriber_lists`（M:N junction，處理 email overlap）
+  - 自動 link trigger：contact email 變更時，同 email 的 subscriber 會自動 link `contact_id`
+  - Backfill query：對已有 contacts 和 subscribers 做一次性 link
+  - citext extension（case-insensitive email）
+  - RLS 啟用：authenticated 可讀、service_role 可寫（管理寫入走 API route）
+- `scripts/import-newsletter-templates.mjs`：把 `docs/newsletter-templates/` 三份 skeleton 塞進 `email_templates`（冪等 upsert by title）
+- `scripts/import-newsletter-subscribers.mjs`：SendGrid CSV → subscribers。支援多個 CSV → 多個 list 對應；同 email 出現在多份 CSV 會被合併成同一 subscriber 並掛到多個 list。column alias 可調整（預設認 `email / first_name / last_name` 各種拼寫）
+
+### 還沒做（要等資料或決策）
+- 執行 SQL migration（需要 Supabase 權限 + user review）
+- 執行 template import 腳本（需要 service role env var 或 user 手動跑）
+- 執行 CSV import（等 user 提供 4 份 CSV 路徑 + 確認欄位名稱）
+- `/api/ai-newsletter-compose` endpoint（等 user 提供歷史電子報作為 tone corpus）
+- 新增 `/admin/newsletter/unlinked` 管理頁面（未 link subscribers 清單）
+- `newsletter_campaigns` 改用 `list_ids` 取代 `tag_ids`
+
 ## v3.1.0 — 查重規則升級 (A+B+E+F) + API 統一化（2026-04-20）
 
 ### 變更項目
