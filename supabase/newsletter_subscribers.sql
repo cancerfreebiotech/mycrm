@@ -72,8 +72,15 @@ CREATE INDEX IF NOT EXISTS newsletter_subscriber_lists_list_id_idx ON newsletter
 -- attach them. citext comparison is already case-insensitive.
 -- ============================================================
 
+-- `SET search_path` prevents function_search_path_mutable advisor warning.
+-- SECURITY INVOKER is explicit (vs SECURITY DEFINER) so the function runs
+-- with the caller's privileges.
 CREATE OR REPLACE FUNCTION link_subscriber_to_contact()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
 BEGIN
   IF NEW.email IS NULL OR NEW.deleted_at IS NOT NULL THEN
     RETURN NEW;
@@ -86,7 +93,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 DROP TRIGGER IF EXISTS link_subscribers_on_contact_email ON contacts;
 CREATE TRIGGER link_subscribers_on_contact_email

@@ -1,5 +1,34 @@
 # CHANGELOG
 
+## v3.2.1 — Newsletter migration + skeleton templates 已部署（2026-04-20）
+
+### 變更項目
+- **已 apply**：`supabase/newsletter_subscribers.sql` 的 migration 已透過 Supabase MCP 執行到 myCRM 專案
+  - 3 張表建好：`newsletter_subscribers`（0 rows）、`newsletter_lists`（4 rows seeded）、`newsletter_subscriber_lists`（0 rows）
+  - `link_subscriber_to_contact` trigger 上線
+  - RLS 啟用（authenticated read / service_role write）
+  - citext extension 啟用
+- **已 insert**：3 份 newsletter skeleton 模板已寫入 `email_templates` 表
+  - `Newsletter Skeleton — 中文月報`（5879 bytes）
+  - `Newsletter Skeleton — English`（5402 bytes）
+  - `Newsletter Skeleton — 日本語`（5405 bytes）
+- **Advisor fix**：`link_subscriber_to_contact` 函式加上 `SET search_path = public, pg_temp` 防止 function_search_path_mutable 警告
+- SQL 檔同步更新，下次 re-run idempotent
+
+### 已部署驗收
+```
+newsletter_subscribers  → 0 rows（等 CSV 匯入）
+newsletter_lists        → 4 rows（zh-TW/en/ja/zh-TW-marketing）
+email_templates (skel)  → 3 rows
+```
+
+### 下一步（等 user 提供資料或決策後才動）
+- 跑 `scripts/import-newsletter-subscribers.mjs` 匯入 4 份 CSV
+- 建 `/admin/newsletter/compose` UI
+- 實作 AI tone-aware compose（等 user 提供歷史電子報 corpus）
+- 改 newsletter wizard：`tag_ids` → `list_ids`
+- 建 `/admin/newsletter/unlinked` 報表頁
+
 ## v3.2.0 — Newsletter subscriber schema + import 腳本鋪底（2026-04-20）
 
 ### 變更項目
