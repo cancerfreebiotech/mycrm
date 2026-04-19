@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## v3.1.0 — 查重規則升級 (A+B+E+F) + API 統一化（2026-04-20）
+
+### 變更項目
+- **規則 A**：`email` 比對改為 case-insensitive（`John@X.com` 跟 `john@x.com` 視為同一）
+- **規則 B**：同步比對 `second_email`（主要 email 沒重複時，第二 email 也查）
+- **規則 E**：`find_similar_contacts` 也跑在 `name_en` 上（英文名片能找到中文版聯絡人）
+- **規則 F**：同樣跑在 `name_local` 上（日文名片亦然）
+- **API 統一**：新增 `POST /api/contacts/check-duplicates` 伺服端端點；`contacts/new/page.tsx` 和 `contacts/batch-upload/page.tsx` 原本各自直接呼叫 `supabase.rpc()`，現在全部改走 API — 規則寫在 `src/lib/duplicate.ts` 單一位置，不會再出現 client-side 跟 server-side 行為不同步的問題
+- **Telegram Bot**（`src/app/api/bot/route.ts:805`）原本就用 shared helper，更新參數簽章傳入所有 5 個欄位（email/second_email/name/name_en/name_local）
+- **回傳結構**：`DuplicateResult.exact` 改為 `Contact[]`（原本是 `Contact | null`，因現在可能同時 match 主 email 與 second_email）
+
+### 未採用（user 2026-04-19 決定）
+- C（LinkedIn URL exact）、D（電話 normalize）、G（email domain + similar name）、H（門檻降 0.5）、I（同 company + similar name）— 誤判風險太高或收益有限
+
+### 技術細節
+- `lib/duplicate.ts` 的 `.ilike()` 呼叫會 escape `%/_/\\` wildcards，避免 email 內含特殊字元造成 pattern bypass
+- 同一個聯絡人若同時符合 exact 和 similar，只回傳在 exact（不重複）
+
 ## v3.0.0 — Newsletter 模板骨架化：從 listmonk 重建為 mycrm 三語骨架（2026-04-19）
 
 ### 變更項目

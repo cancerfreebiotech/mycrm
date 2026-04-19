@@ -802,12 +802,20 @@ async function handlePhoto(
       return
     }
 
-    const { exact, similar } = await checkDuplicates(cardData.email, cardData.name)
+    const { exact, similar } = await checkDuplicates({
+      email: cardData.email,
+      secondEmail: cardData.second_email,
+      name: cardData.name,
+      nameEn: cardData.name_en,
+      nameLocal: cardData.name_local,
+    })
     let dupWarning = ''
-    if (exact) {
-      dupWarning += `\n⚠️ 此 email 已有聯絡人：${exact.name}（${exact.company}），是否仍要新增？`
+    if (exact.length > 0) {
+      const e = exact[0]
+      dupWarning += `\n⚠️ 此 email 已有聯絡人：${e.name}（${e.company}），是否仍要新增？`
     } else if (similar.length > 0) {
-      dupWarning += `\n🔍 系統有相似聯絡人：${similar[0].name}（${similar[0].company}），請確認是否為同一人`
+      const s = similar[0]
+      dupWarning += `\n🔍 系統有相似聯絡人：${s.name}（${s.company}），請確認是否為同一人`
     }
 
     const contactPayload = { ...cardData, card_img_url: cardImgUrl, language: countryToLanguage(cardData.country_code) }

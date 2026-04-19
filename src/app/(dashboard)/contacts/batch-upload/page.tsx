@@ -115,16 +115,31 @@ export default function BatchUploadPage() {
         const data = await res.json()
         if (!res.ok) throw new Error(data.error ?? 'OCR 失敗')
 
-        // Duplicate check
+        // Duplicate check (server-side via shared helper)
         let dupType: RowData['dupType'] = 'none'
         let dupName: string | null = null
-        if (data.email) {
-          const { data: exact } = await supabase.from('contacts').select('id, name').is('deleted_at', null).eq('email', data.email).maybeSingle()
-          if (exact) { dupType = 'exact'; dupName = exact.name }
-        }
-        if (dupType === 'none' && data.name) {
-          const { data: similar } = await supabase.rpc('find_similar_contacts', { input_name: data.name, threshold: 0.6 })
-          if (similar && similar.length > 0) { dupType = 'similar'; dupName = similar[0].name }
+        try {
+          const dupRes = await fetch('/api/contacts/check-duplicates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: data.email,
+              secondEmail: data.second_email,
+              name: data.name,
+              nameEn: data.name_en,
+              nameLocal: data.name_local,
+            }),
+          })
+          if (dupRes.ok) {
+            const { exact, similar } = await dupRes.json() as {
+              exact: Array<{ id: string; name: string | null }>
+              similar: Array<{ id: string; name: string | null }>
+            }
+            if (exact.length > 0) { dupType = 'exact'; dupName = exact[0].name }
+            else if (similar.length > 0) { dupType = 'similar'; dupName = similar[0].name }
+          }
+        } catch {
+          // silent — duplicate check is advisory
         }
 
         setRows((prev) => prev.map((r, i) => i === rowIdx ? {

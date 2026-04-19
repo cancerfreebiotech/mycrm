@@ -152,18 +152,25 @@ export default function NewContactPage() {
   }
 
   async function checkDup() {
-    if (!form.email && !form.name) return
-    let exact: DupContact | null = null
-    if (form.email) {
-      const { data } = await supabase.from('contacts').select('id, name, company').is('deleted_at', null).eq('email', form.email).maybeSingle()
-      exact = data ?? null
-    }
-    setDupExact(exact)
-    if (form.name) {
-      const { data } = await supabase.rpc('find_similar_contacts', { input_name: form.name, threshold: 0.6 })
-      setDupSimilar((data ?? []).filter((c: DupContact) => c.id !== exact?.id).slice(0, 3))
-    } else {
-      setDupSimilar([])
+    if (!form.email && !form.second_email && !form.name && !form.name_en && !form.name_local) return
+    try {
+      const res = await fetch('/api/contacts/check-duplicates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: form.email,
+          secondEmail: form.second_email,
+          name: form.name,
+          nameEn: form.name_en,
+          nameLocal: form.name_local,
+        }),
+      })
+      if (!res.ok) return
+      const { exact, similar } = await res.json() as { exact: DupContact[]; similar: DupContact[] }
+      setDupExact(exact[0] ?? null)
+      setDupSimilar(similar.slice(0, 3))
+    } catch {
+      // silent — duplicate check is advisory, not blocking
     }
   }
 
