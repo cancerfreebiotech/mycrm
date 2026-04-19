@@ -261,8 +261,8 @@ export default function TasksPage() {
                     )}
                     <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-400 dark:text-gray-500">
                       {/* Assigned time & by */}
-                      <span title="指派時間">📅 {formatDate(task.created_at)}</span>
-                      <span title="指派人">🧑‍💼 {getUserLabel(task.created_by)}</span>
+                      <span title={t('assignedAt')}>📅 {formatDate(task.created_at)}</span>
+                      <span title={t('assignedBy')}>🧑‍💼 {getUserLabel(task.created_by)}</span>
                       {task.due_at && (
                         <span>⏰ {new Date(task.due_at).toLocaleString()}</span>
                       )}

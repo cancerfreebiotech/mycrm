@@ -58,6 +58,8 @@ export default function BatchUploadPage() {
   const router = useRouter()
   const t = useTranslations('batch')
   const tc = useTranslations('common')
+  const tbu = useTranslations('batchUpload')
+  const tcnt = useTranslations('contacts')
   const supabase = createBrowserSupabaseClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -113,7 +115,7 @@ export default function BatchUploadPage() {
           body: JSON.stringify({ image: base64, model: aiModelId }),
         })
         const data = await res.json()
-        if (!res.ok) throw new Error(data.error ?? 'OCR 失敗')
+        if (!res.ok) throw new Error(data.error ?? tbu('ocrFailed'))
 
         // Duplicate check (server-side via shared helper)
         let dupType: RowData['dupType'] = 'none'
@@ -155,7 +157,7 @@ export default function BatchUploadPage() {
           skip: dupType === 'exact',
         } : r))
       } catch (err) {
-        const msg = err instanceof Error ? err.message : '處理失敗'
+        const msg = err instanceof Error ? err.message : tbu('processFailed')
         setRows((prev) => prev.map((r, i) => i === rowIdx ? { ...r, status: 'error', error: msg } : r))
       }
     }
@@ -199,8 +201,9 @@ export default function BatchUploadPage() {
       if (inserted) {
         // Add to contact_cards
         if (row.storagePath && row.imgUrl) {
-          await supabase.from('contact_cards').insert({ contact_id: inserted.id, card_img_url: row.imgUrl, storage_path: row.storagePath, label: '正面' })
+          await supabase.from('contact_cards').insert({ contact_id: inserted.id, card_img_url: row.imgUrl, storage_path: row.storagePath, label: tcnt('legacyCardFront') })
         }
+        // i18n: DB filter literal — notes/page.tsx and contacts/[id] filter logs by this exact string
         await supabase.from('interaction_logs').insert({ contact_id: inserted.id, type: 'note', content: '透過批次上傳新增名片', created_by: userId })
         saved++
       } else {
@@ -319,7 +322,7 @@ export default function BatchUploadPage() {
                     </td>
                     <td className="px-3 py-2">
                       {row.imgUrl ? (
-                        <img src={row.imgUrl} alt="名片" className="w-16 h-10 object-cover rounded border border-gray-200 dark:border-gray-700" />
+                        <img src={row.imgUrl} alt={tcnt('cardAlt')} className="w-16 h-10 object-cover rounded border border-gray-200 dark:border-gray-700" />
                       ) : row.status === 'processing' ? (
                         <div className="w-16 h-10 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded">
                           <Loader2 size={14} className="animate-spin text-blue-400" />

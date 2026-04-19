@@ -74,13 +74,13 @@ export default function AdminUsersPage() {
   }
 
   async function resetMfa(u: CrmUser) {
-    if (!confirm(`確定要重設「${u.display_name || u.email}」的 MFA？該用戶下次登入時需重新設置。`)) return
+    if (!confirm(t('confirmResetMfa', { name: u.display_name || u.email }))) return
     setResetMfaId(u.id)
     try {
       const res = await fetch(`/api/admin/users/${u.id}/reset-mfa`, { method: 'POST' })
       const data = await res.json()
       if (res.ok) {
-        alert(`已刪除 ${data.deleted} 個 MFA 驗證器`)
+        alert(t('mfaDeleted', { count: data.deleted }))
         // Refresh MFA status
         const mfaRes = await fetch('/api/admin/mfa-status')
         if (mfaRes.ok) {
@@ -88,10 +88,10 @@ export default function AdminUsersPage() {
           setMfaStatus(status ?? {})
         }
       } else {
-        alert(`重設失敗：${data.error}`)
+        alert(t('resetFailedWithError', { error: data.error }))
       }
     } catch {
-      alert('重設失敗，請稍後再試')
+      alert(t('resetFailed'))
     } finally {
       setResetMfaId(null)
     }
@@ -165,9 +165,9 @@ export default function AdminUsersPage() {
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-1.5 items-start">
                       {mfaStatus[u.email] ? (
-                        <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 rounded-full">已設定</span>
+                        <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 rounded-full">{t('mfaSet')}</span>
                       ) : (
-                        <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-full">未設定</span>
+                        <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-full">{t('mfaNotSet')}</span>
                       )}
                       {mfaStatus[u.email] && (
                         <button
@@ -175,7 +175,7 @@ export default function AdminUsersPage() {
                           disabled={resetMfaId === u.id}
                           className="px-2 py-0.5 text-xs border border-orange-200 dark:border-orange-800 rounded-lg text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/30 disabled:opacity-40 transition-colors"
                         >
-                          {resetMfaId === u.id ? '重設中...' : '重設'}
+                          {resetMfaId === u.id ? t('resetting') : t('reset')}
                         </button>
                       )}
                     </div>

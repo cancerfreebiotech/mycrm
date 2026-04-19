@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { ShieldOff } from 'lucide-react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import type { FeatureKey } from '@/lib/features'
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function PermissionGate({ feature, children }: Props) {
+  const t = useTranslations('permission')
   const [allowed, setAllowed] = useState<boolean | null>(null)
 
   useEffect(() => {
@@ -37,8 +39,8 @@ export function PermissionGate({ feature, children }: Props) {
       <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4 text-center">
         <ShieldOff size={40} className="text-gray-300 dark:text-gray-600" />
         <div>
-          <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">沒有權限</p>
-          <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">請聯絡管理員開通此功能</p>
+          <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">{t('noPermission')}</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">{t('contactAdmin')}</p>
         </div>
       </div>
     )

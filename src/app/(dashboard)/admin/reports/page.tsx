@@ -42,6 +42,8 @@ const FREQ_CRON: Record<string, string> = {
 export default function ReportsPage() {
   const t = useTranslations('reports')
   const tc = useTranslations('common')
+  const tcnt = useTranslations('contacts')
+  const tt = useTranslations('interactionLogs')
   const supabase = createBrowserSupabaseClient()
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
 
@@ -241,7 +243,7 @@ export default function ReportsPage() {
           </div>
           {allTags.length > 0 && (
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">標籤篩選</label>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{tcnt('tagFilter')}</label>
               <div className="flex flex-wrap gap-1.5 max-w-sm">
                 {allTags.map(tag => {
                   const selected = selectedTagIds.includes(tag.id)
@@ -275,7 +277,7 @@ export default function ReportsPage() {
           )}
           {/* Type filter */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">互動類型</label>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('interactionType')}</label>
             <div className="flex gap-1.5">
               {LOG_TYPES.map(({ value, label }) => {
                 const selected = selectedTypes.includes(value)
@@ -300,7 +302,7 @@ export default function ReportsPage() {
           {/* Country filter */}
           {allCountries.length > 0 && (
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">國家</label>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{tcnt('country')}</label>
               <div className="flex flex-wrap gap-1.5 max-w-xs">
                 {allCountries.map(code => {
                   const selected = selectedCountries.includes(code)
@@ -390,8 +392,8 @@ export default function ReportsPage() {
                         <SortTh col="type" label={t('colLogType')} />
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{t('colLogContent')}</th>
                         <SortTh col="date" label={t('colLogDate')} />
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">時間</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">地點</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{tt('meetingTime')}</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{tt('meetingLocation')}</th>
                         <SortTh col="creator" label={t('colCreator')} />
                       </tr>
                     </thead>

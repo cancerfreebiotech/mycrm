@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { NextIntlClientProvider } from 'next-intl'
-import { getLocale, getMessages } from 'next-intl/server'
+import { getLocale, getMessages, getTranslations } from 'next-intl/server'
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,10 +15,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "myCRM",
-  description: "Telegram 名片辨識 CRM 系統",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('app')
+  return {
+    title: "myCRM",
+    description: t('description'),
+  }
+}
 
 export default async function RootLayout({
   children,

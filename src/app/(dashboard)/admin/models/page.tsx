@@ -215,7 +215,7 @@ export default function AdminModelsPage() {
               <div>
                 <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('colName')}</label>
                 <input type="text" value={epForm.name} onChange={(e) => setEpForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="例：Google Gemini"
+                  placeholder={t('endpointPlaceholder')}
                   className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
@@ -270,7 +270,7 @@ export default function AdminModelsPage() {
                     {editingKeyId === ep.id ? (
                       <div className="flex gap-1">
                         <input type="password" value={newApiKey} onChange={(e) => setNewApiKey(e.target.value)}
-                          placeholder="新 API Key"
+                          placeholder={t('newApiKey')}
                           className="text-xs px-2 py-1 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 w-28 focus:outline-none focus:ring-1 focus:ring-blue-500" />
                         <button onClick={() => saveApiKey(ep.id)} className="text-xs text-blue-600 hover:underline">{tc('save')}</button>
                         <button onClick={() => { setEditingKeyId(null); setNewApiKey('') }} className="text-xs text-gray-400">{tc('cancel')}</button>
@@ -340,13 +340,13 @@ export default function AdminModelsPage() {
                 <div>
                   <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Model ID</label>
                   <input type="text" value={mdForm.model_id} onChange={(e) => setMdForm((f) => ({ ...f, model_id: e.target.value }))}
-                    placeholder="例：gemini-2.5-flash"
+                    placeholder={t('modelIdPlaceholder')}
                     className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('colDisplayName')}</label>
                   <input type="text" value={mdForm.display_name} onChange={(e) => setMdForm((f) => ({ ...f, display_name: e.target.value }))}
-                    placeholder="例：Gemini 2.5 Flash"
+                    placeholder={t('modelNamePlaceholder')}
                     className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>

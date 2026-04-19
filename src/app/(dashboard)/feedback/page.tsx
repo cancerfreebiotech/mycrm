@@ -176,7 +176,7 @@ export default function FeedbackPage() {
           ) : (
             <label className="flex items-center gap-2 w-fit cursor-pointer px-3 py-2 text-sm border border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
               <Upload size={15} />
-              <span>上傳截圖</span>
+              <span>{t('uploadScreenshot')}</span>
               <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
             </label>
           )}

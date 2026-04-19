@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## v3.2.2 — 完成 i18n 遷移尾巴 11 個檔案（2026-04-20）
+
+### 變更項目
+- 剩下 11 個檔案的 hardcode 中文全部改用 `t()`：
+  - `admin/reports/page.tsx`：tag/country filter、互動類型、時間/地點表頭
+  - `contacts/batch-upload/page.tsx`：OCR 失敗 / 處理失敗 / `legacyCardFront` / `cardAlt`
+  - `notes/page.tsx`：跳至 placeholder（4 個 `.ilike()` DB filter literals 保留並加 `// i18n:` 註記）
+  - `admin/models/page.tsx`：4 個 placeholder（endpoint / API key / model id / model name）
+  - `admin/users/page.tsx`：MFA 重設 confirm / alert / 「已設定」「未設定」「重設中...」「重設」
+  - `tasks/page.tsx`：指派時間 / 指派人 title
+  - `PermissionGate.tsx`：沒有權限 / 請聯絡管理員
+  - `email/compose/page.tsx`：「我」label
+  - `feedback/page.tsx`：上傳截圖 button
+  - `unassigned-notes/page.tsx`：（空白）fallback
+  - `layout.tsx`：Next.js metadata 改用 `generateMetadata` async function + `getTranslations('app')`
+- 使用既有的 key（`scripts/add-final-keys.mjs` 昨晚已 seed）
+- Three-language key count: **1105 / 1105 / 1105**，sync diff = 0
+
+### 最終結果
+Audit 顯示剩 6 行，全是**刻意 SKIP**的 DB filter literals（`.includes('新增名片')` / `.ilike('%透過 Telegram Bot 新增名片%')` 等）— 這些字串由 bot / batch-upload / camcard 寫入 DB 當 log 內容，UI 篩選這些 log 時需 literal 比對，不能改。都附上 `// i18n: ...` 註解說明原因。
+
+真實 i18n 違規：**0**
+
+### Remote trigger 關閉
+昨晚建的 `mycrm-i18n-nightly`（`trig_01GfPK42u2uhprqGa5jmnbqd`）在 02:13 JST 觸發但沒 push（推測 remote agent 缺 GitHub push token）。已 disable trigger 避免日後空轉。Lesson: 需 write-back 的工作不適合 remote scheduled trigger，本地 `/loop` 或手動執行較可靠。
+
 ## v3.2.1 — Newsletter migration + skeleton templates 已部署（2026-04-20）
 
 ### 變更項目

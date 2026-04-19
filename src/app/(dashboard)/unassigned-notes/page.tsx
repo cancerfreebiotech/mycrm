@@ -145,7 +145,7 @@ export default function UnassignedNotesPage() {
                     {new Date(note.created_at).toLocaleString(undefined, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
-                <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{note.content || '（空白）'}</p>
+                <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{note.content || t('emptyContent')}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <button

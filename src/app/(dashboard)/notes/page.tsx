@@ -68,6 +68,8 @@ export default function NotesPage() {
       .from('interaction_logs')
       .select('id, type, content, email_subject, meeting_date, created_at, contact_id, contacts(name), users(display_name, email)')
       .not('contact_id', 'is', null)
+      // i18n: DB filter literals — these strings are system-generated log content
+      // from bot/batch-upload/camcard. Changing them breaks filter match.
       .not('content', 'ilike', '透過 Telegram Bot 新增名片%')
       .not('content', 'ilike', '從名片王匯入%')
       .not('content', 'ilike', '透過批次上傳新增名片%')
@@ -227,7 +229,7 @@ export default function NotesPage() {
                   max={totalPages}
                   value={jumpInput}
                   onChange={(e) => setJumpInput(e.target.value)}
-                  placeholder="跳至"
+                  placeholder={t('jumpPlaceholder')}
                   className="w-12 px-1.5 py-0.5 text-xs text-center border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
                 <button type="submit" className="px-1.5 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">Go</button>

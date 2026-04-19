@@ -406,7 +406,7 @@ export default function EmailComposePage() {
                     ))}
                     {selfActive && (
                       <span className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-full">
-                        <span className="text-[10px] font-semibold text-blue-500 dark:text-blue-400">我</span>
+                        <span className="text-[10px] font-semibold text-blue-500 dark:text-blue-400">{t('meLabel')}</span>
                         <span className="text-gray-700 dark:text-gray-300">{userEmail}</span>
                         <button
                           onClick={() => setIncludeSelf(false)}
