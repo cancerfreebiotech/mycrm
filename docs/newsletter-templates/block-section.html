@@ -1,0 +1,41 @@
+<!--
+  區塊模板（block pattern）— AI compose 時每個 story 複製一份填空
+  用於 {{upcoming_blocks}} 和 {{recap_blocks}} 的 innerHTML
+-->
+
+<!-- 區塊：標題 + 段落 + 可選連結 -->
+<div style="font-weight:normal;padding:0 24px 16px 32px">
+  <p style="margin:0 0 8px 0">
+    <strong>{{number}}｜{{title}}</strong>
+  </p>
+  {{paragraphs_html}}
+  <!-- paragraphs_html 範例：
+       <p>第一段內容。</p><br>
+       <p>第二段，可以含 <strong>粗體</strong> 或 <em>斜體</em>。</p><br>
+       <ul>
+         <li>列點一</li>
+         <li>列點二</li>
+       </ul><br>
+       <p>📅 時間：2026/5/XX</p>
+       <p>📍 地點：Taipei</p>
+  -->
+  {{link_html}}
+  <!-- link_html 範例（可選，沒有就空字串）：
+       <p>🔗｜<a href="https://example.com" target="_blank" style="color:#0D9488">官網連結</a></p>
+  -->
+</div>
+
+<!-- 圖片（可選）— 獨立 div -->
+<div style="padding:16px 24px 16px 24px;text-align:center">
+  <img alt="{{image_alt}}" src="{{image_url}}" style="outline:none;border:none;text-decoration:none;vertical-align:middle;display:inline-block;max-width:100%"/>
+</div>
+
+<!--
+  圖片若沒有，整個 image <div> 省略。
+  圖片若要可點擊，包 <a>：
+  <div style="padding:16px 24px 16px 24px;text-align:center">
+    <a href="{{image_link}}" style="text-decoration:none" target="_blank">
+      <img alt="..." src="..." style="..."/>
+    </a>
+  </div>
+-->

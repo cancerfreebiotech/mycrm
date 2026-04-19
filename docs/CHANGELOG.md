@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## v3.0.0 — Newsletter 模板骨架化：從 listmonk 重建為 mycrm 三語骨架（2026-04-19）
+
+### 變更項目
+- 新增 `docs/newsletter-templates/` 目錄收納月報骨架
+- `skeleton-zh-TW.html`、`skeleton-en.html`、`skeleton-ja.html`：三語月報骨架，與原 listmonk 版本視覺一致（teal `#0D9488`、600px 容器、Helvetica Neue），但用 `{{placeholder}}` 取代所有可變欄位（logo / month / substack / intro / upcoming / recap / 社群連結 / opt-out URL）
+- `block-section.html`：單一 section 區塊範本，每個 story 複製一份填空（`{{number}}｜{{title}}`、paragraphs、link、image）
+- `README.md`：完整 placeholder 字典 + 後續規劃（AI compose endpoint、Supabase Storage 圖片搬家、template import 腳本）
+- 骨架擺脫 listmonk 和 mailerlite 的 CDN 依賴（圖片 URL 全都是 placeholder），為後續自主運作鋪路
+
+### 後續（待實作，已記入 project memory）
+- 實作 `/api/ai-newsletter-compose`（吃 stories + photos → 填骨架）
+- `newsletter_subscribers` + `newsletter_lists` schema + CSV 匯入 + 未 link 訂閱戶報表
+- 三語骨架寫入 `email_templates` 資料表
+
 ## v2.17.0 — i18n 大規模遷移 + CLAUDE.md 整合 flightpath 規範（2026-04-19）
 
 ### 變更項目
