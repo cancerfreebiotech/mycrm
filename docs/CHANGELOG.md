@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## v3.2.3 — TypeScript 錯誤清零（40 → 0，含 3 個真 bug 修正）（2026-04-20）
+
+### 🔴 修到的真 bug（都是 TS 告狀才發現的）
+
+- **`bot/route.ts:1191`** — `/lang` 指令用了 `from`（undefined），應該是 `fromId`。實際執行會拋 ReferenceError，使用者切語言會失敗。
+- **`bot/route.ts:1295, 1326`** — `generateEmailContent()` 回 `{ text, subject? }`，但程式把整個 object 當 HTML 存：`body_html: body` 變 `[object Object]`。Bot 的 AI 郵件預覽 + 送出都拿錯內容。
+- **`reset-mfa/route.ts:49-50`** — `service.auth.admin.mfa.listFactors()` 回的是 `{ factors: Factor[] }`，程式當成 `{ totp: [], phone: [] }` 存取，`allFactors` 永遠空，reset MFA 永遠回報 `deleted: 0`。
+
+### 其他修正
+
+- **`tsconfig.json`**：`target` 從 ES2017 → ES2020；`exclude` 加入 `supabase/functions/**/*`（Deno 邊緣函式，不該被 Node TS 編譯）→ 一次消掉 21 個 Deno 相關假錯誤
+- **`src/types/heic-convert.d.ts`**（新檔）：補缺失的模組宣告
+- **`admin/prompts/page.tsx`**：`PROMPT_USER_EDITABLE` Record 補上 `meeting_parse: false`
+- **`bot/route.ts:773`**：`cardData.rotation && cardData.rotation !== 0` → `cardData.rotation`（truthy 檢查已排除 0，`!== 0` 多餘）
+- **`hunter/route.ts:163`**：`.select('id', { count: 'exact', head: true })` 在 update query 不支援，改成 `.select('id')` + `data.length`
+- **TipTap v3 遷移**（`TipTapEditor.tsx`）：
+  - `setContent(html, true)` → `setContent(html, { emitUpdate: true })` × 2
+  - `extendMarkToLink({ href: '' }).unsetLink()` → `extendMarkRange('link').unsetLink()`
+- **Supabase relation 型別轉換**（7 處）：`as X` → `as unknown as X`（supabase-js 推論 relation 為陣列，程式當 1:1 物件用）
+  - `admin/newsletter/page.tsx:661`、`admin/trash/page.tsx:116`、`notes/page.tsx:88`
+  - `bot/route.ts:170, 645`、`linkedin/parse/route.ts:56`、`lib/gemini.ts:62`
+
+### 結果
+- `npx tsc --noEmit` → **0 errors**
+- i18n audit 仍然乾淨（只有 6 個 DB filter literal 刻意保留）
+
 ## v3.2.2 — 完成 i18n 遷移尾巴 11 個檔案（2026-04-20）
 
 ### 變更項目

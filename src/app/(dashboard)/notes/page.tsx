@@ -85,7 +85,7 @@ export default function NotesPage() {
     }
 
     const { data } = await query
-    const rows = (data ?? []) as NoteRow[]
+    const rows = (data ?? []) as unknown as NoteRow[]
 
     // Group by contact_id, keeping order of first appearance (most recent note per contact)
     const groupMap = new Map<string, NoteRow[]>()

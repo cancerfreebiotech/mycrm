@@ -7,13 +7,14 @@ import { Check, RotateCcw } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { PermissionGate } from '@/components/PermissionGate'
 
-const PROMPT_KEYS: PromptKey[] = ['ocr_card', 'task_parse', 'email_generate', 'docs_generate']
+const PROMPT_KEYS: PromptKey[] = ['ocr_card', 'task_parse', 'email_generate', 'docs_generate', 'meeting_parse']
 
 const PROMPT_USER_EDITABLE: Record<PromptKey, boolean> = {
   ocr_card:       false,
   task_parse:     false,
   email_generate: true,
   docs_generate:  false,
+  meeting_parse:  false,
 }
 
 interface OrgPrompt {

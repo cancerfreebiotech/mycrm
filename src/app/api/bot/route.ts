@@ -167,7 +167,7 @@ async function handleAI(chatId: number, aiModelId: string | null, m: BotMessages
     await sendMessage(chatId, '🤖 目前使用預設模型：<b>gemini-2.5-flash</b>')
     return
   }
-  const endpointName = (model.ai_endpoints as { name: string } | null)?.name ?? ''
+  const endpointName = (model.ai_endpoints as unknown as { name: string } | null)?.name ?? ''
   await sendMessage(chatId,
     `🤖 目前使用的 AI 模型：\n\n` +
     `<b>${model.display_name}</b>\n` +
@@ -642,7 +642,7 @@ async function handlePhoto(
         const { data: modelRow } = await createServiceClient()
           .from('ai_models').select('model_id, ai_endpoints(api_key)').eq('id', profile.ai_model_id).single()
         if (modelRow) {
-          const ep = modelRow.ai_endpoints as { api_key: string } | null
+          const ep = modelRow.ai_endpoints as unknown as { api_key: string } | null
           modelId = modelRow.model_id
           if (ep?.api_key && ep.api_key !== 'placeholder') apiKey = ep.api_key
         }
@@ -770,7 +770,7 @@ async function handlePhoto(
     )
 
     // Rotate and re-upload if Gemini detected non-zero rotation
-    if (cardData.rotation && cardData.rotation !== 0) {
+    if (cardData.rotation) {
       const sharp = (await import('sharp')).default
       const rotated = await sharp(compressed).rotate(cardData.rotation).jpeg({ quality: 85 }).toBuffer()
       await supabase.storage.from('cards').update(storagePath, rotated, { contentType: 'image/jpeg' })
@@ -1188,7 +1188,7 @@ async function handleText(
       await sendMessage(chatId, m.langInvalid)
       return
     }
-    await supabase.from('users').update({ language: langMap[arg] }).eq('telegram_id', from)
+    await supabase.from('users').update({ language: langMap[arg] }).eq('telegram_id', fromId)
     // Reply in the newly selected language
     const newM = BOT_MESSAGES[arg as keyof typeof BOT_MESSAGES]
     await sendMessage(chatId, newM.langChanged(langLabel[arg]))
@@ -1292,12 +1292,12 @@ async function handleText(
     try {
       const body = await generateEmailContent(text.trim(), undefined, user.ai_model_id)
       const subject = `關於：${text.trim().slice(0, 40)}${text.trim().length > 40 ? '...' : ''}`
-      const preview = body.replace(/<[^>]+>/g, '').slice(0, 200)
+      const preview = body.text.replace(/<[^>]+>/g, '').slice(0, 200)
 
       await setSession(fromId, 'waiting_email_confirm', {
         ...session.context,
         subject,
-        body_html: body,
+        body_html: body.text,
       })
       await sendMessage(chatId,
         `📧 郵件預覽\n\n主旨：${subject}\n\n${preview}${preview.length >= 200 ? '...' : ''}`,
@@ -1323,12 +1323,12 @@ async function handleText(
       const supplement = text.trim().toLowerCase() === 'skip' ? '' : text.trim()
       const body = await generateEmailContent(supplement || '請依照範本生成', templateContent, user.ai_model_id)
       const subject = session.context.template_subject as string || '（無主旨）'
-      const preview = body.replace(/<[^>]+>/g, '').slice(0, 200)
+      const preview = body.text.replace(/<[^>]+>/g, '').slice(0, 200)
 
       await setSession(fromId, 'waiting_email_confirm', {
         ...session.context,
         subject,
-        body_html: body,
+        body_html: body.text,
       })
       await sendMessage(chatId,
         `📧 郵件預覽\n\n主旨：${subject}\n\n${preview}${preview.length >= 200 ? '...' : ''}`,

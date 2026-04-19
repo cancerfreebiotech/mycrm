@@ -102,7 +102,8 @@ export default function TipTapEditor({
   function handleRuleFormat() {
     if (!editor) return
     const formatted = applyRuleFormat(editor.getHTML())
-    editor.commands.setContent(formatted, true)
+    // TipTap v3: setContent options is an object (was `boolean` in v2)
+    editor.commands.setContent(formatted, { emitUpdate: true })
   }
 
   async function handleAiFormat() {
@@ -117,7 +118,7 @@ export default function TipTapEditor({
         body: JSON.stringify({ html }),
       })
       const data = await res.json()
-      if (data.html) editor.commands.setContent(data.html, true)
+      if (data.html) editor.commands.setContent(data.html, { emitUpdate: true })
     } catch {
       // silent fail
     } finally {
@@ -163,7 +164,8 @@ export default function TipTapEditor({
 
   const setLink = useCallback(() => {
     if (!linkUrl.trim()) {
-      editor?.chain().focus().extendMarkToLink({ href: '' }).unsetLink().run()
+      // v3: extend selection across the link mark, then unset it
+      editor?.chain().focus().extendMarkRange('link').unsetLink().run()
     } else {
       const url = linkUrl.startsWith('http') ? linkUrl : `https://${linkUrl}`
       editor?.chain().focus().setLink({ href: url }).run()

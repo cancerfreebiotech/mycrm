@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
         .eq('id', profile.ai_model_id)
         .single()
       if (modelRow) {
-        const ep = modelRow.ai_endpoints as { api_key: string } | null
+        const ep = modelRow.ai_endpoints as unknown as { api_key: string } | null
         modelId = modelRow.model_id
         if (ep?.api_key && ep.api_key !== 'placeholder') apiKey = ep.api_key
       }

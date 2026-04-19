@@ -658,7 +658,7 @@ function DetailView({
         .select('id, email, status, opened_at, clicked_at, contacts(name, company)')
         .eq('campaign_id', campaign.id)
         .order('email')
-      setRecipients((data ?? []) as Recipient[])
+      setRecipients((data ?? []) as unknown as Recipient[])
       setLoading(false)
     }
     load()

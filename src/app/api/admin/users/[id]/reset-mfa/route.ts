@@ -45,10 +45,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const { data: factorsData, error: listError } = await service.auth.admin.mfa.listFactors({ userId: authUserId })
   if (listError) return NextResponse.json({ error: listError.message }, { status: 500 })
 
-  const allFactors = [
-    ...(factorsData?.totp ?? []),
-    ...(factorsData?.phone ?? []),
-  ]
+  // Supabase admin.mfa.listFactors returns { factors: Factor[] }; filter to TOTP + phone
+  // (exclude webauthn which uses a different deletion flow).
+  const allFactors = (factorsData?.factors ?? []).filter(
+    (f) => f.factor_type === 'totp' || f.factor_type === 'phone',
+  )
 
   let deleted = 0
   for (const factor of allFactors) {

@@ -59,7 +59,7 @@ async function resolveModelConfig(aiModelId: string | null): Promise<ModelConfig
       .single()
 
     if (data) {
-      const ep = data.ai_endpoints as { api_key: string } | null
+      const ep = data.ai_endpoints as unknown as { api_key: string } | null
       const apiKey = ep?.api_key && ep.api_key !== 'placeholder'
         ? ep.api_key
         : process.env.GEMINI_API_KEY!

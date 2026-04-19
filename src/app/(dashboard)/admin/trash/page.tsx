@@ -113,7 +113,7 @@ export default function TrashPage() {
       `)
       .eq('id', id)
       .single()
-    setDetailContact(data as ContactDetail)
+    setDetailContact(data as unknown as ContactDetail)
     setDetailLoading(false)
   }
 

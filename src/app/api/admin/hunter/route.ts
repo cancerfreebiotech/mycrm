@@ -154,14 +154,15 @@ export async function POST() {
 // DELETE — reset hunter_searched_at for all contacts without email
 export async function DELETE() {
   const supabase = createServiceClient()
-  const { count, error } = await supabase
+  // select('id') on an update returns the affected rows — row count is data.length.
+  const { data, error } = await supabase
     .from('contacts')
     .update({ hunter_searched_at: null })
     .is('email', null)
     .not('hunter_searched_at', 'is', null)
     .is('deleted_at', null)
-    .select('id', { count: 'exact', head: true })
+    .select('id')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true, reset: count ?? 0 })
+  return NextResponse.json({ ok: true, reset: data?.length ?? 0 })
 }
