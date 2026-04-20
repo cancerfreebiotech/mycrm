@@ -74,6 +74,8 @@ export default function NotesPage() {
       .not('content', 'ilike', '從名片王匯入%')
       .not('content', 'ilike', '透過批次上傳新增名片%')
       .not('content', 'ilike', '名片王名片合併%')
+      .not('content', 'ilike', '【名片新資料】%')
+      .not('content', 'ilike', '【合照附註】%')
       .order('created_at', { ascending: sortDir === 'asc' })
       .limit(FETCH_LIMIT)
 
