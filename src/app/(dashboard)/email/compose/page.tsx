@@ -259,11 +259,20 @@ export default function EmailComposePage() {
     if (!subject.trim() || !bodyHtml.trim() || !userEmail) return
     setTestStatus('sending')
     try {
-      const res = await fetch('/api/email/test-send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject, bodyHtml, method, userId, toEmail: userEmail }),
-      })
+      const meta = { subject, bodyHtml, method, userId, toEmail: userEmail }
+      let res: Response
+      if (attachments.length > 0) {
+        const fd = new FormData()
+        fd.append('data', JSON.stringify(meta))
+        attachments.forEach(f => fd.append('attachments', f))
+        res = await fetch('/api/email/test-send', { method: 'POST', body: fd })
+      } else {
+        res = await fetch('/api/email/test-send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(meta),
+        })
+      }
       const data = await res.json()
       setTestStatus(data.ok ? 'sent' : 'error')
       if (data.ok) setTimeout(() => setTestStatus('idle'), 3000)

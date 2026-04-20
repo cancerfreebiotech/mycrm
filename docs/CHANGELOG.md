@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## v3.3.6 — Fix: 測試寄信沒附附件（2026-04-20）
+
+使用者反饋：「我測試信件時候附件好像不會 attached。」
+
+原因：`/api/email/test-send` 完全沒寫附件處理邏輯，`handleTestSend()` 也只用 JSON 送請求、沒帶附件檔。群發 (`/api/email/send`) 的 multipart/form-data 流程沒複製到測試寄信這邊。
+
+修正：
+- `/api/email/test-send` 比照群發 route 加 `multipart/form-data` 處理：讀 FormData、把 files 轉 base64、Outlook 送 Graph API 的 `attachments`、SendGrid 送 `attachments` 陣列
+- `handleTestSend()` 有附件時改用 FormData 送，沒有就沿用 JSON
+
+### 動到的檔
+- `src/app/api/email/test-send/route.ts`：加 `FileAttachment` / `TestSendBody` types、multipart 解析、Outlook + SendGrid 附件傳遞
+- `src/app/(dashboard)/email/compose/page.tsx`：`handleTestSend` 附件時改走 FormData
+- `package.json`：3.3.5 → 3.3.6
+
 ## v3.3.5 — Feat: Outlook TO/BCC 可選；修正 BCC 寄信數錯字（2026-04-20）
 
 兩個相關修正（`/email/compose`）：

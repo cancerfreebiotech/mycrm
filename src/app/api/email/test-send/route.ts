@@ -13,8 +13,41 @@ function injectOptOutFooter(html: string, optOutUrl: string): string {
   return html + footer
 }
 
+interface FileAttachment {
+  name: string
+  type: string
+  content: string // base64
+}
+
+interface TestSendBody {
+  subject: string
+  bodyHtml: string
+  method: 'outlook' | 'sendgrid'
+  userId: string
+  toEmail: string
+}
+
 export async function POST(req: NextRequest) {
-  const { subject, bodyHtml, method, userId, toEmail } = await req.json()
+  const contentType = req.headers.get('content-type') ?? ''
+  let body: TestSendBody
+  let attachments: FileAttachment[] = []
+
+  if (contentType.includes('multipart/form-data')) {
+    const fd = await req.formData()
+    body = JSON.parse(fd.get('data') as string) as TestSendBody
+    const files = fd.getAll('attachments') as File[]
+    attachments = await Promise.all(
+      files.map(async (f) => ({
+        name: f.name,
+        type: f.type || 'application/octet-stream',
+        content: Buffer.from(await f.arrayBuffer()).toString('base64'),
+      }))
+    )
+  } else {
+    body = (await req.json()) as TestSendBody
+  }
+
+  const { subject, bodyHtml, method, userId, toEmail } = body
   if (!subject?.trim() || !bodyHtml?.trim() || !userId || !toEmail) {
     return NextResponse.json({ error: '缺少必要欄位' }, { status: 400 })
   }
@@ -24,7 +57,17 @@ export async function POST(req: NextRequest) {
   if (method === 'outlook') {
     try {
       const accessToken = await getValidProviderToken(userId)
-      await sendMail({ accessToken, to: toEmail, subject: testSubject, body: bodyHtml })
+      await sendMail({
+        accessToken,
+        to: toEmail,
+        subject: testSubject,
+        body: bodyHtml,
+        attachments: attachments.length > 0 ? attachments.map(a => ({
+          name: a.name,
+          contentType: a.type,
+          contentBytes: a.content,
+        })) : undefined,
+      })
       return NextResponse.json({ ok: true })
     } catch (e) {
       return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
@@ -46,6 +89,14 @@ export async function POST(req: NextRequest) {
     const bodyWithFooter = injectOptOutFooter(bodyHtml, optOutUrl)
     // Fetch sender name for the "from" display
     const { data: sender } = await supabase.from('users').select('email').eq('id', userId).single()
+    const sgAttachments = attachments.length > 0
+      ? attachments.map(a => ({
+          content: a.content,
+          type: a.type,
+          filename: a.name,
+          disposition: 'attachment',
+        }))
+      : undefined
     const res = await fetch(SG_SEND_URL, {
       method: 'POST',
       headers: { Authorization: `Bearer ${sgKey}`, 'Content-Type': 'application/json' },
@@ -55,6 +106,7 @@ export async function POST(req: NextRequest) {
         reply_to: sender?.email ? { email: sender.email } : undefined,
         subject: testSubject,
         content: [{ type: 'text/html', value: bodyWithFooter }],
+        ...(sgAttachments ? { attachments: sgAttachments } : {}),
       }),
     })
     if (res.ok || res.status === 202) return NextResponse.json({ ok: true })
