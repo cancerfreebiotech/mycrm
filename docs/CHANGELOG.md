@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## v3.3.8 — Refactor: 自動產生的 note 改用 `type='system'`（2026-04-21）
+
+架構債清理。`/notes` 原本靠 6 條 `.not('content', 'ilike', '<prefix>%')` 把系統筆記擋掉，每新加一個 prefix 就要兩邊同步，容易漏（像昨天的 `【名片新資料】` 就是被漏掉的受害者）。
+
+### 改動
+- **7 處寫入點**從 `type: 'note'` 改 `type: 'system'`：
+  - `src/app/api/bot/route.ts:524, 581, 1830`（bot 拍名片 / 合照附註 / 新增名片）
+  - `src/app/(dashboard)/contacts/batch-upload/page.tsx:207`（批次上傳）
+  - `src/app/(dashboard)/contacts/new/page.tsx:354`（手動新增）
+  - `src/app/(dashboard)/contacts/[id]/page.tsx:630, 735`（名片更新 / 合照附註）
+- **DB migration**：把既有 339 筆 `type='note'` 的系統筆記改成 `type='system'`（三語 prefix 全覆蓋）
+  - before: meeting=3140, system=1382, email=726, note=371
+  - after:  meeting=3140, system=1721, email=726, **note=32**（剩下的 32 筆就是真正的使用者筆記）
+- **`/notes/page.tsx`**：刪掉 6 條 `.not('content', 'ilike', ...)`、改用單一 `.neq('type', 'system')`
+
+### 不影響
+- `/contacts/[id]` 詳情頁的互動時間軸依然顯示所有類型（含 system），使用者看得到「這人何時被匯入 / 合併」的歷史
+- `admin/reports` 不依 type='note' 計數（grep 確認過）
+
+### 動到的檔
+- `src/app/api/bot/route.ts`
+- `src/app/(dashboard)/contacts/batch-upload/page.tsx`
+- `src/app/(dashboard)/contacts/new/page.tsx`
+- `src/app/(dashboard)/contacts/[id]/page.tsx`
+- `src/app/(dashboard)/notes/page.tsx`
+- DB migration: `migrate_auto_notes_to_system_type`
+- `package.json`：3.3.7 → 3.3.8
+
 ## v3.3.7 — Fix: 筆記搜尋漏掉兩個系統自動筆記的過濾（2026-04-20）
 
 使用者反饋：`/notes` 類別選「筆記」時，會看到 `【名片新資料】...` 這種系統自動產生的資料。

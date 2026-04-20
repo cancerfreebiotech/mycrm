@@ -203,8 +203,7 @@ export default function BatchUploadPage() {
         if (row.storagePath && row.imgUrl) {
           await supabase.from('contact_cards').insert({ contact_id: inserted.id, card_img_url: row.imgUrl, storage_path: row.storagePath, label: tcnt('legacyCardFront') })
         }
-        // i18n: DB filter literal — notes/page.tsx and contacts/[id] filter logs by this exact string
-        await supabase.from('interaction_logs').insert({ contact_id: inserted.id, type: 'note', content: '透過批次上傳新增名片', created_by: userId })
+        await supabase.from('interaction_logs').insert({ contact_id: inserted.id, type: 'system', content: '透過批次上傳新增名片', created_by: userId })
         saved++
       } else {
         skipped++

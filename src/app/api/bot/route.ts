@@ -521,7 +521,7 @@ async function applyCardDiff(
         .join('\n')
       await supabase.from('interaction_logs').insert({
         contact_id: contactId,
-        type: 'note',
+        type: 'system',
         content: `【名片新資料】\n${noteContent}`,
       })
     }
@@ -578,7 +578,7 @@ async function processPersonalPhoto(
     if (note) {
       await supabase.from('interaction_logs').insert({
         contact_id: contactId,
-        type: 'note',
+        type: 'system',
         content: `【合照附註】${note}`,
       })
     }
@@ -1827,7 +1827,7 @@ export async function POST(req: NextRequest) {
 
           await supabase.from('interaction_logs').insert({
             contact_id: inserted.id,
-            type: 'note',
+            type: 'system',
             content: '透過 Telegram Bot 新增名片',
             created_by: user.id,
           })

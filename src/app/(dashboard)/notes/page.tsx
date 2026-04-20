@@ -68,14 +68,7 @@ export default function NotesPage() {
       .from('interaction_logs')
       .select('id, type, content, email_subject, meeting_date, created_at, contact_id, contacts(name), users(display_name, email)')
       .not('contact_id', 'is', null)
-      // i18n: DB filter literals — these strings are system-generated log content
-      // from bot/batch-upload/camcard. Changing them breaks filter match.
-      .not('content', 'ilike', '透過 Telegram Bot 新增名片%')
-      .not('content', 'ilike', '從名片王匯入%')
-      .not('content', 'ilike', '透過批次上傳新增名片%')
-      .not('content', 'ilike', '名片王名片合併%')
-      .not('content', 'ilike', '【名片新資料】%')
-      .not('content', 'ilike', '【合照附註】%')
+      .neq('type', 'system')
       .order('created_at', { ascending: sortDir === 'asc' })
       .limit(FETCH_LIMIT)
 

@@ -627,7 +627,7 @@ export default function ContactDetailPage() {
           .join('\n')
         await supabase.from('interaction_logs').insert({
           contact_id: id,
-          type: 'note',
+          type: 'system',
           content: t('logCardUpdated', { content: noteLines }),
         })
       }
@@ -732,7 +732,7 @@ export default function ContactDetailPage() {
     if (trimmed) {
       await supabase.from('interaction_logs').insert({
         contact_id: id,
-        type: 'note',
+        type: 'system',
         content: t('logPhotoNote', { content: trimmed }),
       })
     }

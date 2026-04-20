@@ -351,7 +351,7 @@ export default function NewContactPage() {
       // Interaction log
       await supabase.from('interaction_logs').insert({
         contact_id: inserted.id,
-        type: 'note',
+        type: 'system',
         content: t('logManualAdd'),
         created_by: profile.id,
       })
