@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v3.3.4 — Fix: TipTap 段落間空行在預覽 / 寄出時被 margin collapse 吃掉（2026-04-20）
+
+使用者反饋：寫信時段落間空一行，預覽時空行不見。
+
+原因：TipTap 對「連按兩次 Enter」產生 `<p></p>` 空段落。HTML 瀏覽器的 margin collapse 會讓相鄰 `<p>` 的上下 margin 合併，空 `<p></p>` 本身沒內容也沒 line-height → 視覺上完全消失，不管幾個空行都一樣。
+
+修正：`TipTapEditor` 對輸出內容和 preview HTML 做一次 `<p></p>` → `<p>&nbsp;</p>` 轉換，讓空段落保留 line-height。三個使用此元件的頁面（`/admin/templates` / `/email/compose` / `/admin/newsletter`）全部受惠。收件端（Gmail/Outlook）也會正常顯示空行，不再被壓扁。
+
+### 動到的檔
+- `src/components/TipTapEditor.tsx`：加 `preserveBlankParagraphs()` helper，`onUpdate` 與 `previewHtml` 各套一次
+- `package.json`：3.3.3 → 3.3.4
+
 ## v3.3.3 — Fix: 郵件範本頁手機可看、內文就地展開、編輯器升級 TipTap（2026-04-20）
 
 三點使用者反饋修正（`/admin/templates`）：

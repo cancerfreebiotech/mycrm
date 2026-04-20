@@ -16,6 +16,13 @@ import {
   Eye, Edit3, Paperclip, X, RemoveFormatting, LayoutList, Wand2, Loader2,
 } from 'lucide-react'
 
+// Empty <p></p> collapses under CSS margin-collapse so user-intended blank
+// lines between paragraphs disappear in rendered HTML / email. Injecting a
+// non-breaking space forces the paragraph to take real line-height.
+function preserveBlankParagraphs(html: string): string {
+  return html.replace(/<p>(\s*<br\s*\/?>\s*)?<\/p>/gi, '<p>&nbsp;</p>')
+}
+
 // ── Rule-based formatter ──────────────────────────────────────────────────────
 function applyRuleFormat(html: string): string {
   // Flatten HTML → structured plain text
@@ -138,7 +145,7 @@ export default function TipTapEditor({
     ],
     content,
     onUpdate: ({ editor }) => {
-      onChange(editor.getHTML(), editor.getJSON())
+      onChange(preserveBlankParagraphs(editor.getHTML()), editor.getJSON())
     },
     editorProps: {
       attributes: {
@@ -191,7 +198,7 @@ export default function TipTapEditor({
     onAttachmentsChange?.(attachments.filter((_, i) => i !== idx))
   }
 
-  const previewHtml = content + (unsubscribeUrl
+  const previewHtml = preserveBlankParagraphs(content) + (unsubscribeUrl
     ? `<p style="margin-top:24px;font-size:12px;color:#888;">
         <a href="${unsubscribeUrl}">${t('unsubscribeText')}</a>
        </p>`
