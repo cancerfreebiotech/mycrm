@@ -1,5 +1,76 @@
 # CHANGELOG
 
+## v3.3.0 — RLS 全面部署 + 安全硬化（2026-04-20）
+
+Supabase Security Advisor 從 **18 ERRORS + 23 WARN = 41 問題** → **0 ERROR + 15 WARN**。
+
+### 設計原則
+
+共享 CRM：「登入 = 可信員工，全員看得到所有聯絡人」。管理權限沿用現有 `users.granted_features` 陣列（12 個 feature）+ `role='super_admin'`。
+
+### Migration（已 apply 到 Supabase myCRM project via MCP）
+
+**1. Helper functions**
+- `has_feature(feature_key text) → bool`：super_admin 自動全有 / 否則檢查 `granted_features @> ARRAY[key]`
+- `is_super_admin() → bool`：以 JWT email 查 `public.users.role`
+
+**2. ai_endpoints：api_key 欄位限 service_role**
+- RLS + column privilege 雙層防護
+- `REVOKE SELECT ON ai_endpoints FROM anon, authenticated` + `GRANT SELECT (id, name, base_url, is_active) TO authenticated`
+- 寫入 policy 限 `is_super_admin()`
+- **結果**：即使員工登入也看不到 Gemini API key；只有 service role（API routes）能讀
+
+**3. Tier 0 — 核心共享（11 張表 RLS + authenticated 全員讀寫）**
+`contacts`、`contact_tags`、`contact_cards`、`contact_photos`、`interaction_logs`、`pending_contacts`、`gemini_models`（讀）、`ai_models`（讀）
+- 例外：`contacts` 的 `DELETE`（永久刪除）需 `has_feature('trash')`
+- `gemini_models` / `ai_models` 的**寫入**限 `is_super_admin()`
+
+**4. Tier 1 — Feature-gated writes（15 張表）**
+| Table | Feature gate |
+|---|---|
+| `tags` | `tags` |
+| `countries` | `countries` |
+| `email_templates`, `template_attachments` | `email_templates` |
+| `prompts` | `prompts` |
+| `camcard_pending` | `camcard` |
+| `duplicate_pairs` | `duplicates` |
+| `failed_scans` | `failed_scans` |
+| Newsletter 一家 7 張表 | `newsletter` |
+
+**5. Tier 2 — super_admin only**
+- `users`：全部操作限 super_admin（讀/寫都是）。**注意**：非 super_admin 使用者看不到其他人的 display_name，未來可能要引入 view 或 API route 補 UX
+- `system_settings`、`docs_content`、`medical_departments`：讀全員、寫 super_admin
+
+**6. Tier 3 — user-scoped**
+- `user_prompts`：`user_id = 目前使用者的 users.id`
+- `feedback`：自己看自己的 + super_admin 看全部；UPDATE/DELETE 限 super_admin
+
+**7. Service-role-only（無 policy）**
+- `bot_sessions`、`telegram_dedup`：RLS 開啟但無 policy → 只走 service_role（Telegram webhook）
+
+**8. Function search_path 硬化（14 個 function）**
+`ALTER FUNCTION ... SET search_path = public, pg_temp`
+
+**9. Storage bucket policies**
+- 移除舊的 `Public read cards`（允許 LIST all files）和偽裝成 service-role 的 `Service role upload cards`
+- `cards` / `camcard` / `template-attachments`：authenticated 可 INSERT/UPDATE/DELETE；SELECT 不需 policy（bucket `public=true` 直接 URL 可讀）
+- `feedback` bucket：保留既有 "auth users can upload own feedback screenshots" INSERT policy，新增 authenticated DELETE
+
+**SQL 檔**：`supabase/rls_security.sql`（consolidated）
+
+### 剩下的 15 個 warnings（都是設計使然）
+
+- 8 × `rls_policy_always_true`：核心共享 table 的 `USING(true)`／`WITH CHECK(true)` — 這就是共享 CRM 設計
+- 2 × `rls_enabled_no_policy`：`bot_sessions` / `telegram_dedup` 刻意只給 service_role
+- 3 × `extension_in_public`：`pg_trgm` / `pg_net` / `citext` — 移動風險高，不動
+- 1 × `auth_leaked_password_protection`：需手動到 Dashboard → Authentication → 打開 "Prevent sign-ups with compromised passwords"
+- 1 × bot-related infos（RLS 開啟無 policy）
+
+### ⚠️ 手動動作（user 需做）
+
+1. 到 Supabase Dashboard → Authentication → Policies → 打開 **"Prevent sign-ups with compromised passwords"**
+2. **關注**：非 super_admin 使用者在 `/contacts` 等頁面看聯絡人時，「建立者」欄可能變空白（因為 `users` 表限 super_admin）。如果要修，之後可加一個 `users_public` view 或 API route
+
 ## v3.2.3 — TypeScript 錯誤清零（40 → 0，含 3 個真 bug 修正）（2026-04-20）
 
 ### 🔴 修到的真 bug（都是 TS 告狀才發現的）
