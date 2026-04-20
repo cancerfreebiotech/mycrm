@@ -218,10 +218,27 @@ CREATE POLICY "newsletter_subscriber_lists_write" ON public.newsletter_subscribe
 -- 5. Tier 2 — super-admin only
 -- ============================================================
 
--- users 表：全部操作僅 super_admin
+-- users 表：全員讀（fix UX on creator-name joins），寫入僅 super_admin。
+-- 欄位級別：provider_token / provider_refresh_token 不給 authenticated（OAuth bearer token）。
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "users_all" ON public.users;
-CREATE POLICY "users_all" ON public.users FOR ALL TO authenticated USING (is_super_admin()) WITH CHECK (is_super_admin());
+DROP POLICY IF EXISTS "users_all"    ON public.users;
+DROP POLICY IF EXISTS "users_select" ON public.users;
+DROP POLICY IF EXISTS "users_insert" ON public.users;
+DROP POLICY IF EXISTS "users_update" ON public.users;
+DROP POLICY IF EXISTS "users_delete" ON public.users;
+CREATE POLICY "users_select" ON public.users FOR SELECT TO authenticated USING (true);
+CREATE POLICY "users_insert" ON public.users FOR INSERT TO authenticated WITH CHECK (is_super_admin());
+CREATE POLICY "users_update" ON public.users FOR UPDATE TO authenticated USING (is_super_admin()) WITH CHECK (is_super_admin());
+CREATE POLICY "users_delete" ON public.users FOR DELETE TO authenticated USING (is_super_admin());
+
+REVOKE SELECT ON public.users FROM anon, authenticated;
+GRANT SELECT (
+  id, email, display_name, role, granted_features, last_login_at, created_at,
+  telegram_id, teams_user_id, teams_conversation_id, teams_service_url,
+  locale, theme, ai_model_id, gemini_model
+) ON public.users TO authenticated;
+-- provider_token / provider_refresh_token 不 grant — 只有 service_role 能讀
+GRANT INSERT, UPDATE, DELETE ON public.users TO authenticated;
 
 -- 系統設定
 ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;

@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## v3.3.1 — 放寬 users 表 SELECT（保留 OAuth token 防護）（2026-04-20）
+
+### 動機
+v3.3.0 把 `public.users` 設成全操作限 super_admin，結果**非 super_admin 使用者**在 `/contacts`、`/contacts/[id]`、`/admin/trash` 等頁面看「建立者 / 刪除者」欄時全部空白（因為 Supabase join `users(display_name)` 被 RLS 擋）。
+
+### 變更
+- **RLS policy 改為 per-op**：
+  - `users_select` — authenticated 全員可讀（UX 修好）
+  - `users_insert / users_update / users_delete` — 仍限 `is_super_admin()`
+- **Column-level privilege**：
+  - authenticated 可 SELECT 15 個欄位：`id / email / display_name / role / granted_features / last_login_at / created_at / telegram_id / teams_user_id / teams_conversation_id / teams_service_url / locale / theme / ai_model_id / gemini_model`
+  - `provider_token` + `provider_refresh_token` 不 grant → **這兩個欄位只有 service_role 讀得到**（它們是活的 Microsoft Graph OAuth bearer token，員工讀到會能盜用同事身份寄 email）
+
+### 驗證
+- 已執行 `SELECT column_name FROM information_schema.column_privileges WHERE grantee='authenticated'` 確認 `provider_token` / `provider_refresh_token` 不在 grant 清單
+- Supabase Security Advisor 無新問題
+
+### Tradeoff
+- `role` 和 `granted_features` 對所有員工公開 — 不是安全問題（大家知道誰是 super_admin、誰有 bulk_email 權限對內部工具無害）
+- 寫入仍只有 super_admin（等於「誰能改 role」這件事本身是 super_admin 的特權，與 v3.3.0 一致）
+
 ## v3.3.0 — RLS 全面部署 + 安全硬化（2026-04-20）
 
 Supabase Security Advisor 從 **18 ERRORS + 23 WARN = 41 問題** → **0 ERROR + 15 WARN**。
