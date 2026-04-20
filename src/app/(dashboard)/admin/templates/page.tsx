@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Pencil, Trash2, Plus, X, Upload, Paperclip, Loader2, Sparkles } from 'lucide-react'
+import { Pencil, Trash2, Plus, X, Upload, Paperclip, Loader2, Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
+import TipTapEditor from '@/components/TipTapEditor'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 
@@ -42,6 +43,7 @@ export default function AdminTemplatesPage() {
   const [saving, setSaving] = useState(false)
   const [fileError, setFileError] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [aiDescription, setAiDescription] = useState('')
   const [aiGenerating, setAiGenerating] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
@@ -193,57 +195,83 @@ export default function AdminTemplatesPage() {
         </button>
       </div>
 
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-            <tr>
-              {[t('colTitle'), t('colSubject'), t('colAttachments'), t('colCreated'), ''].map((h) => (
-                <th key={h} className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">{tc('loading')}</td></tr>
-            ) : templates.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">{t('noTemplates')}</td></tr>
-            ) : (
-              templates.map((tpl) => (
-                <tr key={tpl.id} className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                  <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200">{tpl.title}</td>
-                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{tpl.subject || '—'}</td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                    {tpl.attachments.length > 0
-                      ? <span className="flex items-center gap-1"><Paperclip size={13} />{t('attachCount', { count: tpl.attachments.length })}</span>
-                      : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                    {new Date(tpl.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-3 justify-end">
-                      <button onClick={() => openEdit(tpl)} className="text-gray-400 hover:text-blue-500 dark:hover:text-blue-400">
-                        <Pencil size={16} />
-                      </button>
-                      {confirmDeleteId === tpl.id ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-red-500">{t('confirmDelete')}</span>
-                          <button onClick={() => deleteTemplate(tpl.id)} className="text-xs text-red-600 dark:text-red-400 hover:underline">{tc('confirm')}</button>
-                          <button onClick={() => setConfirmDeleteId(null)} className="text-xs text-gray-400">{tc('cancel')}</button>
-                        </div>
-                      ) : (
-                        <button onClick={() => setConfirmDeleteId(tpl.id)} className="text-gray-400 hover:text-red-500 dark:hover:text-red-400">
-                          <Trash2 size={16} />
-                        </button>
+      {loading ? (
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-8 text-center text-sm text-gray-400">{tc('loading')}</div>
+      ) : templates.length === 0 ? (
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-8 text-center text-sm text-gray-400">{t('noTemplates')}</div>
+      ) : (
+        <div className="space-y-3">
+          {templates.map((tpl) => {
+            const expanded = expandedId === tpl.id
+            return (
+              <div key={tpl.id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="flex items-start gap-3 p-4">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(expanded ? null : tpl.id)}
+                    className="flex-1 text-left min-w-0"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-400 shrink-0">
+                        {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      </span>
+                      <span className="font-medium text-gray-800 dark:text-gray-200 truncate">{tpl.title}</span>
+                    </div>
+                    <div className="mt-1 ml-6 text-sm text-gray-600 dark:text-gray-400 truncate">
+                      {tpl.subject || '—'}
+                    </div>
+                    <div className="mt-1 ml-6 flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                      <span>{new Date(tpl.created_at).toLocaleDateString()}</span>
+                      {tpl.attachments.length > 0 && (
+                        <span className="flex items-center gap-1">
+                          <Paperclip size={12} />
+                          {t('attachCount', { count: tpl.attachments.length })}
+                        </span>
                       )}
                     </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => openEdit(tpl)}
+                      className="p-2 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400"
+                      aria-label={tc('edit')}
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    {confirmDeleteId === tpl.id ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-red-500 hidden sm:inline">{t('confirmDelete')}</span>
+                        <button onClick={() => deleteTemplate(tpl.id)} className="text-xs text-red-600 dark:text-red-400 hover:underline">{tc('confirm')}</button>
+                        <button onClick={() => setConfirmDeleteId(null)} className="text-xs text-gray-400">{tc('cancel')}</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDeleteId(tpl.id)}
+                        className="p-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400"
+                        aria-label={tc('delete')}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {expanded && (
+                  <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 px-4 py-3">
+                    {tpl.body_content
+                      ? (
+                        <div
+                          className="prose prose-sm dark:prose-invert max-w-none"
+                          dangerouslySetInnerHTML={{ __html: tpl.body_content }}
+                        />
+                      )
+                      : <div className="text-xs text-gray-400 italic">—</div>}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Edit/New Modal */}
       {showForm && (
@@ -295,8 +323,10 @@ export default function AdminTemplatesPage() {
 
               <div>
                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('bodyLabel')}</label>
-                <textarea rows={8} value={form.body_content} onChange={(e) => setForm((f) => ({ ...f, body_content: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <TipTapEditor
+                  content={form.body_content}
+                  onChange={(html) => setForm((f) => ({ ...f, body_content: html }))}
+                />
               </div>
 
               {/* Attachments */}

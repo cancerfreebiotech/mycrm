@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## v3.3.3 — Fix: 郵件範本頁手機可看、內文就地展開、編輯器升級 TipTap（2026-04-20）
+
+三點使用者反饋修正（`/admin/templates`）：
+
+1. **手機看不到內文** — 原本只有桌面 `<table>`，手機上欄位擠成一團看不清楚。改成響應式卡片列表，手機/桌面共用一套版面。
+2. **網頁版要看內文要按編輯** — 列表無內文預覽，必須開啟 modal。改為點範本標題列展開，內文就地 render。
+3. **範本編輯器比群發陽春** — 原本 `<textarea rows={8}>`，純文字、無工具列。改用跟 `/email/compose` 共用的 `<TipTapEditor>`：粗體/斜體/清單/連結/圖片/變數 `{{name}}` 等、附預覽模式與 AI 排版。
+
+### 動到的檔
+- `src/app/(dashboard)/admin/templates/page.tsx`：table → 可展開卡片、textarea → TipTapEditor、新增 `expandedId` state
+- `package.json`：3.3.2 → 3.3.3
+
+### 不用動
+- i18n：新增的 UI 只靠 icon + 既有 keys（`common.edit`/`common.delete`、`templates.attachCount`），無新翻譯需求
+- TipTapEditor 本身：沿用同一元件，不改它的實作
+
 ## v3.3.2 — Fix: 聯絡人照片刪除、手機多選寄信（2026-04-20）
 
 ### 🐛 Bug #1：聯絡人照片刪不掉
