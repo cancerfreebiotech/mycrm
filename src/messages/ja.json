@@ -1047,11 +1047,9 @@
     "searchContactPlaceholder": "名前またはメールで検索...",
     "calculatingCount": "計算中...",
     "estimatedRecipients": "予定：<b>{count}</b> 件（配信停止・ブラックリスト除く）",
-    "startTime": "開始時刻（台湾時間）",
-    "dailyLimit": "1日の送信数（1～500）",
-    "sendHour": "送信時刻（UTC+8、0～23）",
-    "scheduleSummary": "予定受信者 <b>{count}</b> 件、1日 <b>{limit}</b> 件 →",
-    "estimatedCompletionDate": "、予定完了日：{date}",
+    "startTime": "送信予約時刻（空欄 = 即時送信）",
+    "scheduleHintImmediate": "空欄で即時送信。SendGridが自動でレート制御するので1日上限は不要です。",
+    "sendSummary": "{count}名の受信者。SendGridが自動でバッチ送信します。",
     "previousStep": "前へ",
     "errorFillRequired": "必須項目を入力してください",
     "errorFillNameSubject": "名前と件名を入力してください",
@@ -1087,8 +1085,7 @@
     "importResultError": "❌ {error}",
     "searchEmailPlaceholder": "メールを検索...",
     "newCampaign": "新規キャンペーン",
-    "nextStep": "次へ",
-    "daysToComplete": "約 <b>{days}</b> 日で完了"
+    "nextStep": "次へ"
   },
   "camcard": {
     "pageTitle": "名刺インポート審査",

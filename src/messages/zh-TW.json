@@ -1047,11 +1047,9 @@
     "searchContactPlaceholder": "搜尋姓名或 email...",
     "calculatingCount": "計算中...",
     "estimatedRecipients": "預計寄送：<b>{count}</b> 人（已排除退訂與黑名單）",
-    "startTime": "開始寄送時間（台灣時間）",
-    "dailyLimit": "每天寄幾封（1–500）",
-    "sendHour": "每天幾點寄（UTC+8，0-23）",
-    "scheduleSummary": "預計收件人 <b>{count}</b> 人，每天 <b>{limit}</b> 封 →",
-    "estimatedCompletionDate": "，預計完成日：{date}",
+    "startTime": "排程寄送時間（留空 = 立即寄送）",
+    "scheduleHintImmediate": "留空代表立即寄送；SendGrid 會自動控制速度，不需要設每日上限。",
+    "sendSummary": "共 {count} 位收件人，SendGrid 會自動批次送出。",
     "previousStep": "上一步",
     "errorFillRequired": "請填寫必要欄位",
     "errorFillNameSubject": "請填寫名稱與主旨",
@@ -1087,8 +1085,7 @@
     "importResultError": "❌ {error}",
     "searchEmailPlaceholder": "搜尋 email...",
     "newCampaign": "新增 Campaign",
-    "nextStep": "下一步",
-    "daysToComplete": "約 <b>{days}</b> 天完成"
+    "nextStep": "下一步"
   },
   "camcard": {
     "pageTitle": "名片王匯入審查",

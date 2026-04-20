@@ -1047,11 +1047,9 @@
     "searchContactPlaceholder": "Search name or email...",
     "calculatingCount": "Calculating...",
     "estimatedRecipients": "Estimated: <b>{count}</b> recipients (excluding unsubs and blacklist)",
-    "startTime": "Start time (Taiwan time)",
-    "dailyLimit": "Daily limit (1–500)",
-    "sendHour": "Send hour (UTC+8, 0-23)",
-    "scheduleSummary": "Estimated <b>{count}</b> recipients, <b>{limit}</b> per day →",
-    "estimatedCompletionDate": ", estimated completion: {date}",
+    "startTime": "Schedule send time (leave empty to send now)",
+    "scheduleHintImmediate": "Empty = send immediately. SendGrid auto-throttles, no daily cap needed.",
+    "sendSummary": "{count} recipients. SendGrid will batch them automatically.",
     "previousStep": "Previous",
     "errorFillRequired": "Please fill required fields",
     "errorFillNameSubject": "Please enter name and subject",
@@ -1087,8 +1085,7 @@
     "importResultError": "❌ {error}",
     "searchEmailPlaceholder": "Search email...",
     "newCampaign": "New Campaign",
-    "nextStep": "Next",
-    "daysToComplete": "~<b>{days}</b> days to complete"
+    "nextStep": "Next"
   },
   "camcard": {
     "pageTitle": "Card Import Review",

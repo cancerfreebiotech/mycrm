@@ -79,10 +79,6 @@ function fmt(dt: string | null) {
   return new Date(dt).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-function estimateDays(total: number, limit: number) {
-  if (!total || !limit) return null
-  return Math.ceil(total / limit)
-}
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
@@ -129,8 +125,6 @@ export default function NewsletterPage() {
       content_json: c.content_json,
       tag_ids: c.tag_ids,
       extra_contact_ids: c.extra_contact_ids,
-      daily_limit: c.daily_limit,
-      send_hour: c.send_hour,
     }).select('*').single()
     if (data) setCampaigns(prev => [data as Campaign, ...prev])
   }
@@ -297,8 +291,6 @@ function WizardView({
       ? new Date(initialCampaign.scheduled_at).toISOString().slice(0, 16)
       : ''
   )
-  const [dailyLimit, setDailyLimit] = useState(initialCampaign?.daily_limit ?? 500)
-  const [sendHour, setSendHour] = useState(initialCampaign?.send_hour ?? 9)
 
   // Compute estimated recipients when tags/contacts change
   useEffect(() => {
@@ -384,7 +376,7 @@ function WizardView({
         title, subject, preview_text: previewText || null, content_html: contentHtml,
         content_json: contentJson, tag_ids: selectedTagIds, extra_contact_ids: extraContactIds,
         status: 'scheduled', scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null,
-        daily_limit: dailyLimit, send_hour: sendHour, total_recipients: eligible.length,
+        total_recipients: eligible.length,
       }
 
       let campaignId = initialCampaign?.id
@@ -428,7 +420,6 @@ function WizardView({
     : []
 
   const STEPS = [t('stepBasic'), t('stepContent'), t('stepRecipients'), t('stepSchedule')]
-  const days = estimateDays(recipientCount ?? 0, dailyLimit)
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -566,35 +557,11 @@ function WizardView({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('startTime')}</label>
             <input type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('dailyLimit')}</label>
-              <input type="number" min={1} max={500} value={dailyLimit} onChange={e => setDailyLimit(Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('sendHour')}</label>
-              <input type="number" min={0} max={23} value={sendHour} onChange={e => setSendHour(Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t('scheduleHintImmediate')}</p>
           </div>
           {recipientCount !== null && recipientCount > 0 && (
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-              {t.rich('scheduleSummary', {
-                count: recipientCount,
-                limit: dailyLimit,
-                b: (chunks) => <b>{chunks}</b>,
-              })}
-              {' '}{t.rich('daysToComplete', {
-                days: days ?? 0,
-                b: (chunks) => <b>{chunks}</b>,
-              })}
-              {days && scheduledAt && (() => {
-                const end = new Date(scheduledAt)
-                end.setDate(end.getDate() + days)
-                return t('estimatedCompletionDate', { date: end.toLocaleDateString(undefined) })
-              })()}
+              {t('sendSummary', { count: recipientCount })}
             </div>
           )}
         </div>

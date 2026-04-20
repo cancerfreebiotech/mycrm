@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## v3.3.9 — Chore: newsletter wizard step 4 簡化（2026-04-21）
+
+SendGrid API 寄信時會自己做 rate limiting，`daily_limit` / `send_hour` 這兩個欄位只是假的節流、沒有實際意義（使用者也跟我確認過）。把兩個 input 與相關「N 天完成」計算統統拿掉，step 4 只剩「排程寄送時間（留空 = 立即寄送）」一欄。
+
+### 改動
+- `src/app/(dashboard)/admin/newsletter/page.tsx`：
+  - 刪 `dailyLimit` / `sendHour` 狀態、UI 輸入、`estimateDays()` 工具函式、schedule summary 區塊
+  - `duplicateCampaign` / `campaignPayload` 不再帶 `daily_limit` / `send_hour`（DB column 還在，有 default 值 500 / 9，不影響既有資料）
+  - step 4 現在只剩 datetime-local 一欄 + 說明
+- `src/messages/{zh-TW,en,ja}.json`：刪 5 個 keys（`dailyLimit` / `sendHour` / `scheduleSummary` / `estimatedCompletionDate` / `daysToComplete`）、加 2 個（`scheduleHintImmediate` / `sendSummary`）、改 `startTime` 措辭
+- `package.json`：3.3.8 → 3.3.9
+
+### 不影響
+- DB schema 不變（`newsletter_campaigns.daily_limit` / `send_hour` 保留不 drop；之後再遷移時再拆）
+- 寄送 API（`/api/email/send`）本來就沒吃這兩個欄位
+- 既有 campaign 的 `daily_limit` / `send_hour` 值保留（UI 不顯示而已）
+
 ## v3.3.8 — Refactor: 自動產生的 note 改用 `type='system'`（2026-04-21）
 
 架構債清理。`/notes` 原本靠 6 條 `.not('content', 'ilike', '<prefix>%')` 把系統筆記擋掉，每新加一個 prefix 就要兩邊同步，容易漏（像昨天的 `【名片新資料】` 就是被漏掉的受害者）。
