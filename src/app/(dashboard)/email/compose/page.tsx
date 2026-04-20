@@ -45,7 +45,7 @@ export default function EmailComposePage() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
-  const [result, setResult] = useState<{ ok: boolean; method: string; sent: number; errors: string[] } | null>(null)
+  const [result, setResult] = useState<{ ok: boolean; method: string; mode?: string; sent: number; emailCount?: number; errors: string[] } | null>(null)
   const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
 
   const [subject, setSubject] = useState('')
@@ -73,6 +73,9 @@ export default function EmailComposePage() {
 
   // SendGrid sub-mode
   const [sgMode, setSgMode] = useState<'individual' | 'bcc'>('individual')
+
+  // Outlook sub-mode
+  const [outlookMode, setOutlookMode] = useState<'bcc' | 'to'>('bcc')
 
   // Preview
   const [previewContact, setPreviewContact] = useState<Recipient | null>(null)
@@ -222,6 +225,7 @@ export default function EmailComposePage() {
         userId,
         method,
         sgMode,
+        outlookMode,
         selfEmail: selfActive ? userEmail : undefined,
       }
 
@@ -244,7 +248,7 @@ export default function EmailComposePage() {
       setSent(true)
       sessionStorage.removeItem('emailRecipients')
     } catch (e) {
-      setResult({ ok: false, method: '', sent: 0, errors: [e instanceof Error ? e.message : String(e)] })
+      setResult({ ok: false, method: '', sent: 0, emailCount: 0, errors: [e instanceof Error ? e.message : String(e)] })
       setSent(true)
     } finally {
       setSending(false)
@@ -282,7 +286,15 @@ export default function EmailComposePage() {
     return (
       <div className="max-w-2xl mx-auto py-12 text-center">
         <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium mb-4 ${result.ok ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
-          {result.ok ? t('sentSuccess', { sent: result.sent, method: result.method }) : t('sentFailed')}
+          {result.ok
+            ? (() => {
+                const count = result.sent
+                if (result.method === 'outlook' && result.mode === 'to') return t('sentSuccessOutlookTo', { count })
+                if (result.method === 'outlook') return t('sentSuccessOutlookBcc', { count })
+                if (result.method === 'sendgrid' && result.mode === 'bcc') return t('sentSuccessSgBcc', { count })
+                return t('sentSuccessSgIndividual', { count })
+              })()
+            : t('sentFailed')}
         </div>
         {result.errors.length > 0 && (
           <div className="text-sm text-red-500 mb-4 space-y-1">
@@ -329,7 +341,7 @@ export default function EmailComposePage() {
           <span className="text-sm text-gray-500 dark:text-gray-400">
             {t('recipients', { count: recipients.length })}
             {method === 'outlook'
-              ? t('methodBcc')
+              ? (outlookMode === 'to' ? t('methodOutlookTo') : t('methodBcc'))
               : sgMode === 'bcc'
               ? t('methodSgBcc')
               : t('methodSgIndividual')}
@@ -338,6 +350,30 @@ export default function EmailComposePage() {
             <span className="text-xs text-amber-600 dark:text-amber-400">{t('outlookLimit')}</span>
           )}
         </div>
+
+        {/* Outlook sub-mode */}
+        {method === 'outlook' && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400 dark:text-gray-500">{t('outlookMode')}</span>
+            <div className="inline-flex rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <button
+                onClick={() => setOutlookMode('bcc')}
+                className={`text-xs px-3 py-1 transition-colors ${outlookMode === 'bcc' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+              >
+                {t('outlookModeBcc')}
+              </button>
+              <button
+                onClick={() => setOutlookMode('to')}
+                className={`text-xs px-3 py-1 transition-colors ${outlookMode === 'to' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+              >
+                {t('outlookModeTo')}
+              </button>
+            </div>
+            <span className="text-xs text-gray-400 dark:text-gray-500">
+              {outlookMode === 'to' ? t('outlookModeToHint') : t('outlookModeBccHint')}
+            </span>
+          </div>
+        )}
 
         {/* SendGrid sub-mode */}
         {method === 'sendgrid' && (
@@ -384,7 +420,7 @@ export default function EmailComposePage() {
                 className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
               >
                 <Users size={14} />
-                {method === 'sendgrid' && sgMode === 'individual'
+                {(method === 'sendgrid' && sgMode === 'individual') || (method === 'outlook' && outlookMode === 'to')
                   ? t('recipientsLabel', { count: totalCount })
                   : t('bccRecipients', { count: totalCount })}
                 <span className="text-xs text-blue-500">{showRecipients ? t('collapse') : t('showEdit')}</span>

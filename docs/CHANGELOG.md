@@ -1,5 +1,34 @@
 # CHANGELOG
 
+## v3.3.5 — Feat: Outlook TO/BCC 可選；修正 BCC 寄信數錯字（2026-04-20）
+
+兩個相關修正（`/email/compose`）：
+
+### 1. Outlook 加 TO/BCC 選擇
+- 原本 Outlook 群發鎖死 BCC：寄件人自己在 TO、所有收件人放 BCC，互相看不到。
+- 新增 sub-mode toggle（跟 SendGrid 的做法對齊）：
+  - **BCC**（預設，現有行為）：1 封郵件，收件人互相看不到
+  - **全部 TO**：1 封郵件，所有收件人在 TO，互相看得到（內部介紹 / 小組討論情境）
+- 後端 `/api/email/send` 接 `outlookMode: 'bcc' | 'to'`，Graph API 的 to/bcc 欄位依此切換。
+
+### 2. 修正成功訊息錯字
+原本訊息「已成功寄出 {N} 封」誤導：Outlook BCC 與 SendGrid BCC 都是 **1 封**郵件寄到 N 位聯絡人，不是 N 封。改成語意正確：
+
+| 模式 | 訊息 |
+|---|---|
+| Outlook BCC | 1 封郵件送達 N 位聯絡人（BCC，互相看不到） |
+| Outlook TO | 1 封郵件送達 N 位聯絡人（全部 TO，共同可見） |
+| SendGrid BCC | 1 封郵件送達 N 位聯絡人（SendGrid BCC） |
+| SendGrid 個人化 | 已寄出 N 封個人化郵件（每人一封） |
+
+寄件確認信（SendGrid）的統計句也跟著調整。
+
+### 動到的檔
+- `src/app/api/email/send/route.ts`：加 `outlookMode`、回傳 `emailCount`/`mode`、`buildConfirmationHtml` 接 `mode` 參數
+- `src/app/(dashboard)/email/compose/page.tsx`：UI toggle、請求帶 `outlookMode`、成功訊息依模式切換 key
+- `src/messages/{zh-TW,en,ja}.json`：新增 9 個 keys（3 語言同步）
+- `package.json`：3.3.4 → 3.3.5
+
 ## v3.3.4 — Fix: TipTap 段落間空行在預覽 / 寄出時被 margin collapse 吃掉（2026-04-20）
 
 使用者反饋：寫信時段落間空一行，預覽時空行不見。

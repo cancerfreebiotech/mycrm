@@ -20,6 +20,7 @@ function buildConfirmationHtml(
   sentCount: number,
   recipients: Array<{ name: string | null; email: string | null; company: string | null }>,
   bodyHtml: string,
+  mode: 'individual' | 'bcc',
 ): string {
   const now = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })
   const rows = recipients.slice(0, sentCount).map((c, i) =>
@@ -29,9 +30,12 @@ function buildConfirmationHtml(
       <td style="padding:7px 12px;border-bottom:1px solid #f3f4f6;color:#3b82f6;">${c.email ?? ''}</td>
     </tr>`
   ).join('')
+  const summaryLine = mode === 'bcc'
+    ? `1 封 BCC 郵件送達 <strong style="color:#111827;">${sentCount} 位聯絡人</strong>`
+    : `已寄出 <strong style="color:#111827;">${sentCount} 封個人化郵件</strong>`
   return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:640px;margin:0 auto;padding:24px 20px;color:#111827;">
   <h2 style="font-size:15px;font-weight:600;margin:0 0 6px;">寄件確認</h2>
-  <p style="font-size:13px;color:#6b7280;margin:0 0 20px;">${now} &nbsp;·&nbsp; 已成功寄出 <strong style="color:#111827;">${sentCount} 封</strong></p>
+  <p style="font-size:13px;color:#6b7280;margin:0 0 20px;">${now} &nbsp;·&nbsp; ${summaryLine}</p>
   <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
     <p style="margin:0 0 3px;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;">主旨</p>
     <p style="margin:0;font-size:14px;font-weight:600;">${subject}</p>
@@ -69,6 +73,7 @@ interface SendBody {
   userId: string
   method?: 'outlook' | 'sendgrid'
   sgMode?: 'individual' | 'bcc'
+  outlookMode?: 'bcc' | 'to'
   selfEmail?: string // sender's own copy — added as real recipient (SendGrid only)
 }
 
@@ -92,7 +97,7 @@ export async function POST(req: NextRequest) {
     body = (await req.json()) as SendBody
   }
 
-  const { contactIds, subject, bodyHtml, cc, replyTo, userId, sgMode = 'individual', selfEmail } = body
+  const { contactIds, subject, bodyHtml, cc, replyTo, userId, sgMode = 'individual', outlookMode = 'bcc', selfEmail } = body
 
   if (!contactIds?.length || !subject?.trim() || !bodyHtml?.trim() || !userId) {
     return NextResponse.json({ error: '缺少必要欄位' }, { status: 400 })
@@ -148,10 +153,12 @@ export async function POST(req: NextRequest) {
         .eq('id', userId)
         .single()
       const senderEmail = sender?.email ?? emails[0]
+      const outlookTo = outlookMode === 'to' ? emails.join(',') : senderEmail
+      const outlookBcc = outlookMode === 'to' ? undefined : emails.join(',')
       await sendMail({
         accessToken,
-        to: senderEmail,
-        bcc: emails.join(','),
+        to: outlookTo,
+        bcc: outlookBcc,
         cc: cc || undefined,
         subject,
         body: bodyHtml,
@@ -323,7 +330,7 @@ export async function POST(req: NextRequest) {
           const confirmRecipients = selfSent
             ? [...valid, { name: '我', email: selfEmail!, company: null }]
             : valid
-          const confirmHtml = buildConfirmationHtml(subject, sentCount, confirmRecipients, bodyHtml)
+          const confirmHtml = buildConfirmationHtml(subject, sentCount, confirmRecipients, bodyHtml, sgMode)
           await fetch(SG_SEND_URL, {
             method: 'POST',
             headers: { Authorization: `Bearer ${sgKey}`, 'Content-Type': 'application/json' },
@@ -344,7 +351,7 @@ export async function POST(req: NextRequest) {
   // ── Create interaction logs ──
   if (sentCount > 0) {
     const logLabel = method === 'outlook'
-      ? 'Outlook BCC'
+      ? (outlookMode === 'to' ? 'Outlook TO' : 'Outlook BCC')
       : sgMode === 'bcc' ? 'SendGrid BCC' : 'SendGrid 個人化'
     const logRows = valid.slice(0, sentCount).map(c => ({
       contact_id: c.id,
@@ -361,11 +368,21 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // `sent` = contacts reached; `emailCount` = physical emails actually sent.
+  // BCC / TO modes send one email to many recipients → emailCount is 1.
+  // Individual mode sends one email per recipient → emailCount equals sent.
+  const isGrouped =
+    (method === 'outlook') ||
+    (method === 'sendgrid' && sgMode === 'bcc')
+  const emailCount = isGrouped ? (sentCount > 0 ? 1 : 0) : sentCount
+
   return NextResponse.json({
     ok: errors.length === 0,
     method,
+    mode: method === 'outlook' ? outlookMode : sgMode,
     campaignId,
     sent: sentCount,
+    emailCount,
     total: valid.length,
     errors,
   })
