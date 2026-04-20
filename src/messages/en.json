@@ -272,7 +272,9 @@
     "parseFailed": "Parse failed",
     "linkedinParseFailed": "LinkedIn screenshot parse failed: ",
     "parsing": "Parsing...",
-    "copyEmail": "Copy email"
+    "copyEmail": "Copy email",
+    "selectAll": "Select all",
+    "selectedCount": "{count} selected"
   },
   "batchUpload": {
     "title": "Batch Upload Cards",

@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## v3.3.2 — Fix: 聯絡人照片刪除、手機多選寄信（2026-04-20）
+
+### 🐛 Bug #1：聯絡人照片刪不掉
+`contacts/[id]/page.tsx:deletePhoto` 不檢查 Supabase delete error，失敗時靜默吞掉；且 storage 檔案沒一起刪，留垃圾。
+
+修正：
+- 加 error 檢查 + 失敗時 alert
+- 刪 DB 後順手 `supabase.storage.from('cards').remove([storage_path])` 清理檔案
+- `ContactPhoto` interface 加 `storage_path`
+- `load()` 查詢把 `storage_path` 一起 select 回來
+
+### 🐛 Bug #2：手機版無法多選聯絡人寄信
+`contacts/page.tsx` 桌面版 table（L666）有 checkbox，但 `sm:hidden` 的手機卡片版**完全沒 checkbox**，所以手機上無法選取多人。`selectedIds` 永遠空 → 「寄信給 N 人」按鈕不出現。
+
+修正：
+- 手機卡片加上選取 checkbox（每張左側）
+- 手機清單頂部加「全選 / 已選 N 人」bar
+- 選取狀態用琥珀色 border 高亮（和桌面版 `bg-amber-50` 呼應）
+- 新增 i18n keys：`contacts.selectAll`、`contacts.selectedCount`
+
+選完後畫面頂部原有的「寄信給 N 人」+「批次編輯」按鈕會自動出現（已在 header，不分桌機手機）。
+
 ## v3.3.1 — 放寬 users 表 SELECT（保留 OAuth token 防護）（2026-04-20）
 
 ### 動機

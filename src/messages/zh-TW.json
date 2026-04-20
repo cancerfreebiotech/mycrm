@@ -272,7 +272,9 @@
     "parseFailed": "解析失敗",
     "linkedinParseFailed": "LinkedIn 截圖解析失敗：",
     "parsing": "解析中...",
-    "copyEmail": "複製 Email"
+    "copyEmail": "複製 Email",
+    "selectAll": "全選",
+    "selectedCount": "已選 {count} 人"
   },
   "batchUpload": {
     "title": "批次上傳名片",

@@ -48,7 +48,7 @@ interface Contact {
   contact_tags: { tags: Tag }[]
 }
 interface ContactCard { id: string; card_img_url: string; card_img_back_url: string | null; label: string | null; created_at: string }
-interface ContactPhoto { id: string; photo_url: string; taken_at: string | null; latitude: number | null; longitude: number | null; location_name: string | null; note: string | null; created_at: string }
+interface ContactPhoto { id: string; photo_url: string; storage_path: string | null; taken_at: string | null; latitude: number | null; longitude: number | null; location_name: string | null; note: string | null; created_at: string }
 interface Log {
   id: string
   content: string | null
@@ -382,7 +382,7 @@ export default function ContactDetailPage() {
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('contact_cards').select('id, card_img_url, card_img_back_url, label, created_at').eq('contact_id', id).order('created_at', { ascending: true }),
       supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),
-      supabase.from('contact_photos').select('id, photo_url, taken_at, latitude, longitude, location_name, note, created_at').eq('contact_id', id).order('created_at', { ascending: false }),
+      supabase.from('contact_photos').select('id, photo_url, storage_path, taken_at, latitude, longitude, location_name, note, created_at').eq('contact_id', id).order('created_at', { ascending: false }),
     ])
     setContact(c as unknown as Contact)
 
@@ -712,7 +712,17 @@ export default function ContactDetailPage() {
 
   async function deletePhoto(photoId: string) {
     if (!confirm(t('confirmDeletePhoto'))) return
-    await supabase.from('contact_photos').delete().eq('id', photoId)
+    // Find the photo to get its storage_path before deleting the row
+    const target = contactPhotos.find((p) => p.id === photoId)
+    const { error: delErr } = await supabase.from('contact_photos').delete().eq('id', photoId)
+    if (delErr) {
+      alert(delErr.message || t('deleteFailed'))
+      return
+    }
+    // Best-effort storage cleanup (non-fatal if it fails)
+    if (target?.storage_path) {
+      await supabase.storage.from('cards').remove([target.storage_path])
+    }
     load()
   }
 

@@ -272,7 +272,9 @@
     "parseFailed": "解析に失敗しました",
     "linkedinParseFailed": "LinkedInスクリーンショットの解析に失敗：",
     "parsing": "解析中...",
-    "copyEmail": "メールをコピー"
+    "copyEmail": "メールをコピー",
+    "selectAll": "すべて選択",
+    "selectedCount": "{count} 件選択"
   },
   "batchUpload": {
     "title": "名刺一括アップロード",

@@ -620,41 +620,75 @@ export default function ContactsPage() {
           <p className="text-center text-sm text-gray-400 py-10">{t('noResults')}</p>
         ) : (
           <div className="space-y-3">
+            {/* Mobile select-all bar (shown only when there are rows) */}
+            <label className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={paginated.length > 0 && selectedIds.size === paginated.length}
+                onChange={toggleSelectAll}
+                className="w-4 h-4 rounded"
+              />
+              <span>
+                {selectedIds.size === 0
+                  ? t('selectAll')
+                  : t('selectedCount', { count: selectedIds.size })}
+              </span>
+            </label>
             {paginated.map((c) => (
-              <div key={c.id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <ImportanceDots value={c.importance} />
-                      <Link href={`/contacts/${c.id}`} className="text-blue-600 dark:text-blue-400 font-semibold text-base hover:underline">
-                        {c.name || '—'}
-                      </Link>
+              <div
+                key={c.id}
+                className={`bg-white dark:bg-gray-900 rounded-xl border p-4 ${
+                  selectedIds.has(c.id)
+                    ? 'border-amber-400 dark:border-amber-600 bg-amber-50/40 dark:bg-amber-950/20'
+                    : 'border-gray-200 dark:border-gray-700'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  {/* Select checkbox */}
+                  <label className="shrink-0 pt-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(c.id)}
+                      onChange={() => toggleSelect(c.id)}
+                      className="w-4 h-4 rounded"
+                    />
+                  </label>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <ImportanceDots value={c.importance} />
+                          <Link href={`/contacts/${c.id}`} className="text-blue-600 dark:text-blue-400 font-semibold text-base hover:underline">
+                            {c.name || '—'}
+                          </Link>
+                        </div>
+                        {c.company && <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{c.company}</p>}
+                        {c.job_title && <p className="text-xs text-gray-500 dark:text-gray-500">{c.job_title}</p>}
+                      </div>
+                      {c.contact_tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 justify-end shrink-0">
+                          {c.contact_tags.map((ct) => ct.tags && (
+                            <span key={ct.tags.id} className="text-xs bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                              {ct.tags.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    {c.company && <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{c.company}</p>}
-                    {c.job_title && <p className="text-xs text-gray-500 dark:text-gray-500">{c.job_title}</p>}
+                    <div className="mt-3 space-y-1">
+                      {c.email && (
+                        <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                          <span className="truncate">{c.email}</span>
+                          <button onClick={() => copyEmail(c.email!)} className="text-gray-400 hover:text-blue-500 shrink-0">
+                            {copiedEmail === c.email ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
+                          </button>
+                          {c.email_status === 'bounced' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 shrink-0">{t('emailStatusBounced')}</span>}
+                          {c.email_status === 'unsubscribed' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800 shrink-0">{t('emailStatusUnsubscribed')}</span>}
+                          {c.email_status === 'invalid' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800 shrink-0">{t('emailStatusInvalid')}</span>}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  {c.contact_tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 justify-end shrink-0">
-                      {c.contact_tags.map((ct) => ct.tags && (
-                        <span key={ct.tags.id} className="text-xs bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
-                          {ct.tags.name}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="mt-3 space-y-1">
-                  {c.email && (
-                    <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                      <span className="truncate">{c.email}</span>
-                      <button onClick={() => copyEmail(c.email!)} className="text-gray-400 hover:text-blue-500 shrink-0">
-                        {copiedEmail === c.email ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
-                      </button>
-                      {c.email_status === 'bounced' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 shrink-0">{t('emailStatusBounced')}</span>}
-                      {c.email_status === 'unsubscribed' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800 shrink-0">{t('emailStatusUnsubscribed')}</span>}
-                      {c.email_status === 'invalid' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800 shrink-0">{t('emailStatusInvalid')}</span>}
-                    </div>
-                  )}
                 </div>
               </div>
             ))}
