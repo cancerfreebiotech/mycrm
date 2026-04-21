@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## v3.6.2 — refactor(contacts): last_activity 簡化 + fix: 照片上傳也算活動（2026-04-21）
+
+v3.6.0 加了「最後活動」欄位到聯絡人列表，Po 回饋：**欄位在 UI 上多餘** — 既然預設排序就把最近有活動的人推到頂，多一欄日期反而資訊重複。而且他舉的實際場景暴露了另一個 bug：拍了三好健嗣的合照上傳後，三好沒浮到頂。
+
+**根因**：照片上傳只寫 `contact_photos` 表，沒寫 `interaction_logs`（即使有合照附註，寫的也是 `type='system'` 被 trigger 過濾掉）。所以 `last_activity_at` 不會被 bump，照片上傳不算活動。
+
+### 改動
+- **DB migration `contact_photos_bump_last_activity`**：
+  - 新 trigger `trg_contact_photos_last_activity` 監聽 `contact_photos` INSERT/DELETE，以 `GREATEST(interaction_logs MAX, contact_photos MAX, created_at)` 公式重算
+  - 舊 `update_contact_last_activity()` 函式同步擴大 — 加 note/meeting/email 時不能 REGRESS 一個更晚時間的照片活動
+  - Backfill 全表：把過往的照片時間戳納入既有 `last_activity_at`
+  - 驗證：奥津徹 + 三好健嗣 (今天上傳照片) 都正確浮到 last_activity_at = 2026-04-21
+- **UI 拿掉「最後活動」欄位**（v3.6.0 新增的）— 預設排序生效但不佔列寬
+- i18n `lastActivity` key 三語皆刪（孤兒）
+- `package.json` 3.6.1 → 3.6.2
+
+### 背後模型（保留紀錄供日後調整）
+`contacts.last_activity_at` 目前訊號來源：
+- ✅ `interaction_logs` type IN (`note`, `meeting`, `email`)
+- ✅ `contact_photos` 任何 row (INSERT/DELETE)
+- ❌ `interaction_logs` type=`system`（刻意排除，避免 bot 自動產生的「名片新資料」/「合照附註」這種系統記錄污染訊號）
+
 ## v3.6.1 — feat(newsletter): 匯入過去 3 期電子報當 AI tone corpus（2026-04-21）
 
 Po 提供 2026 年 2、3、4 月電子報（中/英/日各一份，9 個檔）作為未來 AI 撰寫新電子報的語氣參考語料庫。
