@@ -1174,7 +1174,15 @@
     "permanentDeleteFailed": "Permanent delete failed",
     "sectionBasic": "Basic info",
     "cardDefaultAlt": "Business card",
-    "deletedAtLabel": "Deleted at: {date}"
+    "deletedAtLabel": "Deleted at: {date}",
+    "warningBanner": "{count} contacts in trash. Permanent deletion cannot be undone.",
+    "selectAll": "Select all",
+    "bulkDeleteSelected": "Permanently delete selected ({count})",
+    "deleteAll": "Delete all permanently",
+    "confirmBulkDelete": "Permanently delete these {count} contacts? Related card images will be removed as well. This cannot be undone.",
+    "confirmDeleteAll": "Permanently delete all {count} contacts in trash? Related card images will be removed as well. This cannot be undone.",
+    "bulkDeleteSuccess": "{count} contacts permanently deleted",
+    "bulkDeleteFailed": "Bulk delete failed"
   },
   "tiptap": {
     "varName": "Name",

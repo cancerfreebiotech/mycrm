@@ -1174,7 +1174,15 @@
     "permanentDeleteFailed": "永久刪除失敗",
     "sectionBasic": "基本資料",
     "cardDefaultAlt": "名片",
-    "deletedAtLabel": "刪除時間：{date}"
+    "deletedAtLabel": "刪除時間：{date}",
+    "warningBanner": "共 {count} 筆聯絡人在回收區。永久刪除後無法復原。",
+    "selectAll": "全選",
+    "bulkDeleteSelected": "永久刪除選取 ({count})",
+    "deleteAll": "全部永久刪除",
+    "confirmBulkDelete": "確定要永久刪除這 {count} 筆聯絡人？相關名片圖片也會一併刪除，無法復原。",
+    "confirmDeleteAll": "確定要永久刪除整個回收區共 {count} 筆聯絡人？相關名片圖片也會一併刪除，無法復原。",
+    "bulkDeleteSuccess": "已永久刪除 {count} 筆",
+    "bulkDeleteFailed": "批次刪除失敗"
   },
   "tiptap": {
     "varName": "姓名",

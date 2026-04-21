@@ -1174,7 +1174,15 @@
     "permanentDeleteFailed": "完全削除に失敗しました",
     "sectionBasic": "基本情報",
     "cardDefaultAlt": "名刺",
-    "deletedAtLabel": "削除日時：{date}"
+    "deletedAtLabel": "削除日時：{date}",
+    "warningBanner": "ゴミ箱に {count} 件の連絡先があります。完全削除後は元に戻せません。",
+    "selectAll": "すべて選択",
+    "bulkDeleteSelected": "選択した項目を完全削除 ({count})",
+    "deleteAll": "すべて完全削除",
+    "confirmBulkDelete": "選択した {count} 件の連絡先を完全に削除しますか？関連する名刺画像も削除され、元に戻せません。",
+    "confirmDeleteAll": "ゴミ箱内の全 {count} 件の連絡先を完全に削除しますか？関連する名刺画像も削除され、元に戻せません。",
+    "bulkDeleteSuccess": "{count} 件を完全削除しました",
+    "bulkDeleteFailed": "一括削除に失敗しました"
   },
   "tiptap": {
     "varName": "名前",

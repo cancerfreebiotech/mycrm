@@ -68,6 +68,8 @@ export default function TrashPage() {
   const [actionId, setActionId] = useState<string | null>(null)
   const [detailContact, setDetailContact] = useState<ContactDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -137,12 +139,63 @@ export default function TrashPage() {
     const res = await fetch(`/api/contacts/${id}/permanent`, { method: 'DELETE' })
     if (res.ok) {
       setContacts((prev) => prev.filter((c) => c.id !== id))
+      setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next })
       setDetailContact(null)
     } else {
       const body = await res.json()
       alert(body.error ?? t('permanentDeleteFailed'))
     }
     setActionId(null)
+  }
+
+  function toggleOne(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    setSelectedIds((prev) => {
+      if (prev.size === contacts.length) return new Set()
+      return new Set(contacts.map((c) => c.id))
+    })
+  }
+
+  async function bulkDelete(opts: { all?: boolean }) {
+    const count = opts.all ? contacts.length : selectedIds.size
+    if (count === 0) return
+    const msg = opts.all
+      ? t('confirmDeleteAll', { count })
+      : t('confirmBulkDelete', { count })
+    if (!confirm(msg)) return
+
+    setBulkDeleting(true)
+    try {
+      const body = opts.all ? { all: true } : { ids: Array.from(selectedIds) }
+      const res = await fetch('/api/contacts/trash/bulk', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error ?? t('bulkDeleteFailed'))
+      }
+      const { deleted } = await res.json()
+      if (opts.all) {
+        setContacts([])
+      } else {
+        setContacts((prev) => prev.filter((c) => !selectedIds.has(c.id)))
+      }
+      setSelectedIds(new Set())
+      alert(t('bulkDeleteSuccess', { count: deleted }))
+    } catch (e) {
+      alert(e instanceof Error ? e.message : t('bulkDeleteFailed'))
+    } finally {
+      setBulkDeleting(false)
+    }
   }
 
   if (!isSuperAdmin && !loading) {
@@ -178,10 +231,32 @@ export default function TrashPage() {
         </div>
       ) : (
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
-          {/* Warning banner */}
-          <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 text-sm text-amber-700 dark:text-amber-400">
-            <AlertTriangle size={14} />
-            共 {contacts.length} 筆聯絡人在回收區。永久刪除後無法復原。
+          {/* Warning banner + bulk actions */}
+          <div className="flex flex-wrap items-center gap-3 px-4 py-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 text-sm text-amber-700 dark:text-amber-400">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <AlertTriangle size={14} />
+              <span>{t('warningBanner', { count: contacts.length })}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {selectedIds.size > 0 && (
+                <button
+                  onClick={() => bulkDelete({})}
+                  disabled={bulkDeleting}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50"
+                >
+                  {bulkDeleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                  {t('bulkDeleteSelected', { count: selectedIds.size })}
+                </button>
+              )}
+              <button
+                onClick={() => bulkDelete({ all: true })}
+                disabled={bulkDeleting}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50"
+              >
+                {bulkDeleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                {t('deleteAll')}
+              </button>
+            </div>
           </div>
 
           {/* Table */}
@@ -189,6 +264,16 @@ export default function TrashPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+                  <th className="px-4 py-3 w-8">
+                    <input
+                      type="checkbox"
+                      checked={contacts.length > 0 && selectedIds.size === contacts.length}
+                      ref={(el) => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < contacts.length }}
+                      onChange={toggleAll}
+                      aria-label={t('selectAll')}
+                      className="cursor-pointer"
+                    />
+                  </th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">{tcnt('name')}</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 hidden sm:table-cell">{tcnt('company')}</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 hidden md:table-cell">{t('colDeletedBy')}</th>
@@ -200,11 +285,21 @@ export default function TrashPage() {
                 {contacts.map((contact) => {
                   const isActing = actionId === contact.id
                   const displayName = contact.name || contact.name_en || tcnt('noName')
+                  const checked = selectedIds.has(contact.id)
                   return (
                     <tr
                       key={contact.id}
-                      className="border-b border-gray-100 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/30"
+                      className={`border-b border-gray-100 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/30 ${checked ? 'bg-blue-50/60 dark:bg-blue-950/20' : ''}`}
                     >
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleOne(contact.id)}
+                          aria-label={displayName}
+                          className="cursor-pointer"
+                        />
+                      </td>
                       <td className="px-4 py-3">
                         <button
                           onClick={() => openDetail(contact.id)}

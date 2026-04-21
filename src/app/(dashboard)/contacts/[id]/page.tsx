@@ -373,8 +373,14 @@ export default function ContactDetailPage() {
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
     if (user?.email) {
-      const { data: profile } = await supabase.from('users').select('id, ai_model_id, provider_token, role').eq('email', user.email).single()
+      const { data: profile, error: profileErr } = await supabase
+        .from('users')
+        .select('id, ai_model_id, provider_token, role')
+        .ilike('email', user.email)
+        .maybeSingle()
+      if (profileErr) console.error('[contact-detail] profile load error', profileErr)
       if (profile) { setCurrentUserId(profile.id); setAiModelId(profile.ai_model_id ?? null); setMsProviderToken(profile.provider_token ?? null); setCurrentUserRole(profile.role ?? null) }
+      else console.warn('[contact-detail] no profile row for', user.email)
     }
     const [{ data: c }, { data: l }, { data: tags }, { data: cards }, { data: countries }, { data: photos }] = await Promise.all([
       supabase.from('contacts').select('*, users!created_by(display_name), contact_tags(tags(id, name))').eq('id', id).is('deleted_at', null).single(),
@@ -1058,7 +1064,10 @@ export default function ContactDetailPage() {
     }
   }
 
-  const canDelete = currentUserRole === 'super_admin' || contact?.created_by === currentUserId
+  // Always show delete button; backend (/api/contacts/[id] DELETE) enforces
+  // "super_admin OR creator" permission and returns 403 if unauthorized.
+  // Previously gated on client-side role state which proved fragile in production.
+  const canDelete = currentUserId !== null
 
   if (!contact) return <div className="text-gray-400 text-sm">{tc('loading')}</div>
 

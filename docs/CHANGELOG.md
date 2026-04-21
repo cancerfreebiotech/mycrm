@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## v3.5.0 — feat(trash): 批次永久刪除 + fix(contacts): 刪除按鈕可見性（2026-04-21）
+
+### 1. 刪除按鈕可見性 fix
+Po 回報「編輯/寄信/合併都看到，就是沒有刪除」。DB 確認 `pohan.chen@cancerfree.io` role 是 super_admin，email case 一致、RLS policy 是 `qual=true`，code 邏輯 `currentUserRole === 'super_admin' || created_by === currentUserId` 正確，但前端 role state 在某些情境下沒正確設進來（暫時無法在生產端 repro，診斷成本高）。把前端 canDelete 改成「已登入就顯示」，真正的權限檢查由 backend `DELETE /api/contacts/[id]` 把關（原本就有 super_admin OR creator check，會回 403）。改完 Po 一定看得到按鈕，不是 super_admin / creator 的人按了會 alert 錯誤 — 符合 CRM 常見做法。
+
+另外把 client 的 profile 查詢改成 `ilike` + `maybeSingle()`，並加 error / warn log，方便以後遇到類似問題可以看 console 診斷。
+
+### 2. 回收區批次永久刪除
+`/admin/trash` 以前要一筆一筆按「永久刪除」。加：
+- 表格第一欄 checkbox，header 有全選 / 取消全選（含 indeterminate 狀態）
+- 選取 >0 時右上 banner 冒出「永久刪除選取 (N)」紅字按鈕
+- 永遠顯示的「全部永久刪除」紅底按鈕（一鍵清空整個回收區）
+- 新 API `DELETE /api/contacts/trash/bulk`，body `{ ids: [...] }` 或 `{ all: true }`，super_admin only，會一併清 Storage 名片圖，CASCADE 清 contact_cards / contact_tags / interaction_logs
+- i18n 三語同步（warningBanner / selectAll / bulkDeleteSelected / deleteAll / confirmBulkDelete / confirmDeleteAll / bulkDeleteSuccess / bulkDeleteFailed）
+
+### 改動
+- `src/app/api/contacts/trash/bulk/route.ts`（新）
+- `src/app/(dashboard)/admin/trash/page.tsx`：多選狀態、bulk handler、checkbox 欄、bulk action banner
+- `src/app/(dashboard)/contacts/[id]/page.tsx`：canDelete 放寬 + profile 查詢 robustness
+- `src/messages/{zh-TW,en,ja}.json`：trash namespace 加 8 個 key
+- `package.json`：3.4.0 → 3.5.0
+
 ## v3.4.0 — feat(bot): Portkey gateway 容錯 Gemini 503（2026-04-21）
 
 Telegram bot 最近在 Google AI Studio 免費 tier 碰到 503（Gemini 被降低優先級）。原本的 `withGeminiRetry` 只做「1 次重試、固定等 3 秒」，救不回大部分失敗。引入 [Portkey](https://portkey.ai) AI Gateway 代理 Gemini，取得 **loadbalance 兩把 Gemini project key + 3 次指數退避重試（1 → 2 → 4 秒）** 加集中觀測能力。兩把 key 50/50 隨機分流，單一 project 壓力減半，大幅降低觸發 free-tier priority degradation 的機率；策略定義在 Portkey Config，可從 dashboard 即時調整而不需 redeploy。
