@@ -16,7 +16,8 @@ Path: `/contacts`
 
 - **Keyword search**: Matches name, Email, company name (fuzzy search)
 - **Tag filter**: Click a Tag button to show only contacts with that Tag
-- **Sort**: By creation time descending (newest first)
+- **Default sort**: By "last activity" time descending (recently interacted contacts float to top — see rules below)
+- **Other sorts**: Click column headers (Name / Company / Title / Email / Tags / Created at)
 - **Pagination**: 20 per page, with page navigation at the bottom
 
 ### Export
@@ -94,12 +95,48 @@ Loads 20 entries by default; scrolling to the bottom automatically loads more (i
 ### Send Email
 
 Click the "Send Email" button to open the enhanced email Modal:
-- **To**: Editable, defaults to the contact's Email
+- **To / CC / BCC**: Editable, defaults to the contact's Email
 - **Template**: Selecting one auto-fills the subject, body, and attachments
-- **AI Generation**: Enter a description; AI uses the recipient's info and recent interaction records to generate the body
-- **Temporary Attachments**: Upload attachments for this send only (max 2MB per file); not saved to the template
+- **AI Generation**: Enter a description; AI uses the recipient's info and recent interaction records to generate the body (HTML, TipTap editor)
+- **Contact photos**: If the contact has photos uploaded (via bot `/p` or web), a thumbnail gallery appears — click a thumbnail to attach, click again to remove
+- **Temporary Attachments**: Upload attachments for this send only (max 5MB per file); not saved to the template
 
-An Email interaction record is automatically created after sending.
+Sent via Microsoft Graph (Outlook). An Email interaction record is automatically written and the contact floats to the top of the "last activity" sort (see next section).
+
+---
+
+## Last Activity (`last_activity_at`)
+
+**Purpose**: Contacts you recently interacted with float to the top of the list — no need to search by name.
+
+### Calculation
+`contacts.last_activity_at` is maintained by a DB trigger and takes the **maximum** of:
+1. `interaction_logs.created_at` — limited to type `note` / `meeting` / `email` and **NOT SendGrid-sent**
+2. `contact_photos.created_at` — any photo upload (via bot `/p` or web)
+3. Falls back to `contacts.created_at` when neither exists.
+
+### Behavior Matrix
+
+| Action | Counts as activity? | Interaction log written? |
+|---|---|---|
+| Send email from contact detail (Outlook/Graph) | ✅ | ✅ |
+| Bot `/met` visit note | ✅ | ✅ (type=note or meeting) |
+| Bot `/meet` meeting | ✅ | ✅ (type=meeting) |
+| Bot `/work` task | ✅ | ✅ (type=note) |
+| Bot `/p` photo upload | ✅ | ✅ (system log if note added) |
+| `/email/compose` Outlook bulk | ✅ | ✅ |
+| **`/email/compose` SendGrid bulk** | ❌ | ✅ |
+| **Newsletter campaign (always SendGrid)** | ❌ | ✅ |
+| Bot `/a` add card (AI OCR) | ❌ (type=system) | ✅ |
+
+### Why SendGrid doesn't count
+SendGrid is typically used for automated bulk sends (newsletter, marketing). If every SendGrid message bumped `last_activity_at`, sending one newsletter to 4000+ subscribers would stamp every contact's "last activity" to the same moment — wiping out the signal entirely. Outlook / Graph sends are 1-to-1 or small-scale, which is the real "who did I recently talk to" signal worth tracking.
+
+Users can still see the full send history in the interaction log timeline — it just doesn't affect sort order.
+
+### UI hint
+When `/email/compose` is switched to SendGrid, a purple badge appears:
+> ⚠ SendGrid sends do NOT count toward the contact's last-activity time (interaction log is still written)
 
 ---
 
@@ -124,3 +161,4 @@ An Email interaction record is automatically created after sending.
 | `facebook_url` | Facebook |
 | `notes` | Notes |
 | `country_code` | Country code (ISO 3166-1 alpha-2, e.g. `TW`), linked to the countries table |
+| `last_activity_at` | Last activity timestamp (auto-maintained by DB trigger, see rules above) |

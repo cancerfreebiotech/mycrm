@@ -16,7 +16,8 @@ nav_order: 2
 
 - **關鍵字搜尋**：比對姓名、Email、公司名（模糊搜尋）
 - **Tag 篩選**：點選 Tag 按鈕只顯示該 Tag 的聯絡人
-- **排序**：依建立時間倒序（最新在前）
+- **預設排序**：依「最後活動時間」倒序（最近有互動的人在最上面，詳見下方規則）
+- **其他排序**：點擊欄位標題切換（姓名 / 公司 / 職稱 / Email / Tags / 建立時間）
 - **分頁**：每頁 20 筆，底部頁碼導覽
 
 ### 匯出
@@ -94,12 +95,48 @@ nav_order: 2
 ### 發送 Email
 
 點擊「寄信」按鈕，開啟增強版寄信 Modal：
-- **收件人（To）**：可手動修改，預設帶入聯絡人 Email
+- **收件人（To / CC / BCC）**：可手動修改，預設帶入聯絡人 Email
 - **範本**：選擇後主旨、內文、附件自動帶入
-- **AI 生成**：輸入描述，AI 帶入收件人資訊與最近互動紀錄自動產生內文
-- **臨時附件**：上傳本次專用附件（單檔 2MB），不儲存到範本
+- **AI 生成**：輸入描述，AI 帶入收件人資訊與最近互動紀錄自動產生內文（HTML 格式，TipTap 編輯器）
+- **聯絡人照片**：若該聯絡人已透過 bot `/p` 上傳過合照，modal 會顯示縮圖區塊，點一下縮圖即可附加到信件，再點一下移除
+- **臨時附件**：上傳本次專用附件（單檔 5MB），不儲存到範本
 
-發送後自動建立一筆 Email 互動紀錄。
+發送透過 Microsoft Graph（Outlook）送出，自動建立一筆 Email 互動紀錄並將聯絡人推到「最後活動」排序頂端（見下一節）。
+
+---
+
+## 最後活動時間 (`last_activity_at`)
+
+**目的**：讓最近有互動的聯絡人自動浮到列表頂端，不用記名字去搜尋。
+
+### 計算規則
+`contacts.last_activity_at` 由 DB trigger 自動維護，取下列時間戳的**最晚者**：
+1. `interaction_logs.created_at` — 限 type 為 `note` / `meeting` / `email` 且**非 SendGrid 寄送**
+2. `contact_photos.created_at` — 任何照片上傳（bot `/p` 或網頁上傳）
+3. 若以上都沒有 → fallback 到 `contacts.created_at`
+
+### 行為矩陣
+
+| 動作 | 算最後活動？ | 寫互動紀錄？ |
+|---|---|---|
+| 聯絡人詳情頁寄信（Outlook/Graph） | ✅ | ✅ |
+| Bot `/met` 拜訪筆記 | ✅ | ✅ (type=note 或 meeting) |
+| Bot `/meet` 會議 | ✅ | ✅ (type=meeting) |
+| Bot `/work` 任務 | ✅ | ✅ (type=note) |
+| Bot `/p` 合照上傳 | ✅ | ✅（附註則寫系統紀錄） |
+| `/email/compose` Outlook 群發 | ✅ | ✅ |
+| **`/email/compose` SendGrid 群發** | ❌ | ✅ |
+| **Newsletter campaign（一律走 SendGrid）** | ❌ | ✅ |
+| Bot `/a` 新增名片（AI 辨識） | ❌ (type=system) | ✅ |
+
+### 為什麼 SendGrid 不算？
+SendGrid 典型用途是大量自動化群發（newsletter、行銷信）。如果每封 SendGrid 信件都刷新 `last_activity_at`，寄一次 newsletter 給 4000+ 訂閱者會把每個聯絡人的「最後活動」洗成同一時間，這個排序訊號就完全失去意義。Outlook / Graph 寄信是 1-to-1 或小範圍互動，才是真正值得追蹤的「我最近跟誰聊過」訊號。
+
+**使用者仍可從互動紀錄時間軸看到完整寄送歷史**，只是不影響排序。
+
+### UI 提示
+`/email/compose` 切換到 SendGrid 時會顯示紫色 badge：
+> ⚠ SendGrid 寄送不會計入聯絡人最後活動時間（仍會寫互動紀錄）
 
 ---
 
@@ -124,3 +161,4 @@ nav_order: 2
 | `facebook_url` | Facebook |
 | `notes` | 備註 |
 | `country_code` | 國家代碼（ISO 3166-1 α-2，如 `TW`），連結至 countries 資料表 |
+| `last_activity_at` | 最後活動時間戳（由 DB trigger 自動維護，見上方規則） |
