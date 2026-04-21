@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 
-const SELECT_FIELDS = 'id, name, company, job_title, email, phone, country_code, met_at, created_at, importance, language, email_status, users!created_by(display_name), contact_tags(tags(id, name))'
+const SELECT_FIELDS = 'id, name, company, job_title, email, phone, country_code, met_at, created_at, last_activity_at, importance, language, email_status, users!created_by(display_name), contact_tags(tags(id, name))'
 const BATCH_SIZE = 1000
 
 // GET — fetch all contacts (bypasses PostgREST 1000-row limit via pagination)
+// Default order: last_activity_at DESC (interaction_logs.created_at MAX for
+// types note/meeting/email, fallback to contacts.created_at). Keeps contacts
+// with recent activity near the top even if the row itself is old.
 export async function GET() {
   const supabase = createServiceClient()
 
@@ -16,7 +19,7 @@ export async function GET() {
       .from('contacts')
       .select(SELECT_FIELDS)
       .is('deleted_at', null)
-      .order('created_at', { ascending: false })
+      .order('last_activity_at', { ascending: false })
       .range(from, from + BATCH_SIZE - 1)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })

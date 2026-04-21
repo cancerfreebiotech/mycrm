@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## v3.6.0 — feat(contacts): 依最後活動時間排序（2026-04-21）
+
+Po 反映有些舊聯絡人最近有新活動紀錄，但列表按 created_at 排序就藏在後面很難找。加「最後活動時間」欄位讓這些聯絡人浮到前面，保留原本「建立時間」欄供切換。
+
+### 改動
+- **DB migration `contacts_last_activity_at`**：
+  - `contacts.last_activity_at timestamptz NOT NULL DEFAULT now()`
+  - 部分索引 `idx_contacts_last_activity_at (last_activity_at DESC) WHERE deleted_at IS NULL`
+  - Trigger `trg_update_contact_last_activity`：`interaction_logs` INSERT/UPDATE/DELETE 時，把該 contact 的 last_activity_at 重算成 `MAX(created_at) WHERE type IN ('note','meeting','email')` 或 fallback `contacts.created_at`
+  - 意外遷移：UPDATE 若改變 contact_id（極罕見），新舊兩邊都會重算
+  - Backfill 執行完 2374 筆聯絡人中 1568 有活動紀錄，805 無活動退回 created_at
+- **API `/api/contacts/all`**：`select` 加 `last_activity_at`，預設排序改 `.order('last_activity_at', { ascending: false })`
+- **UI `/contacts`**：
+  - 表格加一欄「最後活動」，點 header 可排序
+  - 欄位值若等於 `created_at` 顯示「—」避免資訊重複
+  - 保留原「建立時間」欄
+  - 預設順序依 API（活動時間 DESC）
+- i18n 三語加 `lastActivity` key
+- `package.json` 3.5.1 → 3.6.0
+
+### 範圍定義（用戶確認）
+- 「活動紀錄」只算 type = `note` / `meeting` / `email`（排除 `system`/`scan`）
+- 無活動紀錄的聯絡人 fallback 到 `created_at`（不會永遠沉底）
+- UI 加切換 = 點欄位 header 切換排序
+
 ## v3.5.1 — fix(auth): /api/me 用 email 查 + feat(mail): 單聯絡人改用 TipTap（2026-04-21）
 
 ### 1. 刪除按鈕真正原因

@@ -29,6 +29,7 @@ interface Contact {
   country_code: string | null
   met_at: string | null
   created_at: string
+  last_activity_at: string
   importance: string
   language: string | null
   email_status: 'bounced' | 'unsubscribed' | 'invalid' | null
@@ -76,7 +77,7 @@ export default function ContactsPage() {
   const liInputRef = useRef<HTMLInputElement>(null)
   const [page, setPage] = useState(1)
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null)
-  type SortField = 'name' | 'company' | 'job_title' | 'email' | 'created_at' | 'tag'
+  type SortField = 'name' | 'company' | 'job_title' | 'email' | 'created_at' | 'last_activity_at' | 'tag'
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -189,6 +190,9 @@ export default function ContactsPage() {
         } else if (sortField === 'created_at') {
           va = a.created_at
           vb = b.created_at
+        } else if (sortField === 'last_activity_at') {
+          va = a.last_activity_at
+          vb = b.last_activity_at
         } else {
           va = a[sortField] ?? ''
           vb = b[sortField] ?? ''
@@ -741,6 +745,17 @@ export default function ContactsPage() {
               <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">{t('creator')}</th>
               <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">
                 <button
+                  onClick={() => handleSort('last_activity_at')}
+                  className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                >
+                  {t('lastActivity')}
+                  {sortField !== 'last_activity_at' && <ChevronsUpDown size={12} className="text-gray-400" />}
+                  {sortField === 'last_activity_at' && sortDir === 'asc' && <ChevronUp size={12} className="text-blue-500" />}
+                  {sortField === 'last_activity_at' && sortDir === 'desc' && <ChevronDown size={12} className="text-blue-500" />}
+                </button>
+              </th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">
+                <button
                   onClick={() => handleSort('created_at')}
                   className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
                 >
@@ -755,11 +770,11 @@ export default function ContactsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">{tc('loading')}</td>
+                <td colSpan={9} className="px-4 py-8 text-center text-gray-400">{tc('loading')}</td>
               </tr>
             ) : sorted.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">{t('noResults')}</td>
+                <td colSpan={9} className="px-4 py-8 text-center text-gray-400">{t('noResults')}</td>
               </tr>
             ) : (
               paginated.map((c) => (
@@ -812,6 +827,11 @@ export default function ContactsPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{c.users?.display_name || '—'}</td>
+                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
+                    {c.last_activity_at && c.last_activity_at !== c.created_at
+                      ? new Date(c.last_activity_at).toLocaleDateString()
+                      : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                  </td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
                     {new Date(c.created_at).toLocaleDateString()}
                   </td>
