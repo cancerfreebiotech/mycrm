@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## v3.7.1 — refactor(last_activity): 排除所有 SendGrid 寄送（含 ad-hoc 群發）（2026-04-21）
+
+v3.7.0 只用 `campaign_id IS NOT NULL` 過濾，Po 指出其實**不管是否掛 campaign**，只要是 SendGrid 寄的都不該算進 last_activity（因為 SendGrid 典型用途是自動大量發送）。互動紀錄仍照常寫進 DB，只是不影響「誰跟我最近有互動」的排序訊號。
+
+### 改動
+- **DB migration `interaction_logs_send_method`**：
+  - `interaction_logs` 加 `send_method text CHECK (in outlook/sendgrid/null)`
+  - Backfill：既有 campaign 綁定的 log 統統標 `'sendgrid'`（過去 campaign 都是走 SG 寄的）；3827 筆個別 log 因無法回推維持 NULL
+  - 部分索引 `idx_interaction_logs_contact_activity` 配合新 trigger 查詢
+  - 兩個 trigger function 過濾條件從 `campaign_id IS NULL` 改為 **`send_method IS DISTINCT FROM 'sendgrid'`** — NULL 視為可計入（向下相容），`'outlook'` 可計入，`'sendgrid'` 排除
+  - 全表 backfill contacts.last_activity_at
+- `src/app/api/email/send/route.ts`：所有插入的 interaction_logs 帶 `send_method: method`
+- `src/app/(dashboard)/contacts/[id]/page.tsx`：個別寄信 insert log 時帶 `send_method: 'outlook'`
+- `src/app/(dashboard)/email/compose/page.tsx`：SendGrid 按鈕選中時顯示紫色提示「⚠ SendGrid 寄送不會計入聯絡人最後活動時間（仍會寫互動紀錄）」
+- i18n 三語加 `sendgridActivityNote` key
+- `package.json` 3.7.0 → 3.7.1
+
+### 行為矩陣
+| 寄送途徑 | send_method | 算 last_activity? |
+|---|---|---|
+| 聯絡人頁寄信（個別） | `outlook` | ✅ |
+| `/email/compose` Outlook | `outlook` | ✅ |
+| `/email/compose` SendGrid | `sendgrid` | ❌ |
+| Newsletter campaign | `sendgrid` | ❌ |
+| Bot /met /work /meet | NULL (非 email) | ✅（type=note/meeting） |
+
 ## v3.7.0 — feat(mail): 寄信附加聯絡人照片 + fix: last_activity 排除 newsletter（2026-04-21）
 
 ### 1. 寄信可附加聯絡人已上傳的照片

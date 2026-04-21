@@ -347,6 +347,11 @@ export default function EmailComposePage() {
               {t('methodSendgrid')}
             </button>
           </div>
+          {method === 'sendgrid' && (
+            <span className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/30 px-2 py-0.5 rounded">
+              {t('sendgridActivityNote')}
+            </span>
+          )}
           <span className="text-sm text-gray-500 dark:text-gray-400">
             {t('recipients', { count: recipients.length })}
             {method === 'outlook'

@@ -885,6 +885,7 @@
     "title": "一斉メール作成",
     "methodOutlook": "Outlook",
     "methodSendgrid": "SendGrid",
+    "sendgridActivityNote": "⚠ SendGrid 送信は連絡先の最終活動時刻には加算されません（インタラクション記録は残ります）",
     "recipients": "{count}人の受信者",
     "methodBcc": "（BCC一斉送信）",
     "methodOutlookTo": "（全員TO）",

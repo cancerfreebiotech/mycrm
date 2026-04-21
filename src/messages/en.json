@@ -885,6 +885,7 @@
     "title": "Compose Group Email",
     "methodOutlook": "Outlook",
     "methodSendgrid": "SendGrid",
+    "sendgridActivityNote": "⚠ SendGrid sends do NOT count toward the contact's last-activity time (interaction log is still written)",
     "recipients": "{count} recipients",
     "methodBcc": "(BCC)",
     "methodOutlookTo": "(shared TO)",

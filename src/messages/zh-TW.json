@@ -885,6 +885,7 @@
     "title": "撰寫群發郵件",
     "methodOutlook": "Outlook",
     "methodSendgrid": "SendGrid",
+    "sendgridActivityNote": "⚠ SendGrid 寄送不會計入聯絡人最後活動時間（仍會寫互動紀錄）",
     "recipients": "{count} 位收件人",
     "methodBcc": "（BCC 群發）",
     "methodOutlookTo": "（全部 TO）",

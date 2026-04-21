@@ -361,6 +361,7 @@ export async function POST(req: NextRequest) {
       email_body: bodyHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),
       created_by: userId,
       campaign_id: campaignId ?? null,
+      send_method: method as 'outlook' | 'sendgrid',
     }))
 
     for (let i = 0; i < logRows.length; i += 500) {

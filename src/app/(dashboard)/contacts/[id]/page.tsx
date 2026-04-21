@@ -1032,6 +1032,7 @@ export default function ContactDetailPage() {
           email_subject: mailSubject,
           email_body: mailBody || null,
           email_attachments: attachmentNames.length > 0 ? attachmentNames : null,
+          send_method: 'outlook',
         }))
         const { data: logRows } = await supabase.from('interaction_logs')
           .insert(inserts)
