@@ -222,7 +222,6 @@ export default function ContactDetailPage() {
   const logsOffsetRef = useRef(0)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
   const [aiModelId, setAiModelId] = useState<string | null>(null)
   const [msProviderToken, setMsProviderToken] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -379,7 +378,7 @@ export default function ContactDetailPage() {
         .ilike('email', user.email)
         .maybeSingle()
       if (profileErr) console.error('[contact-detail] profile load error', profileErr)
-      if (profile) { setCurrentUserId(profile.id); setAiModelId(profile.ai_model_id ?? null); setMsProviderToken(profile.provider_token ?? null); setCurrentUserRole(profile.role ?? null) }
+      if (profile) { setCurrentUserId(profile.id); setAiModelId(profile.ai_model_id ?? null); setMsProviderToken(profile.provider_token ?? null) }
       else console.warn('[contact-detail] no profile row for', user.email)
     }
     const [{ data: c }, { data: l }, { data: tags }, { data: cards }, { data: countries }, { data: photos }] = await Promise.all([
@@ -1064,11 +1063,6 @@ export default function ContactDetailPage() {
     }
   }
 
-  // Always show delete button; backend (/api/contacts/[id] DELETE) enforces
-  // "super_admin OR creator" permission and returns 403 if unauthorized.
-  // Previously gated on client-side role state which proved fragile in production.
-  const canDelete = currentUserId !== null
-
   if (!contact) return <div className="text-gray-400 text-sm">{tc('loading')}</div>
 
   const inputClass = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
@@ -1254,16 +1248,14 @@ export default function ContactDetailPage() {
           >
             <Merge size={14} /> 合併聯絡人
           </button>
-          {canDelete && (
-            <button
-              onClick={handleDelete}
-              disabled={deleting}
-              className="flex items-center gap-2 px-4 py-2 text-sm bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50 ml-auto"
-            >
-              {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-              {tc('delete')}
-            </button>
-          )}
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50 ml-auto"
+          >
+            {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+            {tc('delete')}
+          </button>
         </div>
       </div>
 
