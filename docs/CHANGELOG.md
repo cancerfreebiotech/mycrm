@@ -1,5 +1,35 @@
 # CHANGELOG
 
+## v3.6.1 — feat(newsletter): 匯入過去 3 期電子報當 AI tone corpus（2026-04-21）
+
+Po 提供 2026 年 2、3、4 月電子報（中/英/日各一份，9 個檔）作為未來 AI 撰寫新電子報的語氣參考語料庫。
+
+### 改動
+- **DB migration `newsletter_tone_samples`**：
+  - `newsletter_tone_samples` 表：`language` (zh-TW/en/ja check)、`period` (YYYY-MM)、`html_content`、`plain_text` (HTML strip 後)、`title` (自動抓 h1/h2)、`source_file`
+  - 索引 `(language, period DESC)` 方便按語言撈最新幾期做 few-shot
+  - RLS：authenticated 可讀；寫入走 service role
+- **`scripts/import-newsletter-tone-samples.mjs`**（新）：讀 `NEWSLETTER_CORPUS_DIR` 下的月份資料夾 → 偵測語言 (中/英/日 keyword) → parse period (2604 → 2026-04) → strip HTML → upsert。冪等（重跑會刪掉同 lang+period 後再 insert）
+
+### 匯入結果（2026-04-21 執行）
+| period | zh-TW | en | ja |
+|---|---|---|---|
+| 2026-02 | 2989 chars | **0 chars (原檔為空)** | 3046 chars |
+| 2026-03 | 2742 | 4848 | 2815 |
+| 2026-04 | 4402 | 8399 | 4629 |
+
+9 筆中 8 筆有效。2026-02 英文版原始檔只有 3 bytes — Po 需要重新提供該月英文版（不影響目前使用，AI 可用另外 2 期英文做 few-shot）。
+
+### 還沒做（下次 session）
+- `/api/ai-newsletter-compose` 接入 Gemini few-shot：從 `newsletter_tone_samples` 按語言撈最新 3 期 → 注入 system prompt 當 tone reference → 用戶的 outline + 照片 → 生出符合該語氣的新電子報 section HTML
+- Admin UI：`/admin/newsletter/compose` 讓 Po 輸入 outline bullets + 上傳照片 → 預覽 + 寄測試
+- 仍 block 在「SendGrid CSV 匯入 subscribers」未完成
+
+### 範圍
+- `package.json` 3.6.0 → 3.6.1
+- 新檔：`scripts/import-newsletter-tone-samples.mjs`
+- DB migration：`newsletter_tone_samples`
+
 ## v3.6.0 — feat(contacts): 依最後活動時間排序（2026-04-21）
 
 Po 反映有些舊聯絡人最近有新活動紀錄，但列表按 created_at 排序就藏在後面很難找。加「最後活動時間」欄位讓這些聯絡人浮到前面，保留原本「建立時間」欄供切換。
