@@ -7,6 +7,7 @@ import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { sendMail } from '@/lib/graph'
 import { ArrowLeft, ImageIcon, Mail, X, Pencil, Loader2, Plus, Upload, Trash2, Copy, Check, Sparkles, Paperclip, ZoomIn, ZoomOut, Maximize2, ChevronDown, Merge, Search, RotateCw } from 'lucide-react'
 import Image from 'next/image'
+import TipTapEditor from '@/components/TipTapEditor'
 
 interface Tag { id: string; name: string }
 interface Country { code: string; name_zh: string; emoji: string }
@@ -222,6 +223,7 @@ export default function ContactDetailPage() {
   const logsOffsetRef = useRef(0)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
   const [aiModelId, setAiModelId] = useState<string | null>(null)
   const [msProviderToken, setMsProviderToken] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -351,6 +353,7 @@ export default function ContactDetailPage() {
   const [mailBccList, setMailBccList] = useState<Recipient[]>([])
   const [mailSubject, setMailSubject] = useState('')
   const [mailBody, setMailBody] = useState('')
+  const [mailEditorKey, setMailEditorKey] = useState(0)
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [templateAttachments, setTemplateAttachments] = useState<TemplateAttachment[]>([])
   const [tempAttaches, setTempAttaches] = useState<Array<{ name: string; base64: string; contentType: string; size: number }>>([])
@@ -370,16 +373,22 @@ export default function ContactDetailPage() {
   }, [])
 
   async function load() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user?.email) {
-      const { data: profile, error: profileErr } = await supabase
-        .from('users')
-        .select('id, ai_model_id, provider_token, role')
-        .ilike('email', user.email)
-        .maybeSingle()
-      if (profileErr) console.error('[contact-detail] profile load error', profileErr)
-      if (profile) { setCurrentUserId(profile.id); setAiModelId(profile.ai_model_id ?? null); setMsProviderToken(profile.provider_token ?? null) }
-      else console.warn('[contact-detail] no profile row for', user.email)
+    // Use /api/me (service role, email lookup) because auth.users.id !== public.users.id
+    // in this project — client-side .eq('id', ...) silently returns null
+    const meRes = await fetch('/api/me').catch(() => null)
+    if (meRes?.ok) {
+      const me = await meRes.json() as { id: string; role: string; ai_model_id: string | null }
+      setCurrentUserId(me.id)
+      setCurrentUserRole(me.role || null)
+      setAiModelId(me.ai_model_id ?? null)
+      // provider_token is a separate concern; fetch via existing client path
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user?.email) {
+        const { data: tokenRow } = await supabase.from('users').select('provider_token').ilike('email', user.email).maybeSingle()
+        if (tokenRow) setMsProviderToken(tokenRow.provider_token ?? null)
+      }
+    } else {
+      console.warn('[contact-detail] /api/me failed', meRes?.status)
     }
     const [{ data: c }, { data: l }, { data: tags }, { data: cards }, { data: countries }, { data: photos }] = await Promise.all([
       supabase.from('contacts').select('*, users!created_by(display_name), contact_tags(tags(id, name))').eq('id', id).is('deleted_at', null).single(),
@@ -882,6 +891,7 @@ export default function ContactDetailPage() {
       setMailSubject(tpl.subject ?? '')
       setMailBody(tpl.body_content ?? '')
       setTemplateAttachments(tpl.attachments)
+      setMailEditorKey((k) => k + 1)
     }
   }
 
@@ -900,12 +910,13 @@ export default function ContactDetailPage() {
       const res = await fetch('/api/ai-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description, templateContent: existingBody, model: aiModelId, generateSubject: true }),
+        body: JSON.stringify({ description, templateContent: existingBody, model: aiModelId, generateSubject: true, returnHtml: true }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setMailBody(data.text ?? data.html ?? '')
       if (data.subject) setMailSubject(data.subject)
+      setMailEditorKey((k) => k + 1)
     } catch (e) {
       setMailError(e instanceof Error ? e.message : t('aiGenerateFailed'))
     } finally {
@@ -1062,6 +1073,8 @@ export default function ContactDetailPage() {
       setDeleting(false)
     }
   }
+
+  const canDelete = currentUserRole === 'super_admin' || (contact?.created_by != null && contact.created_by === currentUserId)
 
   if (!contact) return <div className="text-gray-400 text-sm">{tc('loading')}</div>
 
@@ -1248,14 +1261,16 @@ export default function ContactDetailPage() {
           >
             <Merge size={14} /> 合併聯絡人
           </button>
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50 ml-auto"
-          >
-            {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-            {tc('delete')}
-          </button>
+          {canDelete && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50"
+            >
+              {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              {tc('delete')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -2083,8 +2098,12 @@ export default function ContactDetailPage() {
               {/* Body */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">{tm('body')}</label>
-                <textarea value={mailBody} onChange={(e) => setMailBody(e.target.value)} rows={7} placeholder={tm('bodyPlaceholder')}
-                  className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <TipTapEditor
+                  key={mailEditorKey}
+                  content={mailBody}
+                  onChange={(html) => setMailBody(html)}
+                  placeholder={tm('bodyPlaceholder')}
+                />
               </div>
 
               {/* Temp attachments */}

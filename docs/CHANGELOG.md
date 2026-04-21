@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## v3.5.1 — fix(auth): /api/me 用 email 查 + feat(mail): 單聯絡人改用 TipTap（2026-04-21）
+
+### 1. 刪除按鈕真正原因
+終於找到 Po 明明是 super_admin 卻看不到刪除按鈕的根源：**auth.users.id ≠ public.users.id**。`/api/me` 原本用 `.eq('id', user.id)` 查 public.users，auth id 和 public id 不同 UUID，查不到 row → role 回空字串 → 前端 `role === 'super_admin'` 判斷永遠 false。聯絡人詳細頁的 `currentUserRole` state 也因此從來沒被正確填進去。
+
+修法：
+- `/api/me` 改用 `.ilike('email', user.email).maybeSingle()`，加詳細註解避免下次又有人踩雷
+- contact detail page 改用 `/api/me` fetch profile（而非 client-side query），canDelete 權限判斷 `super_admin OR 建立者` 救回來
+- 拿掉上 commit 偷渡的「永遠顯示」fallback
+- 刪除按鈕的 `ml-auto` 拿掉，回到原本 inline 位置（跟 編輯/寄信/合併 同一列）
+
+### 2. 單聯絡人寄信 UI 統一
+原本單聯絡人「寄信」modal 用 `<textarea>`，而群發郵件用 TipTapEditor，UI / 功能都差很多。把 modal body 換成 TipTapEditor，AI 生成 call `returnHtml: true` 產生 HTML 格式，套用範本時 bump editor key 讓 TipTap 重新渲染 HTML content。
+
+### 改動
+- `src/app/api/me/route.ts`：email lookup + 完整型別 + 防呆註解
+- `src/app/(dashboard)/contacts/[id]/page.tsx`：
+  - `load()` 改用 `/api/me`
+  - 救回 `currentUserRole` state + `canDelete` 判斷
+  - 刪除按鈕拿掉 `ml-auto`
+  - 寄信 modal `<textarea>` → `<TipTapEditor>`
+  - AI 生成加 `returnHtml: true`，範本套用 + AI 生成都 bump `mailEditorKey`
+- `package.json`：3.5.0 → 3.5.1
+
 ## v3.5.0 — feat(trash): 批次永久刪除 + fix(contacts): 刪除按鈕可見性（2026-04-21）
 
 ### 1. 刪除按鈕可見性 fix
