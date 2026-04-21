@@ -374,6 +374,10 @@
     "aiGeneratedBody": "AI生成メール本文",
     "aiPromptPlaceholder": "メールの目的を記述（例：先日の打ち合わせへのお礼、新製品の紹介）",
     "extraAttachments": "追加添付（最大5MB）",
+    "contactPhotos": "連絡先の写真（タップして添付）",
+    "attachPhoto": "メールに添付",
+    "photoAttached": "添付済み（もう一度タップで解除）",
+    "attachPhotoFailed": "写真の添付に失敗しました",
     "searchContactsPlaceholder": "名前・会社・メールを検索...",
     "noContactFound": "一致する連絡先が見つかりません"
   },

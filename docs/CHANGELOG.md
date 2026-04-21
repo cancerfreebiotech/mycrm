@@ -1,5 +1,37 @@
 # CHANGELOG
 
+## v3.7.0 — feat(mail): 寄信附加聯絡人照片 + fix: last_activity 排除 newsletter（2026-04-21）
+
+### 1. 寄信可附加聯絡人已上傳的照片
+Po 的工作流：拍合照 → `/p` bot 上傳 → 在聯絡人頁寫感謝信 → 要附照片進去。原本只能再從本機上傳一次同樣的檔案，冗餘。
+
+- 寄信 modal 新增「聯絡人照片」區塊（有照片才出現）
+- 顯示該聯絡人所有已上傳照片的縮圖 gallery
+- 點縮圖即從 Supabase Storage 抓圖、轉 base64、加到附件；再點一下移除
+- 已附加狀態用藍框 + 藍色勾勾 icon 標示
+- 共用 5 MB 單檔上限
+- i18n 三語同步 4 個新 key
+
+### 2. Newsletter 群發不再污染 last_activity
+Po 提醒：一封 newsletter 寄給 4000+ subscribers，如果每個 contact 的 `interaction_logs` 都算活動，last_activity_at 會被洗到全部「今天」，訊號崩潰。
+
+**Heuristic**：`interaction_logs.campaign_id IS NOT NULL` → 是 newsletter campaign 送出 → **排除**不算活動。個別 1-to-1 email（contact detail 頁、bot 等）`campaign_id` 都是 NULL 會照算。
+
+- DB migration `last_activity_exclude_newsletter_campaigns`：兩個 trigger function 都加 `AND il.campaign_id IS NULL` 過濾；全表 backfill
+- 現有 3907 筆 note/meeting/email log 中，80 筆 campaign 送出的被排除，3827 筆個別互動繼續算
+
+### 邊界
+- Ad-hoc 群發（`/email/compose` 沒綁 campaign_id）仍會算活動。使用者一次寄給 10 人通常還是想 follow up，不過度過濾。未來若要更嚴，可加 `is_bulk` 欄位或用 batch size 判斷。
+
+### 改動
+- `src/app/(dashboard)/contacts/[id]/page.tsx`：
+  - `tempAttaches` shape 擴展可選 `photoId`
+  - `toggleContactPhotoAttach()` handler
+  - mail modal 加 "聯絡人照片" 區塊（含 hover / attached 狀態）
+- `src/messages/{zh-TW,en,ja}.json`：`contactPhotos` / `attachPhoto` / `photoAttached` / `attachPhotoFailed`
+- DB migration `last_activity_exclude_newsletter_campaigns`
+- `package.json` 3.6.2 → 3.7.0
+
 ## v3.6.2 — refactor(contacts): last_activity 簡化 + fix: 照片上傳也算活動（2026-04-21）
 
 v3.6.0 加了「最後活動」欄位到聯絡人列表，Po 回饋：**欄位在 UI 上多餘** — 既然預設排序就把最近有活動的人推到頂，多一欄日期反而資訊重複。而且他舉的實際場景暴露了另一個 bug：拍了三好健嗣的合照上傳後，三好沒浮到頂。

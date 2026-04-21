@@ -356,7 +356,8 @@ export default function ContactDetailPage() {
   const [mailEditorKey, setMailEditorKey] = useState(0)
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [templateAttachments, setTemplateAttachments] = useState<TemplateAttachment[]>([])
-  const [tempAttaches, setTempAttaches] = useState<Array<{ name: string; base64: string; contentType: string; size: number }>>([])
+  const [tempAttaches, setTempAttaches] = useState<Array<{ name: string; base64: string; contentType: string; size: number; photoId?: string }>>([])
+  const [photoAttaching, setPhotoAttaching] = useState<string | null>(null)
   const [mailAiDesc, setMailAiDesc] = useState('')
   const [mailAiGenerating, setMailAiGenerating] = useState(false)
   const [mailSending, setMailSending] = useState(false)
@@ -942,6 +943,38 @@ export default function ContactDetailPage() {
       setTempAttaches((prev) => [...prev, { name: file.name, base64, contentType: file.type || 'application/octet-stream', size: file.size }])
     }
     if (e.target) e.target.value = ''
+  }
+
+  async function toggleContactPhotoAttach(photo: ContactPhoto) {
+    // If already attached, just remove it
+    if (tempAttaches.some((a) => a.photoId === photo.id)) {
+      setTempAttaches((prev) => prev.filter((a) => a.photoId !== photo.id))
+      return
+    }
+    setPhotoAttaching(photo.id)
+    setMailError(null)
+    try {
+      const res = await fetch(photo.photo_url)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const blob = await res.blob()
+      const MAX = 5 * 1024 * 1024
+      if (blob.size > MAX) {
+        setMailError(t('fileTooLarge5mb', { name: photo.storage_path?.split('/').pop() || 'photo.jpg' }))
+        return
+      }
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve((reader.result as string).split(',')[1])
+        reader.readAsDataURL(blob)
+      })
+      const filename = photo.storage_path?.split('/').pop() || `photo-${photo.id.slice(0, 8)}.jpg`
+      const contentType = blob.type || 'image/jpeg'
+      setTempAttaches((prev) => [...prev, { name: filename, base64, contentType, size: blob.size, photoId: photo.id }])
+    } catch (e) {
+      setMailError(e instanceof Error ? e.message : t('attachPhotoFailed'))
+    } finally {
+      setPhotoAttaching(null)
+    }
   }
 
   async function urlToBase64(url: string): Promise<string> {
@@ -2105,6 +2138,44 @@ export default function ContactDetailPage() {
                   placeholder={tm('bodyPlaceholder')}
                 />
               </div>
+
+              {/* Contact photos — click to attach */}
+              {contactPhotos.length > 0 && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">{tm('contactPhotos')}</label>
+                  <div className="flex flex-wrap gap-2">
+                    {contactPhotos.map((photo) => {
+                      const attached = tempAttaches.some((a) => a.photoId === photo.id)
+                      const loading = photoAttaching === photo.id
+                      return (
+                        <button
+                          key={photo.id}
+                          onClick={() => toggleContactPhotoAttach(photo)}
+                          disabled={loading}
+                          className={`relative w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
+                            attached
+                              ? 'border-blue-500 ring-2 ring-blue-200 dark:ring-blue-900'
+                              : 'border-gray-200 dark:border-gray-700 hover:border-blue-400'
+                          } disabled:opacity-50`}
+                          title={attached ? tm('photoAttached') : tm('attachPhoto')}
+                        >
+                          <Image src={photo.photo_url} alt="" width={80} height={80} className="w-full h-full object-cover" unoptimized />
+                          {loading && (
+                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                              <Loader2 size={16} className="animate-spin text-white" />
+                            </div>
+                          )}
+                          {attached && !loading && (
+                            <div className="absolute top-0.5 right-0.5 bg-blue-500 rounded-full p-0.5">
+                              <Check size={10} className="text-white" />
+                            </div>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Temp attachments */}
               <div>

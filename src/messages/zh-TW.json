@@ -374,6 +374,10 @@
     "aiGeneratedBody": "AI 生成信件內文",
     "aiPromptPlaceholder": "描述信件目的（如：感謝上次會面，介紹新產品）",
     "extraAttachments": "額外附件（最大 5MB）",
+    "contactPhotos": "聯絡人照片（點一下加入附件）",
+    "attachPhoto": "加入附件",
+    "photoAttached": "已加入附件（再點一下移除）",
+    "attachPhotoFailed": "附加照片失敗",
     "searchContactsPlaceholder": "搜尋姓名、公司、Email...",
     "noContactFound": "找不到符合的聯絡人"
   },

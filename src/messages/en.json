@@ -374,6 +374,10 @@
     "aiGeneratedBody": "AI-generated email body",
     "aiPromptPlaceholder": "Describe the email purpose (e.g., thank you for the meeting, introduce a new product)",
     "extraAttachments": "Extra attachments (max 5MB)",
+    "contactPhotos": "Contact photos (click to attach)",
+    "attachPhoto": "Attach to email",
+    "photoAttached": "Attached (click again to remove)",
+    "attachPhotoFailed": "Failed to attach photo",
     "searchContactsPlaceholder": "Search name, company, email...",
     "noContactFound": "No matching contact"
   },
