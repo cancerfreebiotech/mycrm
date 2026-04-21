@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { getBotLanguage, BOT_MESSAGES, type BotMessages } from '@/lib/bot-messages'
-import { analyzeBusinessCard, generateEmailContent, parseTaskCommand, parseMeetingCommand, parseMetCommand, parseVisitNote, withGeminiRetry } from '@/lib/gemini'
+import { analyzeBusinessCard, generateEmailContent, parseTaskCommand, parseMeetingCommand, parseMetCommand, parseVisitNote, parseLinkedInScreenshot } from '@/lib/gemini'
 import { processCardImage, processPhotoWithExif, extractExif, generateCardFilename } from '@/lib/imageProcessor'
 import { checkDuplicates } from '@/lib/duplicate'
 import { sendMail, createCalendarEvent } from '@/lib/graph'
@@ -391,10 +391,7 @@ async function processAddCardPhoto(
       .single()
 
     await sendMessage(chatId, '⏳ OCR 辨識中，請稍候...')
-    const cardData = await withGeminiRetry(
-      () => analyzeBusinessCard(compressed, user.ai_model_id),
-      async () => { await sendMessage(chatId, '⏳ 辨識失敗，3 秒後自動重試...') }
-    )
+    const cardData = await analyzeBusinessCard(compressed, user.ai_model_id)
 
     if (cardData.rotation) {
       const sharpLib = (await import('sharp')).default
@@ -629,50 +626,11 @@ async function handlePhoto(
     try {
       const imgBuffer = await downloadTelegramPhoto(photo.file_id)
       const compressed = await processCardImage(imgBuffer)
-      const base64 = compressed.toString('base64')
 
-      // Reuse linkedin/parse logic inline (avoid HTTP self-call)
-      const { GoogleGenerativeAI } = await import('@google/generative-ai')
       const { data: profile } = await createServiceClient()
         .from('users').select('ai_model_id').eq('id', user.id).single()
 
-      let modelId = 'gemini-2.5-flash'
-      let apiKey = process.env.GEMINI_API_KEY!
-      if (profile?.ai_model_id && /^[0-9a-f-]{36}$/i.test(profile.ai_model_id)) {
-        const { data: modelRow } = await createServiceClient()
-          .from('ai_models').select('model_id, ai_endpoints(api_key)').eq('id', profile.ai_model_id).single()
-        if (modelRow) {
-          const ep = modelRow.ai_endpoints as unknown as { api_key: string } | null
-          modelId = modelRow.model_id
-          if (ep?.api_key && ep.api_key !== 'placeholder') apiKey = ep.api_key
-        }
-      }
-
-      const LINKEDIN_PROMPT = `你是一個專業的 LinkedIn 截圖解析助手。請從 LinkedIn 個人頁截圖中提取以下資訊，回傳純 JSON，不要有任何其他文字：
-{"name":"","name_en":"","job_title":"","company":"","linkedin_url":"","email":"","notes":""}
-規則：
-- name：中文或日文漢字姓名
-- name_en：英文或羅馬字姓名
-- job_title：目前職位名稱（最新一筆）
-- company：目前任職公司（最新一筆）
-- linkedin_url：重組為 https://linkedin.com/in/{username} 格式，看不到則空字串
-- email：截圖中有則填入，否則空字串
-- notes：About 自我介紹加前綴「[LinkedIn About] 」，否則空字串
-- 所有欄位不可見則輸出空字串`
-
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const geminiModel = genAI.getGenerativeModel({ model: modelId })
-      const parsed = await withGeminiRetry(
-        async () => {
-          const result = await geminiModel.generateContent([
-            LINKEDIN_PROMPT,
-            { inlineData: { mimeType: 'image/jpeg', data: base64 } },
-          ])
-          const raw = result.response.text().trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
-          return JSON.parse(raw) as { name: string; name_en: string; job_title: string; company: string; linkedin_url: string; email: string; notes: string }
-        },
-        async () => { await sendMessage(chatId, '⏳ 辨識失敗，3 秒後自動重試...') }
-      )
+      const parsed = await parseLinkedInScreenshot(compressed, profile?.ai_model_id ?? null)
 
       const displayName = parsed.name || parsed.name_en || '（無姓名）'
       if (!parsed.name && !parsed.name_en) {
@@ -764,10 +722,7 @@ async function handlePhoto(
     cardImgUrl = publicUrlData.publicUrl
 
     // OCR
-    const cardData = await withGeminiRetry(
-      () => analyzeBusinessCard(compressed, user.ai_model_id),
-      async () => { await sendMessage(chatId, m.cardOcrRetry) }
-    )
+    const cardData = await analyzeBusinessCard(compressed, user.ai_model_id)
 
     // Rotate and re-upload if Gemini detected non-zero rotation
     if (cardData.rotation) {
@@ -1387,10 +1342,7 @@ async function handleText(
     let meetingLocation: string | null = null
 
     try {
-      const parsed = await withGeminiRetry(
-        () => parseVisitNote(text.trim(), new Date().toISOString(), user.ai_model_id),
-        async () => { await sendMessage(chatId, '⏳ AI 解析失敗，3 秒後自動重試...') }
-      )
+      const parsed = await parseVisitNote(text.trim(), new Date().toISOString(), user.ai_model_id)
       logType = parsed.type
       meetingDate = parsed.meeting_date ?? null
       meetingTime = parsed.meeting_time ?? null

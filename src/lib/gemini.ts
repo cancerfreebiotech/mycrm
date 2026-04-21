@@ -1,24 +1,7 @@
+import Portkey from 'portkey-ai'
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
 import { createServiceClient } from '@/lib/supabase'
 import { getPrompt } from '@/lib/prompts'
-
-/**
- * Wraps any async Gemini call with one automatic retry after 3 seconds.
- * On first failure, calls onFirstFailure (e.g. send "retrying..." message to user).
- * If retry also fails, throws the error for the caller to handle.
- */
-export async function withGeminiRetry<T>(
-  fn: () => Promise<T>,
-  onFirstFailure?: () => Promise<void>
-): Promise<T> {
-  try {
-    return await fn()
-  } catch {
-    if (onFirstFailure) await onFirstFailure()
-    await new Promise((r) => setTimeout(r, 3000))
-    return await fn()
-  }
-}
 
 export interface CardData {
   name: string
@@ -45,6 +28,44 @@ interface ModelConfig {
   apiKey: string
 }
 
+// Portkey gateway: routing strategy (loadbalance across virtual keys) and retry
+// are defined in the Portkey Config referenced by PORTKEY_CONFIG_ID. This keeps
+// the strategy tunable from the dashboard without redeploying the app.
+function makePortkey(): Portkey {
+  return new Portkey({
+    apiKey: process.env.PORTKEY_API_KEY!,
+    config: process.env.PORTKEY_CONFIG_ID!,
+  })
+}
+
+type MessageContent =
+  | string
+  | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>
+
+async function portkeyGenerate(
+  modelId: string,
+  content: MessageContent
+): Promise<string> {
+  const portkey = makePortkey()
+  const result = await portkey.chat.completions.create({
+    model: modelId,
+    messages: [{ role: 'user', content }],
+  })
+  const raw = result.choices?.[0]?.message?.content
+  const text = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw.map((p) => ('text' in p ? p.text : '')).join('') : ''
+  return text.trim()
+}
+
+function stripJsonFence(text: string): string {
+  return text.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+}
+
+function imageParts(buffers: Buffer[]): Array<{ type: 'image_url'; image_url: { url: string } }> {
+  return buffers.map((buf) => ({
+    type: 'image_url' as const,
+    image_url: { url: `data:image/jpeg;base64,${buf.toString('base64')}` },
+  }))
+}
 
 // Resolve ai_model_id (UUID) → { modelId, apiKey }
 // Falls back to env GEMINI_API_KEY + default model string if aiModelId is a plain model string or null
@@ -79,23 +100,49 @@ export async function analyzeBusinessCard(
   aiModelId: string | null = null,
   userId?: string
 ): Promise<CardData> {
-  const { modelId, apiKey } = await resolveModelConfig(aiModelId)
-  const genAI = new GoogleGenerativeAI(apiKey)
-  const geminiModel = genAI.getGenerativeModel({ model: modelId })
-
+  const { modelId } = await resolveModelConfig(aiModelId)
   const buffers = Array.isArray(imageBuffers) ? imageBuffers : [imageBuffers]
-  const imageParts = buffers.map((buf) => ({
-    inlineData: {
-      mimeType: 'image/jpeg' as const,
-      data: buf.toString('base64'),
-    },
-  }))
-
   const systemPrompt = await getPrompt('ocr_card', userId)
-  const result = await geminiModel.generateContent([systemPrompt, ...imageParts])
-  const text = result.response.text().trim()
-  const json = text.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-  return JSON.parse(json) as CardData
+
+  const text = await portkeyGenerate(modelId, [
+    { type: 'text', text: systemPrompt },
+    ...imageParts(buffers),
+  ])
+  return JSON.parse(stripJsonFence(text)) as CardData
+}
+
+export interface LinkedInParsed {
+  name: string
+  name_en: string
+  job_title: string
+  company: string
+  linkedin_url: string
+  email: string
+  notes: string
+}
+
+const LINKEDIN_PROMPT = `你是一個專業的 LinkedIn 截圖解析助手。請從 LinkedIn 個人頁截圖中提取以下資訊，回傳純 JSON，不要有任何其他文字：
+{"name":"","name_en":"","job_title":"","company":"","linkedin_url":"","email":"","notes":""}
+規則：
+- name：中文或日文漢字姓名
+- name_en：英文或羅馬字姓名
+- job_title：目前職位名稱（最新一筆）
+- company：目前任職公司（最新一筆）
+- linkedin_url：重組為 https://linkedin.com/in/{username} 格式，看不到則空字串
+- email：截圖中有則填入，否則空字串
+- notes：About 自我介紹加前綴「[LinkedIn About] 」，否則空字串
+- 所有欄位不可見則輸出空字串`
+
+export async function parseLinkedInScreenshot(
+  imageBuffer: Buffer,
+  aiModelId: string | null = null
+): Promise<LinkedInParsed> {
+  const { modelId } = await resolveModelConfig(aiModelId)
+  const text = await portkeyGenerate(modelId, [
+    { type: 'text', text: LINKEDIN_PROMPT },
+    ...imageParts([imageBuffer]),
+  ])
+  return JSON.parse(stripJsonFence(text)) as LinkedInParsed
 }
 
 export interface TaskParsed {
@@ -110,16 +157,12 @@ export async function parseTaskCommand(
   nowIso: string,
   aiModelId: string | null = null
 ): Promise<TaskParsed> {
-  const { modelId, apiKey } = await resolveModelConfig(aiModelId)
-  const genAI = new GoogleGenerativeAI(apiKey)
-  const geminiModel = genAI.getGenerativeModel({ model: modelId })
-
+  const { modelId } = await resolveModelConfig(aiModelId)
   const basePrompt = await getPrompt('task_parse')
   const prompt = `現在時間（UTC）：${nowIso}\n${basePrompt}\n\n任務描述：${text}`
 
-  const result = await geminiModel.generateContent(prompt)
-  const raw = result.response.text().trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
-  return JSON.parse(raw) as TaskParsed
+  const raw = await portkeyGenerate(modelId, prompt)
+  return JSON.parse(stripJsonFence(raw)) as TaskParsed
 }
 
 export interface MeetingParsed {
@@ -135,16 +178,12 @@ export async function parseMeetingCommand(
   nowIso: string,
   aiModelId: string | null = null
 ): Promise<MeetingParsed> {
-  const { modelId, apiKey } = await resolveModelConfig(aiModelId)
-  const genAI = new GoogleGenerativeAI(apiKey)
-  const geminiModel = genAI.getGenerativeModel({ model: modelId })
-
+  const { modelId } = await resolveModelConfig(aiModelId)
   const basePrompt = await getPrompt('meeting_parse')
   const prompt = `現在時間（UTC）：${nowIso}\n${basePrompt}\n\n會議描述：${text}`
 
-  const result = await geminiModel.generateContent(prompt)
-  const raw = result.response.text().trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
-  return JSON.parse(raw) as MeetingParsed
+  const raw = await portkeyGenerate(modelId, prompt)
+  return JSON.parse(stripJsonFence(raw)) as MeetingParsed
 }
 
 export interface MetParsed {
@@ -158,9 +197,7 @@ export async function parseMetCommand(
   nowIso: string,
   aiModelId: string | null = null
 ): Promise<MetParsed> {
-  const { modelId, apiKey } = await resolveModelConfig(aiModelId)
-  const genAI = new GoogleGenerativeAI(apiKey)
-  const geminiModel = genAI.getGenerativeModel({ model: modelId })
+  const { modelId } = await resolveModelConfig(aiModelId)
 
   const todayDate = nowIso.slice(0, 10)
   const prompt =
@@ -171,9 +208,8 @@ export async function parseMetCommand(
     `- referred_by：介紹人姓名，沒提到則 null\n\n` +
     `描述：${text}`
 
-  const result = await geminiModel.generateContent(prompt)
-  const raw = result.response.text().trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
-  return JSON.parse(raw) as MetParsed
+  const raw = await portkeyGenerate(modelId, prompt)
+  return JSON.parse(stripJsonFence(raw)) as MetParsed
 }
 
 export interface VisitNoteParsed {
@@ -189,9 +225,7 @@ export async function parseVisitNote(
   nowIso: string,
   aiModelId: string | null = null
 ): Promise<VisitNoteParsed> {
-  const { modelId, apiKey } = await resolveModelConfig(aiModelId)
-  const genAI = new GoogleGenerativeAI(apiKey)
-  const geminiModel = genAI.getGenerativeModel({ model: modelId })
+  const { modelId } = await resolveModelConfig(aiModelId)
 
   const todayDate = nowIso.slice(0, 10)
   const prompt =
@@ -204,11 +238,14 @@ export async function parseVisitNote(
     `- meeting_location：地點，沒提到則 null\n\n` +
     `筆記：${text}`
 
-  const result = await geminiModel.generateContent(prompt)
-  const raw = result.response.text().trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
-  return JSON.parse(raw) as VisitNoteParsed
+  const raw = await portkeyGenerate(modelId, prompt)
+  return JSON.parse(stripJsonFence(raw)) as VisitNoteParsed
 }
 
+// generateEmailContent stays on @google/generative-ai directly: it uses safety_settings
+// (BLOCK_NONE on all 4 harm categories) which can't be round-tripped cleanly through
+// Portkey's OpenAI-compatible API. This function is only called from /api/ai-email
+// (web), not from the Telegram bot, so it's outside this phase's scope anyway.
 const EMAIL_SAFETY: { category: HarmCategory; threshold: HarmBlockThreshold }[] = [
   { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
   { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },

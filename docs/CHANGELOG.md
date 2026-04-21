@@ -1,5 +1,40 @@
 # CHANGELOG
 
+## v3.4.0 — feat(bot): Portkey gateway 容錯 Gemini 503（2026-04-21）
+
+Telegram bot 最近在 Google AI Studio 免費 tier 碰到 503（Gemini 被降低優先級）。原本的 `withGeminiRetry` 只做「1 次重試、固定等 3 秒」，救不回大部分失敗。引入 [Portkey](https://portkey.ai) AI Gateway 代理 Gemini，取得 **loadbalance 兩把 Gemini project key + 3 次指數退避重試（1 → 2 → 4 秒）** 加集中觀測能力。兩把 key 50/50 隨機分流，單一 project 壓力減半，大幅降低觸發 free-tier priority degradation 的機率；策略定義在 Portkey Config，可從 dashboard 即時調整而不需 redeploy。
+
+### 改動
+- `src/lib/gemini.ts`：
+  - 新增 `portkey-ai` 依賴，以 OpenAI-compatible chat completions API 包 Gemini 呼叫
+  - 以 `config: process.env.PORTKEY_CONFIG_ID` 指向 Portkey dashboard 上的 config（loadbalance + retry 在那邊定義；virtual key 也在那邊存放 Google AI keys）
+  - 遷移：`analyzeBusinessCard` / `parseTaskCommand` / `parseMeetingCommand` / `parseMetCommand` / `parseVisitNote`
+  - 新增 `parseLinkedInScreenshot()` — 把 bot route 原本 inline 的 LinkedIn OCR 邏輯收攏
+  - 移除 `withGeminiRetry()`（Portkey 已做更完整的重試）
+  - `generateEmailContent` 保留原 `@google/generative-ai`（`safety_settings` BLOCK_NONE 不透過 Portkey 無法乾淨透傳；且該函式只由 web `/api/ai-email` 呼叫，不在本階段範圍）
+- `src/app/api/bot/route.ts`：
+  - 4 處 `withGeminiRetry(() => ..., onFirstFailure)` 改為直接呼叫 parseXxx / analyzeBusinessCard
+  - `/li` LinkedIn 路徑 40 行 inline 程式碼換成一行 `parseLinkedInScreenshot(...)`
+- `.env.local.example`：新增 `PORTKEY_API_KEY` 與 `PORTKEY_CONFIG_ID`
+- `package.json`：3.3.9 → 3.4.0，加 `portkey-ai`
+
+### 範圍（刻意限縮）
+- ✅ Bot 指令全受保護：`/a` 名片、`/li` LinkedIn、`/work` 任務、`/meet` 會議、`/met` 拜訪筆記（含 visit note parse）、teams-bot 的會議解析
+- ✅ 副作用：`/api/ocr`、`/api/ai-format`、`/api/linkedin/parse` 因共用 `gemini.ts` 自動受惠
+- ❌ 不升級 Gemini 付費 tier、不換模型、不動 `failed_scans` retry queue — 留作後續 iteration
+
+### 部署前需手動做
+1. 到 https://app.portkey.ai，用 2 把 Gemini project API key 建 2 個 Virtual Keys
+2. 建一個 loadbalance Config 指向兩個 VK（weight 0.5 / 0.5、retry on 429/5xx）
+3. 把 Portkey API key 與 Config ID 填進 Vercel env vars（production / preview / development 三環境）
+4. `GEMINI_API_KEY` 仍保留（`generateEmailContent` 走原生 SDK 還需要它）
+
+### 不影響
+- DB schema 無變更
+- `ai_models` / `ai_endpoints` 使用者自訂 key 機制維持
+- 影像處理（`imageProcessor.ts`）維持 1024×1024 JPEG q85
+- 使用者介面訊息維持「🔍 辨識中...」，Portkey 重試期間靜默（7 秒內完成）
+
 ## v3.3.9 — Chore: newsletter wizard step 4 簡化（2026-04-21）
 
 SendGrid API 寄信時會自己做 rate limiting，`daily_limit` / `send_hour` 這兩個欄位只是假的節流、沒有實際意義（使用者也跟我確認過）。把兩個 input 與相關「N 天完成」計算統統拿掉，step 4 只剩「排程寄送時間（留空 = 立即寄送）」一欄。
