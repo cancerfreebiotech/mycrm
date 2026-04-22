@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { PermissionGate } from '@/components/PermissionGate'
-import { Loader2, Send, FileDown, Rss, Eye, Save, ArrowLeft, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Loader2, Send, FileDown, Rss, Eye, Save, ArrowLeft, CheckCircle2, AlertTriangle, Code, Columns, ImageIcon } from 'lucide-react'
 
 interface Campaign {
   id: string
@@ -51,7 +51,11 @@ export default function QuickSendPage() {
   const [previewText, setPreviewText] = useState('')
   const [listIds, setListIds] = useState<string[]>([])
   const [contentHtml, setContentHtml] = useState('')
-  const [showEditor, setShowEditor] = useState(false)
+  type ViewMode = 'preview' | 'edit' | 'split'
+  const [viewMode, setViewMode] = useState<ViewMode>('preview')
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const editorRef = useRef<HTMLTextAreaElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     (async () => {
@@ -149,6 +153,74 @@ export default function QuickSendPage() {
     if (/<body[^>]*>/i.test(contentHtml)) return contentHtml.replace(/<body[^>]*>/i, (m) => `${m}${PRINT_CSS}`)
     return `<!doctype html><html><head>${PRINT_CSS}</head><body>${contentHtml}</body></html>`
   }, [contentHtml])
+
+  // Derive Storage folder from campaign slug (e.g. "2026-04-zh-tw" → "2026-04")
+  // Fall back to current year-month if slug is missing / unparseable.
+  function periodFolder(): string {
+    const m = campaign?.slug?.match(/^(\d{4}-\d{2})/)
+    if (m) return m[1]
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  }
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setBanner({ kind: 'err', msg: '只支援圖片檔' })
+      if (imageInputRef.current) imageInputRef.current.value = ''
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setBanner({ kind: 'err', msg: '圖片超過 10 MB 上限' })
+      if (imageInputRef.current) imageInputRef.current.value = ''
+      return
+    }
+    setUploadingImage(true)
+    setBanner(null)
+    try {
+      // Sanitize filename: ASCII-only for Storage key (same rule as migrate script)
+      const dot = file.name.lastIndexOf('.')
+      const ext = dot >= 0 ? file.name.slice(dot).toLowerCase() : ''
+      const base = dot >= 0 ? file.name.slice(0, dot) : file.name
+      const cleaned = base.replace(/[()（）【】\s]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+      // eslint-disable-next-line no-control-regex
+      const safeName = /[^\x00-\x7F]/.test(cleaned)
+        ? `asset-${Date.now().toString(36)}${ext}`
+        : `${cleaned}-${Date.now().toString(36)}${ext}`
+      const path = `${periodFolder()}/${safeName}`
+
+      const { error: upErr } = await supabase.storage
+        .from('newsletter-assets')
+        .upload(path, file, { contentType: file.type, upsert: false })
+      if (upErr) throw upErr
+      const { data: pub } = supabase.storage.from('newsletter-assets').getPublicUrl(path)
+      const imgTag = `<img src="${pub.publicUrl}" alt="" style="outline:none;border:none;text-decoration:none;vertical-align:middle;display:inline-block;max-width:100%" />`
+
+      // Insert at cursor position in textarea if focused, else append at end
+      const ta = editorRef.current
+      if (ta) {
+        const start = ta.selectionStart ?? contentHtml.length
+        const end = ta.selectionEnd ?? contentHtml.length
+        const next = contentHtml.slice(0, start) + imgTag + contentHtml.slice(end)
+        setContentHtml(next)
+        // Restore cursor position right after the inserted tag
+        requestAnimationFrame(() => {
+          const newPos = start + imgTag.length
+          ta.focus()
+          ta.setSelectionRange(newPos, newPos)
+        })
+      } else {
+        setContentHtml(contentHtml + imgTag)
+      }
+      setBanner({ kind: 'ok', msg: `已上傳並插入：${safeName}` })
+    } catch (e) {
+      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : '圖片上傳失敗' })
+    } finally {
+      setUploadingImage(false)
+      if (imageInputRef.current) imageInputRef.current.value = ''
+    }
+  }
 
   function toggleList(lid: string) {
     setListIds((prev) => (prev.includes(lid) ? prev.filter((x) => x !== lid) : [...prev, lid]))
@@ -344,25 +416,54 @@ export default function QuickSendPage() {
             </div>
 
             <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
-              <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2 text-xs text-gray-500">
-                <div className="flex items-center gap-2">
-                  <Eye size={12} /> {showEditor ? '編輯 HTML（編完按儲存）' : '預覽'}
+              {/* View mode tabs + editor toolbar */}
+              <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2 text-xs">
+                <div className="inline-flex rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  <button
+                    onClick={() => setViewMode('preview')}
+                    className={`flex items-center gap-1 px-2.5 py-1 text-xs ${viewMode === 'preview' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                    title="只看渲染後預覽"
+                  >
+                    <Eye size={12} /> 預覽
+                  </button>
+                  <button
+                    onClick={() => setViewMode('edit')}
+                    className={`flex items-center gap-1 px-2.5 py-1 text-xs border-l border-gray-200 dark:border-gray-700 ${viewMode === 'edit' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                    title="只看 HTML 原始碼"
+                  >
+                    <Code size={12} /> 編輯
+                  </button>
+                  <button
+                    onClick={() => setViewMode('split')}
+                    className={`flex items-center gap-1 px-2.5 py-1 text-xs border-l border-gray-200 dark:border-gray-700 ${viewMode === 'split' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                    title="左編輯 + 右即時預覽"
+                  >
+                    <Columns size={12} /> 分割
+                  </button>
                 </div>
-                <button
-                  onClick={() => setShowEditor((v) => !v)}
-                  className="text-xs px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
-                >
-                  {showEditor ? '回預覽' : '編輯 HTML'}
-                </button>
+                <div className="flex items-center gap-2">
+                  {(viewMode === 'edit' || viewMode === 'split') && (
+                    <button
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={uploadingImage}
+                      className="flex items-center gap-1 px-2 py-1 text-xs border border-gray-200 dark:border-gray-700 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+                      title="上傳圖片到 newsletter-assets 並在游標位置插入 <img>"
+                    >
+                      {uploadingImage ? <Loader2 size={11} className="animate-spin" /> : <ImageIcon size={11} />}
+                      插入圖片
+                    </button>
+                  )}
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageUpload}
+                  />
+                </div>
               </div>
-              {showEditor ? (
-                <textarea
-                  value={contentHtml}
-                  onChange={(e) => setContentHtml(e.target.value)}
-                  spellCheck={false}
-                  className="w-full h-[600px] p-3 text-xs font-mono bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 border-0 focus:outline-none resize-none"
-                />
-              ) : (
+              {/* Content area: preview / edit / split */}
+              {viewMode === 'preview' ? (
                 <iframe
                   ref={previewRef}
                   title="preview"
@@ -370,6 +471,30 @@ export default function QuickSendPage() {
                   srcDoc={previewHtml}
                   sandbox="allow-same-origin allow-popups allow-modals"
                 />
+              ) : viewMode === 'edit' ? (
+                <textarea
+                  ref={editorRef}
+                  value={contentHtml}
+                  onChange={(e) => setContentHtml(e.target.value)}
+                  spellCheck={false}
+                  className="w-full h-[600px] p-3 text-xs font-mono bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 border-0 focus:outline-none resize-none"
+                />
+              ) : (
+                <div className="grid grid-cols-2 divide-x divide-gray-200 dark:divide-gray-700">
+                  <textarea
+                    ref={editorRef}
+                    value={contentHtml}
+                    onChange={(e) => setContentHtml(e.target.value)}
+                    spellCheck={false}
+                    className="w-full h-[600px] p-3 text-xs font-mono bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 border-0 focus:outline-none resize-none"
+                  />
+                  <iframe
+                    title="preview"
+                    className="w-full h-[600px] bg-white"
+                    srcDoc={previewHtml}
+                    sandbox="allow-same-origin allow-popups allow-modals"
+                  />
+                </div>
               )}
             </div>
           </div>

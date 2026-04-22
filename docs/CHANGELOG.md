@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## v3.14.0 — feat(newsletter): quick-send 分割檢視 + 圖片一鍵上傳（2026-04-23）
+
+Po 要求像 `/email/compose` 那樣提升編輯器體驗。考量 4 月電子報仍是 listmonk 表格型 HTML（TipTap WYSIWYG 會 flatten 表格），本版先做**結構安全**的增強：
+
+1. **三態檢視 tab**：預覽 / 編輯 / **分割**（左 HTML 原始碼 + 右即時預覽，邊打邊看）
+2. **插入圖片按鈕**：編輯 / 分割模式下可按「插入圖片」→ 檔案 picker → 自動上傳到 `newsletter-assets/<period>/` → 游標處插入 `<img>` tag。period 由 campaign slug 推導（`2026-04-zh-tw` → `2026-04`），否則 fallback 當月
+3. 檔名 sanitize：非 ASCII 用 `asset-<timestamp36>.ext` fallback 避免 Storage key 拒收
+
+### 改動
+- `src/app/(dashboard)/admin/newsletter/quick-send/[id]/page.tsx`：`viewMode` state (`preview | edit | split`)、`editorRef` + `imageInputRef`、`handleImageUpload` + `periodFolder` helper、3-tab UI
+- `package.json` 3.13.3 → 3.14.0
+
+### 下一步（需要 Po 確認方向）
+TipTap WYSIWYG / AI 輔助撰寫的完整 workflow（Po 每段故事給大綱+照片+連結，AI 以過往語氣生成，再編輯）下次討論後實作。
+
 ## v3.13.3 — chore(newsletter): PDF print CSS 再強化（hide unsub + link 視覺）（2026-04-23）
 
 Po 檢查 PDF 輸出後回報 3 點：
