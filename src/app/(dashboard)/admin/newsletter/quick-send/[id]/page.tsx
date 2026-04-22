@@ -292,19 +292,29 @@ export default function QuickSendPage() {
           {/* Right: recipients + actions */}
           <div className="space-y-4">
             <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">收件名單</h2>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">收件名單</h2>
+                <Link href="/admin/newsletter/lists" className="text-xs text-gray-400 hover:text-blue-500">管理 →</Link>
+              </div>
               <div className="space-y-2">
                 {lists.map((l) => (
-                  <label key={l.id} className="flex items-center gap-2 cursor-pointer text-sm text-gray-700 dark:text-gray-300">
+                  <div key={l.id} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                     <input
                       type="checkbox"
                       checked={listIds.includes(l.id)}
                       onChange={() => toggleList(l.id)}
-                      className="rounded"
+                      id={`list-${l.id}`}
+                      className="rounded cursor-pointer"
                     />
-                    <span className="flex-1">{l.name}</span>
-                    <span className="text-xs text-gray-400">{l.memberCount} 人</span>
-                  </label>
+                    <label htmlFor={`list-${l.id}`} className="flex-1 cursor-pointer">{l.name}</label>
+                    <Link
+                      href={`/admin/newsletter/lists/${l.id}`}
+                      className="text-xs text-gray-400 hover:text-blue-500 hover:underline"
+                      title="檢視名單成員"
+                    >
+                      {l.memberCount} 人 →
+                    </Link>
+                  </div>
                 ))}
               </div>
               <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 text-sm">

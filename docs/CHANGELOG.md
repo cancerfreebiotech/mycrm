@@ -1,5 +1,39 @@
 # CHANGELOG
 
+## v3.12.0 — feat(newsletter): 刪舊 wizard + 名單詳情 + 複製/新建 + 連結補齊（2026-04-23）
+
+Po 要求一口氣處理 4 件事：刪舊 wizard、名單可點進看成員、缺複製/新建、補齊剩下的連結並優化排版。
+
+### 1. 舊 wizard 下線
+- 刪除 `src/app/(dashboard)/admin/newsletter/page.tsx`（955 行舊 wizard）
+- `src/lib/features.ts` 的 `newsletter` 路徑指到 `/admin/newsletter/campaigns`
+
+### 2. 收件名單頁
+- `/admin/newsletter/lists` index：4 份 list + 各 list 訂閱者數
+- `/admin/newsletter/lists/[id]` 詳情：列出所有訂閱者（email / 姓名 / CRM 聯絡人連結 / 加入時間 / 訂閱狀態），帶搜尋 + 3 個統計 tile（總數 / 已連結 / 已退訂）
+- Quick-send 頁每份 list 的人數旁加 `→` 連結直接跳到詳情
+- Campaigns 頁右上新連結「收件名單管理 →」
+
+### 3. 複製 / 新建電子報
+- `POST /api/newsletter/campaigns` — 建空白草稿（帶最小預設 title / content）
+- `POST /api/newsletter/campaigns/[id]/duplicate` — 複製既有 campaign 成新草稿，title 加 " (副本)"、清除 status / sent_at / slug 等狀態、list_ids/content_html 沿用
+- Campaigns index 頁頂右「+ 新增電子報」按鈕、每列末加「複製」icon button（都會自動跳到 quick-send 繼續編輯）
+
+### 4. 四月中文電子報 HTML 清理
+- 3 個 `href="#"` 社群 icon 補上 CancerFree 的 facebook / linkedin / website URL
+- 移除過時「新聞連結」指向 `preview--linky-news-hub.lovable.app`（Po 確認沒用）
+- 版面微優化：分數像素 padding 四捨五入為整數、連續 3+ `<br>` 壓縮成單一
+
+### 改動
+- 刪 `src/app/(dashboard)/admin/newsletter/page.tsx`
+- 新 `src/app/(dashboard)/admin/newsletter/lists/page.tsx` + `lists/[id]/page.tsx`
+- 新 `src/app/api/newsletter/campaigns/route.ts` + `[id]/duplicate/route.ts`
+- 改 `campaigns/page.tsx`：新增/複製按鈕 + 名單管理連結
+- 改 `quick-send/[id]/page.tsx`:每份 list 人數變連結
+- `src/lib/features.ts`: newsletter 路徑更新
+- DB: 4 月中文 campaign HTML SQL 整理（3 socials + 移 lovable + cosmetic regex pass）
+- `package.json` 3.11.0 → 3.12.0
+
 ## v3.11.0 — feat(newsletter): HTML 編輯器 + unsubscribe 替換 + 圖示搬家 + nav 整合（2026-04-23）
 
 Po 預覽試用後提三個問題：(1) 沒地方編輯 HTML、(2) 裡面的連結要檢查、(3) unsubscribe 要導到 mycrm 的 `/unsubscribe` 頁。發現還有舊 wizard 和新 Campaigns 兩頁沒串起來。

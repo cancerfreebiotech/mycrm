@@ -22,7 +22,7 @@ export const FEATURE_ROUTES: Record<FeatureKey, string> = {
   email_templates: '/admin/templates',
   prompts: '/admin/prompts',
   countries: '/admin/countries',
-  newsletter: '/admin/newsletter',
+  newsletter: '/admin/newsletter/campaigns',
   failed_scans: '/admin/failed-scans',
   duplicates: '/admin/duplicates',
   camcard: '/admin/camcard',
