@@ -88,8 +88,48 @@ export default function QuickSendPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  // Memoized preview HTML — React srcDoc prop re-renders iframe when content changes
-  const previewHtml = useMemo(() => contentHtml, [contentHtml])
+  // Print-optimized preview HTML: inject @media print rules so window.print()
+  // (= 匯出 PDF) renders without browser default margins, keeps background
+  // colors, avoids splitting images/sections across pages. Stored HTML in DB
+  // is NOT modified — pure version goes out to SendGrid for email clients.
+  const previewHtml = useMemo(() => {
+    const PRINT_CSS = `
+<style>
+@media print {
+  @page { size: A4; margin: 8mm; }
+  html, body {
+    margin: 0 !important; padding: 0 !important;
+    background: #FFFFFF !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  body > div, body > table { padding: 0 !important; background: #FFFFFF !important; }
+  table[align="center"], table { max-width: 100% !important; width: 100% !important; }
+  img { max-width: 100% !important; height: auto !important; page-break-inside: avoid !important; break-inside: avoid !important; display: block; margin: 0 auto; }
+  h1, h2, h3, h4 { page-break-after: avoid !important; break-after: avoid !important; }
+  p { orphans: 3; widows: 3; }
+  tr, td { page-break-inside: avoid !important; break-inside: avoid !important; }
+  /* Numbered story blocks: each starts with "N｜" and sits in its own padded div — keep together */
+  div[style*="padding:0px 24px"],
+  div[style*="padding:16px 24px"] { page-break-inside: avoid !important; break-inside: avoid !important; }
+  a { color: #0D9488 !important; text-decoration: underline !important; word-break: break-all; }
+  hr { border-top: 1px solid #CCCCCC !important; }
+  /* Show URL after link text so user can see / copy even if PDF flattens anchors.
+     Skip if the <a> wraps only an image (logo / social icons) — URL would clutter. */
+  a[href^="http"]:not(:has(> img))::after {
+    content: " (" attr(href) ")";
+    color: #888888 !important;
+    font-size: 0.82em !important;
+    font-weight: normal !important;
+    word-break: break-all;
+  }
+}
+</style>`.trim()
+    // Inject before </head> when present; else prepend to <body>; else wrap.
+    if (/<\/head>/i.test(contentHtml)) return contentHtml.replace(/<\/head>/i, `${PRINT_CSS}</head>`)
+    if (/<body[^>]*>/i.test(contentHtml)) return contentHtml.replace(/<body[^>]*>/i, (m) => `${m}${PRINT_CSS}`)
+    return `<!doctype html><html><head>${PRINT_CSS}</head><body>${contentHtml}</body></html>`
+  }, [contentHtml])
 
   function toggleList(lid: string) {
     setListIds((prev) => (prev.includes(lid) ? prev.filter((x) => x !== lid) : [...prev, lid]))
@@ -170,10 +210,36 @@ export default function QuickSendPage() {
   }
 
   function exportPdf() {
-    const iframe = previewRef.current
-    if (!iframe?.contentWindow) { setBanner({ kind: 'err', msg: '找不到 preview iframe' }); return }
-    iframe.contentWindow.focus()
-    iframe.contentWindow.print()
+    // Open a fresh window with the full HTML + injected print CSS, then
+    // trigger print. This avoids a known Chrome quirk where iframe printing
+    // flattens <a> anchors in the resulting PDF (clicks do nothing).
+    // Using a new window keeps anchors as real hyperlinks in the PDF.
+    const w = window.open('', '_blank', 'width=800,height=1000,menubar=no,toolbar=no')
+    if (!w) {
+      setBanner({ kind: 'err', msg: '瀏覽器阻擋了彈出視窗，請允許後再試' })
+      return
+    }
+    w.document.open()
+    w.document.write(previewHtml)
+    w.document.close()
+    // Wait for images to load before printing so PDF isn't cut off mid-load
+    const triggerPrint = () => { w.focus(); w.print() }
+    const imgs = w.document.images
+    if (imgs.length === 0) {
+      setTimeout(triggerPrint, 300)
+      return
+    }
+    let loaded = 0
+    const done = () => { if (++loaded >= imgs.length) triggerPrint() }
+    for (const img of Array.from(imgs)) {
+      if (img.complete) done()
+      else {
+        img.addEventListener('load', done)
+        img.addEventListener('error', done)
+      }
+    }
+    // Safety timeout in case some images never resolve
+    setTimeout(triggerPrint, 3000)
   }
 
   if (loading) {

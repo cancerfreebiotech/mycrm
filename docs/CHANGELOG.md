@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## v3.13.2 — fix(newsletter): PDF 匯出邊界 + 連結保留（2026-04-23）
+
+Po 回報 PDF 版面不夠整齊、連結點不開。兩個問題根源：
+1. Email HTML 沒 print CSS → 瀏覽器預設 margin/顏色模式弄壞版面
+2. `window.print()` 對 iframe 列印時，Chrome 常把 `<a>` anchor flatten 掉 → PDF 裡連結不可點
+
+### Fix
+- **Print CSS 注入** (iframe srcDoc 層，不動 stored HTML)：
+  - `@page { size: A4; margin: 8mm }`
+  - `-webkit-print-color-adjust: exact` 保留背景顏色
+  - `img { max-width: 100%; page-break-inside: avoid }` 避免圖片跨頁裁切
+  - `h1-h4 { page-break-after: avoid }`
+  - `div[style*="padding:0px 24px"]`/`padding:16px 24px` → `page-break-inside: avoid`（故事區塊不跨頁）
+  - `tr, td { page-break-inside: avoid }`（表格不裂）
+  - `a { color: #0D9488; underline; word-break: break-all }` 連結視覺強化
+- **URL fallback**：每個 `a[href^="http"]:not(:has(>img))::after { content: " (" attr(href) ")" }`，列印時連結文字後面會附灰色 URL，萬一 PDF anchor flatten 掉仍可 copy-paste。圖檔連結（logo / 社群 icon）不會掛 URL 文字。
+- **exportPdf 改走新視窗列印**（繞 iframe 的 anchor flatten quirk）：`window.open('', '_blank')` → 寫入 previewHtml → 等所有 img `load`（3 秒 safety timeout）→ `window.print()`。PDF 裡的連結現在是真 hyperlink。
+
+### 改動
+- `src/app/(dashboard)/admin/newsletter/quick-send/[id]/page.tsx`：`previewHtml` useMemo 注入 print CSS；`exportPdf()` 改為新視窗列印
+- `package.json` 3.13.1 → 3.13.2
+
+### 使用者行動
+瀏覽器可能擋 popup（「瀏覽器阻擋了彈出視窗」訊息），允許 popup 後重按即可。
+
 ## v3.13.1 — chore(newsletter): 4 月中文 HTML 再清 39 個冗餘 `<br>`（2026-04-23）
 
 Po 要求再清 HTML。做了個 audit：
