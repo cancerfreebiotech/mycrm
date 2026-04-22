@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## v3.13.1 — chore(newsletter): 4 月中文 HTML 再清 39 個冗餘 `<br>`（2026-04-23）
+
+Po 要求再清 HTML。做了個 audit：
+- 14 張圖全部在 Supabase Storage ✓
+- 17 條連結全部有效、無 `#` 死連結 ✓
+- 零外部 CDN 殘留（listmonk / mlcdn / lovable 都清掉了） ✓
+- 2 個 `{{{` 佔位符是 unsubscribe 模板（SendGrid 寄送時會 substitute）
+- 發現 46 個 `<br>`，其中 38 個是 `</p>` 後面的冗餘 br（paragraph 本身就有段距）
+
+SQL 清：
+- `</p>` 後面的 `<br>` 全部移除（38 個）
+- 連續 2+ `<br>` 壓縮成單個（1 處）
+
+剩 7 個 `<br>` 全都是有意義的分行（`📅 時間 <br> 📍 地點` 類）。
+
+`package.json` 3.13.0 → 3.13.1。HTML 從 26187 → 26029 bytes。
+
 ## v3.13.0 — feat(contacts): 互動紀錄顯示 email 追蹤狀態（已開啟/已點擊/彈信）（2026-04-23）
 
 Po 要求：聯絡人詳情頁的互動紀錄，如果是可追蹤的信件（有 `campaign_id` 的電子報），旁邊直接顯示信件狀態 badge — 開啟、點擊、彈信等，讓使用者一眼看出互動熱度。
