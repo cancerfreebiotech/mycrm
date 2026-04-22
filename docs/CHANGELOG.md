@@ -1,5 +1,35 @@
 # CHANGELOG
 
+## v3.10.1 — fix(newsletter): preview 空白 + 圖片搬家到 Storage + docs（2026-04-23）
+
+Po 實測回報 3 件事：(1) quick-send 頁的 preview iframe 一片空白、(2) 測試信收到但沒圖片、(3) 要寫使用者文件。
+
+### 1. preview 空白 fix
+iframe 原本用 `ref.srcdoc = campaign.content_html` 在 useEffect 裡 set，race condition + React 不認這個 mutation。改用 React 的 `srcDoc` prop（`useMemo` 產 HTML，iframe 拿到 prop 自動 re-render）。
+
+### 2. 圖片搬家：listmonk CDN → Supabase Storage
+Po 要求「以後直接存系統」+ 4 月這期先抓回來。
+- 新 Storage bucket `newsletter-assets`（public、10 MB/檔、image/* 白名單）
+- `scripts/migrate-newsletter-images.mjs` 一次性工具：parse campaign HTML → 下載所有 listmonk URL → 上傳 Storage（路徑 `<period>/<filename>`）→ 改寫 `<img src>` 並 PATCH 回 DB
+- 檔名 sanitize：非 ASCII（中文）Storage key 會拒收，fallback 用 `asset-<8-char-sha256>.ext` 形式
+- 4 月中文電子報：11 張圖全部遷移，listmonk URL 清零，改指 Supabase Storage
+
+### 3. 文件
+- 新檔 `docs/admin/newsletter.md` + `.en.md` + `.ja.md` — subscriber / list / quick-send / PDF / RSS / Substack 設定 / 圖片 Storage / 不污染 last_activity 的保證 都寫進去
+- `docs/admin/index.{md,en.md,ja.md}` 表格加一列「電子報」
+
+### 改動
+- `src/app/(dashboard)/admin/newsletter/quick-send/[id]/page.tsx`：iframe 改 `srcDoc` prop、useEffect 換 useMemo
+- `scripts/migrate-newsletter-images.mjs` 新檔
+- DB：新 bucket `newsletter-assets`
+- `docs/admin/newsletter.{md,en.md,ja.md}` 新檔
+- `docs/admin/index.{md,en.md,ja.md}` 更新
+- `package.json` 3.10.0 → 3.10.1
+
+### 測試用戶端行動
+- 測試信沒看到圖片，通常是 **Gmail/Outlook 預設擋遠端圖片**。點信件頂部「顯示圖片」/「信任此寄件者」後就會載入。
+- 現在圖片都在 Supabase Storage public bucket，CORS 友善、長期穩定。
+
 ## v3.10.0 — feat(newsletter): CSV 匯入 + quick-send + RSS + PDF（2026-04-22）
 
 Po 提供 497 筆 SendGrid 4 月中文未寄名單 + 4 月內容 docx/PDF，要求打通整條 newsletter pipeline：CSV → 收件人 → 電子報編輯 → 寄送 → PDF 匯出 → RSS 給 Substack 抓草稿。

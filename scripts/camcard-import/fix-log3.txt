@@ -1,0 +1,235 @@
+找到 220 張需補上傳的卡片
+
+[1/220] ✓ 細野 尚孝-Card Front.jpg
+[2/220] ✓ 羅佳伶-Card Front.jpg
+[3/220] ✓ 簡美琴-Card Front.jpg
+[4/220] ✓ 簡上婕-Card Front.jpg
+[5/220] ✓ 羅偉誠-Card Front.jpg
+[6/220] ⚠ 找不到: 彭宇勛-Card Front.jpg
+[7/220] ✓ 簡志浩-Card Front.jpg
+[8/220] ✓ 簡鈺欣-Card Front.jpg
+[9/220] ⚠ 找不到: 張航湊-Card Front.jpg
+[10/220] ✓ 缪志鹏-Card Front.jpg
+[11/220] ✓ 紀筑尹-Card Front.jpg
+[12/220] ✓ 經濟國钦-Card Front.jpg
+[13/220] ✓ 章晴威-Card Front.jpg
+[14/220] ✓ 葉介庭-Card Front.jpg
+[15/220] ⚠ 找不到: 張靖忠-Card Front.jpg
+[16/220] ✓ 篠原英幸-Card Front.jpg
+[17/220] ✓ 羅傳璽-Card Front.jpg
+[18/220] ✓ 簡君全-Card Front.jpg
+[19/220] ✓ 羅沁雯-Card Front.jpg
+[20/220] ✓ 簡銀杏-Card Front.jpg
+  ── 已處理 20/220，暫停 2 秒...
+[21/220] ✓ 簡嘉惠-Card Front.jpg
+[22/220] ✓ 簡博彬-Card Front.jpg
+[23/220] ✓ 簡士閎-Card Front.jpg
+[24/220] ✓ 葉冠義-Card Front.jpg
+[25/220] ✓ 稲垣涼-Card Front.jpg
+[26/220] ✓ 葉匡時-Card Front.jpg
+[27/220] ✓ 簡定國-Card Front.jpg
+[28/220] ✓ 粟林稔-Card Front.jpg
+[29/220] ✓ 羅壽能-Card Front.jpg
+[30/220] ✓ 紫藤観 Miru-Card Front.jpg
+[31/220] ✓ 篠原 昌宏-Card Front.jpg
+[32/220] ✓ 簡惠茹-Card Front.jpg
+[33/220] ⚠ 找不到: 張鑑耀-Card Front.jpg
+[34/220] ✓ 葉士嘉-Card Front.jpg
+[35/220] ✓ 羅一中-Card Front.jpg
+[36/220] ✓ 童啟哲-Card Front.jpg
+[37/220] ✓ 葉俐瑩-Card Front.jpg
+[38/220] ✓ 維真生醫-Card Front.jpg
+[39/220] ✓ 葉力瑋-Card Front.jpg
+[40/220] ✓ 粘曉菁-Card Front.jpg
+  ── 已處理 40/220，暫停 2 秒...
+[41/220] ⚠ 找不到: 張飛-Card Front.jpg
+[42/220] ✓ 童敏哲-Card Front.jpg
+[43/220] ✓ 穎慧-Card Front.jpg
+[44/220] ✓ 羅宇帆-Card Front.jpg
+[45/220] ✓ 葉卿卿-Card Front.jpg
+[46/220] ✓ 萩野圭-Card Front.jpg
+[47/220] ✓ 紀昆廷-Card Front.jpg
+[48/220] ✓ 簡督憲-Card Front.jpg
+[49/220] ✓ 簡奉任-Card Front.jpg
+[50/220] ⚠ 找不到: 張洪璩-Card Front.jpg
+[51/220] ⚠ 找不到: 張澤-Card Front.jpg
+[52/220] ✓ 羅慧華-Card Front.jpg
+[53/220] ✓ 羅際偉-Card Front.jpg
+[54/220] ⚠ 找不到: 張立珩-Card Front.jpg
+[55/220] ⚠ 找不到: 張瓊-Card Front.jpg
+[56/220] ✓ 米弢伟-Card Front.jpg
+[57/220] ✓ 萬瑋琳-Card Front.jpg
+[58/220] ✓ 葉俊才-Card Front.jpg
+[59/220] ✓ 羅惠真-Card Front.jpg
+[60/220] ⚠ 找不到: 張琇茹-Card Front.jpg
+[61/220] ✓ 簡沛琦-Card Front.jpg
+[62/220] ✓ 童力威-Card Front.jpg
+[63/220] ✓ 穆宣佑-Card Front.jpg
+[64/220] ✓ 羅寶基-Card Front.jpg
+[65/220] ✓ 糊辦興-Card Front.jpg
+[66/220] ✓ 羅之盈-Card Front.jpg
+[67/220] ✓ 范秉航-Card Front.jpg
+[68/220] ✓ 萩野圭-Card Front.jpg
+[69/220] ✓ 蔡欣怡-Card Front.jpg
+[70/220] ✓ 苗春亭-Card Front.jpg
+[71/220] ✓ 蔡育霖-Card Front.jpg
+[72/220] ✓ 莊心瑋-Card Front.jpg
+[73/220] ✓ 蔡孟燐-Card Front.jpg
+[74/220] ✓ 莊南田-Card Front.jpg
+[75/220] ✓ 葉育銘-Card Front.jpg
+[76/220] ✓ 葉宗壽-Card Front.jpg
+[77/220] ✓ 胡家銘-Card Front.jpg
+[78/220] ✓ 胡邾鏻-Card Front.jpg
+[79/220] ✓ 葉俊才-Card Front.jpg
+[80/220] ✓ 胡翔崴-Card Front.jpg
+  ── 已處理 80/220，暫停 2 秒...
+[81/220] ✓ 蔡雅菁-Card Front.jpg
+[82/220] ✓ 蒋荏-Card Front.jpg
+[83/220] ✓ 蔡芸樺-Card Front.jpg
+[84/220] ✓ 蔡寧遠-Card Front.jpg
+[85/220] ✓ 葉貞儀-Card Front.jpg
+[86/220] ✓ 葉思見-Card Front.jpg
+[87/220] ✓ 蔡通靈-Card Front.jpg
+[88/220] ✓ 蔡世辰-Card Front.jpg
+[89/220] ✓ 蔡秀娟-Card Front.jpg
+[90/220] ✓ 莊劍偉-Card Front.jpg
+[91/220] ✓ 蔡炫錡-Card Front.jpg
+[92/220] ✓ 莊佳甄-Card Front.jpg
+[93/220] ✓ 蔡宗霖-Card Front.jpg
+[94/220] ✓ 蔡孟杰-Card Front.jpg
+[95/220] ✓ 蔡尚燐-Card Front.jpg
+[96/220] ✓ 蒋崆-Card Front.jpg
+[97/220] ✓ 蔡天甲-Card Front.jpg
+[98/220] ✓ 萧姜萍-Card Front.jpg
+[99/220] ✓ 蔡秀麗-Card Front.jpg
+[100/220] ✓ 翼生醫創投-Card Front.jpg
+  ── 已處理 100/220，暫停 2 秒...
+[101/220] ✓ 葉冠義-Card Front.jpg
+[102/220] ✓ 菊岡翔太-Card Front.jpg
+[103/220] ✓ 蔡承旭-Card Front.jpg
+[104/220] ✓ 葉淵霖-Card Front.jpg
+[105/220] ✓ 蔡秉諺-Card Front.jpg
+[106/220] ✓ 莊國祥-Card Front.jpg
+[107/220] ✓ 蔡亦筑-Card Front.jpg
+[108/220] ✓ 蔡耿彰-Card Front.jpg
+[109/220] ✓ 葉淇臺-Card Front.jpg
+[110/220] ✓ 葉卿卿-Card Front.jpg
+[111/220] ✓ 蔡慶祥-Card Front.jpg
+[112/220] ✓ 臧程遠-Card Front.jpg
+[113/220] ✓ 蔡莫凡-Card Front.jpg
+[114/220] ✓ 蔡柏宣-Card Front.jpg
+[115/220] ✓ 葉秋焱-Card Front.jpg
+[116/220] ✓ 葉常菁-Card Front.jpg
+[117/220] ✓ 胡津祐-Card Front.jpg
+[118/220] ✓ 臺灣銀行-Card Front.jpg
+[119/220] ✓ 萬瑋琳-Card Front.jpg
+[120/220] ✓ 美馬傑-Card Front.jpg
+  ── 已處理 120/220，暫停 2 秒...
+[121/220] ✓ 華國媛-Card Front.jpg
+[122/220] ✓ 葉柏廷-Card Front.jpg
+[123/220] ✓ 董士鳴-Card Front.jpg
+[124/220] ✓ 臺北醫學大學校友總會-Card Front.jpg
+[125/220] ✓ 蒋正男-Card Front.jpg
+[126/220] ✓ 蔡舜任-Card Front.jpg
+[127/220] ✓ 葛禮仁-Card Front.jpg
+[128/220] ✓ 蓮見 賢一郎-Card Front.jpg
+[129/220] ✓ 莊上逸-Card Front.jpg
+[130/220] ✓ 翁宜賢-Card Front.jpg
+[131/220] ✓ 葉士嘉-Card Front.jpg
+[132/220] ✓ 蔡欣倫-Card Front.jpg
+[133/220] ✓ 蔡宇婷-Card Front.jpg
+[134/220] ✓ 蔡宏斌-Card Front.jpg
+[135/220] ✓ 葉明功-Card Front.jpg
+[136/220] ✓ 葉志鴻-Card Front.jpg
+[137/220] ✓ 蔡宜樺-Card Front.jpg
+[138/220] ✓ 葉至誠-Card Front.jpg
+[139/220] ✓ 葉惠芬-Card Front.jpg
+[140/220] ✓ 菊池朱未-Card Front.jpg
+  ── 已處理 140/220，暫停 2 秒...
+[141/220] ✓ 葉祖昀-Card Front.jpg
+[142/220] ✓ 蔡成龍-Card Front.jpg
+[143/220] ✓ 蔡甄薬-Card Front.jpg
+[144/220] ✓ 董鳳婷-Card Front.jpg
+[145/220] ✓ 蔡慎修-Card Front.jpg
+[146/220] ✓ 莊智軒-Card Front.jpg
+[147/220] ✓ 翁嘉宏-Card Front.jpg
+[148/220] ✓ 葉馥菱-Card Front.jpg
+[149/220] ✓ 胡一君-Card Front.jpg
+[150/220] ✓ 蔡函恩-Card Front.jpg
+[151/220] ✓ 肱黒勇正-Card Front.jpg
+[152/220] ✓ 蔡易展-Card Front.jpg
+[153/220] ✓ 葉承軒-Card Front.jpg
+[154/220] ✓ 蔡寬錫-Card Front.jpg
+[155/220] ✓ 胡惠涵-Card Front.jpg
+[156/220] ✓ 莊大賜-Card Front.jpg
+[157/220] ✓ 花稜堤-Card Front.jpg
+[158/220] ✓ 莊曜宇-Card Front.jpg
+[159/220] ✓ 胡敏君-Card Front.jpg
+[160/220] ✓ 葉忠祐-Card Front.jpg
+  ── 已處理 160/220，暫停 2 秒...
+[161/220] ✓ 葉介庭-Card Front.jpg
+[162/220] ✓ 蔡焜煌-Card Front.jpg
+[163/220] ✓ 葉俐瑩-Card Front.jpg
+[164/220] ✓ 葉建明-Card Front.jpg
+[165/220] ✓ 葉力瑋-Card Front.jpg
+[166/220] ✓ 葉肇元-Card Front.jpg
+[167/220] ✓ 莊永裕-Card Front.jpg
+[168/220] ✓ 葉旺铛-Card Front.jpg
+[169/220] ✓ 蔡孟柔-Card Front.jpg
+[170/220] ✓ 莊亞男-Card Front.jpg
+[171/220] ✓ 羊錦邦-Card Front.jpg
+[172/220] ✓ 蔡孟男-Card Front.jpg
+[173/220] ✓ 翁正軒-Card Front.jpg
+[174/220] ✓ 葉德偉-Card Front.jpg
+[175/220] ✓ 蔡建芳-Card Front.jpg
+[176/220] ✓ 蔡宛綺-Card Front.jpg
+[177/220] ✓ 胡哲銘-Card Front.jpg
+[178/220] ✓ 莊均緯-Card Front.jpg
+[179/220] ✓ 蔡進坤-Card Front.jpg
+[180/220] ✓ 花儒卡-Card Front.jpg
+  ── 已處理 180/220，暫停 2 秒...
+[181/220] ✓ 董鈺新-Card Front.jpg
+[182/220] ✓ 翟浩宇-Card Front.jpg
+[183/220] ✓ 葉憶萱-Card Front.jpg
+[184/220] ✓ 翁士傑-Card Front.jpg
+[185/220] ✓ 蔡穎瑩-Card Front.jpg
+[186/220] ✓ 莊鎭嶽-Card Front.jpg
+[187/220] ✓ 翟清楠-Card Front.jpg
+[188/220] ✓ 蔡琪玲-Card Front.jpg
+[189/220] ✓ 翁銘隆-Card Front.jpg
+[190/220] ✓ 蔡岱倫-Card Front.jpg
+[191/220] ✓ 蔡曜聰-Card Front.jpg
+[192/220] ✓ 葉淨元-Card Front.jpg
+[193/220] ✓ 翁文彬-Card Front.jpg
+[194/220] ✓ 蔡汶芳-Card Front.jpg
+[195/220] ✓ 翁麗俐-Card Front.jpg
+[196/220] ✓ 胡恩樺-Card Front.jpg
+[197/220] ✓ 荻原麻理-Card Front.jpg
+[198/220] ✓ 葉匡時-Card Front.jpg
+[199/220] ✓ 羅鴻源-Card Front.jpg
+[200/220] ✓ 蔡承翰-Card Front.jpg
+  ── 已處理 200/220，暫停 2 秒...
+[201/220] ✓ 蔡佳君-Card Front.jpg
+[202/220] ✓ 蔡君珮-Card Front.jpg
+[203/220] ✓ 蔡協致-Card Front.jpg
+[204/220] ✓ 蔡淑麗-Card Front.jpg
+[205/220] ✓ 翁巧筑-Card Front.jpg
+[206/220] ✓ 蔡肅玉-Card Front.jpg
+[207/220] ✓ 蔡明志-Card Front.jpg
+[208/220] ✓ 胡竹暄-Card Front.jpg
+[209/220] ✓ 蔡依璇-Card Front.jpg
+[210/220] ✓ 蔡世偉-Card Front.jpg
+[211/220] ✓ 翁啟信-Card Front.jpg
+[212/220] ✓ 蔡熙文-Card Front.jpg
+[213/220] ✓ 翁竹君-Card Front.jpg
+[214/220] ✓ 蔡长祺-Card Front.jpg
+[215/220] ✓ 蔡苑婷-Card Front.jpg
+[216/220] ✓ 荻野 真一-Card Front.jpg
+[217/220] ✓ 羅際揚-Card Front.jpg
+[218/220] ✓ 葉庭妤-Card Front.jpg
+[219/220] ✓ 蔡瑋純-Card Front.jpg
+[220/220] ✓ 翁嘉盛-Card Front.jpg
+  ── 已處理 220/220，暫停 2 秒...
+
+完成！✓ 成功 210  ✗ 失敗 10
+失敗清單：scripts/camcard-import/fix-failed.txt

@@ -19,3 +19,4 @@ The following features are managed exclusively by Super Admin:
 | User Management | Manage member accounts and roles |
 | Reports | View business activity statistics reports |
 | Country Management | Maintain the country list (ISO code, multilingual names, flag emoji, enabled status) |
+| Newsletter | Subscriber management / campaign editor / SendGrid sending / PDF export / RSS feed for Substack auto-drafts |

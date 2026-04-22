@@ -1,0 +1,494 @@
+找到 467 張需補上傳的卡片
+
+[1/467] ✓ 楊昌達-Card Front.jpg
+[2/467] ✓ 柯承志-Card Front.jpg
+[3/467] ✓ 王光毅-Card Front.jpg
+[4/467] ✓ 牧志 一-Card Front.jpg
+[5/467] ✓ 江怡欣-Card Front.jpg
+[6/467] ✓ 江肇傑-Card Front.jpg
+[7/467] ✓ 楊孝敏-Card Front.jpg
+[8/467] ✓ 柯旂-Card Front.jpg
+[9/467] ✓ 王愈善-Card Front.jpg
+[10/467] ✓ 王仁中-Card Front.jpg
+[11/467] ✓ 柯芃如-Card Front.jpg
+[12/467] ✓ 楊承翰-Card Front.jpg
+[13/467] ✓ 楊敦閔-Card Front.jpg
+[14/467] ✓ 沈芳秀-Card Front.jpg
+[15/467] ✓ 歌德漢默特-Card Front.jpg
+[16/467] ✓ 王麗雲-Card Front.jpg
+[17/467] ✓ 梶井 健-Card Front.jpg
+[18/467] ✓ 滕昭怡-Card Front.jpg
+[19/467] ✓ 王明哲-Card Front.jpg
+[20/467] ✓ 江依芳-Card Front.jpg
+  ── 已處理 20/467，暫停 2 秒...
+[21/467] ✓ 楊竣偉-Card Front.jpg
+[22/467] ✓ 沈峻宏-Card Front.jpg
+[23/467] ✓ 澤邊 岳彦-Card Front.jpg
+[24/467] ✓ 源本祥平-Card Front.jpg
+[25/467] ✓ 江祥緯-Card Front.jpg
+[26/467] ✓ 王柏松-Card Front.jpg
+[27/467] ✓ 楊梓銘-Card Front.jpg
+[28/467] ✓ 涂君怡-Card Front.jpg
+[29/467] ✓ 楊晴然-Card Front.jpg
+[30/467] ✓ 王勇勝-Card Front.jpg
+[31/467] ✓ 熊雨-Card Front.jpg
+[32/467] ✓ 洪榮賢-Card Front.jpg
+[33/467] ✓ 柯宣竹-Card Front.jpg
+[34/467] ✓ 沈柏年-Card Front.jpg
+[35/467] ✓ 洪欣儒-Card Front.jpg
+[36/467] ✓ 永吉翼-Card Front.jpg
+[37/467] ✓ 林鼎閔-Card Front.jpg
+[38/467] ✓ 楊啓航-Card Front.jpg
+[39/467] ✓ 歐宴泉-Card Front.jpg
+[40/467] ✓ 游皓畲-Card Front.jpg
+  ── 已處理 40/467，暫停 2 秒...
+[41/467] ✓ 柯王德-Card Front.jpg
+[42/467] ✓ 王永昇-Card Front.jpg
+[43/467] ✓ 平建台-Card Front.jpg
+[44/467] ✓ 王美美-Card Front.jpg
+[45/467] ✓ 楊芯縈-Card Front.jpg
+[46/467] ✓ 渡邊賢一-Card Front.jpg
+[47/467] ✓ 梁曉政-Card Front.jpg
+[48/467] ✓ 王芊茵-Card Front.jpg
+[49/467] ✓ 林韋伶-Card Front.jpg
+[50/467] ✓ 澤田鉄郎-Card Front.jpg
+[51/467] ✓ 山口 將太-Card Front.jpg
+[52/467] ✓ 王俊勝-Card Front.jpg
+[53/467] ✓ 楊明儀-Card Front.jpg
+[54/467] ✓ 沈志隆-Card Front.jpg
+[55/467] ✓ 岸田高明-Card Front.jpg
+[56/467] ✓ 毛國光-Card Front.jpg
+[57/467] ✓ 洪于婷-Card Front.jpg
+[58/467] ✓ 林育聖-Card Front.jpg
+[59/467] ✓ 山沢 昌寛-Card Front.jpg
+[60/467] ✓ 島袋誠守-Card Front.jpg
+  ── 已處理 60/467，暫停 2 秒...
+[61/467] ✓ 洪健吾-Card Front.jpg
+[62/467] ✓ 楊揚-Card Front.jpg
+[63/467] ✓ 山下一輝-Card Front.jpg
+[64/467] ✓ 林胤呈-Card Front.jpg
+[65/467] ✓ 林蓓茹-Card Front.jpg
+[66/467] ✓ 王惟民-Card Front.jpg
+[67/467] ✓ 查怡-Card Front.jpg
+[68/467] ✓ 山中 翔太郎-Card Front.jpg
+[69/467] ✓ 榻明華-Card Front.jpg
+[70/467] ✓ 楊舜任-Card Front.jpg
+[71/467] ✓ 山田徹-Card Front.jpg
+[72/467] ✓ 清水英-Card Front.jpg
+[73/467] ✓ 王千綸-Card Front.jpg
+[74/467] ✓ 熊全迪-Card Front.jpg
+[75/467] ✓ 柳雲峰-Card Front.jpg
+[76/467] ✓ 王泊勻-Card Front.jpg
+[77/467] ✓ 川崎将輝-Card Front.jpg
+[78/467] ✓ 島袋稔也-Card Front.jpg
+[79/467] ✓ 楊博勝-Card Front.jpg
+[80/467] ✓ 王健全-Card Front.jpg
+  ── 已處理 80/467，暫停 2 秒...
+[81/467] ✓ 江旻壕-Card Front.jpg
+[82/467] ✓ 山崎由可-Card Front.jpg
+[83/467] ✓ 楊淑圓-Card Front.jpg
+[84/467] ✓ 洪如玲-Card Front.jpg
+[85/467] ✓ 林英傑-Card Front.jpg
+[86/467] ✓ 岸原稔泰-Card Front.jpg
+[87/467] ✓ 段淵傑-Card Front.jpg
+[88/467] ✓ 山本英樹-Card Front.jpg
+[89/467] ✓ 王唯任-Card Front.jpg
+[90/467] ✓ 庄熙平-Card Front.jpg
+[91/467] ✓ 梁瑞芳-Card Front.jpg
+[92/467] ✓ 梁育晨-Card Front.jpg
+[93/467] ✓ 柯竑至-Card Front.jpg
+[94/467] ✓ 汪庭安-Card Front.jpg
+[95/467] ✓ 王政松-Card Front.jpg
+[96/467] ✓ 王怡仁-Card Front.jpg
+[97/467] ✓ 池森恵-Card Front.jpg
+[98/467] ✓ 王泳鴻-Card Front.jpg
+[99/467] ✓ 王文利-Card Front.jpg
+[100/467] ✓ 王昶閔-Card Front.jpg
+  ── 已處理 100/467，暫停 2 秒...
+[101/467] ✓ 樊亞倫-Card Front.jpg
+[102/467] ✓ 王登煌-Card Front.jpg
+[103/467] ✓ 沈燕妮-Card Front.jpg
+[104/467] ✓ 潘瑋翔-Card Front.jpg
+[105/467] ✓ 水野壮人-Card Front.jpg
+[106/467] ✓ 王是琦-Card Front.jpg
+[107/467] ✓ 岡崎敏治-Card Front.jpg
+[108/467] ✓ 楊朝鈞-Card Front.jpg
+[109/467] ✓ 楊士進-Card Front.jpg
+[110/467] ✓ 林育辰-Card Front.jpg
+[111/467] ✓ 林鎮國-Card Front.jpg
+[112/467] ✓ 楚雅雯-Card Front.jpg
+[113/467] ✓ 渡邉賢一-Card Front.jpg
+[114/467] ✓ 岩里 朗太-Card Front.jpg
+[115/467] ✓ 岩田 雅人-Card Front.jpg
+[116/467] ✓ 梁松杰-Card Front.jpg
+[117/467] ✓ 楊承益-Card Front.jpg
+[118/467] ✓ 林輔樂-Card Front.jpg
+[119/467] ✓ 浦添正彦-Card Front.jpg
+[120/467] ✓ 王俊勝-Card Front.jpg
+  ── 已處理 120/467，暫停 2 秒...
+[121/467] ✓ 森脇健ㄧ-Card Front.jpg
+[122/467] ✓ 岳瀚-Card Front.jpg
+[123/467] ✓ 王达玮-Card Front.jpg
+[124/467] ✓ 王俊祥-Card Front.jpg
+[125/467] ✓ 山口 博史-Card Front.jpg
+[126/467] ✓ 王國雄-Card Front.jpg
+[127/467] ✓ 河西 佑太郎-Card Front.jpg
+[128/467] ✓ 洪岳鵬-Card Front.jpg
+[129/467] ✓ 王良順-Card Front.jpg
+[130/467] ✓ 柯世聰-Card Front.jpg
+[131/467] ✓ 左永寧-Card Front.jpg
+[132/467] ✓ 王琇瑩-Card Front.jpg
+[133/467] ✓ 楊為植-Card Front.jpg
+[134/467] ✓ 永田邦廣-Card Front.jpg
+[135/467] ✓ 王上達-Card Front.jpg
+[136/467] ✓ 王經富-Card Front.jpg
+[137/467] ✓ 王功熙-Card Front.jpg
+[138/467] ✓ 熊樂昌-Card Front.jpg
+[139/467] ✓ 柏國芳-Card Front.jpg
+[140/467] ✓ 王景南-Card Front.jpg
+  ── 已處理 140/467，暫停 2 秒...
+[141/467] ✓ 林鼎-Card Front.jpg
+[142/467] ✓ 柯凱畹-Card Front.jpg
+[143/467] ✓ 王志中-Card Front.jpg
+[144/467] ✓ 王光毅-Card Front.jpg
+[145/467] ✓ 王一民-Card Front.jpg
+[146/467] ✓ 梁鈺翎-Card Front.jpg
+[147/467] ✓ 温智傑-Card Front.jpg
+[148/467] ✓ 桜井公美-Card Front.jpg
+[149/467] ✓ 沢岻由里恵-Card Front.jpg
+[150/467] ✓ 林錦祥-Card Front.jpg
+[151/467] ✓ 浦上武雄-Card Front.jpg
+[152/467] ✓ 池田一生-Card Front.jpg
+[153/467] ✓ 王勇勝-Card Front.jpg
+[154/467] ✓ 沈湯龍-Card Front.jpg
+[155/467] ✓ 江宏倫-Card Front.jpg
+[156/467] ✓ 楊凱琳-Card Front.jpg
+[157/467] ✓ 王翊蓁-Card Front.jpg
+[158/467] ✓ 潘定一-Card Front.jpg
+[159/467] ✓ 王志仁-Card Front.jpg
+[160/467] ✓ 楊智惠-Card Front.jpg
+  ── 已處理 160/467，暫停 2 秒...
+[161/467] ✓ 温政翰-Card Front.jpg
+[162/467] ✓ 楊立-Card Front.jpg
+[163/467] ✓ 王盈文-Card Front.jpg
+[164/467] ✓ 江碩涵-Card Front.jpg
+[165/467] ✓ 王德勳-Card Front.jpg
+[166/467] ✓ 楊吉陸-Card Front.jpg
+[167/467] ✓ 温致群-Card Front.jpg
+[168/467] ✓ 洪維廷-Card Front.jpg
+[169/467] ✓ 市原 大和-Card Front.jpg
+[170/467] ✓ 王為敏-Card Front.jpg
+[171/467] ✓ 王煒-Card Front.jpg
+[172/467] ✓ 梁賡義-Card Front.jpg
+[173/467] ✓ 武立凡-Card Front.jpg
+[174/467] ✓ 楊淑媚-Card Front.jpg
+[175/467] ✓ 沈立明-Card Front.jpg
+[176/467] ✓ 瀧口友里奈-Card Front.jpg
+[177/467] ✓ 沈耀安-Card Front.jpg
+[178/467] ✓ 島田結実-Card Front.jpg
+[179/467] ✓ 林颖铨-Card Front.jpg
+[180/467] ✓ 楊弘仁-Card Front.jpg
+  ── 已處理 180/467，暫停 2 秒...
+[181/467] ✓ 江怡葆-Card Front.jpg
+[182/467] ✓ 王子明-Card Front.jpg
+[183/467] ✓ 楊良友-Card Front.jpg
+[184/467] ✓ 横溝洋平-Card Front.jpg
+[185/467] ✓ 王姓-Card Front.jpg
+[186/467] ✓ 王誠一-Card Front.jpg
+[187/467] ✓ 物部慶幸-Card Front.jpg
+[188/467] ✓ 洪尚希-Card Front.jpg
+[189/467] ✓ 洪晟惠-Card Front.jpg
+[190/467] ✓ 母里明陽-Card Front.jpg
+[191/467] ✓ 熊谷伸栄-Card Front.jpg
+[192/467] ✓ 洪純正-Card Front.jpg
+[193/467] ✓ 尹繼源-Card Front.jpg
+[194/467] ✓ 游意中-Card Front.jpg
+[195/467] ✓ 浮田博文-Card Front.jpg
+[196/467] ✓ 王景禾-Card Front.jpg
+[197/467] ✓ 平原淳-Card Front.jpg
+[198/467] ✓ 尹弘武-Card Front.jpg
+[199/467] ✓ 林育竹-Card Front.jpg
+[200/467] ✓ 平岡和彦-Card Front.jpg
+  ── 已處理 200/467，暫停 2 秒...
+[201/467] ✓ 游萬淵-Card Front.jpg
+[202/467] ✓ 王梓明-Card Front.jpg
+[203/467] ✓ 王楠淵-Card Front.jpg
+[204/467] ✓ 王坤强-Card Front.jpg
+[205/467] ✓ 楊慕華-Card Front.jpg
+[206/467] ✓ 王麗淑-Card Front.jpg
+[207/467] ✓ 林胡助-Card Front.jpg
+[208/467] ✓ 温國蘭-Card Front.jpg
+[209/467] ✓ 水野結愛アンジェリカ-Card Front.jpg
+[210/467] ✓ 江希以-Card Front.jpg
+[211/467] ✓ 湯麗玲-Card Front.jpg
+[212/467] ✓ 熊全迪-Card Front.jpg
+[213/467] ✓ 王若羽-Card Front.jpg
+[214/467] ✓ 柯磊-Card Front.jpg
+[215/467] ✓ 清水洋子-Card Front.jpg
+[216/467] ✓ 熊秉誠-Card Front.jpg
+[217/467] ✓ 楊子杰-Card Front.jpg
+[218/467] ✓ 温明璇-Card Front.jpg
+[219/467] ✓ 沈凱棋-Card Front.jpg
+[220/467] ✓ 王怡今-Card Front.jpg
+  ── 已處理 220/467，暫停 2 秒...
+[221/467] ✓ 王正旭-Card Front.jpg
+[222/467] ✓ 王榕朗-Card Front.jpg
+[223/467] ✓ 王建順-Card Front.jpg
+[224/467] ✓ 烏仕明-Card Front.jpg
+[225/467] ✓ 楊子聖-Card Front.jpg
+[226/467] ✓ 河本佳世-Card Front.jpg
+[227/467] ✓ 王逢偉-Card Front.jpg
+[228/467] ✓ 王功熙-Card Front.jpg
+[229/467] ✓ 湯惠珍-Card Front.jpg
+[230/467] ✓ 池本 美咲-Card Front.jpg
+[231/467] ✓ 楊啟航-Card Front.jpg
+[232/467] ✓ 溫演福-Card Front.jpg
+[233/467] ✓ 濱口道成-Card Front.jpg
+[234/467] ✓ 康詩婷-Card Front.jpg
+[235/467] ✓ 崔耿美-Card Front.jpg
+[236/467] ✓ 林重榮-Card Front.jpg
+[237/467] ✓ 王守瑜-Card Front.jpg
+[238/467] ✓ 平船 新大-Card Front.jpg
+[239/467] ✓ 左典修-Card Front.jpg
+[240/467] ✓ 王佳惠-Card Front.jpg
+  ── 已處理 240/467，暫停 2 秒...
+[241/467] ✓ 王耀庭-Card Front.jpg
+[242/467] ✓ 洪啟淵-Card Front.jpg
+[243/467] ✓ 潘奕彰-Card Front.jpg
+[244/467] ✓ 王易凡-Card Front.jpg
+[245/467] ✓ 王元宏-Card Front.jpg
+[246/467] ✓ 王イーセン-Card Front.jpg
+[247/467] ✓ 王儒譽-Card Front.jpg
+[248/467] ✓ 瀬戸泰之-Card Front.jpg
+[249/467] ✓ 楊方儒-Card Front.jpg
+[250/467] ✓ 沈麗華-Card Front.jpg
+[251/467] ✓ 汪禹-Card Front.jpg
+[252/467] ✓ 沈家寧-Card Front.jpg
+[253/467] ✓ 王慈敏-Card Front.jpg
+[254/467] ✓ 渡嘉敷唯章-Card Front.jpg
+[255/467] ✓ 歐曜瑋-Card Front.jpg
+[256/467] ✓ 嶋田卓也-Card Front.jpg
+[257/467] ✓ 尾實健-Card Front.jpg
+[258/467] ✓ 牧志 一-Card Front.jpg
+[259/467] ✓ 河原三紀郎-Card Front.jpg
+[260/467] ✓ 楊上輝-Card Front.jpg
+  ── 已處理 260/467，暫停 2 秒...
+[261/467] ✓ 池田将-Card Front.jpg
+[262/467] ✓ 沈宗祐-Card Front.jpg
+[263/467] ✓ 溫舒夏-Card Front.jpg
+[264/467] ✓ 王漢州-Card Front.jpg
+[265/467] ✓ 王志翔-Card Front.jpg
+[266/467] ✓ 潘怡潔-Card Front.jpg
+[267/467] ✓ 游森楨-Card Front.jpg
+[268/467] ✓ 王威漢-Card Front.jpg
+[269/467] ✓ 涂煥昌-Card Front.jpg
+[270/467] ✓ 沈方正-Card Front.jpg
+[271/467] ✓ 栗原里奈-Card Front.jpg
+[272/467] ✓ 廖健宏-Card Front.jpg
+[273/467] ✓ 巫昱德-Card Front.jpg
+[274/467] ✓ 梁郁敏-Card Front.jpg
+[275/467] ✓ 游智欣-Card Front.jpg
+[276/467] ✓ 楊大慶-Card Front.jpg
+[277/467] ✓ 橋本呂峰-Card Front.jpg
+[278/467] ✓ 王蕙容-Card Front.jpg
+[279/467] ✓ 江宜倫-Card Front.jpg
+[280/467] ✓ 楊雅淳-Card Front.jpg
+  ── 已處理 280/467，暫停 2 秒...
+[281/467] ✓ 王廷芳-Card Front.jpg
+[282/467] ✓ 洪國勝-Card Front.jpg
+[283/467] ✓ 川上 祐佳-Card Front.jpg
+[284/467] ✓ 王上達-Card Front.jpg
+[285/467] ✓ IRIE Masahiko-Card Front(2).jpg
+[286/467] ✓ 比嘉 弥-Card Front.jpg
+[287/467] ✓ 瀧口友里奈-Card Front.jpg
+[288/467] ✓ 楊竣宇-Card Front.jpg
+[289/467] ✓ 永井良雄-Card Front.jpg
+[290/467] ✓ 楊桂賢-Card Front.jpg
+[291/467] ✓ 楊彩蘭-Card Front.jpg
+[292/467] ✓ 庄秀輝-Card Front.jpg
+[293/467] ✓ 牛島卓斗-Card Front.jpg
+[294/467] ✓ 潘啟明-Card Front.jpg
+[295/467] ✓ 王千綸-Card Front.jpg
+[296/467] ✓ 澤田 目成-Card Front.jpg
+[297/467] ✓ 段詩潔-Card Front.jpg
+[298/467] ✓ 王羽晴-Card Front.jpg
+[299/467] ✓ 江欣蒨-Card Front.jpg
+[300/467] ✓ 游立光-Card Front.jpg
+  ── 已處理 300/467，暫停 2 秒...
+[301/467] ✓ 并上晃-Card Front.jpg
+[302/467] ✓ 漆原栄雄-Card Front.jpg
+[303/467] ✓ 潘奕彰-Card Front.jpg
+[304/467] ✓ 洋展坂本-Card Front.jpg
+[305/467] ✓ 梁廷安-Card Front.jpg
+[306/467] ✓ 柯昇穎-Card Front.jpg
+[307/467] ✓ 澤邊 岳彦-Card Front.jpg
+[308/467] ✓ 栗原宏平-Card Front.jpg
+[309/467] ✓ 洪秉坤-Card Front.jpg
+[310/467] ✓ 楊子萱-Card Front.jpg
+[311/467] ✓ 王イーセン-Card Front.jpg
+[312/467] ✓ 楊司弘-Card Front.jpg
+[313/467] ✓ 柯凱曉-Card Front.jpg
+[314/467] ✓ 江欣翰-Card Front.jpg
+[315/467] ✓ 濱口道成-Card Front.jpg
+[316/467] ✓ 洪譽庭-Card Front.jpg
+[317/467] ✓ 沈冠瑜 Vince Shen-Card Front.jpg
+[318/467] ✓ 河野欲-Card Front.jpg
+[319/467] ✓ 山本 裕典-Card Front.jpg
+[320/467] ✓ 楊正-Card Front.jpg
+  ── 已處理 320/467，暫停 2 秒...
+[321/467] ✓ 巫慧燕-Card Front.jpg
+[322/467] ✓ 左松靜-Card Front.jpg
+[323/467] ✓ 林進章-Card Front.jpg
+[324/467] ✓ 林裕敏-Card Front.jpg
+[325/467] ✓ 洪冠予-Card Front.jpg
+[326/467] ✓ 岩崎敬-Card Front.jpg
+[327/467] ✓ 王一民-Card Front.jpg
+[328/467] ✓ 沃兆德-Card Front.jpg
+[329/467] ✓ 洪嘉駿-Card Front.jpg
+[330/467] ✓ 王政堂-Card Front.jpg
+[331/467] ✓ 殷春美-Card Front.jpg
+[332/467] ✓ 王佳惠-Card Front.jpg
+[333/467] ✓ 歐偉仁-Card Front.jpg
+[334/467] ✓ 林靜-Card Front.jpg
+[335/467] ✓ 江淑華-Card Front.jpg
+[336/467] ✓ 王治元-Card Front.jpg
+[337/467] ✓ 王俊陽-Card Front.jpg
+[338/467] ✓ 王薏婷-Card Front.jpg
+[339/467] ✓ 森敏秀-Card Front.jpg
+[340/467] ✓ 楊明昕-Card Front.jpg
+  ── 已處理 340/467，暫停 2 秒...
+[341/467] ✓ 熊樂昌-Card Front.jpg
+[342/467] ✓ 川上 公尋-Card Front.jpg
+[343/467] ✓ 澤田鉄郎-Card Front.jpg
+[344/467] ✓ 段奇瑋-Card Front.jpg
+[345/467] ✓ 楊志偉-Card Front.jpg
+[346/467] ✓ 平良 侑希-Card Front.jpg
+[347/467] ✓ 洪經勝-Card Front.jpg
+[348/467] ✓ 洪孟婷-Card Front.jpg
+[349/467] ✓ 林茂榮-Card Front.jpg
+[350/467] ✓ 段Weihua Yin-Card Front.jpg
+[351/467] ✓ 王雅汶-Card Front.jpg
+[352/467] ✓ 王俊祥-Card Front.jpg
+[353/467] ✓ 梅傑所-Card Front.jpg
+[354/467] ✓ 洪愷誠-Card Front.jpg
+[355/467] ✓ 江文豪-Card Front.jpg
+[356/467] ✓ 牀敬倫博士-Card Front.jpg
+[357/467] ✓ 王毓雯-Card Front.jpg
+[358/467] ✓ 潘怡潔-Card Front.jpg
+[359/467] ✓ 江崇芬-Card Front.jpg
+[360/467] ✓ 岳珮喻-Card Front.jpg
+  ── 已處理 360/467，暫停 2 秒...
+[361/467] ✓ 温斯勇-Card Front.jpg
+[362/467] ✓ 王耀宏-Card Front.jpg
+[363/467] ✓ 王儒譽-Card Front.jpg
+[364/467] ✓ 山里 永悟-Card Front.jpg
+[365/467] ✓ 熊文匯-Card Front.jpg
+[366/467] ✓ 森本岳史-Card Front.jpg
+[367/467] ✓ 楊舜鈞-Card Front.jpg
+[368/467] ✓ 洪弘毅-Card Front.jpg
+[369/467] ✓ 洪紹崗-Card Front.jpg
+[370/467] ✓ 林郁芬-Card Front.jpg
+[371/467] ✓ 川口未華-Card Front.jpg
+[372/467] ✓ 王威鈞-Card Front.jpg
+[373/467] ✓ 山城美奈子-Card Front.jpg
+[374/467] ✓ 平野翔久-Card Front.jpg
+[375/467] ✓ 尤盟貴-Card Front.jpg
+[376/467] ✓ 森田 諭-Card Front.jpg
+[377/467] ✓ 牛寶賢-Card Front.jpg
+[378/467] ✓ 牛寶賢-Card Front.jpg
+[379/467] ✓ 渡部 瑞生-Card Front.jpg
+[380/467] ✓ 楊桂華-Card Front.jpg
+  ── 已處理 380/467，暫停 2 秒...
+[381/467] ✓ 歐明昌-Card Front.jpg
+[382/467] ✓ 康義勝-Card Front.jpg
+[383/467] ✓ 楊正秋-Card Front.jpg
+[384/467] ✓ 楊閔隆-Card Front.jpg
+[385/467] ✓ 熊谷伸栄-Card Front.jpg
+[386/467] ✓ 江維元-Card Front.jpg
+[387/467] ✓ 山田 早輝子-Card Front.jpg
+[388/467] ✓ 王治平-Card Front.jpg
+[389/467] ✓ 江承蒽-Card Front.jpg
+[390/467] ✓ 尹曼莉-Card Front.jpg
+[391/467] ✓ 王育民-Card Front.jpg
+[392/467] ✓ 熊秉誠-Card Front.jpg
+[393/467] ✓ 林鳳琪-Card Front.jpg
+[394/467] ✓ 株式会社JenT Capital-Card Front.jpg
+[395/467] ✓ 康涵慈-Card Front.jpg
+[396/467] ✓ 王健全-Card Front.jpg
+[397/467] ✓ 王怡文-Card Front.jpg
+[398/467] ✓ 山本俊成-Card Front.jpg
+[399/467] ✓ 楊鎮寧-Card Front.jpg
+[400/467] ✓ 渡邊章王-Card Front.jpg
+  ── 已處理 400/467，暫停 2 秒...
+[401/467] ✓ 洪觔-Card Front.jpg
+[402/467] ✓ 王正融-Card Front.jpg
+[403/467] ✓ 廖俊仁-Card Front.jpg
+[404/467] ✓ 王元宏-Card Front.jpg
+[405/467] ✓ 巻口賢司-Card Front.jpg
+[406/467] ✓ 王櫻儒-Card Front.jpg
+[407/467] ✓ 平尾大地-Card Front.jpg
+[408/467] ✓ 游尚傑-Card Front.jpg
+[409/467] ✓ 林鴻昌-Card Front.jpg
+[410/467] ✓ 清水邦彦-Card Front.jpg
+[411/467] ✓ 王韶華-Card Front.jpg
+[412/467] ✓ 洪偉仁-Card Front.jpg
+[413/467] ✓ 王碩治-Card Front.jpg
+[414/467] ✓ 潘啟明-Card Front.jpg
+[415/467] ✓ 王華勇-Card Front.jpg
+[416/467] ✓ 櫻井櫻井 悟郎-Card Front.jpg
+[417/467] ✓ 康明淵-Card Front.jpg
+[418/467] ✓ 林詩媚-Card Front.jpg
+[419/467] ✓ 林若渝-Card Front.jpg
+[420/467] ✓ 王玉玲-Card Front.jpg
+  ── 已處理 420/467，暫停 2 秒...
+[421/467] ✓ 洪仲凱-Card Front.jpg
+[422/467] ✓ 熊雨-Card Front.jpg
+[423/467] ✓ 楊伊嘉-Card Front.jpg
+[424/467] ✓ 岩谷 健司-Card Front.jpg
+[425/467] ✓ 林道通-Card Front.jpg
+[426/467] ✓ 澤田 目成-Card Front.jpg
+[427/467] ✓ 樂以媛-Card Front.jpg
+[428/467] ✓ 庄子尚宏-Card Front.jpg
+[429/467] ✓ 林詠翔-Card Front.jpg
+[430/467] ✓ 熊文匯-Card Front.jpg
+[431/467] ✓ 潘瑋翔-Card Front.jpg
+[432/467] ✓ 江明洋-Card Front.jpg
+[433/467] ✓ 森下惟一-Card Front.jpg
+[434/467] ✓ 柯景懷-Card Front.jpg
+[435/467] ✓ 王仁中-Card Front.jpg
+[436/467] ✓ 池愛隣-Card Front.jpg
+[437/467] ✓ 楊家榮-Card Front.jpg
+[438/467] ✓ 楊思源-Card Front.jpg
+[439/467] ✓ 牛島卓斗-Card Front.jpg
+[440/467] ✓ 林麗珊-Card Front.jpg
+  ── 已處理 440/467，暫停 2 秒...
+[441/467] ✓ 潘定一-Card Front.jpg
+[442/467] ✓ 梅澤 亮. Ryo Umezawa-Card Front.jpg
+[443/467] ✓ 楊維中-Card Front.jpg
+[444/467] ✓ 物部慶幸-Card Front.jpg
+[445/467] ✓ 山下真由-Card Front.jpg
+[446/467] ✓ 江旻璟-Card Front.jpg
+[447/467] ✓ 尾原 瑠南-Card Front.jpg
+[448/467] ✓ 岸本優子-Card Front.jpg
+[449/467] ✓ 游國忠-Card Front.jpg
+[450/467] ✓ 牀敬倫博士-Card Front.jpg
+[451/467] ✓ 歐哲佑-Card Front.jpg
+[452/467] ✓ 王俊陽-Card Front.jpg
+[453/467] ✓ 沈怡君-Card Front.jpg
+[454/467] ✓ 楊涵婕-Card Front.jpg
+[455/467] ✓ 沈祖望-Card Front.jpg
+[456/467] ✓ 山本 吉秀-Card Front.jpg
+[457/467] ✓ 洪嘉鎂-Card Front.jpg
+[458/467] ✓ 熊谷孝幸-Card Front.jpg
+[459/467] ✓ 洪玉英-Card Front.jpg
+[460/467] ✓ 楊易航-Card Front.jpg
+  ── 已處理 460/467，暫停 2 秒...
+[461/467] ✓ 江衛台-Card Front.jpg
+[462/467] ✓ 柯雅雯-Card Front.jpg
+[463/467] ✓ 林詩芸-Card Front.jpg
+[464/467] ✓ 楊尚叡-Card Front.jpg
+[465/467] ✓ 江宗翰-Card Front.jpg
+[466/467] ✓ 滕涵菁-Card Front.jpg
+[467/467] ✓ 歐陽暐婷-Card Front.jpg
+
+完成！✓ 成功 467  ✗ 失敗 0

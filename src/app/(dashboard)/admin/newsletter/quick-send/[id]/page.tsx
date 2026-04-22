@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
@@ -85,11 +85,8 @@ export default function QuickSendPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  // Update iframe srcdoc when campaign changes
-  useEffect(() => {
-    if (!previewRef.current || !campaign?.content_html) return
-    previewRef.current.srcdoc = campaign.content_html
-  }, [campaign?.content_html])
+  // Memoized preview HTML — React srcDoc prop re-renders iframe when content changes
+  const previewHtml = useMemo(() => campaign?.content_html ?? '', [campaign?.content_html])
 
   function toggleList(lid: string) {
     setListIds((prev) => (prev.includes(lid) ? prev.filter((x) => x !== lid) : [...prev, lid]))
@@ -266,6 +263,7 @@ export default function QuickSendPage() {
                 ref={previewRef}
                 title="preview"
                 className="w-full h-[600px] bg-white"
+                srcDoc={previewHtml}
                 sandbox="allow-same-origin allow-popups allow-modals"
               />
             </div>
