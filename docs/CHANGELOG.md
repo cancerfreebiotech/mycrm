@@ -1,5 +1,46 @@
 # CHANGELOG
 
+## v3.10.0 — feat(newsletter): CSV 匯入 + quick-send + RSS + PDF（2026-04-22）
+
+Po 提供 497 筆 SendGrid 4 月中文未寄名單 + 4 月內容 docx/PDF，要求打通整條 newsletter pipeline：CSV → 收件人 → 電子報編輯 → 寄送 → PDF 匯出 → RSS 給 Substack 抓草稿。
+
+### 改動
+
+**DB migrations**
+- `newsletter_campaigns_list_ids_published_slug`: 加 `list_ids uuid[]` / `published_at timestamptz` / `slug text` + 兩個 partial index
+- `reverse_link_subscriber_to_contact`: 新 trigger，當 `newsletter_subscribers` INSERT / email update 時自動連到既有 contact（補既有 forward trigger 缺的反向）
+
+**Data**
+- 新 list `2604-zh-unsent` (2026-04 中文未寄名單)
+- Import 497 subscribers from CSV (`scripts/import-newsletter-subscribers.mjs` 有 fetch failed 問題，改用 `/tmp/import-direct.mjs` with chunked 50 batches)
+- Backfill 194/497 連到既有 contacts (剩 303 是純 subscriber)
+- 新 campaign `5491d2a2-3a2b-4369-8261-bada98254061` `2026-04-zh-tw` (從 `newsletter_tone_samples` 撈 HTML，status=draft)
+
+**APIs**
+- `/api/newsletter/campaigns/[id]` GET / PATCH — 讀/改 campaign
+- `/api/newsletter/campaigns/[id]/send` POST — via SendGrid personalizations (1000/chunk)，寫 interaction_logs with `send_method='sendgrid'` (不污染 last_activity)，更新 sent_at/sent_count/status；支援 `testOnly + testEmail`
+- `/api/newsletter/campaigns/[id]/publish` POST — flip `published_at`
+- `/api/newsletter/feed.xml` GET — 公開 RSS 2.0 feed，Substack RSS importer 用；只輸出 `published_at IS NOT NULL` 的 campaigns
+
+**Pages**
+- `/admin/newsletter/campaigns` — 列表頁，連到 quick-send
+- `/admin/newsletter/quick-send/[id]` — 編輯主旨/預覽文字/收件名單、HTML iframe preview、「測試寄送到單一 email」、「正式寄送」、「發布到 RSS」、「匯出 PDF」(`window.print` on preview iframe)
+- `/newsletter/view/[slug]` — 公開 view page，Substack RSS `<link>` 指這；用 slug 或 id 都能開
+
+**Other**
+- `package.json` 3.9.0 → 3.10.0
+
+### Substack pipeline 操作方式
+1. mycrm `/admin/newsletter/quick-send/[id]` 做好內容 → 按「發布到 RSS」
+2. Substack Settings → Import from RSS → URL 填 `https://crm.cancerfree.io/api/newsletter/feed.xml`
+3. Substack 定期 poll，抓到新 item 自動建草稿
+4. Po 在 Substack 登入確認排版、按 publish
+
+### 還沒做（下輪）
+- AI 自動寫稿：`/api/ai-newsletter-compose` 接 Gemini + `newsletter_tone_samples` few-shot
+- 老 wizard `/admin/newsletter` 的 `tag_ids → list_ids` 遷移（wizard 11 處 UI 要改；quick-send 先行不阻塞）
+- unlinked subscribers 手動配對介面 `/admin/newsletter/unlinked`
+
 ## v3.9.0 — feat(contacts): 建立者篩選（2026-04-22）
 
 Po 要求聯絡人列表能依「誰建立的」篩選。
