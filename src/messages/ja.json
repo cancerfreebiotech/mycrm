@@ -254,6 +254,7 @@
     "logPhotoNote": "【集合写真メモ】{content}",
     "fileTooLarge5mb": "「{name}」は5MBの上限を超えています",
     "logSentEmail": "メール送信：{subject}",
+    "hunterFoundEmail": "📧 Hunter が email を自動検出：{email}",
     "confirmMergeContact": "「{source}」を「{target}」に統合しますか？\n\n統合元の連絡先は削除され、元に戻せません。",
     "aiRecentInteractionPrefix": "最近のやり取り：",
     "recognitionFailed": "認識に失敗しました",

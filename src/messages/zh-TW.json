@@ -254,6 +254,7 @@
     "logPhotoNote": "【合照附註】{content}",
     "fileTooLarge5mb": "「{name}」超過 5MB 限制",
     "logSentEmail": "寄送郵件：{subject}",
+    "hunterFoundEmail": "📧 Hunter 已自動查到 email：{email}",
     "confirmMergeContact": "確定要將「{source}」合併進「{target}」？\n\n來源聯絡人將被刪除，此操作無法復原。",
     "aiRecentInteractionPrefix": "最近互動：",
     "recognitionFailed": "辨識失敗",

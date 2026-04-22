@@ -1,5 +1,56 @@
 # CHANGELOG
 
+## v3.8.1 — fix(hunter): 回報三態 + /p 帶公司 + 編輯重試 + help 更新（2026-04-22）
+
+v3.8.0 送出後 Po 實測：/p 戴建丞 建立後 bot 完全靜默（像沒動作）、且真實情況下 Hunter 對純中文名 + 政府單位基本查不到。本版處理三個具體 gap。
+
+### A. Hunter 查詢結果一律回報（Telegram 不再沉默）
+`enrichContactEmail` 改回傳 `{ status, email }` 六態：
+- `found` — 查到並寫回
+- `not_found` — 查了 Hunter 但無結果（cron 30 天後重試）
+- `skipped_cjk_name` — 純 CJK 名 Hunter 參數驗證會直接 400，未送，**不記 hunter_searched_at**（未來補英文名即可重試）
+- `skipped_no_company` — Hunter 沒 company 不能查，**不記**
+- `skipped_no_key` — 系統未設 API key
+- `error` — 網路/API 錯誤（記 searched_at、30 天重試）
+
+三語 `enrichStatusMessage()` 把 status 翻成使用者可讀訊息。Bot `/a` / `/li` / `/p` 建立新聯絡人三處都呼叫，**不管查到沒都發一則狀態訊息**。Web 新增/批次上傳仍是 fire-and-forget（背景），編輯頁特殊情況會 alert。
+
+### B. `/p 姓名 | 公司` 帶公司語法
+Bot 新指令語法（向下相容）：
+- `/p 戴建丞` — 現有行為
+- `/p 戴建丞 | 經濟部` — 找不到時建立新聯絡人**同時填入公司**
+- `/p 戴建丞, 經濟部` — 逗號分隔也接受
+
+callback payload 從 `base64(name)` 改 `base64(JSON {n, c})`，callback handler 相容舊格式。bot-messages.ts 三語 help 同步更新。
+
+### C. 編輯聯絡人自動重試
+`contacts/[id]` 編輯儲存時：若 `email` 仍空 + (`company` 從空變填 OR `name_en` 從空變填)：
+- 自動把 `hunter_searched_at` 設 null
+- Fire `/api/hunter/enrich` 背景查
+- 查到的話 alert 顯示新 email 並 reload
+
+意味著「名片 OCR 沒抓到公司 → 事後手動編輯補公司」也能觸發 Hunter 第二次查詢。
+
+### 改動
+- `src/lib/hunter.ts`：`EnrichStatus` / `EnrichResult` 型別 + `enrichStatusMessage(r, lang)` 三語訊息；`splitName` 對 CJK-only 名直接 return empty（防 Hunter 400）
+- `src/app/api/bot/route.ts`：
+  - `/a` 名片存檔後 Hunter 段改 call shared helper、一律 `sendMessage(status)`
+  - `/li` 大段 inline Hunter 碼 refactor 為 10 行 shared helper 呼叫
+  - `/p 姓名` 加 `| 公司` 語法解析、callback payload 改 JSON
+  - `create_p_*` handler 解析新 JSON 並帶 company insert
+- `src/app/(dashboard)/contacts/[id]/page.tsx`：`saveEdit()` 加 Hunter 重試邏輯
+- `src/app/api/hunter/enrich/route.ts`：回傳完整 `EnrichResult`
+- `src/lib/bot-messages.ts` 三語：`/p` help 句更新為 `[姓名] 或 /p 姓名 | 公司`
+- `src/messages/{zh-TW,en,ja}.json`：`contacts.hunterFoundEmail` toast key
+- `docs/features/contacts.{md,en.md,ja.md}` 三語：Hunter 章節擴充（bot 三態訊息、編輯重試、CJK 限制說明）
+- `package.json` 3.8.0 → 3.8.1
+
+### 戴建丞現況處理
+- DB 手動 reset `hunter_searched_at = null`
+- 現狀 `name='戴建丞'`, `name_en=null`, `company='經濟部'`, `email=null`
+- Hunter 目前仍不會查（CJK-only name）→ 建議 Po 編輯補上 `name_en`（例如「Chien-Cheng Tai」）→ 編輯儲存會自動重試
+- 但政府單位 Hunter 命中率極低，實際能不能查到靠運氣
+
 ## v3.8.0 — feat(hunter): 全新建流程自動查 email + 每日 cron 清舊帳（2026-04-22）
 
 Po 反映：原本 Hunter.io Email Finder 只有 `/li` LinkedIn 辨識時會自動查，其他新建路徑（`/a` 名片、批次上傳、手動新增、`/p 姓名` 找不到）都沒用上，舊 800 筆沒 email 的聯絡人也沒排程清理。重點是 Hunter Free tier 50/mo 但「找不到不扣 credit」，所以可以積極批次清。

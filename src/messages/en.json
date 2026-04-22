@@ -254,6 +254,7 @@
     "logPhotoNote": "[Group Photo Note] {content}",
     "fileTooLarge5mb": "\"{name}\" exceeds the 5MB limit",
     "logSentEmail": "Sent email: {subject}",
+    "hunterFoundEmail": "📧 Hunter auto-found email: {email}",
     "confirmMergeContact": "Merge \"{source}\" into \"{target}\"?\n\nThe source contact will be deleted; this cannot be undone.",
     "aiRecentInteractionPrefix": "Recent interaction: ",
     "recognitionFailed": "Recognition failed",

@@ -147,9 +147,22 @@ When `/email/compose` is switched to SendGrid, a purple badge appears:
 ### Triggers
 - Bot `/a` namecard OCR finishes with no email
 - Bot `/li` LinkedIn OCR finishes with no email
-- Bot `/p name` not found → create minimal contact (name only) → query
+- Bot `/p name` or `/p name | company` not found → tap "✅ Create new contact" → query
 - Web batch upload, each inserted row with empty email
 - Web manual create `/contacts/new`, email field left blank
+- **Web contact edit**: if email is still empty after save but `company` or `name_en` was newly added → `hunter_searched_at` resets and a fresh lookup fires
+
+### Bot feedback
+The bot always replies with the Hunter outcome (so you know the system tried):
+- 📧 `Hunter auto-found email: X`
+- 🔍 `Hunter queried, no email found (will retry in 30 days via cron)`
+- ℹ Insufficient data — explains whether to add English name or company; cron will retry once filled
+- ⚠ API error — auto-retry in 30 days
+
+### Hunter's hard requirements
+- **Hunter does not accept CJK-only names**: must have Latin first_name + last_name
+- **Company is required**: Hunter Email Finder uses it to infer email format
+- For Chinese contacts, fill `name_en` (e.g., "戴建丞" → "Chien-Cheng Tai") + company → next cron retries automatically
 
 ### Daily batch (cron)
 - Runs at **02:00 Asia/Taipei** daily via `/api/hunter/cron`

@@ -551,9 +551,40 @@ export default function ContactDetailPage() {
     try {
       const payload = Object.fromEntries(
         Object.entries(editForm).map(([k, v]) => [k, v.trim() || null])
-      )
-      await supabase.from('contacts').update(payload).eq('id', id)
+      ) as Record<string, string | null>
+
+      // Detect whether this edit added info that could unlock Hunter lookup
+      // (company was empty → now filled, OR name_en was empty → now filled),
+      // while email is still empty. If so, reset hunter_searched_at so the
+      // cron or next enrich call will retry with the new data.
+      const companyAdded = !contact?.company && !!payload.company
+      const nameEnAdded  = !contact?.name_en && !!payload.name_en
+      const emailStillEmpty = !payload.email && !contact?.email
+      const shouldRetry = emailStillEmpty && (companyAdded || nameEnAdded)
+
+      if (shouldRetry) {
+        await supabase.from('contacts').update({ ...payload, hunter_searched_at: null }).eq('id', id)
+      } else {
+        await supabase.from('contacts').update(payload).eq('id', id)
+      }
       setEditOpen(false)
+
+      // Fire Hunter enrich in background if conditions met — toast on result
+      if (shouldRetry) {
+        fetch('/api/hunter/enrich', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contactId: id }),
+        }).then(async (res) => {
+          if (!res.ok) return
+          const data = await res.json() as { status?: string; email?: string | null }
+          if (data.status === 'found' && data.email) {
+            alert(t('hunterFoundEmail', { email: data.email }))
+            load()
+          }
+        }).catch(() => { /* non-fatal */ })
+      }
+
       load()
     } finally { setEditSaving(false) }
   }

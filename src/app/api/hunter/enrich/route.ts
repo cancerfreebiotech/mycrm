@@ -29,13 +29,13 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (!contact) return NextResponse.json({ error: 'contact not found' }, { status: 404 })
-  if (contact.email) return NextResponse.json({ email: contact.email, alreadyHadEmail: true })
+  if (contact.email) return NextResponse.json({ status: 'already_had_email', email: contact.email })
 
-  const email = await enrichContactEmail(
+  const result = await enrichContactEmail(
     contact.id as string,
     contact.name_en as string | null,
     contact.name as string | null,
     contact.company as string | null,
   )
-  return NextResponse.json({ email })
+  return NextResponse.json(result)
 }

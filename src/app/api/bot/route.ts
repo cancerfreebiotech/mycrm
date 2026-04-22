@@ -1634,16 +1634,25 @@ async function handleText(
     return
   }
 
-  // ── /p name — add personal photo to specified contact ────────────────────
+  // ── /p name [| company] — add personal photo to specified contact ─────────
+  // Syntax:
+  //   /p 戴建丞            → search "戴建丞"; on miss offer to create
+  //   /p 戴建丞 | 經濟部    → search "戴建丞"; on miss offer to create w/ company
+  //   /p 戴建丞, 經濟部     → same (comma separator also accepted)
   const addPhotoMatch = cmd.match(/^\/p\s+(.+)/)
   if (addPhotoMatch) {
-    const query = addPhotoMatch[1].trim()
-    const contacts = await searchContacts(query)
+    const raw = addPhotoMatch[1].trim()
+    const sepMatch = raw.match(/^(.+?)\s*[|,]\s*(.+)$/)
+    const queryName = (sepMatch ? sepMatch[1] : raw).trim()
+    const queryCompany = sepMatch ? sepMatch[2].trim() : ''
+    const contacts = await searchContacts(queryName)
     if (contacts.length === 0) {
-      await sendMessage(chatId, `找不到聯絡人「${query}」，要建立新聯絡人嗎？`, {
+      const payload = JSON.stringify({ n: queryName, c: queryCompany })
+      const createLabel = queryCompany ? `✅ 建立「${queryName} · ${queryCompany}」` : `✅ 建立「${queryName}」`
+      await sendMessage(chatId, `找不到聯絡人「${queryName}」，要建立新聯絡人嗎？`, {
         reply_markup: {
           inline_keyboard: [[
-            { text: `✅ 建立「${query}」`, callback_data: `create_p_${Buffer.from(query).toString('base64')}` },
+            { text: createLabel, callback_data: `create_p_${Buffer.from(payload).toString('base64')}` },
             { text: '❌ 取消', callback_data: 'cancel_p' },
           ]],
         },
@@ -1815,14 +1824,14 @@ export async function POST(req: NextRequest) {
           const currentEmail = (pendingData.email as string | null | undefined) ?? null
           if (!currentEmail) {
             try {
-              const { enrichContactEmail } = await import('@/lib/hunter')
-              const found = await enrichContactEmail(
+              const { enrichContactEmail, enrichStatusMessage } = await import('@/lib/hunter')
+              const r = await enrichContactEmail(
                 inserted.id,
                 (pendingData.name_en as string | null) ?? null,
                 (pendingData.name as string | null) ?? null,
                 (pendingData.company as string | null) ?? null,
               )
-              if (found) await sendMessage(from.id, `📧 已自動查到 email：${found}`)
+              await sendMessage(from.id, enrichStatusMessage(r, 'zh-TW'))
             } catch { /* non-fatal */ }
           }
         }
@@ -2013,15 +2022,27 @@ export async function POST(req: NextRequest) {
         else if (data?.startsWith('create_p_')) {
           const encoded = data.replace('create_p_', '')
           let nameQuery = ''
-          try { nameQuery = Buffer.from(encoded, 'base64').toString('utf-8').trim() } catch { /* noop */ }
+          let companyQuery: string | null = null
+          try {
+            const decoded = Buffer.from(encoded, 'base64').toString('utf-8')
+            if (decoded.startsWith('{')) {
+              const p = JSON.parse(decoded) as { n?: string; c?: string }
+              nameQuery = (p.n ?? '').trim()
+              companyQuery = (p.c ?? '').trim() || null
+            } else {
+              nameQuery = decoded.trim()
+            }
+          } catch { /* noop */ }
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           if (!nameQuery) {
             await sendMessage(from.id, '❌ 建立失敗，請重新輸入 /p 姓名')
           } else {
+            const insertPayload: Record<string, unknown> = { name: nameQuery, created_by: user.id }
+            if (companyQuery) insertPayload.company = companyQuery
             const { data: inserted, error } = await supabase
               .from('contacts')
-              .insert({ name: nameQuery, created_by: user.id })
+              .insert(insertPayload)
               .select('id')
               .single()
             if (error || !inserted) {
@@ -2030,20 +2051,22 @@ export async function POST(req: NextRequest) {
               await supabase.from('interaction_logs').insert({
                 contact_id: inserted.id,
                 type: 'system',
-                content: '透過 Telegram Bot /p 手動建立（僅姓名）',
+                content: companyQuery
+                  ? '透過 Telegram Bot /p 手動建立（姓名 + 公司）'
+                  : '透過 Telegram Bot /p 手動建立（僅姓名）',
                 created_by: user.id,
               })
               await updateLastContact(from.id, inserted.id)
               await setSession(from.id, 'waiting_for_photo', { contact_id: inserted.id, contact_name: nameQuery })
               const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
               const link = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">查看聯絡人頁面</a>` : ''
-              await sendMessage(from.id, `✅ 已建立聯絡人：<b>${nameQuery}</b>${link}\n\n請傳送合照\n\n💡 長按照片 → <b>以檔案傳送</b>，可保留拍攝時間和 GPS 地點`)
+              const displayLine = companyQuery ? `<b>${nameQuery}</b>（${companyQuery}）` : `<b>${nameQuery}</b>`
+              await sendMessage(from.id, `✅ 已建立聯絡人：${displayLine}${link}\n\n請傳送合照\n\n💡 長按照片 → <b>以檔案傳送</b>，可保留拍攝時間和 GPS 地點`)
 
-              // Hunter auto-enrich (no email, has name only)
               try {
-                const { enrichContactEmail } = await import('@/lib/hunter')
-                const found = await enrichContactEmail(inserted.id, null, nameQuery, null)
-                if (found) await sendMessage(from.id, `📧 已自動查到 email：${found}`)
+                const { enrichContactEmail, enrichStatusMessage } = await import('@/lib/hunter')
+                const r = await enrichContactEmail(inserted.id, null, nameQuery, companyQuery)
+                await sendMessage(from.id, enrichStatusMessage(r, 'zh-TW'))
               } catch { /* non-fatal */ }
             }
           }
@@ -2197,27 +2220,14 @@ export async function POST(req: NextRequest) {
               // Hunter.io email enrichment — only if no email was found
               if (!parsed.email) {
                 try {
-                  const { data: hunterSetting } = await supabase
-                    .from('system_settings').select('value').eq('key', 'hunter_api_key').single()
-                  const hunterKey = hunterSetting?.value
-                  if (hunterKey) {
-                    const nameParts = (parsed.name_en || parsed.name || '').trim().split(/\s+/)
-                    const firstName = nameParts[0] ?? ''
-                    const lastName = nameParts.slice(1).join(' ') || ''
-                    const company = parsed.company || ''
-                    const params = new URLSearchParams({ api_key: hunterKey, first_name: firstName })
-                    if (lastName) params.set('last_name', lastName)
-                    if (company) params.set('company', company)
-                    const hunterRes = await fetch(`https://api.hunter.io/v2/email-finder?${params}`)
-                    if (hunterRes.ok) {
-                      const hunterData = await hunterRes.json()
-                      const foundEmail = hunterData?.data?.email as string | undefined
-                      if (foundEmail && foundEmail.includes('@')) {
-                        await supabase.from('contacts').update({ email: foundEmail }).eq('id', inserted.id)
-                        await sendMessage(from.id, `📧 已自動查到 email：${foundEmail}`)
-                      }
-                    }
-                  }
+                  const { enrichContactEmail, enrichStatusMessage } = await import('@/lib/hunter')
+                  const r = await enrichContactEmail(
+                    inserted.id,
+                    parsed.name_en ?? null,
+                    parsed.name ?? null,
+                    parsed.company ?? null,
+                  )
+                  await sendMessage(from.id, enrichStatusMessage(r, 'zh-TW'))
                 } catch {
                   // Hunter.io enrichment failure is non-fatal
                 }
