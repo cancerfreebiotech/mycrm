@@ -40,12 +40,17 @@ export default function CampaignsIndexPage() {
   return (
     <PermissionGate feature="newsletter">
       <div className="p-6 max-w-5xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <Mail size={22} className="text-blue-500" />
-          <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">電子報</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">管理電子報草稿、寄送、發布到 RSS</p>
+        <div className="flex items-center justify-between gap-3 mb-6">
+          <div className="flex items-center gap-3">
+            <Mail size={22} className="text-blue-500" />
+            <div>
+              <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">電子報</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">管理電子報草稿、寄送、發布到 RSS</p>
+            </div>
           </div>
+          <a href="/admin/newsletter" className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+            舊版 Wizard / 訂閱管理 →
+          </a>
         </div>
 
         {loading ? (

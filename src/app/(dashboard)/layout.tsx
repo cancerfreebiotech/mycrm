@@ -120,7 +120,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/admin/templates', label: t('emailTemplates'), icon: Mail },
     { href: '/admin/prompts', label: t('prompts'), icon: ShieldCheck },
     { href: '/admin/countries', label: t('countries'), icon: MapPin },
-    { href: '/admin/newsletter', label: t('newsletter'), icon: Newspaper },
+    { href: '/admin/newsletter/campaigns', label: t('newsletter'), icon: Newspaper },
     { href: '/admin/failed-scans', label: t('failedScans'), icon: ShieldCheck },
     { href: '/admin/duplicates', label: t('duplicates'), icon: ScanSearch },
     { href: '/admin/camcard', label: t('camcard'), icon: FolderInput },

@@ -1,5 +1,41 @@
 # CHANGELOG
 
+## v3.11.0 — feat(newsletter): HTML 編輯器 + unsubscribe 替換 + 圖示搬家 + nav 整合（2026-04-23）
+
+Po 預覽試用後提三個問題：(1) 沒地方編輯 HTML、(2) 裡面的連結要檢查、(3) unsubscribe 要導到 mycrm 的 `/unsubscribe` 頁。發現還有舊 wizard 和新 Campaigns 兩頁沒串起來。
+
+### 1. Quick-Send 加 HTML 編輯器
+- 預覽右上角「編輯 HTML」切換按鈕
+- 編輯模式顯示 `<textarea>` 原始 HTML（monospace、600px 高、spellCheck off）
+- 編完回預覽自動 live preview；按「儲存草稿」持久化到 DB（`content_html` 欄位）
+- 改 `/api/newsletter/campaigns/[id]` PATCH 也支援 `content_html` 欄位
+
+### 2. Unsubscribe 連結：SendGrid substitutions 接 mycrm
+電子報 HTML 帶 listmonk 留下的 `{{{unsubscribe}}}` 和 `{{{unsubscribe_preferences}}}` 佔位符。send 路由每個收件人 sign 一個 JWT token（HMAC-SHA256，365 天過期、payload `{email, campaignId, exp}`），組成 `https://crm.cancerfree.io/unsubscribe?token=<jwt>`，透過 SendGrid personalizations 的 `substitutions` 欄位替換 — 每位收件人拿到屬於自己的 token。點下去會走現有的 `/unsubscribe` 頁 + `/api/newsletter/unsubscribe` API（既有驗 HMAC 邏輯）。
+
+### 3. 社群圖示 CDN 搬家
+`assets.mlcdn.com`（MailerLite CDN）的 3 張 icon（facebook / linkedin / website）也搬到 Supabase Storage `newsletter-assets/2026-04/`。`scripts/migrate-newsletter-images.mjs` 現支援 mlcdn + listmonk 兩種 pattern，可擴充。電子報現在完全不依賴外部 CDN。
+
+### 4. Nav 串起兩頁
+- Sidebar 「電子報」entry 從 `/admin/newsletter` 改指 `/admin/newsletter/campaigns`（新流程）
+- 舊 `/admin/newsletter` wizard 頂部加黃色 banner「⚠ 舊版 wizard，建議用新版 Campaigns 流程」+ 按鈕「前往 Campaigns →」
+- 新 `/admin/newsletter/campaigns` 右上角加小字連結「舊版 Wizard / 訂閱管理 →」備查
+
+### 還有待 Po 確認的連結
+HTML 仍有兩處不確定：
+- `href="#"`（社群 icon 的 facebook/linkedin/website 3 處）— CancerFree 的品牌社群網址沒填，Po 需要提供我才能改
+- `https://preview--linky-news-hub.lovable.app/` — 看起來像 lovable.dev 的預覽 URL，可能是還沒上線的「新聞連結」dev URL，Po 需確認要替換成正式網址還是移除
+
+### 改動
+- `src/app/(dashboard)/admin/newsletter/quick-send/[id]/page.tsx`：加 `contentHtml` state、showEditor toggle、編輯模式 textarea、save 包 content_html
+- `src/app/api/newsletter/campaigns/[id]/send/route.ts`：import crypto、`signUnsubToken()`、personalizations 加 substitutions
+- `scripts/migrate-newsletter-images.mjs`：URL pattern 擴充為 listmonk + mlcdn
+- `src/app/(dashboard)/layout.tsx`：sidebar newsletter entry 指向 `/campaigns`
+- `src/app/(dashboard)/admin/newsletter/page.tsx`：舊 wizard 頂部 banner
+- `src/app/(dashboard)/admin/newsletter/campaigns/page.tsx`：右上角導引連結
+- 資料：April 中文 campaign 的 3 張 mlcdn 圖示已遷移到 Storage
+- `package.json` 3.10.2 → 3.11.0
+
 ## v3.10.2 — fix(ocr): name_local 日文/中文名片不再誤判「無法識別姓名」（2026-04-23）
 
 Po 在 Telegram 新增日本人名片回報「❌ Recognition failed: could not identify name」，但到 Portkey dashboard 看 Gemini 其實有正常回應。實際回傳 JSON：

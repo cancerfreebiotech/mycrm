@@ -177,6 +177,11 @@ export default function NewsletterPage() {
   return (
     <PermissionGate feature="newsletter">
     <div className="p-6 max-w-5xl mx-auto">
+      {/* Legacy wizard notice — new Campaigns flow supersedes this */}
+      <div className="mb-4 px-4 py-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-sm text-amber-800 dark:text-amber-300 flex items-center justify-between gap-3">
+        <span>⚠ 這是舊版 wizard（使用 tag_ids）。新版電子報寄送流程已改到 Campaigns 列表 + Quick-Send，建議使用。</span>
+        <a href="/admin/newsletter/campaigns" className="shrink-0 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">前往 Campaigns →</a>
+      </div>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('pageTitle')}</h1>

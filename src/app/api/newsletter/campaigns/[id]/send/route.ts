@@ -1,7 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { createHmac } from 'crypto'
 
 const SG_SEND_URL = 'https://api.sendgrid.com/v3/mail/send'
+
+// Sign a JWT-like token for per-recipient unsubscribe link. Verified by
+// /api/newsletter/unsubscribe which shares the same secret + algorithm.
+function signUnsubToken(email: string, campaignId: string): string {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url')
+  const payload = Buffer.from(
+    JSON.stringify({ email, campaignId, exp: Math.floor(Date.now() / 1000) + 365 * 24 * 3600 })
+  ).toString('base64url')
+  const secret = process.env.NEXTAUTH_SECRET ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
+  const sig = createHmac('sha256', secret).update(`${header}.${payload}`).digest('base64url')
+  return `${header}.${payload}.${sig}`
+}
 
 interface Subscriber {
   id: string
@@ -84,11 +97,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   let sent = 0
   const errors: string[] = []
 
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.cancerfree.io'
   for (let i = 0; i < recipients.length; i += CHUNK) {
     const slice = recipients.slice(i, i + CHUNK)
     const personalizations = slice.map((r) => {
       const name = [r.first_name, r.last_name].filter(Boolean).join(' ').trim()
-      return { to: [name ? { email: r.email, name } : { email: r.email }] }
+      const token = signUnsubToken(r.email, campaignId)
+      const unsubUrl = `${baseUrl}/unsubscribe?token=${token}`
+      return {
+        to: [name ? { email: r.email, name } : { email: r.email }],
+        // SendGrid per-personalization substitutions: keys must match exactly
+        // in the body/subject. Newsletter HTML from listmonk uses {{{unsubscribe}}}
+        // and {{{unsubscribe_preferences}}} — map both to our mycrm unsubscribe URL.
+        substitutions: {
+          '{{{unsubscribe}}}': unsubUrl,
+          '{{{unsubscribe_preferences}}}': unsubUrl,
+        },
+      }
     })
     const payload = {
       from: { email: fromEmail, name: fromName },

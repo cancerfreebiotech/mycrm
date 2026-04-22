@@ -50,6 +50,8 @@ export default function QuickSendPage() {
   const [subject, setSubject] = useState('')
   const [previewText, setPreviewText] = useState('')
   const [listIds, setListIds] = useState<string[]>([])
+  const [contentHtml, setContentHtml] = useState('')
+  const [showEditor, setShowEditor] = useState(false)
 
   useEffect(() => {
     (async () => {
@@ -67,6 +69,7 @@ export default function QuickSendPage() {
       setSubject(c.subject ?? '')
       setPreviewText(c.preview_text ?? '')
       setListIds(c.list_ids ?? [])
+      setContentHtml(c.content_html ?? '')
 
       // Member counts per list
       const listsArr = listData ?? []
@@ -86,7 +89,7 @@ export default function QuickSendPage() {
   }, [id])
 
   // Memoized preview HTML — React srcDoc prop re-renders iframe when content changes
-  const previewHtml = useMemo(() => campaign?.content_html ?? '', [campaign?.content_html])
+  const previewHtml = useMemo(() => contentHtml, [contentHtml])
 
   function toggleList(lid: string) {
     setListIds((prev) => (prev.includes(lid) ? prev.filter((x) => x !== lid) : [...prev, lid]))
@@ -99,11 +102,11 @@ export default function QuickSendPage() {
       const res = await fetch(`/api/newsletter/campaigns/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject, preview_text: previewText, list_ids: listIds }),
+        body: JSON.stringify({ subject, preview_text: previewText, list_ids: listIds, content_html: contentHtml }),
       })
       if (!res.ok) throw new Error((await res.json()).error ?? 'save failed')
       setBanner({ kind: 'ok', msg: '已儲存' })
-      setCampaign((prev) => prev ? { ...prev, subject, preview_text: previewText, list_ids: listIds } : prev)
+      setCampaign((prev) => prev ? { ...prev, subject, preview_text: previewText, list_ids: listIds, content_html: contentHtml } : prev)
     } catch (e) {
       setBanner({ kind: 'err', msg: e instanceof Error ? e.message : '儲存失敗' })
     } finally { setSaving(false) }
@@ -256,16 +259,33 @@ export default function QuickSendPage() {
             </div>
 
             <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
-              <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2 text-xs text-gray-500">
-                <Eye size={12} /> 預覽
+              <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2 text-xs text-gray-500">
+                <div className="flex items-center gap-2">
+                  <Eye size={12} /> {showEditor ? '編輯 HTML（編完按儲存）' : '預覽'}
+                </div>
+                <button
+                  onClick={() => setShowEditor((v) => !v)}
+                  className="text-xs px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  {showEditor ? '回預覽' : '編輯 HTML'}
+                </button>
               </div>
-              <iframe
-                ref={previewRef}
-                title="preview"
-                className="w-full h-[600px] bg-white"
-                srcDoc={previewHtml}
-                sandbox="allow-same-origin allow-popups allow-modals"
-              />
+              {showEditor ? (
+                <textarea
+                  value={contentHtml}
+                  onChange={(e) => setContentHtml(e.target.value)}
+                  spellCheck={false}
+                  className="w-full h-[600px] p-3 text-xs font-mono bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 border-0 focus:outline-none resize-none"
+                />
+              ) : (
+                <iframe
+                  ref={previewRef}
+                  title="preview"
+                  className="w-full h-[600px] bg-white"
+                  srcDoc={previewHtml}
+                  sandbox="allow-same-origin allow-popups allow-modals"
+                />
+              )}
             </div>
           </div>
 

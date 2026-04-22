@@ -100,9 +100,12 @@ async function main() {
   const campaign = await fetchCampaign()
   const html = campaign.content_html
 
-  // Extract all listmonk URLs (dedupe)
-  const re = /https:\/\/listmonk\.avatarmedicine\.xyz\/uploads\/[^"'\s<>]+/g
-  const urls = [...new Set(html.match(re) ?? [])]
+  // Extract all external CDN URLs we want to migrate (listmonk + mlcdn)
+  const patterns = [
+    /https:\/\/listmonk\.avatarmedicine\.xyz\/uploads\/[^"'\s<>]+/g,
+    /https:\/\/assets\.mlcdn\.com\/[^"'\s<>]+/g,
+  ]
+  const urls = [...new Set(patterns.flatMap((re) => html.match(re) ?? []))]
   console.log(`Found ${urls.length} listmonk URLs`)
 
   const urlMap = {}
