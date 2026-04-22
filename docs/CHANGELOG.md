@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## v3.10.2 — fix(ocr): name_local 日文/中文名片不再誤判「無法識別姓名」（2026-04-23）
+
+Po 在 Telegram 新增日本人名片回報「❌ Recognition failed: could not identify name」，但到 Portkey dashboard 看 Gemini 其實有正常回應。實際回傳 JSON：
+```
+{"name":"","name_en":"","name_local":"藤崎 啓司",
+ "company":"千葉県商工労働部 企業立地課", ...}
+```
+
+Gemini 把日文姓名放在 `name_local`（漢字本地欄位），但 bot 名片 /a 流程和 camcard 管理員確認流程的 fallback 只做 `name → name_en`，漏了 `name_local` → 整張卡被丟進 `failed_scans`。
+
+### Fix
+- `src/app/api/bot/route.ts` L749：fallback 鏈補第三階 `name_local`
+- `src/app/api/camcard/[id]/confirm/route.ts` L89-90：同步補 `name_local` + `company_local`
+
+LinkedIn `/li` 路徑的 prompt 早就把中文/日文漢字放在 `name` 欄位本身，不需此修復。
+
+### 改動
+- bot/route.ts 一行 fallback
+- camcard confirm/route.ts 兩行 fallback（name + company）
+- `package.json` 3.10.1 → 3.10.2
+
 ## v3.10.1 — fix(newsletter): preview 空白 + 圖片搬家到 Storage + docs（2026-04-23）
 
 Po 實測回報 3 件事：(1) quick-send 頁的 preview iframe 一片空白、(2) 測試信收到但沒圖片、(3) 要寫使用者文件。

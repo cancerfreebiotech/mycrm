@@ -743,8 +743,11 @@ async function handlePhoto(
       }
     }
 
-    // Name fallback: use English name if no local language name
+    // Name fallback chain: name → name_en → name_local
+    // Japanese/Korean cards often have ONLY name_local populated (kanji/hangul),
+    // while name and name_en stay empty. Accept any of them.
     if (!cardData.name && cardData.name_en) cardData.name = cardData.name_en
+    if (!cardData.name && cardData.name_local) cardData.name = cardData.name_local
 
     // If no name detected at all, save as failed scan and notify user
     if (!cardData.name) {
