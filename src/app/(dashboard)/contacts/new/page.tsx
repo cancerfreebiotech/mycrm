@@ -356,6 +356,15 @@ export default function NewContactPage() {
         created_by: profile.id,
       })
 
+      // Hunter auto-enrich when user left email blank (fire-and-forget, non-fatal)
+      if (!payload.email) {
+        fetch('/api/hunter/enrich', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contactId: inserted.id }),
+        }).catch(() => { /* ignore */ })
+      }
+
       router.push(`/contacts/${inserted.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : t('saveFailed'))

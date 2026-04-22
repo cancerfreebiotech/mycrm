@@ -1,4 +1,8 @@
 {
-  "crons": []
+  "crons": [
+    {
+      "path": "/api/hunter/cron",
+      "schedule": "0 18 * * *"
+    }
+  ]
 }
-

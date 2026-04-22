@@ -204,6 +204,14 @@ export default function BatchUploadPage() {
           await supabase.from('contact_cards').insert({ contact_id: inserted.id, card_img_url: row.imgUrl, storage_path: row.storagePath, label: tcnt('legacyCardFront') })
         }
         await supabase.from('interaction_logs').insert({ contact_id: inserted.id, type: 'system', content: '透過批次上傳新增名片', created_by: userId })
+        // Hunter auto-enrich when OCR yielded no email (non-fatal)
+        if (!row.email) {
+          fetch('/api/hunter/enrich', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contactId: inserted.id }),
+          }).catch(() => { /* ignore */ })
+        }
         saved++
       } else {
         skipped++

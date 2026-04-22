@@ -1640,7 +1640,14 @@ async function handleText(
     const query = addPhotoMatch[1].trim()
     const contacts = await searchContacts(query)
     if (contacts.length === 0) {
-      await sendMessage(chatId, `找不到聯絡人「${query}」`)
+      await sendMessage(chatId, `找不到聯絡人「${query}」，要建立新聯絡人嗎？`, {
+        reply_markup: {
+          inline_keyboard: [[
+            { text: `✅ 建立「${query}」`, callback_data: `create_p_${Buffer.from(query).toString('base64')}` },
+            { text: '❌ 取消', callback_data: 'cancel_p' },
+          ]],
+        },
+      })
     } else if (contacts.length === 1) {
       await setSession(fromId, 'waiting_for_photo', { contact_id: contacts[0].id, contact_name: contacts[0].name })
       await sendMessage(chatId, `找到：${contacts[0].name}\n\n請傳送合照\n\n💡 長按照片 → <b>以檔案傳送</b>，可保留拍攝時間和 GPS 地點`)
@@ -1803,6 +1810,21 @@ export async function POST(req: NextRequest) {
           const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
           const contactLink = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">查看聯絡人頁面</a>` : ''
           await sendMessage(from.id, `✅ 已成功存檔！${contactLink}`)
+
+          // Hunter.io auto-enrich when namecard OCR yielded no email
+          const currentEmail = (pendingData.email as string | null | undefined) ?? null
+          if (!currentEmail) {
+            try {
+              const { enrichContactEmail } = await import('@/lib/hunter')
+              const found = await enrichContactEmail(
+                inserted.id,
+                (pendingData.name_en as string | null) ?? null,
+                (pendingData.name as string | null) ?? null,
+                (pendingData.company as string | null) ?? null,
+              )
+              if (found) await sendMessage(from.id, `📧 已自動查到 email：${found}`)
+            } catch { /* non-fatal */ }
+          }
         }
 
         // ── Cancel card ───────────────────────────────────────────────────────
@@ -1985,6 +2007,53 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await applyCardDiff(from.id, from.id, contactId, false)
+        }
+
+        // ── /p name not found → create minimal contact ────────────────────────
+        else if (data?.startsWith('create_p_')) {
+          const encoded = data.replace('create_p_', '')
+          let nameQuery = ''
+          try { nameQuery = Buffer.from(encoded, 'base64').toString('utf-8').trim() } catch { /* noop */ }
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          if (!nameQuery) {
+            await sendMessage(from.id, '❌ 建立失敗，請重新輸入 /p 姓名')
+          } else {
+            const { data: inserted, error } = await supabase
+              .from('contacts')
+              .insert({ name: nameQuery, created_by: user.id })
+              .select('id')
+              .single()
+            if (error || !inserted) {
+              await sendMessage(from.id, `❌ 建立失敗：${error?.message ?? '未知錯誤'}`)
+            } else {
+              await supabase.from('interaction_logs').insert({
+                contact_id: inserted.id,
+                type: 'system',
+                content: '透過 Telegram Bot /p 手動建立（僅姓名）',
+                created_by: user.id,
+              })
+              await updateLastContact(from.id, inserted.id)
+              await setSession(from.id, 'waiting_for_photo', { contact_id: inserted.id, contact_name: nameQuery })
+              const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+              const link = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">查看聯絡人頁面</a>` : ''
+              await sendMessage(from.id, `✅ 已建立聯絡人：<b>${nameQuery}</b>${link}\n\n請傳送合照\n\n💡 長按照片 → <b>以檔案傳送</b>，可保留拍攝時間和 GPS 地點`)
+
+              // Hunter auto-enrich (no email, has name only)
+              try {
+                const { enrichContactEmail } = await import('@/lib/hunter')
+                const found = await enrichContactEmail(inserted.id, null, nameQuery, null)
+                if (found) await sendMessage(from.id, `📧 已自動查到 email：${found}`)
+              } catch { /* non-fatal */ }
+            }
+          }
+        }
+
+        // ── /p name not found, cancel create ──────────────────────────────────
+        else if (data === 'cancel_p') {
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await sendMessage(from.id, '已取消')
         }
 
         // ── Select contact for /p photo ───────────────────────────────────────

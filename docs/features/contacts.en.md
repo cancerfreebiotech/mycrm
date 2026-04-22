@@ -140,6 +140,35 @@ When `/email/compose` is switched to SendGrid, a purple badge appears:
 
 ---
 
+## Hunter.io Email Auto-lookup
+
+**Purpose**: When a new contact has no email (OCR missed it, form left blank), the system quietly queries Hunter.io Email Finder. If found, the email is written to the contact and the user is notified (bot) or silently updated (web).
+
+### Triggers
+- Bot `/a` namecard OCR finishes with no email
+- Bot `/li` LinkedIn OCR finishes with no email
+- Bot `/p name` not found → create minimal contact (name only) → query
+- Web batch upload, each inserted row with empty email
+- Web manual create `/contacts/new`, email field left blank
+
+### Daily batch (cron)
+- Runs at **02:00 Asia/Taipei** daily via `/api/hunter/cron`
+- Processes up to 50 contacts per run (contacts with no email, not searched in 30 days)
+- 800 backlog clears in ~16 days
+- Skips if Hunter account has fewer than 5 searches remaining
+
+### Credit model
+Hunter Free tier = 50 searches/month, but "not found" lookups do NOT consume credit. So wide scans on old contacts (which mostly won't be found) are safe. Live remaining credits shown on `/admin/hunter`.
+
+### Admin page
+`/admin/hunter` still has:
+- Stats (total no-email / never-searched / searched-not-found / searched-this-month)
+- Manual batch trigger (up to 100 contacts/click)
+- API key settings
+- Reset `hunter_searched_at` (for re-running against everyone)
+
+---
+
 ## Field Descriptions
 
 | Field | Description |

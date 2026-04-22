@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## v3.8.0 — feat(hunter): 全新建流程自動查 email + 每日 cron 清舊帳（2026-04-22）
+
+Po 反映：原本 Hunter.io Email Finder 只有 `/li` LinkedIn 辨識時會自動查，其他新建路徑（`/a` 名片、批次上傳、手動新增、`/p 姓名` 找不到）都沒用上，舊 800 筆沒 email 的聯絡人也沒排程清理。重點是 Hunter Free tier 50/mo 但「找不到不扣 credit」，所以可以積極批次清。
+
+### 改動
+- **`src/lib/hunter.ts`（新）**：抽共用模組
+  - `enrichContactEmail(contactId, nameEn, name, company)` — 單查，寫回 email + hunter_searched_at
+  - `runHunterBatch({ maxContacts, cooldownDays, remainingBuffer })` — 批次查，執行前檢查 Hunter 帳號 credits，低於 buffer 就 skip
+  - `getHunterAccount(apiKey)` — 讀 plan / used / available / remaining
+- **新建聯絡人自動查 email 空的四條路徑**：
+  - `/a` 名片 bot 流程 (`route.ts:1805`)：OCR 無 email → fire Hunter → 查到訊息通知
+  - `/p 姓名` 找不到 (`route.ts:1642`)：新增「建立新聯絡人」按鈕流程 → callback `create_p_*` 建 minimal contact → 等照片 + 查 Hunter
+  - 批次上傳 (`batch-upload/page.tsx:201`)：每筆 insert 後 fire-and-forget `/api/hunter/enrich`
+  - 手動新增 (`contacts/new/page.tsx:353`)：submit 無 email → fire-and-forget enrich
+  - `/li` 保留原 inline 邏輯不動（低風險、已經 stable）
+- **`/api/hunter/enrich`（新）**：client-side 新建流程用的包裝 endpoint
+- **`/api/hunter/cron`（新）**：cron route，每天 02:00 TPE/JST 跑 50 筆 backlog
+  - auth 用 `Bearer CRON_SECRET`
+  - credit buffer = 5（Hunter 帳號剩 < 5 searches 就 skip 這次）
+  - 800 筆舊帳約 16 天清完一輪（30 天 cooldown 擋重查）
+- **`vercel.json`**：加 `crons: [{ path: "/api/hunter/cron", schedule: "0 18 * * *" }]`
+- **Vercel env**：新增 `CRON_SECRET`（production + development）。原 `CRON_SECRE`（拼錯 T）保留備查，可後續手動刪
+- **`src/app/api/admin/hunter/route.ts`**：POST 重構為 `runHunterBatch({ maxContacts: 100 })` 一行
+
+### 部署後要做
+1. Vercel dashboard 手動補 `CRON_SECRET` 到 **Preview** 環境（CLI 對 preview all-branches 模式有限制）
+2. 確認舊 `CRON_SECRE` 可以刪除後手動清掉（本次不動避免誤刪還有其他地方在讀）
+
 ## v3.7.1 — refactor(last_activity): 排除所有 SendGrid 寄送（含 ad-hoc 群發）（2026-04-21）
 
 v3.7.0 只用 `campaign_id IS NOT NULL` 過濾，Po 指出其實**不管是否掛 campaign**，只要是 SendGrid 寄的都不該算進 last_activity（因為 SendGrid 典型用途是自動大量發送）。互動紀錄仍照常寫進 DB，只是不影響「誰跟我最近有互動」的排序訊號。
