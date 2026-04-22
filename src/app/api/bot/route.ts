@@ -1647,12 +1647,14 @@ async function handleText(
     const queryCompany = sepMatch ? sepMatch[2].trim() : ''
     const contacts = await searchContacts(queryName)
     if (contacts.length === 0) {
-      const payload = JSON.stringify({ n: queryName, c: queryCompany })
+      // Use session to carry name + company — Telegram callback_data has a
+      // hard 64-byte limit, so we can't embed arbitrary-length strings there.
+      await setSession(fromId, 'confirm_create_p', { name: queryName, company: queryCompany })
       const createLabel = queryCompany ? `✅ 建立「${queryName} · ${queryCompany}」` : `✅ 建立「${queryName}」`
       await sendMessage(chatId, `找不到聯絡人「${queryName}」，要建立新聯絡人嗎？`, {
         reply_markup: {
           inline_keyboard: [[
-            { text: createLabel, callback_data: `create_p_${Buffer.from(payload).toString('base64')}` },
+            { text: createLabel, callback_data: 'confirm_create_p' },
             { text: '❌ 取消', callback_data: 'cancel_p' },
           ]],
         },
@@ -2019,20 +2021,30 @@ export async function POST(req: NextRequest) {
         }
 
         // ── /p name not found → create minimal contact ────────────────────────
-        else if (data?.startsWith('create_p_')) {
-          const encoded = data.replace('create_p_', '')
+        else if (data === 'confirm_create_p' || data?.startsWith('create_p_')) {
+          // Preferred path: read pending name/company from session (unlimited length)
+          // Legacy path (create_p_<base64>): kept for in-flight messages from older
+          // deploys; can be removed after 24h.
           let nameQuery = ''
           let companyQuery: string | null = null
-          try {
-            const decoded = Buffer.from(encoded, 'base64').toString('utf-8')
-            if (decoded.startsWith('{')) {
-              const p = JSON.parse(decoded) as { n?: string; c?: string }
-              nameQuery = (p.n ?? '').trim()
-              companyQuery = (p.c ?? '').trim() || null
-            } else {
-              nameQuery = decoded.trim()
+          if (data === 'confirm_create_p') {
+            const pendingSession = await getSession(from.id)
+            if (pendingSession?.state === 'confirm_create_p') {
+              nameQuery = (pendingSession.context?.name as string | undefined ?? '').trim()
+              companyQuery = ((pendingSession.context?.company as string | undefined ?? '').trim()) || null
             }
-          } catch { /* noop */ }
+          } else if (data?.startsWith('create_p_')) {
+            try {
+              const decoded = Buffer.from(data.replace('create_p_', ''), 'base64').toString('utf-8')
+              if (decoded.startsWith('{')) {
+                const p = JSON.parse(decoded) as { n?: string; c?: string }
+                nameQuery = (p.n ?? '').trim()
+                companyQuery = (p.c ?? '').trim() || null
+              } else {
+                nameQuery = decoded.trim()
+              }
+            } catch { /* noop */ }
+          }
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           if (!nameQuery) {
@@ -2076,6 +2088,7 @@ export async function POST(req: NextRequest) {
         else if (data === 'cancel_p') {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await clearSession(from.id)
           await sendMessage(from.id, '已取消')
         }
 

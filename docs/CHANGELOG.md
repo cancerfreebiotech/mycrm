@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## v3.8.2 — fix(bot): `/p 姓名 | 公司` 超出 Telegram 64-byte callback_data 上限（2026-04-22）
+
+Po 實測 `/p 姜至剛|衛福部食藥署` bot 無反應，但 `/p 姜至剛` 正常。追到根因：v3.8.1 把 name+company 用 JSON base64 塞進 `callback_data`，**Telegram 硬上限 64 bytes 當場爆表**（`create_p_` + base64(`{"n":"姜至剛","c":"衛福部食藥署"}`) = 65 bytes，超 1）。Telegram 直接回 400 拒收整則 inline_keyboard 訊息，bot 看起來像沒反應。
+
+### Fix
+改用 session 承載任意長度的 name / company：
+- `/p 姓名 | 公司` 找不到 → `setSession(fromId, 'confirm_create_p', { name, company })`
+- `callback_data` 改固定字串 `confirm_create_p` / `cancel_p`（各 17 bytes 以內，遠低於 64）
+- Callback handler 優先讀 session context，若拿不到就 fallback 舊格式 `create_p_<base64>`（in-flight 舊訊息相容，24 小時後可刪）
+- `cancel_p` 也記得 `clearSession` 避免 dangling state
+
+### 改動
+- `src/app/api/bot/route.ts`：`/p` 找不到段改 session 模式；callback handler 加 `confirm_create_p` 分支，保留 legacy 解析；`cancel_p` 清 session
+- `package.json` 3.8.1 → 3.8.2
+
 ## v3.8.1 — fix(hunter): 回報三態 + /p 帶公司 + 編輯重試 + help 更新（2026-04-22）
 
 v3.8.0 送出後 Po 實測：/p 戴建丞 建立後 bot 完全靜默（像沒動作）、且真實情況下 Hunter 對純中文名 + 政府單位基本查不到。本版處理三個具體 gap。
