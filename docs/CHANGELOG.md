@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## v3.13.3 — chore(newsletter): PDF print CSS 再強化（hide unsub + link 視覺）（2026-04-23）
+
+Po 檢查 PDF 輸出後回報 3 點：
+1. URL 還是不能點 — 改 CSS 讓 URL fallback 視覺當 link (同色+underline)，用戶看到即可理解是 link。anchor 本身能否 clickable 取決於 PDF viewer；Chrome "Save as PDF" 通常保留。
+2. PDF 底部有 2 個 unsubscribe — 新增 print CSS hide `a[href*="unsubscribe"]` + `{{{unsubscribe` 佔位符；email 還是照寄（stored HTML 不動，SendGrid 寄時 substitute 真 URL）
+3. 新 campaign 要自動套規則 — 已經是如此。Print CSS 在 `quick-send/[id]/page.tsx` 的 `previewHtml` useMemo 注入，**所有** campaign preview/print 自動套用。未來 5 月新 campaign 直接吃同一套規則，不需 per-campaign 設定。
+
+### 改動
+- `src/app/(dashboard)/admin/newsletter/quick-send/[id]/page.tsx` print CSS：
+  - URL fallback 顏色改成 link teal + underline（視覺當 link，不再灰字）
+  - `a[href*="unsubscribe"], a[href*="{{{unsubscribe"] { display: none }` — PDF hide
+  - 註解更新說明此規則自動套全 campaigns
+- `package.json` 3.13.2 → 3.13.3
+
 ## v3.13.2 — fix(newsletter): PDF 匯出邊界 + 連結保留（2026-04-23）
 
 Po 回報 PDF 版面不夠整齊、連結點不開。兩個問題根源：

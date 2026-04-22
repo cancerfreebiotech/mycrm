@@ -90,8 +90,11 @@ export default function QuickSendPage() {
 
   // Print-optimized preview HTML: inject @media print rules so window.print()
   // (= 匯出 PDF) renders without browser default margins, keeps background
-  // colors, avoids splitting images/sections across pages. Stored HTML in DB
-  // is NOT modified — pure version goes out to SendGrid for email clients.
+  // colors, avoids splitting images/sections across pages.
+  // Stored HTML in DB is NOT modified — pure version goes out to SendGrid for
+  // email clients; print CSS only activates in the iframe / new-window print.
+  // This rule-set applies automatically to ALL campaigns (current + future
+  // new campaigns), so 5 月、6 月、後續的電子報都共用同一套。
   const previewHtml = useMemo(() => {
     const PRINT_CSS = `
 <style>
@@ -109,19 +112,35 @@ export default function QuickSendPage() {
   h1, h2, h3, h4 { page-break-after: avoid !important; break-after: avoid !important; }
   p { orphans: 3; widows: 3; }
   tr, td { page-break-inside: avoid !important; break-inside: avoid !important; }
-  /* Numbered story blocks: each starts with "N｜" and sits in its own padded div — keep together */
+  /* Numbered story blocks: each sits in its own padded div — keep together */
   div[style*="padding:0px 24px"],
   div[style*="padding:16px 24px"] { page-break-inside: avoid !important; break-inside: avoid !important; }
+  /* Link styling: override listmonk's inline text-decoration:none so URLs are
+     visible and distinguishable in PDF (helps anchor detection by PDF viewers). */
   a { color: #0D9488 !important; text-decoration: underline !important; word-break: break-all; }
   hr { border-top: 1px solid #CCCCCC !important; }
-  /* Show URL after link text so user can see / copy even if PDF flattens anchors.
-     Skip if the <a> wraps only an image (logo / social icons) — URL would clutter. */
+  /* Show URL after link text so reader can see / copy even if PDF flattens anchors.
+     Style as pseudo-link (same colour, underline) so visually consistent.
+     Skip if the <a> wraps only an image — URL would clutter logo / social icons. */
   a[href^="http"]:not(:has(> img))::after {
     content: " (" attr(href) ")";
-    color: #888888 !important;
+    color: #0D9488 !important;
+    text-decoration: underline !important;
     font-size: 0.82em !important;
     font-weight: normal !important;
     word-break: break-all;
+  }
+  /* ── Hide unsubscribe footer in PDF export ──
+     Email clients need the unsubscribe link (SendGrid substitutes {{{unsubscribe}}}
+     at send time). PDF is a static artefact — unsubscribe link makes no sense there.
+     Match both literal placeholders (in preview) AND substituted real URLs. */
+  a[href*="unsubscribe"],
+  a[href*="{{{unsubscribe"] {
+    display: none !important;
+  }
+  /* If entire footer container only holds unsub links, collapse its padding. */
+  td[style*="padding:16px 24px 16px 24px"]:has(> div > a[href*="unsubscribe"]) {
+    display: none !important;
   }
 }
 </style>`.trim()
