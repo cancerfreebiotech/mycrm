@@ -61,7 +61,20 @@ interface Log {
   email_subject: string | null
   email_body: string | null
   email_attachments: string[] | null
+  campaign_id: string | null
   users: { display_name: string | null } | null
+}
+
+// Email tracking event aggregation per campaign (from SendGrid webhook events)
+interface CampaignEmailStatus {
+  delivered: boolean
+  opened: boolean
+  openedAt: string | null
+  clicked: boolean
+  clickedAt: string | null
+  bounced: boolean
+  spam: boolean
+  unsubscribed: boolean
 }
 interface TemplateAttachment { id: string; file_name: string; file_url: string; file_size: number }
 interface EmailTemplate { id: string; title: string; subject: string | null; body_content: string | null; attachments: TemplateAttachment[] }
@@ -219,6 +232,8 @@ export default function ContactDetailPage() {
   const [allCountries, setAllCountries] = useState<Country[]>([])
   const [logs, setLogs] = useState<Log[]>([])
   const [hasMoreLogs, setHasMoreLogs] = useState(false)
+  // Map from campaign_id → aggregated email tracking status (from SendGrid events)
+  const [emailStatus, setEmailStatus] = useState<Record<string, CampaignEmailStatus>>({})
   const [loadingMoreLogs, setLoadingMoreLogs] = useState(false)
   const logsOffsetRef = useRef(0)
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -393,7 +408,7 @@ export default function ContactDetailPage() {
     }
     const [{ data: c }, { data: l }, { data: tags }, { data: cards }, { data: countries }, { data: photos }] = await Promise.all([
       supabase.from('contacts').select('*, users!created_by(display_name), contact_tags(tags(id, name))').eq('id', id).is('deleted_at', null).single(),
-      supabase.from('interaction_logs').select('id, content, type, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, users(display_name)').eq('contact_id', id).order('created_at', { ascending: false }).range(0, LOG_PAGE - 1),
+      supabase.from('interaction_logs').select('id, content, type, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, campaign_id, users(display_name)').eq('contact_id', id).order('created_at', { ascending: false }).range(0, LOG_PAGE - 1),
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('contact_cards').select('id, card_img_url, card_img_back_url, label, created_at').eq('contact_id', id).order('created_at', { ascending: true }),
       supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),
@@ -427,6 +442,32 @@ export default function ContactDetailPage() {
     setContactCards(cards ?? [])
     setContactPhotos((photos as unknown as ContactPhoto[]) ?? [])
     setAllCountries(countries ?? [])
+
+    // Fetch SendGrid email tracking events for this contact (grouped by campaign)
+    // Used to render open/click/bounce badges next to email interaction_logs.
+    const { data: events } = await supabase
+      .from('email_events')
+      .select('campaign_id, event, occurred_at')
+      .eq('contact_id', id)
+      .not('campaign_id', 'is', null)
+      .order('occurred_at', { ascending: true })
+    const statusMap: Record<string, CampaignEmailStatus> = {}
+    for (const e of (events ?? []) as Array<{ campaign_id: string; event: string; occurred_at: string }>) {
+      const cur = statusMap[e.campaign_id] ?? {
+        delivered: false, opened: false, openedAt: null, clicked: false, clickedAt: null,
+        bounced: false, spam: false, unsubscribed: false,
+      }
+      switch (e.event) {
+        case 'delivered': cur.delivered = true; break
+        case 'open': cur.opened = true; cur.openedAt = cur.openedAt ?? e.occurred_at; break
+        case 'click': cur.clicked = true; cur.clickedAt = cur.clickedAt ?? e.occurred_at; break
+        case 'bounce': case 'dropped': cur.bounced = true; break
+        case 'spamreport': cur.spam = true; break
+        case 'unsubscribe': cur.unsubscribed = true; break
+      }
+      statusMap[e.campaign_id] = cur
+    }
+    setEmailStatus(statusMap)
   }
 
   const loadMoreLogs = useCallback(async () => {
@@ -435,7 +476,7 @@ export default function ContactDetailPage() {
     const from = logsOffsetRef.current
     const { data } = await supabase
       .from('interaction_logs')
-      .select('id, content, type, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, users(display_name)')
+      .select('id, content, type, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, campaign_id, users(display_name)')
       .eq('contact_id', id)
       .order('created_at', { ascending: false })
       .range(from, from + LOG_PAGE - 1)
@@ -835,7 +876,7 @@ export default function ContactDetailPage() {
     setAddingLog(true)
     const { data } = await supabase.from('interaction_logs')
       .insert({ contact_id: id, content: logContent.trim(), type: logType, meeting_date: logType === 'meeting' && logDate ? logDate : null, meeting_time: logType === 'meeting' && logTime ? logTime : null, meeting_location: logType === 'meeting' && logLocation.trim() ? logLocation.trim() : null, created_by: currentUserId })
-      .select('id, content, type, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, users(display_name)').single()
+      .select('id, content, type, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, campaign_id, users(display_name)').single()
     if (data) {
       setLogs((prev) => [data as unknown as Log, ...prev])
       logsOffsetRef.current += 1
@@ -1067,7 +1108,7 @@ export default function ContactDetailPage() {
         }))
         const { data: logRows } = await supabase.from('interaction_logs')
           .insert(inserts)
-          .select('id, content, type, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, users(display_name)')
+          .select('id, content, type, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, campaign_id, users(display_name)')
         // Update UI only for the current contact's log
         const currentLog = (logRows ?? []).find((r: Record<string, unknown>) => r.contact_id === id || uniqueContactIds[0] === id)
         if (currentLog) setLogs((prev) => [currentLog as unknown as Log, ...prev])
@@ -1699,12 +1740,38 @@ export default function ContactDetailPage() {
               return (
                 <li key={log.id} className="relative">
                   <div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-white dark:border-gray-900" />
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className={`text-xs px-2 py-0.5 rounded ${TYPE_COLOR[log.type] ?? TYPE_COLOR.note}`}>
                       {t(`logTypes.${log.type as 'note' | 'meeting' | 'email' | 'system'}`)}
                     </span>
                     {log.meeting_date && <span className="text-xs text-gray-500 dark:text-gray-400">📅 {log.meeting_date}{log.meeting_time ? ` ${log.meeting_time.slice(0, 5)}` : ''}</span>}
                     {log.meeting_location && <span className="text-xs text-gray-500 dark:text-gray-400">📍 {log.meeting_location}</span>}
+                    {/* Email tracking badges — only for emails with campaign_id (SendGrid events flow in via webhook) */}
+                    {log.type === 'email' && log.campaign_id && emailStatus[log.campaign_id] && (() => {
+                      const s = emailStatus[log.campaign_id]
+                      return (
+                        <>
+                          {s.delivered && !s.opened && !s.clicked && !s.bounced && (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400" title="已寄達但尚未開啟">✉ 已寄達</span>
+                          )}
+                          {s.opened && !s.clicked && (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400" title={`開啟時間：${s.openedAt ? new Date(s.openedAt).toLocaleString('zh-TW') : ''}`}>👁 已開啟</span>
+                          )}
+                          {s.clicked && (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400" title={`點擊時間：${s.clickedAt ? new Date(s.clickedAt).toLocaleString('zh-TW') : ''}`}>🖱 已點擊</span>
+                          )}
+                          {s.bounced && (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400" title="退信或 dropped">⚠ 彈信</span>
+                          )}
+                          {s.spam && (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400" title="被標示為垃圾信">🚫 垃圾信</span>
+                          )}
+                          {s.unsubscribed && (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400" title="此收件人已退訂">取消訂閱</span>
+                          )}
+                        </>
+                      )
+                    })()}
                     {isEmailLog && (
                       <button
                         type="button"

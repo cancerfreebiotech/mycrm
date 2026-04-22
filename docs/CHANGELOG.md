@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## v3.13.0 — feat(contacts): 互動紀錄顯示 email 追蹤狀態（已開啟/已點擊/彈信）（2026-04-23）
+
+Po 要求：聯絡人詳情頁的互動紀錄，如果是可追蹤的信件（有 `campaign_id` 的電子報），旁邊直接顯示信件狀態 badge — 開啟、點擊、彈信等，讓使用者一眼看出互動熱度。
+
+### 改動
+- `src/app/(dashboard)/contacts/[id]/page.tsx`：
+  - `Log` interface 加 `campaign_id`；SELECT 查詢也加進去（兩處 fetch + 1 處 update log 的 select）
+  - 新 `CampaignEmailStatus` 型別 + `emailStatus: Record<campaign_id, status>` state
+  - `load()` 多 fetch 一次 `email_events` for this contact，group by `campaign_id` → 聚合成 delivered / opened / clicked / bounced / spam / unsubscribed 六態
+  - 互動紀錄 render 端：email log 有 campaign_id 就根據聚合狀態顯示 badge（已寄達 / 已開啟 / 已點擊 / 彈信 / 垃圾信 / 已退訂），`title` hover 顯示發生時間
+  - 視覺優先序：clicked > opened > delivered（只顯示一個狀態），bounced/spam/unsub 並列附加
+- `package.json` 3.12.0 → 3.13.0
+
+### 資料來源
+`email_events` 表是由 `/api/email/webhook` SendGrid webhook 處理寫入的。需要 SendGrid 端 Event Webhook 設定指向那個 endpoint（URL 已長期在用，無需本次動作）。
+
+### 範圍
+- 只顯示 `type=email` 且 `campaign_id IS NOT NULL` 的 log（即 newsletter campaigns）；手動寄信沒綁 campaign_id，不會掛 badge
+- 如果 SendGrid webhook 因網路等原因沒跑，badge 就不會出現 — 背景有 `/api/email/backfill-events` 可補
+
 ## v3.12.0 — feat(newsletter): 刪舊 wizard + 名單詳情 + 複製/新建 + 連結補齊（2026-04-23）
 
 Po 要求一口氣處理 4 件事：刪舊 wizard、名單可點進看成員、缺複製/新建、補齊剩下的連結並優化排版。
