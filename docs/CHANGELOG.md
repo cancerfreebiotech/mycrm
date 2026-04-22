@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## v3.9.0 — feat(contacts): 建立者篩選（2026-04-22）
+
+Po 要求聯絡人列表能依「誰建立的」篩選。
+
+### 改動
+- `src/app/api/contacts/all/route.ts`：SELECT 加 `created_by` uuid（配合原本就有的 `users!created_by(display_name)`）
+- `src/app/(dashboard)/contacts/page.tsx`：
+  - `Creator` interface + `creators` state、`fetchAll()` 多 fetch 一次 `users(id, display_name)`
+  - `selectedCreators: string[]` 多選
+  - filter bar 在 Email Status 和「認識於」輸入框中間加「建立者」下拉（多選 checkbox，含選幾位顯示 badge 數字、底部「清除」）
+  - Filter 邏輯加 `matchCreator`（與其他 filter AND）
+  - URL `?creator=uuid1,uuid2` 可直接初始化
+  - 重用既有 `contacts.creator` i18n key（「建立者」/「Creator」/「作成者」— 無新 key）
+- `package.json` 3.8.2 → 3.9.0
+
+### 行為
+- 不選 → 顯示全部
+- 選一位以上 → 只顯示那些人建立的聯絡人
+- 跟其他 filter 都是 AND：例如「選 Po + Tag=VIP + 國家=TW」會同時套三個條件
+
 ## v3.8.2 — fix(bot): `/p 姓名 | 公司` 超出 Telegram 64-byte callback_data 上限（2026-04-22）
 
 Po 實測 `/p 姜至剛|衛福部食藥署` bot 無反應，但 `/p 姜至剛` 正常。追到根因：v3.8.1 把 name+company 用 JSON base64 塞進 `callback_data`，**Telegram 硬上限 64 bytes 當場爆表**（`create_p_` + base64(`{"n":"姜至剛","c":"衛福部食藥署"}`) = 65 bytes，超 1）。Telegram 直接回 400 拒收整則 inline_keyboard 訊息，bot 看起來像沒反應。

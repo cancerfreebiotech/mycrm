@@ -33,9 +33,12 @@ interface Contact {
   importance: string
   language: string | null
   email_status: 'bounced' | 'unsubscribed' | 'invalid' | null
+  created_by: string | null
   users: { display_name: string | null } | null
   contact_tags: { tags: Tag }[]
 }
+
+interface Creator { id: string; display_name: string | null }
 
 function ImportanceDots({ value }: { value: string }) {
   const filled = value === 'high' ? 3 : value === 'low' ? 1 : 2
@@ -70,7 +73,10 @@ export default function ContactsPage() {
   const [selectedLanguage, setSelectedLanguage] = useState<string>('')
   const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false)
   const [selectedEmailStatus, setSelectedEmailStatus] = useState<string>('')
+  const [creators, setCreators] = useState<Creator[]>([])
+  const [selectedCreators, setSelectedCreators] = useState<string[]>([])
   const [emailStatusDropdownOpen, setEmailStatusDropdownOpen] = useState(false)
+  const [creatorDropdownOpen, setCreatorDropdownOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [addDropOpen, setAddDropOpen] = useState(false)
   const [liParsing, setLiParsing] = useState(false)
@@ -99,13 +105,14 @@ export default function ContactsPage() {
   async function fetchAll() {
     const supabase = createBrowserSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
-    const [contactRes, { data: tagData }, { data: countryData }, { data: userData }] = await Promise.all([
+    const [contactRes, { data: tagData }, { data: countryData }, { data: userData }, { data: creatorData }] = await Promise.all([
       fetch('/api/contacts/all').then(r => r.json()),
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),
       user?.email
         ? supabase.from('users').select('role, granted_features').eq('email', user.email).single()
         : Promise.resolve({ data: null }),
+      supabase.from('users').select('id, display_name').order('display_name'),
     ])
     const isSuperAdmin = userData?.role === 'super_admin'
     const grantedFeatures: string[] = userData?.granted_features ?? []
@@ -114,6 +121,7 @@ export default function ContactsPage() {
     setContacts((Array.isArray(contactRes) ? contactRes : []) as Contact[])
     setAllTags(tags)
     setAllCountries(countryData ?? [])
+    setCreators((creatorData ?? []) as Creator[])
     setLoading(false)
 
     // Initialize filters from URL query params (after data loaded)
@@ -129,6 +137,10 @@ export default function ContactsPage() {
     const importanceParam = searchParams.get('importance')
     if (importanceParam) {
       setSelectedImportance(importanceParam)
+    }
+    const creatorParam = searchParams.get('creator')
+    if (creatorParam) {
+      setSelectedCreators(creatorParam.split(','))
     }
   }
 
@@ -178,7 +190,10 @@ export default function ContactsPage() {
     const matchLanguage = !selectedLanguage || c.language === selectedLanguage
     const matchEmailStatus = !selectedEmailStatus ||
       (selectedEmailStatus === 'ok' ? !c.email_status : c.email_status === selectedEmailStatus)
-    return matchQuery && matchMet && matchTags && matchCountry && matchImportance && matchLanguage && matchEmailStatus
+    const matchCreator =
+      selectedCreators.length === 0 ||
+      (c.created_by != null && selectedCreators.includes(c.created_by))
+    return matchQuery && matchMet && matchTags && matchCountry && matchImportance && matchLanguage && matchEmailStatus && matchCreator
   })
 
   const sorted = sortField
@@ -205,7 +220,7 @@ export default function ContactsPage() {
     : filtered
 
   const emailable = sorted.filter(c => c.email && !c.email_status)
-  const hasFilter = !!(query || metQuery || selectedTags.length > 0 || selectedCountries.length > 0 || selectedImportance || selectedLanguage || selectedEmailStatus)
+  const hasFilter = !!(query || metQuery || selectedTags.length > 0 || selectedCountries.length > 0 || selectedImportance || selectedLanguage || selectedEmailStatus || selectedCreators.length > 0)
   const selectedEmailable = selectedIds.size > 0
     ? sorted.filter(c => selectedIds.has(c.id) && c.email && !c.email_status)
     : []
@@ -565,7 +580,7 @@ export default function ContactsPage() {
         {/* Email Status filter dropdown */}
         <div className="relative">
           <button
-            onClick={() => { setEmailStatusDropdownOpen((v) => !v); setTagDropdownOpen(false); setCountryDropdownOpen(false); setImportanceDropdownOpen(false); setLanguageDropdownOpen(false) }}
+            onClick={() => { setEmailStatusDropdownOpen((v) => !v); setTagDropdownOpen(false); setCountryDropdownOpen(false); setImportanceDropdownOpen(false); setLanguageDropdownOpen(false); setCreatorDropdownOpen(false) }}
             className="flex items-center gap-2 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
           >
             {t('email')}
@@ -602,6 +617,49 @@ export default function ContactsPage() {
                   {label}
                 </button>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* Creator filter dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => { setCreatorDropdownOpen((v) => !v); setTagDropdownOpen(false); setCountryDropdownOpen(false); setImportanceDropdownOpen(false); setLanguageDropdownOpen(false); setEmailStatusDropdownOpen(false) }}
+            className="flex items-center gap-2 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            {t('creator')}
+            {selectedCreators.length > 0 && (
+              <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-full">
+                {selectedCreators.length}
+              </span>
+            )}
+            <ChevronDown size={14} />
+          </button>
+          {creatorDropdownOpen && (
+            <div className="absolute top-full mt-1 left-0 z-10 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-44 max-h-64 overflow-y-auto">
+              {creators.map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => {
+                    setSelectedCreators((prev) =>
+                      prev.includes(u.id) ? prev.filter((x) => x !== u.id) : [...prev, u.id]
+                    )
+                    setPage(1)
+                  }}
+                  className="w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  <span className={`w-3 h-3 border rounded shrink-0 ${selectedCreators.includes(u.id) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 dark:border-gray-600'}`} />
+                  <span className="text-gray-700 dark:text-gray-300 truncate">{u.display_name || '—'}</span>
+                </button>
+              ))}
+              {selectedCreators.length > 0 && (
+                <button
+                  onClick={() => { setSelectedCreators([]); setPage(1) }}
+                  className="w-full text-left px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600 border-t border-gray-100 dark:border-gray-700 mt-1 pt-1"
+                >
+                  {tc('clear')}
+                </button>
+              )}
             </div>
           )}
         </div>
