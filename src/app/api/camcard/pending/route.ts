@@ -10,6 +10,7 @@ export async function GET(request: Request) {
   const hasDuplicate = url.searchParams.get('has_duplicate') === '1'
   const countryCode = (url.searchParams.get('country_code') ?? '').trim()
   const hasEmail = url.searchParams.get('has_email') === '1'
+  const assignee = (url.searchParams.get('assignee') ?? '').trim()  // exact label; special '__unassigned__' for NULL
   const sort = url.searchParams.get('sort') ?? 'newest'
 
   let countQ = supabase
@@ -19,8 +20,16 @@ export async function GET(request: Request) {
 
   let dataQ = supabase
     .from('camcard_pending')
-    .select('id, image_filename, card_img_url, back_img_url, ocr_data, status, duplicate_contact_id, match_type, created_at')
+    .select('id, image_filename, card_img_url, back_img_url, ocr_data, status, duplicate_contact_id, match_type, created_at, assignee_label')
     .eq('status', 'pending')
+
+  if (assignee === '__unassigned__') {
+    countQ = countQ.is('assignee_label', null)
+    dataQ = dataQ.is('assignee_label', null)
+  } else if (assignee) {
+    countQ = countQ.eq('assignee_label', assignee)
+    dataQ = dataQ.eq('assignee_label', assignee)
+  }
 
   if (hasDuplicate) {
     countQ = countQ.not('duplicate_contact_id', 'is', null)

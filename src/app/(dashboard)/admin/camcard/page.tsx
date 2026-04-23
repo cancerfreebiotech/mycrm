@@ -23,6 +23,7 @@ interface PendingCard {
   duplicate_contact_id: string | null
   match_type: string | null
   created_at: string
+  assignee_label: string | null
   duplicate_contact?: {
     id: string
     name: string | null
@@ -31,6 +32,8 @@ interface PendingCard {
     email: string | null
   } | null
 }
+
+interface AssigneeOption { label: string; count: number }
 
 interface GroupedCards {
   company: string
@@ -98,7 +101,11 @@ export default function CamcardPage() {
   const [hasDuplicateFilter, setHasDuplicateFilter] = useState(false)
   const [countryCodeFilter, setCountryCodeFilter] = useState('')
   const [hasEmailFilter, setHasEmailFilter] = useState(false)
+  const [assigneeFilter, setAssigneeFilter] = useState('')   // '', 'PO', 'Eva', '__unassigned__'
   const [sortFilter, setSortFilter] = useState<'newest' | 'oldest'>('newest')
+  const [assigneeOptions, setAssigneeOptions] = useState<AssigneeOption[]>([])
+  const [unassignedCount, setUnassignedCount] = useState(0)
+  const [bulkAssigning, setBulkAssigning] = useState(false)
 
   // Debounce search input → searchFilter
   useEffect(() => {
@@ -114,6 +121,7 @@ export default function CamcardPage() {
     if (hasDuplicateFilter) params.set('has_duplicate', '1')
     if (countryCodeFilter) params.set('country_code', countryCodeFilter)
     if (hasEmailFilter) params.set('has_email', '1')
+    if (assigneeFilter) params.set('assignee', assigneeFilter)
     if (sortFilter === 'oldest') params.set('sort', 'oldest')
 
     const res = await fetch(`/api/camcard/pending?${params}`)
@@ -145,7 +153,7 @@ export default function CamcardPage() {
     }
     setCardLanguage(prev => ({ ...langMap, ...prev }))
     setLoading(false)
-  }, [searchFilter, hasDuplicateFilter, countryCodeFilter, hasEmailFilter, sortFilter])
+  }, [searchFilter, hasDuplicateFilter, countryCodeFilter, hasEmailFilter, assigneeFilter, sortFilter])
 
   // Fetch when page or fetchPending (filters) change
   useEffect(() => {
@@ -159,7 +167,7 @@ export default function CamcardPage() {
     if (isFirstRender.current) { isFirstRender.current = false; return }
     if (page !== 1) setPage(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchFilter, hasDuplicateFilter, countryCodeFilter, hasEmailFilter, sortFilter])
+  }, [searchFilter, hasDuplicateFilter, countryCodeFilter, hasEmailFilter, assigneeFilter, sortFilter])
 
   useEffect(() => {
     supabase.from('tags').select('id, name').order('name').then(({ data }) => setAllTags(data ?? []))
@@ -169,6 +177,36 @@ export default function CamcardPage() {
       setMyUser({ id: user.id, display_name: meData?.display_name || user.email || '' })
     })
   }, [])
+
+  const reloadAssignees = useCallback(async () => {
+    const res = await fetch('/api/camcard/assignees')
+    if (!res.ok) return
+    const j = await res.json() as { assignees: AssigneeOption[]; unassigned: number }
+    setAssigneeOptions(j.assignees ?? [])
+    setUnassignedCount(j.unassigned ?? 0)
+  }, [])
+
+  useEffect(() => { reloadAssignees() }, [reloadAssignees, searchFilter, assigneeFilter])
+
+  async function bulkAssign(label: string | null) {
+    if (selectedCards.size === 0) { alert('請先勾選要更改的名片'); return }
+    const niceLabel = label ?? '（取消指派）'
+    if (!confirm(`將 ${selectedCards.size} 張名片的審核人改為「${niceLabel}」？`)) return
+    setBulkAssigning(true)
+    try {
+      const res = await fetch('/api/camcard/assignees', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selectedCards], assignee_label: label }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? '更新失敗')
+      await fetchPending(page)
+      await reloadAssignees()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '更新失敗')
+    } finally { setBulkAssigning(false) }
+  }
 
   function toggleGroup(company: string) {
     setCollapsedGroups((prev) => {
@@ -486,7 +524,14 @@ export default function CamcardPage() {
 
           {/* OCR data */}
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{name}</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{name}</p>
+              {card.assignee_label && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-medium" title="審核人">
+                  👤 {card.assignee_label}
+                </span>
+              )}
+            </div>
             {ocr.job_title && <p className="text-xs text-gray-500 mt-0.5">{ocr.job_title}</p>}
             <div className="mt-2 text-xs space-y-0.5">
               {ocr.name_en && ocr.name_en !== ocr.name && <OcrField label={t('fieldNameEn')} value={ocr.name_en} />}
@@ -711,6 +756,25 @@ export default function CamcardPage() {
               <option value="HK">{t('countryHK')}</option>
               <option value="CN">{t('countryCN')}</option>
               <option value="US">{t('countryUS')}</option>
+            </select>
+            <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          </div>
+        </div>
+
+        {/* Assignee / 審核人 */}
+        <div className="flex items-center gap-1.5">
+          <label className="text-xs text-gray-400 shrink-0">審核人</label>
+          <div className="relative">
+            <select
+              value={assigneeFilter}
+              onChange={(e) => setAssigneeFilter(e.target.value)}
+              className="appearance-none pl-2 pr-6 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            >
+              <option value="">全部</option>
+              {assigneeOptions.map((a) => (
+                <option key={a.label} value={a.label}>{a.label} ({a.count})</option>
+              ))}
+              {unassignedCount > 0 && <option value="__unassigned__">（未指派） ({unassignedCount})</option>}
             </select>
             <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
@@ -1056,6 +1120,18 @@ export default function CamcardPage() {
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 font-medium whitespace-nowrap"
               >
                 <Check size={13} /> {t('bulkConfirmSelected', { count: selectedCards.size })}
+              </button>
+              <button
+                onClick={async () => {
+                  const label = prompt('指派審核人（輸入名字，如 PO / Eva / Tom；留空 = 取消指派）', 'PO')
+                  if (label === null) return
+                  await bulkAssign(label.trim() || null)
+                }}
+                disabled={bulkAssigning}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 disabled:opacity-50 font-medium whitespace-nowrap"
+                title="批次指派審核人"
+              >
+                {bulkAssigning ? <Loader2 size={13} className="animate-spin" /> : <>👤</>} 指派審核人
               </button>
               <button
                 onClick={() => setSelectedCards(new Set())}

@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## v4.1.0 — feat(camcard): pending 名片審核人 label + 批次指派 + 篩選（2026-04-23）
+
+Po 要處理大量名片王匯入，不同批次給不同人確認。加 `assignee_label` 短文字欄位當標籤（非 FK，最彈性），目前 1187 筆 pending 全部 backfill 為 `PO`。
+
+### 改動
+- **DB migration `camcard_pending_assignee_label`**：`camcard_pending.assignee_label text`（nullable）+ 部分索引 `(assignee_label) WHERE status='pending'`；1187 筆 pending 回填 'PO'
+- **API**:
+  - `/api/camcard/pending` GET 加 `assignee` query param (exact label 或 `__unassigned__` 代 NULL)、回傳 `assignee_label`
+  - **新 `/api/camcard/assignees`** GET: 回各 label 數量 + unassigned 數量；PATCH: `{ ids, assignee_label }` 批次更新
+- **UI `/admin/camcard`**:
+  - filter bar 加「審核人」下拉，顯示所有 label 與未指派數
+  - 卡片標題右側藍色 badge `👤 PO` 顯示審核人
+  - 底部 bulk action bar 新增「指派審核人」按鈕 → prompt 輸入標籤 → 批次更新
+  - 空字串當取消指派
+
+### 用法
+- 匯入新一批 500 張給別人審核：匯入後去 `/admin/camcard` → 篩選 `(未指派)` → 全選 → 「指派審核人」輸入 `Eva` → 之後 Eva 用 `審核人 = Eva` 篩選只看她要做的
+- Label 是自由文字，不一定要是 mycrm 的使用者（可用 `AD-June` / `訪客` 之類）
+
+### package.json 4.0.0 → 4.1.0
+
 ## v4.0.0 — feat(newsletter): AI 輔助撰稿 + 自動翻譯 + 乾淨 skeleton（2026-04-23）
 
 MAJOR bump 標示 newsletter 工作流重構。Po 決定 mycrm 接手後不再使用 listmonk HTML，未來電子報都走「中文輸入 → AI 以過往語氣生成 → AI 自動翻譯英日版 → 編輯 → 寄出/Substack」。
