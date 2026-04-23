@@ -1,5 +1,49 @@
 # CHANGELOG
 
+## v4.0.0 — feat(newsletter): AI 輔助撰稿 + 自動翻譯 + 乾淨 skeleton（2026-04-23）
+
+MAJOR bump 標示 newsletter 工作流重構。Po 決定 mycrm 接手後不再使用 listmonk HTML，未來電子報都走「中文輸入 → AI 以過往語氣生成 → AI 自動翻譯英日版 → 編輯 → 寄出/Substack」。
+
+### 1. 乾淨 skeleton 重寫
+3 份 `email_templates` skeleton 從 listmonk 表格型（5400-5900 bytes）重寫成簡潔 email-safe HTML（~2500 bytes），支援 placeholder：`{{subject}}` / `{{period_label}}` / `{{intro_html}}` / `{{stories_html}}` / `{{{unsubscribe}}}`。Logo + 社群 icon 搬到 `newsletter-assets/shared/` 當穩定路徑。
+
+### 2. `POST /api/newsletter/ai-compose`
+Input: Chinese outline + stories（每段 title/outline/optional image/links）+ `translate` boolean。Process:
+- 對每個目標語言（zh-TW 必定、en + ja 若 translate=true）:
+  - 從 `newsletter_tone_samples` 載入該語言最近 2 份 plain_text 當 few-shot
+  - 用 Portkey + Gemini 2.5 Flash 依每段大綱 + tone few-shot 生成段落 HTML
+  - en/ja 時 title 也翻譯
+  - 渲染 skeleton（替換 placeholder）
+  - 寫 `newsletter_campaigns` draft，綁對應語言 list (zh-TW/en/ja)
+- 回傳 `{ results: [{ lang, id, error? }] }`，前端跳到 zh-TW campaign 的 quick-send
+
+### 3. `/admin/newsletter/ai-compose` 表單頁
+- 期別 YYYY-MM、自動翻譯 toggle、開場介紹（中文）
+- 動態 story cards：標題 / 大綱 / 圖片（上傳到 `newsletter-assets/<period>/`）/ 連結（URL + label 多組）
+- 「AI 生成電子報」紫色按鈕 → 送 API → 跳 quick-send
+
+### 4. Campaigns index 整合
+右上角新增「🪄 AI 撰寫」紫色按鈕（primary）+ 「空白新增」次要。
+
+### 改動
+- DB: 3 份 email_templates skeleton rewrite（via MCP SQL）
+- Storage: `newsletter-assets/shared/` 新增 logo / facebook / linkedin / website
+- 新 `src/app/api/newsletter/ai-compose/route.ts`（300+ 行）
+- 新 `src/app/(dashboard)/admin/newsletter/ai-compose/page.tsx`（dynamic story form + image upload）
+- `campaigns/page.tsx`: 新按鈕佈局
+- `package.json` 3.14.0 → 4.0.0
+- 使用者文件（docs/admin/newsletter.md 三語）將於下輪補 AI 撰寫章節
+
+### 範圍內但未做
+- TipTap WYSIWYG 完整整合：暫不做。AI-compose 產出的 HTML 乾淨、可直接用 quick-send 的 split view + image upload 編輯。完整 WYSIWYG 涉及拆 content-from-skeleton 雙層編輯，下輪視需求再做。
+
+### Workflow 範例（5 月）
+1. 到 `/admin/newsletter/ai-compose`
+2. 期別 `2026-05`、開場 textarea 寫「5 月重點」，自動翻譯打勾
+3. 「新增段落」輸入 3-4 段故事（標題 + 大綱 + 圖片 + 連結）
+4. 按「AI 生成電子報」→ 約 30-60 秒產生 3 份草稿
+5. 跳 quick-send 頁編輯中文 → 儲存 → 切到 en/ja campaign 檢查 → 編輯 → 寄出/發布 RSS
+
 ## v3.14.0 — feat(newsletter): quick-send 分割檢視 + 圖片一鍵上傳（2026-04-23）
 
 Po 要求像 `/email/compose` 那樣提升編輯器體驗。考量 4 月電子報仍是 listmonk 表格型 HTML（TipTap WYSIWYG 會 flatten 表格），本版先做**結構安全**的增強：

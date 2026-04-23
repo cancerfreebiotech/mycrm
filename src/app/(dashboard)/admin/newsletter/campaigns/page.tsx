@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { PermissionGate } from '@/components/PermissionGate'
-import { Loader2, Send, Rss, Mail, Plus, Copy } from 'lucide-react'
+import { Loader2, Send, Rss, Mail, Plus, Copy, Wand2 } from 'lucide-react'
 
 interface CampaignRow {
   id: string
@@ -84,13 +84,20 @@ export default function CampaignsIndexPage() {
             <a href="/admin/newsletter/lists" className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
               收件名單管理 →
             </a>
+            <Link
+              href="/admin/newsletter/ai-compose"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700"
+            >
+              <Wand2 size={14} />
+              AI 撰寫
+            </Link>
             <button
               onClick={createBlank}
               disabled={creating}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
             >
               {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-              新增電子報
+              空白新增
             </button>
           </div>
         </div>

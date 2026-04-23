@@ -94,14 +94,43 @@ EMAIL,FIRST_NAME,LAST_NAME,ADDRESS_LINE_1,...,CREATED_AT,UPDATED_AT,CONTACT_ID
 
 ---
 
-## 月次ワークフロー（推奨）
+## AI 支援による作成（v4.0.0+）
 
-1. **コンテンツ準備**：月次ニュースレター執筆（将来は `newsletter_tone_samples` を使った AI 支援）
-2. **Campaign 作成**：DB に直接挿入、後に `/admin/newsletter/compose` UI から skeleton 生成
-3. **新画像を Storage にアップロード**（必要な場合）
-4. **Quick-Send ページ**：件名 / プレビューテキスト調整、list 選択
-5. **テスト送信** を自分の email に送りレイアウト確認
-6. **RSS 公開** → Substack が自動下書き化 → Substack 側でレイアウト確認
+パス：`/admin/newsletter/ai-compose`（campaigns 画面の「🪄 AI 撰寫」ボタン）
+
+### ワークフロー
+1. **期間**：`YYYY-MM` 形式（例：`2026-05`）、デフォルトは翌月
+2. **自動翻訳トグル**：オンで zh-TW / en / ja の 3 つの下書きを同時生成、オフだと zh-TW のみ
+3. **冒頭挨拶（中国語）**：textarea に月の要点を書く、AI が正式な段落に書き換え。省略可。
+4. **ストーリーカード**：「新增段落」ボタンで追加。各カードに:
+   - タイトル（中国語、必須）
+   - アウトライン / 要点（中国語の箇条書きまたは文、必須）— AI が 200-400 文字に拡張
+   - 画像（任意）— アップロードすると `newsletter-assets/<period>/` に保存
+   - 関連リンク（任意）— URL + 中国語ラベル、複数可
+5. 「**AI 生成電子報**」をクリック → 30-60 秒待つ → zh-TW 下書きの quick-send ページへ自動遷移
+
+### AI の生成方法
+- `newsletter_tone_samples` から対象言語の最新 2 件を **few-shot 語調参照**として読み込む
+- Portkey + Gemini 2.5 Flash がアウトラインと過去の語調を組み合わせて段落 HTML を生成
+- en / ja ではタイトルも先に翻訳、本文は機械翻訳ではなく対象言語で書き直し
+- クリーンな skeleton テンプレート（ロゴヘッダー、冒頭、番号付きストーリー、SNS アイコン、配信停止フッター）に流し込む
+
+### Skeleton テンプレート
+`email_templates` テーブル（言語毎 1 件）。Placeholder：`{{subject}}` / `{{period_label}}` / `{{intro_html}}` / `{{stories_html}}` / `{{{unsubscribe}}}`。各 ~2.5 KB のクリーン HTML（listmonk のテーブル地獄はもう無し）。グローバル書式変更は skeleton を編集。
+
+### Tone コーパス管理
+`newsletter_tone_samples` は過去のニュースレター HTML を参照コーパスとして保存。追加/更新は `scripts/import-newsletter-tone-samples.mjs` で。送信済みで出来が良い campaign を手動で追加すれば将来の AI 参考になる（自動蓄積トリガーは未実装）。
+
+---
+
+## 月次ワークフロー（v4.0.0 推奨）
+
+1. `/admin/newsletter/ai-compose` で中国語コンテンツを入力（1 回で 3 言語自動翻訳）
+2. AI 生成を待つ → zh-TW 下書きの quick-send に自動遷移
+3. **件名 / プレビューテキスト調整**、必要なら本文微調整（分割ビューでライブプレビュー）
+4. en / ja キャンペーンに切り替えて翻訳確認 / 調整
+5. **テスト送信** を自分の email に送りレイアウト確認（SendGrid 経由）
+6. **RSS 公開** → Substack が自動下書き化 → Substack にログインしてレイアウト確認
 7. **本番送信** 全購読者へ
 8. Substack で publish
 

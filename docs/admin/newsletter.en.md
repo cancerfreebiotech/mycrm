@@ -94,16 +94,45 @@ Note: Substack has no Post-by-Email API (confirmed), so we use the RSS route ins
 
 ---
 
-## Monthly Workflow (Suggested)
+## AI-assisted Composition (v4.0.0+)
 
-1. **Prepare content**: write the monthly newsletter (future: AI-assisted via `newsletter_tone_samples`)
-2. **Create campaign**: direct DB insert, or later via `/admin/newsletter/compose` UI from skeleton
-3. **Upload new images** to Storage (if any)
-4. **Quick-Send page**: adjust subject / preview text, select lists
-5. **Test send** to your own email, verify rendering
-6. **Publish to RSS** → Substack auto-drafts → verify Substack rendering
+Path: `/admin/newsletter/ai-compose` (via the "🪄 AI 撰寫" button on campaigns index)
+
+### Workflow
+1. **Period**: `YYYY-MM` (e.g. `2026-05`), defaults to next month
+2. **Auto-translate toggle**: if on, generates zh-TW / en / ja drafts simultaneously; if off, zh-TW only
+3. **Intro (Chinese)**: textarea with the month's highlight; AI rewrites into formal opening. Can leave blank.
+4. **Story cards**: "Add section" button adds a card. Each card:
+   - Title (Chinese, required)
+   - Outline / key points (Chinese bullets or full sentences, required) — AI will expand to 200-400 chars
+   - Image (optional) — direct upload, stored at `newsletter-assets/<period>/`
+   - Related links (optional) — URL + Chinese label, multiple entries
+5. Click "**AI 生成電子報**" → wait 30-60 seconds → auto-redirects to the zh-TW draft in quick-send
+
+### How AI generates content
+- Loads the latest 2 newsletters per target language from `newsletter_tone_samples` as **few-shot tone reference**
+- Portkey + Gemini 2.5 Flash expands your outline with past tone into paragraph HTML
+- For en / ja, titles are translated first, then body written in target-language tone (not mechanical translation)
+- Filled into clean skeleton (logo header, intro, numbered stories, social icons, unsubscribe footer)
+
+### Skeleton templates
+Stored in `email_templates` (one per language). Placeholders: `{{subject}}`, `{{period_label}}`, `{{intro_html}}`, `{{stories_html}}`, `{{{unsubscribe}}}`. ~2.5 KB each, clean HTML (no more listmonk table hell). Edit skeleton to change global format.
+
+### Tone corpus maintenance
+`newsletter_tone_samples` stores past newsletter HTML as reference corpus. Add/update via `scripts/import-newsletter-tone-samples.mjs`. After sending a campaign that reads well, you may manually insert it into the corpus for future AI reference (or write a trigger to accumulate automatically — not yet done).
+
+---
+
+## Monthly Workflow (v4.0.0 Suggested)
+
+1. Go to `/admin/newsletter/ai-compose`, enter Chinese content (once; auto-translates to 3 languages)
+2. Wait for AI generation → auto-redirect to zh-TW draft in quick-send
+3. **Adjust subject / preview text**; fine-tune body if needed (split view with live preview)
+4. Switch to en / ja campaigns to check translations / polish
+5. **Test send** to your own email to verify rendering (via SendGrid)
+6. **Publish to RSS** → Substack auto-drafts → log in to Substack to verify layout
 7. **Production send** to all subscribers
-8. In Substack, click publish
+8. Click publish in Substack
 
 ---
 

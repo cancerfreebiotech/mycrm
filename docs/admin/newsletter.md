@@ -94,14 +94,43 @@ EMAIL,FIRST_NAME,LAST_NAME,ADDRESS_LINE_1,...,CREATED_AT,UPDATED_AT,CONTACT_ID
 
 ---
 
-## 每月例行流程（建議）
+## AI 輔助撰寫（v4.0.0+）
 
-1. **準備內容**：撰寫月度電子報（之後可用 AI 輔助 from `newsletter_tone_samples`）
-2. **建 campaign**：直接在 DB 插入，或之後做 `/admin/newsletter/compose` UI 從 skeleton 生成
-3. **匯入圖片到 Storage**（如果有新圖）
-4. **Quick-Send 頁**：調整主旨/預覽文字，選 list
-5. **測試寄送** 到自己 email 確認排版
-6. **發布到 RSS** → Substack 自動抓草稿 → 確認 Substack 版面
+路徑：`/admin/newsletter/ai-compose`（campaigns 頁右上角「🪄 AI 撰寫」按鈕）
+
+### 工作流程
+1. **輸入期別**：`YYYY-MM`（如 `2026-05`），預設下個月
+2. **自動翻譯 toggle**：勾選會同時生成 zh-TW / en / ja 三份草稿；關掉只生成中文
+3. **開場介紹（中文）**：textarea 寫本月重點，AI 會改寫成正式開場段落；可留空
+4. **故事段落**：「新增段落」按鈕動態加卡片，每張卡輸入：
+   - 標題（中文，必填）
+   - 大綱 / 重點（中文 bullet 或完整句，必填）— AI 會擴展成 200-400 字段落
+   - 圖片（可選）— 直接上傳，自動存到 `newsletter-assets/<period>/`
+   - 相關連結（可選）— URL + 中文標籤，可多組
+5. 按「**AI 生成電子報**」→ 等 30-60 秒 → 自動跳到 zh-TW 草稿的 quick-send 頁
+
+### AI 如何生成內容
+- 從 `newsletter_tone_samples` 載入目標語言最近 2 份電子報當 **few-shot tone reference**
+- 用 Portkey + Gemini 2.5 Flash 依你的大綱 + 過往語氣產出段落 HTML
+- 英日版會先翻譯標題，內文直接用該語言 tone 重寫（不是硬翻）
+- 填入乾淨的 skeleton 模板（logo + header + intro + 編號故事 + 社群 icon + unsubscribe 底部）
+
+### Skeleton 模板
+存於 `email_templates` 表，三語各一份。用 placeholder `{{subject}}` / `{{period_label}}` / `{{intro_html}}` / `{{stories_html}}` / `{{{unsubscribe}}}`。每篇 ~2.5 KB 乾淨 HTML，不再是 listmonk 表格地獄。修改 skeleton 即可改全體格式。
+
+### Tone 語料庫維護
+`newsletter_tone_samples` 存過往電子報範本。新增/更新用 `scripts/import-newsletter-tone-samples.mjs`。每次發布一份 campaign 後若覺得品質好，可手動插入一筆當未來 AI 範本（或寫個 trigger 自動累積 — 目前沒做）。
+
+---
+
+## 每月例行流程（v4.0.0 建議）
+
+1. **到 `/admin/newsletter/ai-compose`** 輸入本月內容（中文一次，自動翻譯三語）
+2. 等 AI 生成 → 跳 quick-send 中文草稿
+3. **調整主旨/預覽文字** 必要時修內文（split view 即時預覽）
+4. 切到英日版 campaigns 檢查翻譯 / 補充
+5. **測試寄送** 到自己 email 確認排版（SendGrid）
+6. **發布到 RSS** → Substack 自動抓草稿 → 登 Substack 確認版面
 7. **正式寄送** 給所有訂閱者
 8. Substack 端按 publish
 
