@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 
 const SG_BASE = 'https://api.sendgrid.com/v3'
@@ -82,14 +82,7 @@ async function createSendGridLogs(
   return logRows.length
 }
 
-/**
- * POST /api/sendgrid/import-suppressions
- * Fetches SendGrid suppression lists (last 90 days, paginated) and:
- *   1. Upserts into newsletter_blacklist / newsletter_unsubscribes
- *   2. Updates contacts.email_status
- *   3. Creates system interaction logs for matched CRM contacts
- */
-export async function POST() {
+async function runImport() {
   const apiKey = process.env.SENDGRID_API_KEY
   if (!apiKey) {
     return NextResponse.json({ error: 'SENDGRID_API_KEY not configured' }, { status: 500 })
@@ -193,4 +186,29 @@ export async function POST() {
 
   const total = result.bounces + result.invalidEmails + result.unsubscribes
   return NextResponse.json({ ok: result.errors.length === 0, total, ...result })
+}
+
+/**
+ * POST /api/sendgrid/import-suppressions
+ * Fetches SendGrid suppression lists (last 90 days, paginated) and:
+ *   1. Upserts into newsletter_blacklist / newsletter_unsubscribes
+ *   2. Updates contacts.email_status
+ *   3. Creates system interaction logs for matched CRM contacts
+ */
+export async function POST() {
+  return runImport()
+}
+
+/**
+ * GET /api/sendgrid/import-suppressions
+ * Vercel Cron entry point. Authenticates via CRON_SECRET bearer token.
+ * vercel.json: { "path": "/api/sendgrid/import-suppressions", "schedule": "0 19 * * *" }
+ */
+export async function GET(req: NextRequest) {
+  const authHeader = req.headers.get('authorization')
+  const cronSecret = process.env.CRON_SECRET
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  return runImport()
 }

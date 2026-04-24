@@ -3,6 +3,10 @@
     {
       "path": "/api/hunter/cron",
       "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/sendgrid/import-suppressions",
+      "schedule": "0 19 * * *"
     }
   ]
 }

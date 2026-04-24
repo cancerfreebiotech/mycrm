@@ -7,7 +7,7 @@ import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { PermissionGate } from '@/components/PermissionGate'
 import {
   Loader2, ArrowLeft, Users, Search, Link as LinkIcon,
-  Plus, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, X,
+  Plus, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, X, RefreshCw,
 } from 'lucide-react'
 
 interface ListMeta {
@@ -16,6 +16,8 @@ interface ListMeta {
   name: string
   description: string | null
 }
+
+type EmailStatus = 'bounced' | 'invalid' | 'unsubscribed' | null
 
 interface SubscriberRow {
   id: string
@@ -26,6 +28,7 @@ interface SubscriberRow {
   unsubscribed_at: string | null
   added_at: string
   contact_name: string | null
+  email_status: EmailStatus
 }
 
 interface ContactResult {
@@ -37,7 +40,7 @@ interface ContactResult {
   company: string | null
 }
 
-type SortCol = 'email' | 'name' | 'added_at' | 'status'
+type SortCol = 'email' | 'contact' | 'added_at' | 'status'
 type SortDir = 'asc' | 'desc'
 
 function SortIcon({ col, active, dir }: { col: SortCol; active: SortCol; dir: SortDir }) {
@@ -70,6 +73,10 @@ export default function ListDetailPage() {
   // Delete state
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
+  // Sync state
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState<string | null>(null)
+
   const loadList = useCallback(async () => {
     const [{ data: listData }, { data: memberData }] = await Promise.all([
       supabase.from('newsletter_lists').select('id, key, name, description').eq('id', id).maybeSingle(),
@@ -83,21 +90,44 @@ export default function ListDetailPage() {
 
     const rows: SubscriberRow[] = []
     const contactIds: string[] = []
+    const emails: string[] = []
     for (const m of memberData ?? []) {
       const s = (m as unknown as { added_at: string; newsletter_subscribers: { id: string; email: string; first_name: string | null; last_name: string | null; contact_id: string | null; unsubscribed_at: string | null } }).newsletter_subscribers
       if (!s) continue
-      rows.push({ id: s.id, email: s.email, first_name: s.first_name, last_name: s.last_name, contact_id: s.contact_id, unsubscribed_at: s.unsubscribed_at, added_at: (m as { added_at: string }).added_at, contact_name: null })
+      rows.push({ id: s.id, email: s.email, first_name: s.first_name, last_name: s.last_name, contact_id: s.contact_id, unsubscribed_at: s.unsubscribed_at, added_at: (m as { added_at: string }).added_at, contact_name: null, email_status: null })
       if (s.contact_id) contactIds.push(s.contact_id)
+      if (s.email) emails.push(s.email.toLowerCase().trim())
     }
 
-    if (contactIds.length > 0) {
-      const { data: contacts } = await supabase.from('contacts').select('id, name, name_en, name_local').in('id', [...new Set(contactIds)])
-      const nameMap = new Map<string, string>()
-      for (const c of contacts ?? []) {
-        const n = c as { id: string; name: string | null; name_en: string | null; name_local: string | null }
-        nameMap.set(n.id, n.name || n.name_en || n.name_local || '')
-      }
-      for (const r of rows) { if (r.contact_id) r.contact_name = nameMap.get(r.contact_id) ?? null }
+    const [contactsRes, blRes, unsubRes] = await Promise.all([
+      contactIds.length > 0
+        ? supabase.from('contacts').select('id, name, name_en, name_local, email_status').in('id', [...new Set(contactIds)])
+        : Promise.resolve({ data: [] as { id: string; name: string | null; name_en: string | null; name_local: string | null; email_status: EmailStatus }[] }),
+      emails.length > 0
+        ? supabase.from('newsletter_blacklist').select('email, reason').in('email', [...new Set(emails)])
+        : Promise.resolve({ data: [] as { email: string; reason: string | null }[] }),
+      emails.length > 0
+        ? supabase.from('newsletter_unsubscribes').select('email').in('email', [...new Set(emails)])
+        : Promise.resolve({ data: [] as { email: string }[] }),
+    ])
+
+    const nameMap = new Map<string, string>()
+    const statusByContact = new Map<string, EmailStatus>()
+    for (const c of (contactsRes.data ?? []) as { id: string; name: string | null; name_en: string | null; name_local: string | null; email_status: EmailStatus }[]) {
+      nameMap.set(c.id, c.name || c.name_en || c.name_local || '')
+      statusByContact.set(c.id, c.email_status)
+    }
+    const blSet = new Set(((blRes.data ?? []) as { email: string }[]).map((r) => r.email.toLowerCase().trim()))
+    const unsubSet = new Set(((unsubRes.data ?? []) as { email: string }[]).map((r) => r.email.toLowerCase().trim()))
+
+    for (const r of rows) {
+      if (r.contact_id) r.contact_name = nameMap.get(r.contact_id) ?? null
+      const em = r.email.toLowerCase().trim()
+      const contactStatus = r.contact_id ? statusByContact.get(r.contact_id) : null
+      // Priority: blacklist (bounce) > contact.email_status=invalid > unsubscribe sources
+      if (blSet.has(em) || contactStatus === 'bounced') r.email_status = 'bounced'
+      else if (contactStatus === 'invalid') r.email_status = 'invalid'
+      else if (unsubSet.has(em) || r.unsubscribed_at || contactStatus === 'unsubscribed') r.email_status = 'unsubscribed'
     }
 
     setSubs(rows)
@@ -149,12 +179,18 @@ export default function ListDetailPage() {
     return [...filtered].sort((a, b) => {
       let cmp = 0
       if (sortCol === 'email') cmp = a.email.localeCompare(b.email)
-      else if (sortCol === 'name') {
-        const an = [a.first_name, a.last_name].filter(Boolean).join(' ')
-        const bn = [b.first_name, b.last_name].filter(Boolean).join(' ')
-        cmp = an.localeCompare(bn)
+      else if (sortCol === 'contact') {
+        const an = a.contact_name ?? ''
+        const bn = b.contact_name ?? ''
+        // Rows without a linked contact sort last in asc, first in desc
+        if (!an && bn) cmp = 1
+        else if (an && !bn) cmp = -1
+        else cmp = an.localeCompare(bn)
       } else if (sortCol === 'added_at') cmp = a.added_at.localeCompare(b.added_at)
-      else if (sortCol === 'status') cmp = (a.unsubscribed_at ? 1 : 0) - (b.unsubscribed_at ? 1 : 0)
+      else if (sortCol === 'status') {
+        const order = (s: EmailStatus) => s === null ? 0 : s === 'unsubscribed' ? 1 : s === 'invalid' ? 2 : 3
+        cmp = order(a.email_status) - order(b.email_status)
+      }
       return sortDir === 'asc' ? cmp : -cmp
     })
   }, [filtered, sortCol, sortDir])
@@ -190,6 +226,23 @@ export default function ListDetailPage() {
     await loadList()
   }
 
+  async function handleSync() {
+    setSyncing(true)
+    setSyncMsg(null)
+    try {
+      const res = await fetch('/api/sendgrid/import-suppressions', { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) { setSyncMsg(`同步失敗：${json.error ?? res.statusText}`); return }
+      setSyncMsg(`同步完成：退信 ${json.bounces ?? 0} / 無效 ${json.invalidEmails ?? 0} / 退訂 ${json.unsubscribes ?? 0}`)
+      await loadList()
+    } catch (e) {
+      setSyncMsg(`同步失敗：${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setSyncing(false)
+      setTimeout(() => setSyncMsg(null), 6000)
+    }
+  }
+
   if (loading) {
     return <div className="flex justify-center py-20"><Loader2 size={24} className="animate-spin text-gray-400" /></div>
   }
@@ -198,7 +251,9 @@ export default function ListDetailPage() {
   }
 
   const linkedCount = subs.filter((s) => s.contact_id).length
-  const unsubCount = subs.filter((s) => s.unsubscribed_at).length
+  const unsubCount = subs.filter((s) => s.email_status === 'unsubscribed').length
+  const bouncedCount = subs.filter((s) => s.email_status === 'bounced' || s.email_status === 'invalid').length
+  const activeCount = subs.filter((s) => s.email_status === null).length
 
   const thClass = 'text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 cursor-pointer select-none hover:text-gray-900 dark:hover:text-gray-100 whitespace-nowrap'
 
@@ -218,6 +273,15 @@ export default function ListDetailPage() {
             </p>
           </div>
           <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg font-medium disabled:opacity-60"
+            title="從 SendGrid 同步退信/退訂狀態"
+          >
+            {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            同步 SendGrid
+          </button>
+          <button
             onClick={() => { setShowAdd(true); setContactSearch(''); setContactResults([]); setAddError(null) }}
             className="flex items-center gap-1.5 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
           >
@@ -225,18 +289,28 @@ export default function ListDetailPage() {
           </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 mb-4">
+        {syncMsg && (
+          <div className="mb-3 text-sm px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+            {syncMsg}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
             <div className="text-xs text-gray-500 dark:text-gray-400">總訂閱者</div>
             <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{subs.length}</div>
           </div>
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
-            <div className="text-xs text-gray-500 dark:text-gray-400">已連結聯絡人</div>
-            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{linkedCount}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">可寄送</div>
+            <div className="text-2xl font-bold text-green-600 dark:text-green-400">{activeCount}</div>
+          </div>
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
+            <div className="text-xs text-gray-500 dark:text-gray-400">退信 / 無效</div>
+            <div className="text-2xl font-bold text-red-600 dark:text-red-400">{bouncedCount}</div>
           </div>
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
             <div className="text-xs text-gray-500 dark:text-gray-400">已退訂</div>
-            <div className="text-2xl font-bold text-red-500 dark:text-red-400">{unsubCount}</div>
+            <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{unsubCount}</div>
           </div>
         </div>
 
@@ -258,10 +332,9 @@ export default function ListDetailPage() {
                 <th className={thClass} onClick={() => toggleSort('email')}>
                   Email <SortIcon col="email" active={sortCol} dir={sortDir} />
                 </th>
-                <th className={`${thClass} hidden sm:table-cell`} onClick={() => toggleSort('name')}>
-                  姓名 <SortIcon col="name" active={sortCol} dir={sortDir} />
+                <th className={thClass} onClick={() => toggleSort('contact')}>
+                  CRM 聯絡人 <SortIcon col="contact" active={sortCol} dir={sortDir} />
                 </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">CRM 聯絡人</th>
                 <th className={`${thClass} hidden md:table-cell`} onClick={() => toggleSort('added_at')}>
                   加入時間 <SortIcon col="added_at" active={sortCol} dir={sortDir} />
                 </th>
@@ -273,13 +346,11 @@ export default function ListDetailPage() {
             </thead>
             <tbody>
               {sorted.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">{search ? '無符合搜尋結果' : '名單目前沒有訂閱者'}</td></tr>
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">{search ? '無符合搜尋結果' : '名單目前沒有訂閱者'}</td></tr>
               ) : sorted.map((s) => {
-                const displayName = [s.first_name, s.last_name].filter(Boolean).join(' ').trim()
                 return (
                   <tr key={s.id} className="border-b border-gray-100 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/30">
                     <td className="px-4 py-3 text-gray-900 dark:text-gray-100">{s.email}</td>
-                    <td className="px-4 py-3 text-gray-600 dark:text-gray-400 hidden sm:table-cell">{displayName || '—'}</td>
                     <td className="px-4 py-3">
                       {s.contact_id ? (
                         <Link href={`/contacts/${s.contact_id}`} className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline">
@@ -293,8 +364,12 @@ export default function ListDetailPage() {
                       {new Date(s.added_at).toLocaleDateString('zh-TW')}
                     </td>
                     <td className="px-4 py-3">
-                      {s.unsubscribed_at ? (
-                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">已退訂</span>
+                      {s.email_status === 'bounced' ? (
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">退信</span>
+                      ) : s.email_status === 'invalid' ? (
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">無效</span>
+                      ) : s.email_status === 'unsubscribed' ? (
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400">已退訂</span>
                       ) : (
                         <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">訂閱中</span>
                       )}

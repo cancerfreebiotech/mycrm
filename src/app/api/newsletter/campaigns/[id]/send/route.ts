@@ -86,7 +86,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .select('id, email, first_name, last_name, contact_id')
       .in('id', subIds)
       .is('unsubscribed_at', null)
-    recipients = (subs ?? []) as Subscriber[]
+    const rawSubs = (subs ?? []) as Subscriber[]
+
+    // Filter out blacklisted (hard bounce / spam / invalid) and globally unsubscribed emails
+    const emails = [...new Set(rawSubs.map((s) => s.email.toLowerCase().trim()))]
+    const [{ data: bl }, { data: unsubs }] = await Promise.all([
+      service.from('newsletter_blacklist').select('email').in('email', emails),
+      service.from('newsletter_unsubscribes').select('email').in('email', emails),
+    ])
+    const suppressed = new Set<string>([
+      ...((bl ?? []) as { email: string }[]).map((r) => r.email.toLowerCase().trim()),
+      ...((unsubs ?? []) as { email: string }[]).map((r) => r.email.toLowerCase().trim()),
+    ])
+
+    recipients = rawSubs.filter((r) => !suppressed.has(r.email.toLowerCase().trim()))
   }
 
   if (recipients.length === 0) return NextResponse.json({ error: 'no valid recipients after filters' }, { status: 400 })
