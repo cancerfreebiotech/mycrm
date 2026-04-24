@@ -295,10 +295,14 @@ export default function ListDetailPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
             <div className="text-xs text-gray-500 dark:text-gray-400">總訂閱者</div>
             <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{subs.length}</div>
+          </div>
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
+            <div className="text-xs text-gray-500 dark:text-gray-400">已連結聯絡人</div>
+            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{linkedCount}</div>
           </div>
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
             <div className="text-xs text-gray-500 dark:text-gray-400">可寄送</div>

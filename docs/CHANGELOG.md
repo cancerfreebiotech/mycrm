@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## v4.2.0 — feat(newsletter): 收件名單管理強化 + SendGrid 狀態整合（2026-04-25）
+
+收件名單管理頁（`/admin/newsletter/lists/[id]`）加入完整的管理能力，SendGrid 退信/退訂狀態全面整合到寄送流程。
+
+### 名單管理
+- **欄位排序**：Email / CRM 聯絡人 / 加入時間 / 狀態 都可點擊 header 排序
+- **新增聯絡人**：Modal 搜尋 CRM 聯絡人（姓名/email），自動 find-or-create subscriber，防重複加入
+- **刪除**：每列垃圾桶按鈕從名單移除（只刪 junction，不刪 subscriber 本體）
+- **Stats 區塊**：5 格（總訂閱者/已連結聯絡人/可寄送/退信+無效/已退訂）
+
+### SendGrid 整合
+- **寄送過濾**：`newsletter_blacklist` 和 `newsletter_unsubscribes` 中的 email 自動從寄送名單排除
+- **狀態 badge**：名單列表顯示 4 種狀態（訂閱中/退信/無效/已退訂），來源交叉比對 contact.email_status + blacklist + unsubscribes + subscriber.unsubscribed_at
+- **同步按鈕**：名單頁可手動觸發 `/api/sendgrid/import-suppressions`
+- **Vercel Cron**：每日 03:00 Asia/Taipei 自動同步 SendGrid 狀態
+- **API**：新增 `POST/DELETE /api/newsletter/list-members`；`import-suppressions` 加 GET handler + CRON_SECRET auth
+
+### CI 修正
+- **Node.js 24 升級**：`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` 解決 actions/checkout@v4 deprecation warning
+- **ECONNRESET 修正**：workflow 加 actions/setup-node cache + npm retry config（fetch-retries=5, timeout=60s）
+- **npm ci → npm install**：避免 Windows/Linux lock file 跨平台不同步造成 EUSAGE
+- **Jekyll Liquid error 修正**：`render_with_liquid: false` front matter + exclude CHANGELOG.md / newsletter-templates/
+
 ## v4.1.0 — feat(camcard): pending 名片審核人 label + 批次指派 + 篩選（2026-04-23）
 
 Po 要處理大量名片王匯入，不同批次給不同人確認。加 `assignee_label` 短文字欄位當標籤（非 FK，最彈性），目前 1187 筆 pending 全部 backfill 為 `PO`。
