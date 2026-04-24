@@ -27,6 +27,7 @@ interface List {
   key: string
   name: string
   memberCount: number
+  eligibleCount: number
 }
 
 export default function QuickSendPage() {
@@ -75,17 +76,14 @@ export default function QuickSendPage() {
       setListIds(c.list_ids ?? [])
       setContentHtml(c.content_html ?? '')
 
-      // Member counts per list
+      // Fetch per-list stats (total + eligible, applying send-flow suppression filters)
       const listsArr = listData ?? []
-      const counts = await Promise.all(
-        listsArr.map(async (l) => {
-          const { count } = await supabase
-            .from('newsletter_subscriber_lists')
-            .select('subscriber_id', { count: 'exact', head: true })
-            .eq('list_id', l.id)
-          return { ...l, memberCount: count ?? 0 } as List
-        })
-      )
+      const statsRes = await fetch('/api/newsletter/lists/stats')
+      const statsJson = statsRes.ok ? await statsRes.json() as { stats: Record<string, { total: number; eligible: number }> } : { stats: {} }
+      const counts = listsArr.map((l) => {
+        const s = statsJson.stats[l.id]
+        return { ...l, memberCount: s?.total ?? 0, eligibleCount: s?.eligible ?? 0 } as List
+      })
       setLists(counts)
       setLoading(false)
     })()
@@ -244,7 +242,7 @@ export default function QuickSendPage() {
   }
 
   async function sendReal() {
-    const selectedCount = lists.filter((l) => listIds.includes(l.id)).reduce((sum, l) => sum + l.memberCount, 0)
+    const selectedCount = lists.filter((l) => listIds.includes(l.id)).reduce((sum, l) => sum + l.eligibleCount, 0)
     if (!confirm(`確定要寄送這份電子報給 ${selectedCount} 位訂閱者？（此操作無法復原）`)) return
     setSending(true)
     setBanner(null)
@@ -345,7 +343,9 @@ export default function QuickSendPage() {
     return <div className="p-8 text-center text-gray-400">找不到電子報</div>
   }
 
-  const totalSelected = lists.filter((l) => listIds.includes(l.id)).reduce((sum, l) => sum + l.memberCount, 0)
+  const totalSelected = lists.filter((l) => listIds.includes(l.id)).reduce((sum, l) => sum + l.eligibleCount, 0)
+  const totalRawSelected = lists.filter((l) => listIds.includes(l.id)).reduce((sum, l) => sum + l.memberCount, 0)
+  const totalSuppressed = totalRawSelected - totalSelected
 
   return (
     <PermissionGate feature="newsletter">
@@ -520,16 +520,19 @@ export default function QuickSendPage() {
                     <Link
                       href={`/admin/newsletter/lists/${l.id}`}
                       className="text-xs text-gray-400 hover:text-blue-500 hover:underline"
-                      title="檢視名單成員"
+                      title="檢視名單成員（可寄送 / 總數）"
                     >
-                      {l.memberCount} 人 →
+                      {l.eligibleCount}{l.memberCount !== l.eligibleCount && <span className="text-gray-400"> / {l.memberCount}</span>} 人 →
                     </Link>
                   </div>
                 ))}
               </div>
               <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 text-sm">
-                <span className="text-gray-500">總計：</span>
+                <span className="text-gray-500">可寄送：</span>
                 <span className="font-medium text-gray-900 dark:text-gray-100">{totalSelected} 人</span>
+                {totalSuppressed > 0 && (
+                  <span className="text-xs text-gray-400 ml-2">（排除退信/退訂 {totalSuppressed} 人）</span>
+                )}
               </div>
             </div>
 

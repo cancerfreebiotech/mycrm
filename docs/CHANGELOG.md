@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## v4.2.2 — fix(newsletter): quick-send 顯示可寄送人數（2026-04-25）
+
+quick-send 頁面顯示的名單人數沒有扣除退信/退訂（選 491 人的名單，實際只會寄 488），和名單詳情頁不一致。
+
+### 改動
+- **新增 API `GET /api/newsletter/lists/stats`**：回傳每個 list 的 `{ total, eligible }`，eligibility 套用與 send flow 相同的過濾條件（unsubscribed_at / blacklist / unsubscribes / contact.email_status）
+- **quick-send 頁面**：
+  - 顯示 `eligibleCount / memberCount` 格式（當有差異時）
+  - 總計改顯示「可寄送」人數，附帶「排除退信/退訂 N 人」提示
+  - 寄送 confirm 和按鈕都用 eligible 人數
+
 ## v4.2.1 — fix(newsletter): 退信狀態以 contacts.email_status 為準（2026-04-25）
 
 前一版會把退信的 CRM 聯絡人同時寫入 `contacts.email_status` 和 `newsletter_blacklist`，資料重複且不一致（v4.2.0 sync 後 林楨特 / 劉家豪 兩人只有 blacklist 沒有 email_status）。改成：CRM 聯絡人以 `email_status` 為 canonical，`newsletter_blacklist` 只用於非 CRM 的外部 email。
