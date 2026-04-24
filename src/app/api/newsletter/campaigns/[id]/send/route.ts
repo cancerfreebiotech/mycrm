@@ -88,18 +88,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .is('unsubscribed_at', null)
     const rawSubs = (subs ?? []) as Subscriber[]
 
-    // Filter out blacklisted (hard bounce / spam / invalid) and globally unsubscribed emails
+    // Filter out suppressed emails.
+    // Sources checked (in priority order):
+    //   1. contacts.email_status ∈ {bounced, invalid, unsubscribed} — canonical for CRM contacts
+    //   2. newsletter_blacklist — for non-contact emails (external subscribers)
+    //   3. newsletter_unsubscribes — global unsubscribe tracking
     const emails = [...new Set(rawSubs.map((s) => s.email.toLowerCase().trim()))]
-    const [{ data: bl }, { data: unsubs }] = await Promise.all([
+    const contactIds = [...new Set(rawSubs.map((s) => s.contact_id).filter((x): x is string => !!x))]
+    const [{ data: bl }, { data: unsubs }, { data: badContacts }] = await Promise.all([
       service.from('newsletter_blacklist').select('email').in('email', emails),
       service.from('newsletter_unsubscribes').select('email').in('email', emails),
+      contactIds.length > 0
+        ? service.from('contacts').select('id').in('id', contactIds).not('email_status', 'is', null)
+        : Promise.resolve({ data: [] as { id: string }[] }),
     ])
     const suppressed = new Set<string>([
       ...((bl ?? []) as { email: string }[]).map((r) => r.email.toLowerCase().trim()),
       ...((unsubs ?? []) as { email: string }[]).map((r) => r.email.toLowerCase().trim()),
     ])
+    const suppressedContactIds = new Set<string>(((badContacts ?? []) as { id: string }[]).map((c) => c.id))
 
-    recipients = rawSubs.filter((r) => !suppressed.has(r.email.toLowerCase().trim()))
+    recipients = rawSubs.filter((r) =>
+      !suppressed.has(r.email.toLowerCase().trim()) &&
+      !(r.contact_id && suppressedContactIds.has(r.contact_id))
+    )
   }
 
   if (recipients.length === 0) return NextResponse.json({ error: 'no valid recipients after filters' }, { status: 400 })

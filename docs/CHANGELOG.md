@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v4.2.1 — fix(newsletter): 退信狀態以 contacts.email_status 為準（2026-04-25）
+
+前一版會把退信的 CRM 聯絡人同時寫入 `contacts.email_status` 和 `newsletter_blacklist`，資料重複且不一致（v4.2.0 sync 後 林楨特 / 劉家豪 兩人只有 blacklist 沒有 email_status）。改成：CRM 聯絡人以 `email_status` 為 canonical，`newsletter_blacklist` 只用於非 CRM 的外部 email。
+
+### 改動
+- **DB 清理**：林楨特 / 劉家豪 的 `email_status` 回填 `'bounced'`，從 `newsletter_blacklist` 移除
+- **`sendgrid/import-suppressions`**：bounces / invalids 同步時先更新 `contacts.email_status`，再只把**非 CRM 聯絡人**的 email 寫入 blacklist
+- **`campaigns/[id]/send`**：filter 加入 `contacts.email_status IS NOT NULL` 檢查；移除 blacklist 後這些人仍會被正確排除
+
 ## v4.2.0 — feat(newsletter): 收件名單管理強化 + SendGrid 狀態整合（2026-04-25）
 
 收件名單管理頁（`/admin/newsletter/lists/[id]`）加入完整的管理能力，SendGrid 退信/退訂狀態全面整合到寄送流程。

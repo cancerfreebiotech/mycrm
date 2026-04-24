@@ -99,13 +99,23 @@ async function runImport() {
         email: b.email.toLowerCase().trim(),
         reason: `hard_bounce: ${b.reason ?? b.status ?? ''}`.slice(0, 200),
       }))
-      const { error } = await supabase
-        .from('newsletter_blacklist')
-        .upsert(rows, { onConflict: 'email' })
-      if (error) throw new Error(error.message)
-
       const emails = rows.map((r) => r.email)
+
+      // Update contacts.email_status for CRM contacts (canonical source for contacts)
       await supabase.from('contacts').update({ email_status: 'bounced' }).in('email', emails).is('deleted_at', null)
+
+      // Find which emails have matching CRM contacts — those skip blacklist (status is enough)
+      const { data: matchingContacts } = await supabase
+        .from('contacts').select('email').in('email', emails).is('deleted_at', null)
+      const contactEmails = new Set(((matchingContacts ?? []) as { email: string }[]).map((c) => c.email.toLowerCase().trim()))
+      const blacklistRows = rows.filter((r) => !contactEmails.has(r.email))
+
+      if (blacklistRows.length > 0) {
+        const { error } = await supabase
+          .from('newsletter_blacklist')
+          .upsert(blacklistRows, { onConflict: 'email' })
+        if (error) throw new Error(error.message)
+      }
 
       // Build log map: email → { created, content }
       const emailToInfo = new Map(bounces.map((b) => [
@@ -130,13 +140,21 @@ async function runImport() {
         email: i.email.toLowerCase().trim(),
         reason: `invalid_email: ${i.error ?? ''}`.slice(0, 200),
       }))
-      const { error } = await supabase
-        .from('newsletter_blacklist')
-        .upsert(rows, { onConflict: 'email' })
-      if (error) throw new Error(error.message)
-
       const emails = rows.map((r) => r.email)
+
       await supabase.from('contacts').update({ email_status: 'invalid' }).in('email', emails).is('deleted_at', null)
+
+      const { data: matchingContacts } = await supabase
+        .from('contacts').select('email').in('email', emails).is('deleted_at', null)
+      const contactEmails = new Set(((matchingContacts ?? []) as { email: string }[]).map((c) => c.email.toLowerCase().trim()))
+      const blacklistRows = rows.filter((r) => !contactEmails.has(r.email))
+
+      if (blacklistRows.length > 0) {
+        const { error } = await supabase
+          .from('newsletter_blacklist')
+          .upsert(blacklistRows, { onConflict: 'email' })
+        if (error) throw new Error(error.message)
+      }
 
       const emailToInfo = new Map(invalids.map((i) => [
         i.email.toLowerCase().trim(),
