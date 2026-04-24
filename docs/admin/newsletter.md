@@ -2,6 +2,7 @@
 title: 電子報
 parent: 管理員
 nav_order: 7
+render_with_liquid: false
 ---
 
 # 電子報（Newsletter）

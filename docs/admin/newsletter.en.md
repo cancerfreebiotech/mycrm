@@ -2,6 +2,7 @@
 title: Newsletter
 parent: Admin
 nav_order: 7
+render_with_liquid: false
 ---
 
 # Newsletter

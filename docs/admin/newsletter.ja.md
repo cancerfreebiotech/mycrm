@@ -2,6 +2,7 @@
 title: ニュースレター
 parent: 管理者
 nav_order: 7
+render_with_liquid: false
 ---
 
 # ニュースレター（Newsletter）

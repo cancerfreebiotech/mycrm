@@ -18,10 +18,5 @@ footer_content: "© CancerFree Biotech"
 exclude:
   - SUMMARY.md
   - PRD.md
-
-# 關掉頁面內容的 Liquid 解析（避免文件中 {{{unsubscribe}}} 等 placeholder 被誤判）
-defaults:
-  - scope:
-      path: ""
-    values:
-      render_with_liquid: false
+  - CHANGELOG.md
+  - newsletter-templates
