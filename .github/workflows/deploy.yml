@@ -8,26 +8,37 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      VERCEL_ORG_ID: team_2ROdEsQOs9WqAXrHwtIevCO9
+      VERCEL_PROJECT_ID: prj_odEiiPu3BMz61CG1fGzn28SeiNds
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Configure npm retries
+        run: |
+          npm config set fetch-retries 5
+          npm config set fetch-retry-mintimeout 10000
+          npm config set fetch-retry-maxtimeout 60000
+
+      - name: Install dependencies
+        run: npm ci
+        timeout-minutes: 10
 
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
       - name: Pull Vercel environment
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: team_2ROdEsQOs9WqAXrHwtIevCO9
-          VERCEL_PROJECT_ID: prj_odEiiPu3BMz61CG1fGzn28SeiNds
 
       - name: Build
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: team_2ROdEsQOs9WqAXrHwtIevCO9
-          VERCEL_PROJECT_ID: prj_odEiiPu3BMz61CG1fGzn28SeiNds
 
       - name: Deploy
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: team_2ROdEsQOs9WqAXrHwtIevCO9
-          VERCEL_PROJECT_ID: prj_odEiiPu3BMz61CG1fGzn28SeiNds

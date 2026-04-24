@@ -90,7 +90,7 @@ async function resolveModelConfig(aiModelId: string | null): Promise<ModelConfig
 
   // Fallback: treat as plain model string (legacy) or use default
   return {
-    modelId: aiModelId ?? 'gemini-2.5-flash',
+    modelId: aiModelId ?? 'gemini-3.1-flash-lite-preview',
     apiKey: process.env.GEMINI_API_KEY!,
   }
 }

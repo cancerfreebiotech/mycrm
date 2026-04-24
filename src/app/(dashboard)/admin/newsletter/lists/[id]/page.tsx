@@ -1,11 +1,14 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { PermissionGate } from '@/components/PermissionGate'
-import { Loader2, ArrowLeft, Users, Search, Link as LinkIcon } from 'lucide-react'
+import {
+  Loader2, ArrowLeft, Users, Search, Link as LinkIcon,
+  Plus, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, X,
+} from 'lucide-react'
 
 interface ListMeta {
   id: string
@@ -25,88 +28,179 @@ interface SubscriberRow {
   contact_name: string | null
 }
 
+interface ContactResult {
+  id: string
+  name: string | null
+  name_en: string | null
+  name_local: string | null
+  email: string | null
+  company: string | null
+}
+
+type SortCol = 'email' | 'name' | 'added_at' | 'status'
+type SortDir = 'asc' | 'desc'
+
+function SortIcon({ col, active, dir }: { col: SortCol; active: SortCol; dir: SortDir }) {
+  if (col !== active) return <ChevronsUpDown size={12} className="ml-1 text-gray-400 inline" />
+  return dir === 'asc'
+    ? <ChevronUp size={12} className="ml-1 text-blue-500 inline" />
+    : <ChevronDown size={12} className="ml-1 text-blue-500 inline" />
+}
+
 export default function ListDetailPage() {
   const params = useParams<{ id: string }>()
   const id = params.id
   const supabase = createBrowserSupabaseClient()
+
   const [list, setList] = useState<ListMeta | null>(null)
   const [subs, setSubs] = useState<SubscriberRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [sortCol, setSortCol] = useState<SortCol>('added_at')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
 
-  useEffect(() => {
-    (async () => {
-      const [{ data: listData }, { data: memberData }] = await Promise.all([
-        supabase.from('newsletter_lists').select('id, key, name, description').eq('id', id).maybeSingle(),
-        supabase
-          .from('newsletter_subscriber_lists')
-          .select('added_at, newsletter_subscribers(id, email, first_name, last_name, contact_id, unsubscribed_at)')
-          .eq('list_id', id)
-          .order('added_at', { ascending: false }),
-      ])
-      setList((listData ?? null) as ListMeta | null)
+  // Add modal state
+  const [showAdd, setShowAdd] = useState(false)
+  const [contactSearch, setContactSearch] = useState('')
+  const [contactResults, setContactResults] = useState<ContactResult[]>([])
+  const [contactLoading, setContactLoading] = useState(false)
+  const [addingId, setAddingId] = useState<string | null>(null)
+  const [addError, setAddError] = useState<string | null>(null)
 
-      const rows: SubscriberRow[] = []
-      const contactIds: string[] = []
-      for (const m of memberData ?? []) {
-        const s = (m as unknown as { added_at: string; newsletter_subscribers: { id: string; email: string; first_name: string | null; last_name: string | null; contact_id: string | null; unsubscribed_at: string | null } }).newsletter_subscribers
-        if (!s) continue
-        rows.push({
-          id: s.id,
-          email: s.email,
-          first_name: s.first_name,
-          last_name: s.last_name,
-          contact_id: s.contact_id,
-          unsubscribed_at: s.unsubscribed_at,
-          added_at: (m as { added_at: string }).added_at,
-          contact_name: null,
-        })
-        if (s.contact_id) contactIds.push(s.contact_id)
+  // Delete state
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const loadList = useCallback(async () => {
+    const [{ data: listData }, { data: memberData }] = await Promise.all([
+      supabase.from('newsletter_lists').select('id, key, name, description').eq('id', id).maybeSingle(),
+      supabase
+        .from('newsletter_subscriber_lists')
+        .select('added_at, newsletter_subscribers(id, email, first_name, last_name, contact_id, unsubscribed_at)')
+        .eq('list_id', id)
+        .order('added_at', { ascending: false }),
+    ])
+    setList((listData ?? null) as ListMeta | null)
+
+    const rows: SubscriberRow[] = []
+    const contactIds: string[] = []
+    for (const m of memberData ?? []) {
+      const s = (m as unknown as { added_at: string; newsletter_subscribers: { id: string; email: string; first_name: string | null; last_name: string | null; contact_id: string | null; unsubscribed_at: string | null } }).newsletter_subscribers
+      if (!s) continue
+      rows.push({ id: s.id, email: s.email, first_name: s.first_name, last_name: s.last_name, contact_id: s.contact_id, unsubscribed_at: s.unsubscribed_at, added_at: (m as { added_at: string }).added_at, contact_name: null })
+      if (s.contact_id) contactIds.push(s.contact_id)
+    }
+
+    if (contactIds.length > 0) {
+      const { data: contacts } = await supabase.from('contacts').select('id, name, name_en, name_local').in('id', [...new Set(contactIds)])
+      const nameMap = new Map<string, string>()
+      for (const c of contacts ?? []) {
+        const n = c as { id: string; name: string | null; name_en: string | null; name_local: string | null }
+        nameMap.set(n.id, n.name || n.name_en || n.name_local || '')
       }
+      for (const r of rows) { if (r.contact_id) r.contact_name = nameMap.get(r.contact_id) ?? null }
+    }
 
-      // Fetch contact names in batch
-      if (contactIds.length > 0) {
-        const { data: contacts } = await supabase
-          .from('contacts')
-          .select('id, name, name_en, name_local')
-          .in('id', [...new Set(contactIds)])
-        const nameMap = new Map<string, string>()
-        for (const c of contacts ?? []) {
-          const n = (c as { name: string | null; name_en: string | null; name_local: string | null })
-          nameMap.set((c as { id: string }).id, n.name || n.name_en || n.name_local || '')
-        }
-        for (const r of rows) {
-          if (r.contact_id) r.contact_name = nameMap.get(r.contact_id) ?? null
-        }
-      }
-
-      setSubs(rows)
-      setLoading(false)
-    })()
+    setSubs(rows)
+    setLoading(false)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
+  useEffect(() => { loadList() }, [loadList])
+
+  // Debounced contact search
+  useEffect(() => {
+    if (!showAdd) return
+    if (!contactSearch.trim()) { setContactResults([]); return }
+    const timer = setTimeout(async () => {
+      setContactLoading(true)
+      const q = `%${contactSearch}%`
+      const { data } = await supabase
+        .from('contacts')
+        .select('id, name, name_en, name_local, email, company')
+        .is('deleted_at', null)
+        .or(`name.ilike.${q},name_en.ilike.${q},email.ilike.${q}`)
+        .order('name')
+        .limit(20)
+      setContactResults((data ?? []) as ContactResult[])
+      setContactLoading(false)
+    }, 300)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contactSearch, showAdd])
+
+  function toggleSort(col: SortCol) {
+    if (sortCol === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortCol(col); setSortDir('asc') }
+  }
+
   const filtered = useMemo(() => {
-    if (!search.trim()) return subs
-    const q = search.toLowerCase()
-    return subs.filter((s) =>
-      s.email.toLowerCase().includes(q) ||
-      s.first_name?.toLowerCase().includes(q) ||
-      s.last_name?.toLowerCase().includes(q) ||
-      s.contact_name?.toLowerCase().includes(q)
-    )
+    const q = search.toLowerCase().trim()
+    return q
+      ? subs.filter((s) =>
+          s.email.toLowerCase().includes(q) ||
+          s.first_name?.toLowerCase().includes(q) ||
+          s.last_name?.toLowerCase().includes(q) ||
+          s.contact_name?.toLowerCase().includes(q)
+        )
+      : subs
   }, [subs, search])
+
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      let cmp = 0
+      if (sortCol === 'email') cmp = a.email.localeCompare(b.email)
+      else if (sortCol === 'name') {
+        const an = [a.first_name, a.last_name].filter(Boolean).join(' ')
+        const bn = [b.first_name, b.last_name].filter(Boolean).join(' ')
+        cmp = an.localeCompare(bn)
+      } else if (sortCol === 'added_at') cmp = a.added_at.localeCompare(b.added_at)
+      else if (sortCol === 'status') cmp = (a.unsubscribed_at ? 1 : 0) - (b.unsubscribed_at ? 1 : 0)
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }, [filtered, sortCol, sortDir])
+
+  async function handleAdd(contact: ContactResult) {
+    if (!contact.email) { setAddError('此聯絡人沒有 email'); return }
+    setAddingId(contact.id)
+    setAddError(null)
+    const res = await fetch('/api/newsletter/list-members', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ list_id: id, contact_id: contact.id }),
+    })
+    const json = await res.json()
+    if (!res.ok) { setAddError(json.error ?? '新增失敗'); setAddingId(null); return }
+    setAddingId(null)
+    setShowAdd(false)
+    setContactSearch('')
+    setContactResults([])
+    setAddError(null)
+    await loadList()
+  }
+
+  async function handleDelete(subscriberId: string) {
+    if (!confirm('確定要將此人從名單移除？')) return
+    setDeletingId(subscriberId)
+    await fetch('/api/newsletter/list-members', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ list_id: id, subscriber_id: subscriberId }),
+    })
+    setDeletingId(null)
+    await loadList()
+  }
 
   if (loading) {
     return <div className="flex justify-center py-20"><Loader2 size={24} className="animate-spin text-gray-400" /></div>
   }
-
   if (!list) {
     return <div className="p-8 text-center text-gray-400">找不到名單</div>
   }
 
   const linkedCount = subs.filter((s) => s.contact_id).length
   const unsubCount = subs.filter((s) => s.unsubscribed_at).length
+
+  const thClass = 'text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 cursor-pointer select-none hover:text-gray-900 dark:hover:text-gray-100 whitespace-nowrap'
 
   return (
     <PermissionGate feature="newsletter">
@@ -116,13 +210,19 @@ export default function ListDetailPage() {
             <ArrowLeft size={18} />
           </Link>
           <Users size={22} className="text-blue-500" />
-          <div>
+          <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{list.name}</h1>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
               <code className="font-mono">{list.key}</code>
               {list.description && <> · {list.description}</>}
             </p>
           </div>
+          <button
+            onClick={() => { setShowAdd(true); setContactSearch(''); setContactResults([]); setAddError(null) }}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
+          >
+            <Plus size={14} /> 新增聯絡人
+          </button>
         </div>
 
         <div className="grid grid-cols-3 gap-3 mb-4">
@@ -151,21 +251,30 @@ export default function ListDetailPage() {
           />
         </div>
 
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
-                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">Email</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 hidden sm:table-cell">姓名</th>
+                <th className={thClass} onClick={() => toggleSort('email')}>
+                  Email <SortIcon col="email" active={sortCol} dir={sortDir} />
+                </th>
+                <th className={`${thClass} hidden sm:table-cell`} onClick={() => toggleSort('name')}>
+                  姓名 <SortIcon col="name" active={sortCol} dir={sortDir} />
+                </th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">CRM 聯絡人</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 hidden md:table-cell">加入時間</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">狀態</th>
+                <th className={`${thClass} hidden md:table-cell`} onClick={() => toggleSort('added_at')}>
+                  加入時間 <SortIcon col="added_at" active={sortCol} dir={sortDir} />
+                </th>
+                <th className={thClass} onClick={() => toggleSort('status')}>
+                  狀態 <SortIcon col="status" active={sortCol} dir={sortDir} />
+                </th>
+                <th className="px-4 py-3 w-10" />
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">{search ? '無符合搜尋結果' : '名單目前沒有訂閱者'}</td></tr>
-              ) : filtered.map((s) => {
+              {sorted.length === 0 ? (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">{search ? '無符合搜尋結果' : '名單目前沒有訂閱者'}</td></tr>
+              ) : sorted.map((s) => {
                 const displayName = [s.first_name, s.last_name].filter(Boolean).join(' ').trim()
                 return (
                   <tr key={s.id} className="border-b border-gray-100 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/30">
@@ -190,6 +299,16 @@ export default function ListDetailPage() {
                         <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">訂閱中</span>
                       )}
                     </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => handleDelete(s.id)}
+                        disabled={deletingId === s.id}
+                        className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40"
+                        title="從名單移除"
+                      >
+                        {deletingId === s.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                      </button>
+                    </td>
                   </tr>
                 )
               })}
@@ -197,8 +316,81 @@ export default function ListDetailPage() {
           </table>
         </div>
 
-        <p className="text-xs text-gray-400 mt-3">顯示 {filtered.length} / {subs.length} 筆</p>
+        <p className="text-xs text-gray-400 mt-3">顯示 {sorted.length} / {subs.length} 筆</p>
       </div>
+
+      {/* Add Contact Modal */}
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800">
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100">新增聯絡人到名單</h2>
+              <button
+                onClick={() => setShowAdd(false)}
+                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-5">
+              <div className="relative mb-3">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  autoFocus
+                  type="text"
+                  value={contactSearch}
+                  onChange={(e) => setContactSearch(e.target.value)}
+                  placeholder="搜尋聯絡人姓名或 email..."
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {addError && (
+                <p className="mb-3 text-sm text-red-600 dark:text-red-400">{addError}</p>
+              )}
+
+              <div className="max-h-72 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                {contactLoading ? (
+                  <div className="flex justify-center py-8"><Loader2 size={18} className="animate-spin text-gray-400" /></div>
+                ) : contactSearch.trim() === '' ? (
+                  <p className="py-8 text-center text-sm text-gray-400">輸入姓名或 email 搜尋</p>
+                ) : contactResults.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-gray-400">找不到符合的聯絡人</p>
+                ) : contactResults.map((c) => {
+                  const displayName = c.name || c.name_en || c.name_local || '（無名）'
+                  const alreadyIn = subs.some((s) => s.contact_id === c.id)
+                  return (
+                    <button
+                      key={c.id}
+                      disabled={!!alreadyIn || addingId === c.id || !c.email}
+                      onClick={() => handleAdd(c)}
+                      className="w-full text-left px-4 py-3 border-b border-gray-100 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{displayName}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {c.email ?? <span className="text-red-400">無 email</span>}
+                          {c.company && ` · ${c.company}`}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-xs">
+                        {alreadyIn ? (
+                          <span className="text-gray-400">已在名單</span>
+                        ) : addingId === c.id ? (
+                          <Loader2 size={14} className="animate-spin text-blue-500" />
+                        ) : (
+                          <span className="text-blue-600 dark:text-blue-400">新增</span>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </PermissionGate>
   )
 }
