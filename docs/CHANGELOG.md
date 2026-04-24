@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v4.2.3 — feat(sendgrid): webhook 加 dropped 事件 + 統一 suppression policy（2026-04-25）
+
+SendGrid 寄送後的 drops（pre-send 拒發，例如 invalid / bounced address / spam）原本 webhook 不處理，要等每日 cron 才會同步。加上即時處理，同時把 webhook 的 suppression 邏輯對齊 v4.2.1 的 policy：CRM 聯絡人只更新 `contacts.email_status`，非 CRM 才寫 blacklist。
+
+### 改動
+- **新增 `dropped` event 處理**：根據 `reason` 分類為 bounced / invalid / unsubscribed，即時更新狀態
+- **統一 suppression 邏輯**：抽出 `markSuppressed()` helper，bounce / dropped / spamreport / unsubscribe 都走同一條路
+- **修 bug**：舊 webhook 的 `bounce` handler 只寫 blacklist，沒更新 `contacts.email_status`，導致 CRM 聯絡人退信後頁面看不出來；改成優先更新 `email_status`
+
 ## v4.2.2 — fix(newsletter): quick-send 顯示可寄送人數（2026-04-25）
 
 quick-send 頁面顯示的名單人數沒有扣除退信/退訂（選 491 人的名單，實際只會寄 488），和名單詳情頁不一致。

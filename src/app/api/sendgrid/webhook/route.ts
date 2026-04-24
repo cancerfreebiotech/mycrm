@@ -14,14 +14,63 @@ function verifySignature(req: NextRequest, rawBody: string): boolean {
 }
 
 interface SendGridEvent {
-  event: 'open' | 'click' | 'unsubscribe' | 'bounce' | 'spamreport' | string
+  event: 'open' | 'click' | 'unsubscribe' | 'bounce' | 'dropped' | 'spamreport' | string
   email: string
   timestamp: number
   'X-Campaign-Id'?: string
   'X-Recipient-Id'?: string
   bounce_classification?: string
   type?: string // hard / soft for bounce
+  reason?: string // drop reason (e.g. "Bounced Address", "Invalid")
   url?: string
+}
+
+type SuppressStatus = 'bounced' | 'invalid' | 'unsubscribed'
+
+// Canonical suppression update: for CRM contacts → update contacts.email_status;
+// for non-CRM emails → write to newsletter_blacklist (or unsubscribes).
+// Mirrors the policy enforced in /api/sendgrid/import-suppressions (v4.2.1).
+async function markSuppressed(
+  supabase: ReturnType<typeof createServiceClient>,
+  email: string,
+  status: SuppressStatus,
+  reason: string,
+) {
+  const normalized = email.toLowerCase().trim()
+  const { data: contact } = await supabase
+    .from('contacts')
+    .select('id')
+    .eq('email', normalized)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  if (contact) {
+    await supabase.from('contacts').update({ email_status: status }).eq('id', contact.id)
+    return
+  }
+
+  if (status === 'unsubscribed') {
+    await supabase
+      .from('newsletter_unsubscribes')
+      .upsert({ email: normalized, source: 'webhook', reason }, { onConflict: 'email' })
+  } else {
+    await supabase
+      .from('newsletter_blacklist')
+      .upsert({ email: normalized, reason }, { onConflict: 'email' })
+  }
+}
+
+// Classify a SendGrid "dropped" event's reason into a suppression status.
+// SendGrid drop reasons include:
+//   "Bounced Address" / "Invalid" / "Spam Reported" / "Unsubscribed Address" /
+//   "Invalid SMTPAPI header" / "Recipient List over Package Quota"
+function classifyDropReason(reason: string): SuppressStatus | null {
+  const r = reason.toLowerCase()
+  if (r.includes('unsubscribe')) return 'unsubscribed'
+  if (r.includes('invalid')) return 'invalid'
+  if (r.includes('bounce') || r.includes('spam')) return 'bounced'
+  // Unknown drop reason → conservative: mark as bounced
+  return 'bounced'
 }
 
 export async function POST(req: NextRequest) {
@@ -50,7 +99,7 @@ export async function POST(req: NextRequest) {
             .from('newsletter_recipients')
             .update({ opened_at: new Date(ev.timestamp * 1000).toISOString() })
             .eq('id', recipientId)
-            .is('opened_at', null) // only set first open
+            .is('opened_at', null)
         }
         break
 
@@ -60,66 +109,41 @@ export async function POST(req: NextRequest) {
             .from('newsletter_recipients')
             .update({ clicked_at: new Date(ev.timestamp * 1000).toISOString() })
             .eq('id', recipientId)
-            .is('clicked_at', null) // only set first click
+            .is('clicked_at', null)
         }
         break
 
-      case 'unsubscribe': {
-        // Find contact by email
-        const { data: contact } = await supabase
-          .from('contacts')
-          .select('id')
-          .eq('email', ev.email)
-          .maybeSingle()
-
-        await supabase
-          .from('newsletter_unsubscribes')
-          .upsert(
-            { email: ev.email, contact_id: contact?.id ?? null, source: 'webhook' },
-            { onConflict: 'email' }
-          )
+      case 'unsubscribe':
+        await markSuppressed(supabase, ev.email, 'unsubscribed', 'SendGrid webhook unsubscribe')
         break
-      }
 
       case 'bounce':
         if (ev.type === 'bounce') {
-          // Hard bounce → blacklist
-          const { data: contact } = await supabase
-            .from('contacts')
-            .select('id')
-            .eq('email', ev.email)
-            .maybeSingle()
-
-          await supabase
-            .from('newsletter_blacklist')
-            .upsert(
-              { email: ev.email, contact_id: contact?.id ?? null, reason: 'hard_bounce' },
-              { onConflict: 'email' }
-            )
+          // Hard bounce
+          await markSuppressed(supabase, ev.email, 'bounced', `hard_bounce: ${ev.bounce_classification ?? ''}`.slice(0, 200))
         }
         if (recipientId) {
-          await supabase
-            .from('newsletter_recipients')
-            .update({ status: 'failed' })
-            .eq('id', recipientId)
+          await supabase.from('newsletter_recipients').update({ status: 'failed' }).eq('id', recipientId)
         }
         break
 
-      case 'spamreport': {
-        const { data: contact } = await supabase
-          .from('contacts')
-          .select('id')
-          .eq('email', ev.email)
-          .maybeSingle()
-
-        await supabase
-          .from('newsletter_blacklist')
-          .upsert(
-            { email: ev.email, contact_id: contact?.id ?? null, reason: 'spam' },
-            { onConflict: 'email' }
-          )
+      case 'dropped': {
+        // Pre-send drop — SendGrid refused to deliver. Reasons include
+        // bounced address, invalid format, spam, prior unsubscribe etc.
+        const reason = ev.reason ?? 'dropped'
+        const status = classifyDropReason(reason)
+        if (status) {
+          await markSuppressed(supabase, ev.email, status, `dropped: ${reason}`.slice(0, 200))
+        }
+        if (recipientId) {
+          await supabase.from('newsletter_recipients').update({ status: 'failed' }).eq('id', recipientId)
+        }
         break
       }
+
+      case 'spamreport':
+        await markSuppressed(supabase, ev.email, 'bounced', 'spam_report')
+        break
     }
   }
 
