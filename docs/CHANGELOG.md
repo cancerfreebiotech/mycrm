@@ -2,6 +2,10 @@
 
 ## v4.3.2 — feat(dashboard): Email 寄送狀態總覽 + 補完 in-app 文件（2026-04-25）
 
+📌 補充：v4.3.2 後 `docs_content.user`（三語）也補上了 newsletter 訂閱者管理操作 + 7 種 email status badge 含義 + 手動清除步驟。super_admin 補架構與技術細節，user 補日常操作。
+
+
+
 過去 7 天 email_status 系列功能（v4.2.0–v4.3.1）的收尾，把使用者該知道的東西放到對的地方。
 
 ### Dashboard
