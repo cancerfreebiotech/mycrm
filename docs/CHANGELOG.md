@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## v4.4.0 — feat(bot): 偵測同名重複時，可選擇加到既有聯絡人（2026-04-25）
+
+過去 Telegram bot 拍名片時偵測到同名/同 email 的聯絡人，只能選「✅ 確認存檔（建新檔）」或「❌ 不存檔」。新增第三選項「📌 加到既有」直接把該名片合併到既存聯絡人。
+
+### 改動
+- **`src/app/api/bot/route.ts`** OCR 後的 dup 偵測流程：
+  - 偵測到 exact (email match) 或 similar (name match) 時，把 target id 暫存進 `pending_contacts.data._merge_target_id`
+  - 訊息 inline keyboard 改成 3 個按鈕：✅ 仍建立新聯絡人 / 📌 加到「{既有聯絡人}」/ ❌ 不存檔
+- **新增 `merge_<pendingId>` callback handler**：
+  - 拉 pending data + target contact 現有欄位
+  - 計算 toFill（OCR 有/contact 空）+ conflicts（不同值）
+  - UPDATE 填空白、INSERT contact_cards 加圖、INSERT interaction_logs (type=system) 寫衝突
+  - DELETE pending_contacts、updateLastContact 切到目標聯絡人
+  - 回覆「已加到「XXX」：填入 N 個空白欄位、M 個衝突寫入互動紀錄、🖼 名片圖已加入」+ 連結
+- **save_ handler**：新增 `_merge_target_id` 也會被 strip 掉（不寫入 contacts 主表）
+
 ## v4.3.7 — fix(contacts): revert v4.3.6，衝突欄位仍要寫互動紀錄（2026-04-25）
 
 v4.3.6 誤解需求把衝突 → interaction_logs 寫入邏輯刪掉了，會造成新名片上的不同資訊流失。還原。

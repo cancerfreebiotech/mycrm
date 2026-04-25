@@ -768,15 +768,27 @@ async function handlePhoto(
       nameLocal: cardData.name_local,
     })
     let dupWarning = ''
+    let mergeTargetId: string | null = null
+    let mergeTargetName: string | null = null
     if (exact.length > 0) {
       const e = exact[0]
+      mergeTargetId = e.id
+      mergeTargetName = e.name
       dupWarning += `\n⚠️ 此 email 已有聯絡人：${e.name}（${e.company}），是否仍要新增？`
     } else if (similar.length > 0) {
       const s = similar[0]
+      mergeTargetId = s.id
+      mergeTargetName = s.name
       dupWarning += `\n🔍 系統有相似聯絡人：${s.name}（${s.company}），請確認是否為同一人`
     }
 
-    const contactPayload = { ...cardData, card_img_url: cardImgUrl, language: countryToLanguage(cardData.country_code) }
+    const contactPayload = {
+      ...cardData,
+      card_img_url: cardImgUrl,
+      language: countryToLanguage(cardData.country_code),
+      // hidden field for "merge to existing" flow; stripped before INSERT contacts
+      _merge_target_id: mergeTargetId,
+    }
     const { data: pending, error: pendingError } = await supabase
       .from('pending_contacts')
       .insert({ data: contactPayload, created_by: user.id, storage_path: storagePath })
@@ -807,13 +819,19 @@ async function handlePhoto(
       dupWarning +
       m.cardConfirmPrompt
 
+    // Build buttons: when dup detected, offer 3rd option to merge into existing contact
+    const cardButtons: Array<Array<{ text: string; callback_data: string }>> = [[
+      { text: mergeTargetId ? '✅ 仍建立新聯絡人' : '✅ 確認存檔', callback_data: `save_${pending.id}` },
+    ]]
+    if (mergeTargetId && mergeTargetName) {
+      cardButtons.push([
+        { text: `📌 加到「${mergeTargetName}」`, callback_data: `merge_${pending.id}` },
+      ])
+    }
+    cardButtons.push([{ text: '❌ 不存檔', callback_data: `cancel_${pending.id}` }])
+
     await sendMessage(chatId, resultText, {
-      reply_markup: {
-        inline_keyboard: [[
-          { text: '✅ 確認存檔', callback_data: `save_${pending.id}` },
-          { text: '❌ 不存檔', callback_data: `cancel_${pending.id}` },
-        ]],
-      },
+      reply_markup: { inline_keyboard: cardButtons },
     })
   } catch (err) {
     const msg = err instanceof Error
@@ -1789,8 +1807,8 @@ export async function POST(req: NextRequest) {
 
           await answerCallbackQuery(callbackQueryId, m.cbCardSaved)
 
-          // Strip rotation field (OCR-only, no contacts column)
-          const { rotation: _r, ...contactFields } = pending.data as Record<string, unknown>
+          // Strip rotation + merge-target hidden fields (OCR/UI-only, no contacts column)
+          const { rotation: _r, _merge_target_id: _mt, ...contactFields } = pending.data as Record<string, unknown>
           const { data: inserted, error } = await supabase
             .from('contacts')
             .insert({ ...contactFields, created_by: user.id })
@@ -1839,6 +1857,97 @@ export async function POST(req: NextRequest) {
               await sendMessage(from.id, enrichStatusMessage(r, 'zh-TW'))
             } catch { /* non-fatal */ }
           }
+        }
+
+        // ── Merge to existing contact (when dup detected) ─────────────────────
+        else if (data?.startsWith('merge_')) {
+          const pendingId = data.replace('merge_', '')
+          const { data: pending } = await supabase
+            .from('pending_contacts')
+            .select('data, storage_path')
+            .eq('id', pendingId)
+            .single()
+          if (!pending) {
+            await answerCallbackQuery(callbackQueryId)
+            return NextResponse.json({ ok: true })
+          }
+
+          const pdata = pending.data as Record<string, unknown>
+          const targetId = pdata._merge_target_id as string | undefined
+          if (!targetId) {
+            await answerCallbackQuery(callbackQueryId, '無合併目標')
+            await sendMessage(from.id, '❌ 找不到合併目標聯絡人，請重新掃描。')
+            return NextResponse.json({ ok: true })
+          }
+
+          await answerCallbackQuery(callbackQueryId, '處理中...')
+
+          // Fetch target contact's current fields
+          const { data: existing } = await supabase
+            .from('contacts')
+            .select('id, name, name_en, name_local, company, job_title, email, phone, second_phone, address, website')
+            .eq('id', targetId)
+            .single()
+          if (!existing) {
+            await sendMessage(from.id, '❌ 目標聯絡人已不存在')
+            return NextResponse.json({ ok: true })
+          }
+
+          // Compute toFill (OCR has, contact empty) + conflicts
+          const FIELD_LABELS: Record<string, string> = {
+            name: '姓名', name_en: '英文名', name_local: '當地語名',
+            company: '公司', job_title: '職稱', email: 'Email',
+            phone: '電話', second_phone: '備用電話', address: '地址', website: '網站',
+          }
+          const toFill: Record<string, string> = {}
+          const conflicts: Array<{ key: string; label: string; newVal: string; oldVal: string }> = []
+          for (const key of Object.keys(FIELD_LABELS)) {
+            const newVal = pdata[key] as string | null | undefined
+            const oldVal = (existing as Record<string, unknown>)[key] as string | null | undefined
+            if (!newVal) continue
+            if (!oldVal) toFill[key] = newVal
+            else if (oldVal !== newVal) conflicts.push({ key, label: FIELD_LABELS[key], newVal, oldVal })
+          }
+
+          // Apply: fill empty fields
+          if (Object.keys(toFill).length > 0) {
+            await supabase.from('contacts').update(toFill).eq('id', targetId)
+          }
+
+          // Insert card image to contact_cards
+          if (pdata.card_img_url) {
+            const now = new Date()
+            const cardLabel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+            await supabase.from('contact_cards').insert({
+              contact_id: targetId,
+              card_img_url: pdata.card_img_url as string,
+              storage_path: pending.storage_path,
+              label: cardLabel,
+            })
+          }
+
+          // Conflicts → system log so info isn't lost
+          if (conflicts.length > 0) {
+            const noteLines = conflicts.map(c => `${c.label}：${c.newVal}（現有：${c.oldVal}）`).join('\n')
+            await supabase.from('interaction_logs').insert({
+              contact_id: targetId,
+              type: 'system',
+              content: `合併新名片資料（與現有不同的欄位）：\n${noteLines}`,
+              created_by: user.id,
+            })
+          }
+
+          await supabase.from('pending_contacts').delete().eq('id', pendingId)
+          await updateLastContact(from.id, targetId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+
+          const summary = []
+          if (Object.keys(toFill).length > 0) summary.push(`✅ 填入 ${Object.keys(toFill).length} 個空白欄位`)
+          if (conflicts.length > 0) summary.push(`📝 ${conflicts.length} 個衝突欄位寫入互動紀錄`)
+          summary.push('🖼 名片圖已加入')
+          const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+          const link = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${targetId}">查看 ${existing.name}</a>` : ''
+          await sendMessage(from.id, `已加到「${existing.name}」：\n${summary.join('\n')}${link}`)
         }
 
         // ── Cancel card ───────────────────────────────────────────────────────
