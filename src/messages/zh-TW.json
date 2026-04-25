@@ -219,7 +219,7 @@
     "rotate90cw": "順時針旋轉 90°",
     "ocrFillHint": "以下空白欄位將補上 OCR 識別結果：",
     "ocrNoFill": "OCR 未找到可補充的空白欄位，仍可儲存名片圖",
-    "ocrDiffWarn": "ℹ 這些欄位現有資料與名片不同（將忽略，保留現有資料）：",
+    "ocrDiffWarn": "⚠️ 與現有資料不同（保留現有資料，新值會存入互動紀錄）：",
     "groupPhoto": "合照",
     "photoNotePlaceholder": "附註...",
     "clickToAddNote": "點擊加入附註",
