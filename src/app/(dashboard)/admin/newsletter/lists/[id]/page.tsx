@@ -17,7 +17,7 @@ interface ListMeta {
   description: string | null
 }
 
-type EmailStatus = 'bounced' | 'invalid' | 'unsubscribed' | null
+type EmailStatus = 'bounced' | 'invalid' | 'unsubscribed' | 'deferred' | 'mailbox_full' | 'sender_blocked' | 'recipient_blocked' | null
 
 interface SubscriberRow {
   id: string
@@ -104,8 +104,8 @@ export default function ListDetailPage() {
         ? supabase.from('contacts').select('id, name, name_en, name_local, email_status').in('id', [...new Set(contactIds)])
         : Promise.resolve({ data: [] as { id: string; name: string | null; name_en: string | null; name_local: string | null; email_status: EmailStatus }[] }),
       emails.length > 0
-        ? supabase.from('newsletter_blacklist').select('email, reason').in('email', [...new Set(emails)])
-        : Promise.resolve({ data: [] as { email: string; reason: string | null }[] }),
+        ? supabase.from('newsletter_blacklist').select('email, status').in('email', [...new Set(emails)])
+        : Promise.resolve({ data: [] as { email: string; status: EmailStatus }[] }),
       emails.length > 0
         ? supabase.from('newsletter_unsubscribes').select('email').in('email', [...new Set(emails)])
         : Promise.resolve({ data: [] as { email: string }[] }),
@@ -117,17 +117,21 @@ export default function ListDetailPage() {
       nameMap.set(c.id, c.name || c.name_en || c.name_local || '')
       statusByContact.set(c.id, c.email_status)
     }
-    const blSet = new Set(((blRes.data ?? []) as { email: string }[]).map((r) => r.email.toLowerCase().trim()))
+    const blStatusMap = new Map<string, EmailStatus>()
+    for (const r of (blRes.data ?? []) as { email: string; status: EmailStatus }[]) {
+      blStatusMap.set(r.email.toLowerCase().trim(), r.status)
+    }
     const unsubSet = new Set(((unsubRes.data ?? []) as { email: string }[]).map((r) => r.email.toLowerCase().trim()))
 
     for (const r of rows) {
       if (r.contact_id) r.contact_name = nameMap.get(r.contact_id) ?? null
       const em = r.email.toLowerCase().trim()
       const contactStatus = r.contact_id ? statusByContact.get(r.contact_id) : null
-      // Priority: blacklist (bounce) > contact.email_status=invalid > unsubscribe sources
-      if (blSet.has(em) || contactStatus === 'bounced') r.email_status = 'bounced'
-      else if (contactStatus === 'invalid') r.email_status = 'invalid'
-      else if (unsubSet.has(em) || r.unsubscribed_at || contactStatus === 'unsubscribed') r.email_status = 'unsubscribed'
+      const blStatus = blStatusMap.get(em)
+      // Priority: contact.email_status > blacklist.status > unsubscribe
+      if (contactStatus) r.email_status = contactStatus
+      else if (blStatus) r.email_status = blStatus
+      else if (unsubSet.has(em) || r.unsubscribed_at) r.email_status = 'unsubscribed'
     }
 
     setSubs(rows)
@@ -188,7 +192,14 @@ export default function ListDetailPage() {
         else cmp = an.localeCompare(bn)
       } else if (sortCol === 'added_at') cmp = a.added_at.localeCompare(b.added_at)
       else if (sortCol === 'status') {
-        const order = (s: EmailStatus) => s === null ? 0 : s === 'unsubscribed' ? 1 : s === 'invalid' ? 2 : 3
+        const order = (s: EmailStatus) =>
+          s === null ? 0 :
+          s === 'deferred' ? 1 :
+          s === 'mailbox_full' ? 2 :
+          s === 'sender_blocked' ? 3 :
+          s === 'recipient_blocked' ? 4 :
+          s === 'unsubscribed' ? 5 :
+          s === 'invalid' ? 6 : 7
         cmp = order(a.email_status) - order(b.email_status)
       }
       return sortDir === 'asc' ? cmp : -cmp
@@ -253,6 +264,10 @@ export default function ListDetailPage() {
   const linkedCount = subs.filter((s) => s.contact_id).length
   const unsubCount = subs.filter((s) => s.email_status === 'unsubscribed').length
   const bouncedCount = subs.filter((s) => s.email_status === 'bounced' || s.email_status === 'invalid').length
+  const pendingCount = subs.filter((s) =>
+    s.email_status === 'deferred' || s.email_status === 'mailbox_full' ||
+    s.email_status === 'sender_blocked' || s.email_status === 'recipient_blocked'
+  ).length
   const activeCount = subs.filter((s) => s.email_status === null).length
 
   const thClass = 'text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 cursor-pointer select-none hover:text-gray-900 dark:hover:text-gray-100 whitespace-nowrap'
@@ -295,7 +310,7 @@ export default function ListDetailPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
             <div className="text-xs text-gray-500 dark:text-gray-400">總訂閱者</div>
             <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{subs.length}</div>
@@ -311,6 +326,10 @@ export default function ListDetailPage() {
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
             <div className="text-xs text-gray-500 dark:text-gray-400">退信 / 無效</div>
             <div className="text-2xl font-bold text-red-600 dark:text-red-400">{bouncedCount}</div>
+          </div>
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
+            <div className="text-xs text-gray-500 dark:text-gray-400">待處理</div>
+            <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400" title="暫時錯誤 / 信箱滿 / 寄件方問題 / 收件方擋信">{pendingCount}</div>
           </div>
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
             <div className="text-xs text-gray-500 dark:text-gray-400">已退訂</div>
@@ -371,9 +390,17 @@ export default function ListDetailPage() {
                       {s.email_status === 'bounced' ? (
                         <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">退信</span>
                       ) : s.email_status === 'invalid' ? (
-                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">無效</span>
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">無效</span>
                       ) : s.email_status === 'unsubscribed' ? (
                         <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400">已退訂</span>
+                      ) : s.email_status === 'deferred' ? (
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400" title="網路或對方伺服器暫時錯誤">暫時失敗</span>
+                      ) : s.email_status === 'mailbox_full' ? (
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400" title="對方信箱已滿">信箱滿</span>
+                      ) : s.email_status === 'sender_blocked' ? (
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400" title="寄件方認證/spam 問題">寄件擋</span>
+                      ) : s.email_status === 'recipient_blocked' ? (
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400" title="對方公司政策擋信">收件擋</span>
                       ) : (
                         <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">訂閱中</span>
                       )}

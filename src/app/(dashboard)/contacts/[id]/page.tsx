@@ -44,7 +44,7 @@ interface Contact {
   card_img_back_url: string | null
   created_at: string
   created_by: string | null
-  email_status: 'bounced' | 'unsubscribed' | 'invalid' | null
+  email_status: 'bounced' | 'unsubscribed' | 'invalid' | 'deferred' | 'mailbox_full' | 'sender_blocked' | 'recipient_blocked' | null
   users: { display_name: string | null } | null
   contact_tags: { tags: Tag }[]
 }
@@ -1665,6 +1665,8 @@ export default function ContactDetailPage() {
               ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800 text-red-700 dark:text-red-400'
               : contact.email_status === 'unsubscribed'
               ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-400'
+              : contact.email_status === 'sender_blocked' || contact.email_status === 'recipient_blocked'
+              ? 'bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-400'
               : 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-400'
           }`}>
             <div className="flex items-start gap-2">
@@ -1672,11 +1674,19 @@ export default function ContactDetailPage() {
                 {contact.email_status === 'bounced' && t('emailStatusBounced')}
                 {contact.email_status === 'unsubscribed' && t('emailStatusUnsubscribed')}
                 {contact.email_status === 'invalid' && t('emailStatusInvalid')}
+                {contact.email_status === 'deferred' && t('emailStatusDeferred')}
+                {contact.email_status === 'mailbox_full' && t('emailStatusMailboxFull')}
+                {contact.email_status === 'sender_blocked' && t('emailStatusSenderBlocked')}
+                {contact.email_status === 'recipient_blocked' && t('emailStatusRecipientBlocked')}
               </span>
               <span className="text-xs opacity-75">
                 {contact.email_status === 'bounced' && t('emailStatusBouncedDesc')}
                 {contact.email_status === 'unsubscribed' && t('emailStatusUnsubscribedDesc')}
                 {contact.email_status === 'invalid' && t('emailStatusInvalidDesc')}
+                {contact.email_status === 'deferred' && t('emailStatusDeferredDesc')}
+                {contact.email_status === 'mailbox_full' && t('emailStatusMailboxFullDesc')}
+                {contact.email_status === 'sender_blocked' && t('emailStatusSenderBlockedDesc')}
+                {contact.email_status === 'recipient_blocked' && t('emailStatusRecipientBlockedDesc')}
               </span>
             </div>
             <button

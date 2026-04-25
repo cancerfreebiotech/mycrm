@@ -32,7 +32,7 @@ interface Contact {
   last_activity_at: string
   importance: string
   language: string | null
-  email_status: 'bounced' | 'unsubscribed' | 'invalid' | null
+  email_status: 'bounced' | 'unsubscribed' | 'invalid' | 'deferred' | 'mailbox_full' | 'sender_blocked' | 'recipient_blocked' | null
   created_by: string | null
   users: { display_name: string | null } | null
   contact_tags: { tags: Tag }[]
@@ -747,6 +747,10 @@ export default function ContactsPage() {
                           {c.email_status === 'bounced' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 shrink-0">{t('emailStatusBounced')}</span>}
                           {c.email_status === 'unsubscribed' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800 shrink-0">{t('emailStatusUnsubscribed')}</span>}
                           {c.email_status === 'invalid' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800 shrink-0">{t('emailStatusInvalid')}</span>}
+                          {c.email_status === 'deferred' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800 shrink-0">{t('emailStatusDeferred')}</span>}
+                          {c.email_status === 'mailbox_full' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800 shrink-0">{t('emailStatusMailboxFull')}</span>}
+                          {c.email_status === 'sender_blocked' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800 shrink-0">{t('emailStatusSenderBlocked')}</span>}
+                          {c.email_status === 'recipient_blocked' && <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800 shrink-0">{t('emailStatusRecipientBlocked')}</span>}
                         </div>
                       )}
                     </div>
@@ -860,6 +864,18 @@ export default function ContactsPage() {
                         )}
                         {c.email_status === 'invalid' && (
                           <span className="inline-flex w-fit text-xs font-medium px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800">{t('emailStatusInvalid')}</span>
+                        )}
+                        {c.email_status === 'deferred' && (
+                          <span className="inline-flex w-fit text-xs font-medium px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800">{t('emailStatusDeferred')}</span>
+                        )}
+                        {c.email_status === 'mailbox_full' && (
+                          <span className="inline-flex w-fit text-xs font-medium px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800">{t('emailStatusMailboxFull')}</span>
+                        )}
+                        {c.email_status === 'sender_blocked' && (
+                          <span className="inline-flex w-fit text-xs font-medium px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800">{t('emailStatusSenderBlocked')}</span>
+                        )}
+                        {c.email_status === 'recipient_blocked' && (
+                          <span className="inline-flex w-fit text-xs font-medium px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800">{t('emailStatusRecipientBlocked')}</span>
                         )}
                       </div>
                     ) : '—'}

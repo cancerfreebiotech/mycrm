@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## v4.3.0 — feat(email-status): 新增 4 種細粒度寄送狀態（2026-04-25）
+
+原本 `email_status` 只有 `bounced` / `invalid` / `unsubscribed` 3 種，但 SendGrid Activity log 的失敗 / drop / blocked 還可細分為「暫時錯誤 / 信箱滿 / 寄件方問題 / 收件方擋信」等。新增 4 種狀態，這些都會被自動排除寄送，但聯絡人本人或團隊發現可恢復時，可以手動清除狀態。
+
+### 新增狀態
+- **`deferred`**（暫時無法寄送）— 上次寄送遇到網路 timeout / 500 service unavailable
+- **`mailbox_full`**（信箱已滿）— 對方信箱 quota 滿
+- **`sender_blocked`**（寄件方問題）— DKIM / SpamTrap / 寄件人認證問題（我方可修）
+- **`recipient_blocked`**（收件方擋信）— Relay denied / Transport rules / Hop count 等對方政策
+
+### DB 改動
+- **`contacts_email_status_check`** constraint 擴充為 7 種值
+- **`newsletter_blacklist`** 新增 `status` column（外部 email 也能分類）
+- 從 SendGrid Activity log 補回 4/17、4/19、4/24 三批共 ~345 個聯絡人 + 228 筆 blacklist，並依分類設定 status
+
+### 程式改動
+- **i18n**：zh-TW / en / ja 各加 4 個 label + 4 個 description
+- **聯絡人列表 / 詳情頁**：banner + badge 支援 7 種狀態
+- **電子報名單詳情頁**：stats 卡新增「待處理」格、行內 badge 7 種樣式、排序順序更新
+- **寄送過濾**：原本就已排除任何 non-null email_status，新狀態自動生效
+
+### 操作手冊
+- 看到聯絡人有 `deferred` / `mailbox_full` / `sender_blocked` / `recipient_blocked` badge，**不需要刪除聯絡人**
+- 確認問題已解決（例如對方清空信箱、我方修好 DKIM、對方加白名單）後，到聯絡人詳情頁點「清除狀態」即可恢復寄送
+
 ## v4.2.3 — feat(sendgrid): webhook 加 dropped 事件 + 統一 suppression policy（2026-04-25）
 
 SendGrid 寄送後的 drops（pre-send 拒發，例如 invalid / bounced address / spam）原本 webhook 不處理，要等每日 cron 才會同步。加上即時處理，同時把 webhook 的 suppression 邏輯對齊 v4.2.1 的 policy：CRM 聯絡人只更新 `contacts.email_status`，非 CRM 才寫 blacklist。
