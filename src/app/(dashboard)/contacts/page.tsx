@@ -72,7 +72,9 @@ export default function ContactsPage() {
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false)
   const [selectedLanguage, setSelectedLanguage] = useState<string>('')
   const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false)
-  const [selectedEmailStatus, setSelectedEmailStatus] = useState<string>('')
+  const [selectedEmailStatus, setSelectedEmailStatus] = useState<string>(
+    searchParams?.get('email_status') ?? ''
+  )
   const [creators, setCreators] = useState<Creator[]>([])
   const [selectedCreators, setSelectedCreators] = useState<string[]>([])
   const [emailStatusDropdownOpen, setEmailStatusDropdownOpen] = useState(false)
@@ -600,8 +602,12 @@ export default function ContactsPage() {
                 { value: '', label: 'ALL', dot: null },
                 { value: 'ok', label: t('emailStatusOk'), dot: 'bg-green-500' },
                 { value: 'bounced', label: t('emailStatusBounced'), dot: 'bg-red-500' },
-                { value: 'unsubscribed', label: t('emailStatusUnsubscribed'), dot: 'bg-orange-400' },
                 { value: 'invalid', label: t('emailStatusInvalid'), dot: 'bg-yellow-500' },
+                { value: 'unsubscribed', label: t('emailStatusUnsubscribed'), dot: 'bg-orange-400' },
+                { value: 'deferred', label: t('emailStatusDeferred'), dot: 'bg-yellow-400' },
+                { value: 'mailbox_full', label: t('emailStatusMailboxFull'), dot: 'bg-yellow-500' },
+                { value: 'sender_blocked', label: t('emailStatusSenderBlocked'), dot: 'bg-purple-500' },
+                { value: 'recipient_blocked', label: t('emailStatusRecipientBlocked'), dot: 'bg-purple-400' },
               ].map(({ value, label, dot }) => (
                 <button
                   key={value}
@@ -611,7 +617,9 @@ export default function ContactsPage() {
                   } ${value === 'ok' && selectedEmailStatus === value ? 'text-green-600 dark:text-green-400' : ''}
                   ${value === 'bounced' && selectedEmailStatus === value ? 'text-red-600 dark:text-red-400' : ''}
                   ${value === 'unsubscribed' && selectedEmailStatus === value ? 'text-orange-600 dark:text-orange-400' : ''}
-                  ${value === 'invalid' && selectedEmailStatus === value ? 'text-yellow-600 dark:text-yellow-400' : ''}`}
+                  ${value === 'invalid' && selectedEmailStatus === value ? 'text-yellow-600 dark:text-yellow-400' : ''}
+                  ${(value === 'deferred' || value === 'mailbox_full') && selectedEmailStatus === value ? 'text-yellow-600 dark:text-yellow-400' : ''}
+                  ${(value === 'sender_blocked' || value === 'recipient_blocked') && selectedEmailStatus === value ? 'text-purple-600 dark:text-purple-400' : ''}`}
                 >
                   {dot && <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />}
                   {label}

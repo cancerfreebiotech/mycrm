@@ -89,7 +89,10 @@
     "tagDistribution": "Tag 分布",
     "noTags": "尚未建立任何 Tag",
     "countryDistribution": "國家分布",
-    "countryOther": "其他"
+    "countryOther": "其他",
+    "emailStatusSection": "Email 寄送狀態",
+    "crmContacts": "CRM 聯絡人",
+    "externalEmails": "外部訂閱者（未連結 CRM）"
   },
   "contacts": {
     "title": "聯絡人",

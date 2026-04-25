@@ -89,7 +89,10 @@
     "tagDistribution": "Tag Distribution",
     "noTags": "No tags created yet",
     "countryDistribution": "Country Distribution",
-    "countryOther": "Other"
+    "countryOther": "Other",
+    "emailStatusSection": "Email Send Status",
+    "crmContacts": "CRM Contacts",
+    "externalEmails": "External Subscribers (no CRM link)"
   },
   "contacts": {
     "title": "Contacts",

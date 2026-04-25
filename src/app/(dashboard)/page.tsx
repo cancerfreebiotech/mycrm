@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Users, CalendarPlus, X, Search, StickyNote, Tag, Globe, ChevronRight } from 'lucide-react'
+import { Users, CalendarPlus, X, Search, StickyNote, Tag, Globe, ChevronRight, Mail } from 'lucide-react'
 
 interface UnassignedNote {
   id: string
@@ -42,6 +42,7 @@ export default function DashboardPage() {
   const [unassignedCount, setUnassignedCount] = useState<number>(0)
   const [tagStats, setTagStats] = useState<TagStat[]>([])
   const [countryStats, setCountryStats] = useState<CountryStat[]>([])
+  const [emailStatusStats, setEmailStatusStats] = useState<Record<string, number>>({})
   const [notes, setNotes] = useState<UnassignedNote[]>([])
   const [assigningNote, setAssigningNote] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -56,6 +57,7 @@ export default function DashboardPage() {
     loadUnassignedNotes()
     loadTagStats()
     loadCountryStats()
+    loadEmailStatusStats()
     supabase.auth.getUser().then(({ data }) => {
       if (data.user?.email) {
         supabase.from('users').select('display_name').eq('email', data.user.email).single()
@@ -92,6 +94,16 @@ export default function DashboardPage() {
     const { data } = await supabase.rpc('dashboard_tag_stats')
     if (!data) return
     setTagStats(data.map((r: { name: string; count: number }) => ({ name: r.name, count: Number(r.count) })))
+  }
+
+  async function loadEmailStatusStats() {
+    const { data } = await supabase.rpc('dashboard_email_status_stats')
+    if (!data) return
+    const map: Record<string, number> = {}
+    for (const r of data as { category: string; count: number }[]) {
+      map[r.category] = Number(r.count)
+    }
+    setEmailStatusStats(map)
   }
 
   async function loadCountryStats() {
@@ -267,6 +279,64 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Email 寄送狀態 */}
+      {(() => {
+        const crmStatuses: { key: string; label: string; dot: string; text: string }[] = [
+          { key: 'ok', label: tc('emailStatusOk'), dot: 'bg-green-500', text: 'text-green-600 dark:text-green-400' },
+          { key: 'bounced', label: tc('emailStatusBounced'), dot: 'bg-red-500', text: 'text-red-600 dark:text-red-400' },
+          { key: 'invalid', label: tc('emailStatusInvalid'), dot: 'bg-yellow-500', text: 'text-yellow-600 dark:text-yellow-400' },
+          { key: 'unsubscribed', label: tc('emailStatusUnsubscribed'), dot: 'bg-orange-400', text: 'text-orange-600 dark:text-orange-400' },
+          { key: 'deferred', label: tc('emailStatusDeferred'), dot: 'bg-yellow-400', text: 'text-yellow-600 dark:text-yellow-400' },
+          { key: 'mailbox_full', label: tc('emailStatusMailboxFull'), dot: 'bg-yellow-500', text: 'text-yellow-600 dark:text-yellow-400' },
+          { key: 'sender_blocked', label: tc('emailStatusSenderBlocked'), dot: 'bg-purple-500', text: 'text-purple-600 dark:text-purple-400' },
+          { key: 'recipient_blocked', label: tc('emailStatusRecipientBlocked'), dot: 'bg-purple-400', text: 'text-purple-600 dark:text-purple-400' },
+        ]
+        const externalCount = emailStatusStats['external'] ?? 0
+        return (
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Mail size={16} className="text-gray-400" />
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('emailStatusSection')}</h2>
+            </div>
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 max-w-3xl space-y-4">
+              <div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t('crmContacts')}</div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {crmStatuses.map((s) => (
+                    <Link
+                      key={s.key}
+                      href={`/contacts?email_status=${s.key}`}
+                      className="border border-gray-100 dark:border-gray-800 rounded-lg p-2.5 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${s.dot}`} />
+                        <span className="text-xs text-gray-500 dark:text-gray-400 truncate">{s.label}</span>
+                      </div>
+                      <div className={`text-xl font-bold ${s.text}`}>{emailStatusStats[s.key] ?? 0}</div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+              <div className="pt-3 border-t border-gray-100 dark:border-gray-800">
+                <Link
+                  href="/admin/newsletter/lists"
+                  className="flex items-center justify-between gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 rounded-lg px-2 -mx-2 py-1.5 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-gray-400 shrink-0" />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">{t('externalEmails')}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl font-bold text-gray-700 dark:text-gray-300">{externalCount}</span>
+                    <ChevronRight size={14} className="text-gray-400 shrink-0" />
+                  </div>
+                </Link>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* 待處理未歸類筆記 */}
       <div>

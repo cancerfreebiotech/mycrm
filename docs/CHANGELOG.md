@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## v4.3.2 — feat(dashboard): Email 寄送狀態總覽 + 補完 in-app 文件（2026-04-25）
+
+過去 7 天 email_status 系列功能（v4.2.0–v4.3.1）的收尾，把使用者該知道的東西放到對的地方。
+
+### Dashboard
+- 新區塊「Email 寄送狀態」放在國家分布之後
+- **CRM 聯絡人 8 格**：訂閱中 / 退信 / 無效 / 已退訂 / 暫時失敗 / 信箱滿 / 寄件擋 / 收件擋
+- 點任一格 → `/contacts?email_status=X` 預先套用篩選
+- **外部訂閱者 1 格**：在 newsletter_subscribers / blacklist / unsubscribes 但不在 contacts 的 distinct email；點擊 → `/admin/newsletter/lists`
+- ⚠ 沒 email 的聯絡人不算（修正先前 `COALESCE` 邏輯把 NULL email 算 ok 的問題）
+- 新 RPC：`dashboard_email_status_stats()`
+
+### 聯絡人列表
+- email_status 篩選 dropdown 補上 4 個新選項（deferred / mailbox_full / sender_blocked / recipient_blocked）
+- 接受 URL query param `?email_status=X` 自動套用篩選
+
+### in-app 文件（`docs_content` table）
+- super_admin 三語各補上：Newsletter / 7 種 email_status / 三條同步路徑 / 雙資料源原則 / Webhook 自動分類 / Dashboard 邏輯 / CamCard assignee_label / Hunter / last_activity 規則
+- 過去 7 天的 v4.2.x、v4.3.x 變更全部反映在 `/docs` 頁
+
+### GitHub Pages 停用
+- 刪除 `docs/_config.yml` / `docs/_includes/` / `docs/index*.md` / `docs/admin/newsletter*.md`
+- 新增 `docs/.nojekyll` 保險
+- 真正使用者文件改回 in-app `docs_content` table（`/docs` 頁讀取）
+
+### i18n
+- 新增 `dashboard.emailStatusSection` / `crmContacts` / `externalEmails` 三個 key（zh-TW / en / ja）
+
 ## v4.3.1 — feat(sendgrid): webhook 細分 7 種狀態（2026-04-25）
 
 v4.3.0 加了 4 種新狀態，但 webhook 只能粗分 bounced / invalid / unsubscribed。這版讓 webhook 能根據 SendGrid event 的 `reason` 自動分到 7 種正確類別。
