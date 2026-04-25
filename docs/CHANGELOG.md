@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## v4.4.2 — fix(dashboard): 外部訂閱者只算「可寄送」的（2026-04-26）
+
+### 痛點
+總覽頁「外部訂閱者」過去把已退訂、blacklist 的也算進去，數字看似很多但實際上多數不可寄送。
+
+### 改動
+- `dashboard_email_status_stats()` RPC 修改 external 分支：
+  - 原本：所有 `subscribers ∪ blacklist ∪ unsubscribes` 不在 contacts 的 distinct email
+  - 現在：`subscribers WHERE unsubscribed_at IS NULL` 不在 contacts，**且不在 blacklist 也不在 unsubscribes**
+- 結果：1112 → 865（247 個降下來，含過去退訂、blacklist、軟刪除聯絡人連動退訂的）
+
 ## v4.4.1 — feat(db): 軟刪除聯絡人時自動退訂該 email（2026-04-26）
 
 ### 痛點
