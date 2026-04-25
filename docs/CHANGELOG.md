@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v4.3.5 — fix(contacts): 上傳新名片後舊名片被隱藏（2026-04-25）
+
+聯絡人詳情頁的名片顯示邏輯把 legacy（`contacts.card_img_url`）和 `contact_cards` 表互斥渲染，導致「上傳新一張名片後，原本的正面圖整個消失」。改成兩者都顯示。
+
+### 改動
+- `src/app/(dashboard)/contacts/[id]/page.tsx` 行 1240-1252
+- legacy 主表的圖永遠當作第一張顯示，後面接 contact_cards 表的所有 row
+- 一個聯絡人可累積多張名片（不分正反），都會列出
+
 ## v4.3.4 — fix(newsletter): 大名單超過 1000 人時 contact name 不顯示（2026-04-25）
 
 訂閱者名單詳情頁有 2203 人（超過 Supabase REST 預設 1000 row limit）時，後 1203 人的「CRM 聯絡人」欄只顯示「已連結」而沒名字。原因是 `.in('id', [...])` 查 contacts 被 limit 截斷。

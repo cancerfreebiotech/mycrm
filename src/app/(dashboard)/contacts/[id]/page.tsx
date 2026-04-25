@@ -1237,12 +1237,20 @@ export default function ContactDetailPage() {
     )
   }
 
-  // All card images: from contact_cards table + legacy fields
-  const legacyCards: ContactCard[] = []
-  if (contact.card_img_url && contactCards.length === 0) {
-    legacyCards.push({ id: 'legacy-front', card_img_url: contact.card_img_url, card_img_back_url: contact.card_img_back_url ?? null, label: t('legacyCardFront'), created_at: contact.created_at })
+  // All card images: legacy contacts.card_img_url/back_url ALWAYS shown first,
+  // then any contact_cards rows. Don't hide legacy when new cards exist —
+  // a contact can accumulate multiple business cards over time.
+  const allCards: ContactCard[] = []
+  if (contact.card_img_url || contact.card_img_back_url) {
+    allCards.push({
+      id: 'legacy-front',
+      card_img_url: contact.card_img_url ?? '',
+      card_img_back_url: contact.card_img_back_url ?? null,
+      label: t('legacyCardFront'),
+      created_at: contact.created_at,
+    })
   }
-  const allCards = contactCards.length > 0 ? contactCards : legacyCards
+  allCards.push(...contactCards)
 
   return (
     <div className="max-w-2xl mx-auto">
