@@ -219,7 +219,7 @@
     "rotate90cw": "Rotate 90° clockwise",
     "ocrFillHint": "The blank fields below will be filled with OCR results:",
     "ocrNoFill": "OCR found no blank fields to fill; the business card image can still be saved",
-    "ocrDiffWarn": "⚠️ Differs from existing data (saved to notes after confirmation):",
+    "ocrDiffWarn": "ℹ These fields differ from existing data (will be ignored, existing values kept):",
     "groupPhoto": "Group Photo",
     "photoNotePlaceholder": "Note...",
     "clickToAddNote": "Click to add a note",

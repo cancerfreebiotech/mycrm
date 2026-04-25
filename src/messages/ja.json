@@ -219,7 +219,7 @@
     "rotate90cw": "時計回りに90°回転",
     "ocrFillHint": "以下の空欄にOCR認識結果が追加されます：",
     "ocrNoFill": "補完可能な空欄は見つかりませんでした。名刺画像は保存できます",
-    "ocrDiffWarn": "⚠️ 既存データと異なります（確認後メモに保存）：",
+    "ocrDiffWarn": "ℹ 既存データと異なります（無視され、既存値が保持されます）：",
     "groupPhoto": "集合写真",
     "photoNotePlaceholder": "メモ...",
     "clickToAddNote": "クリックしてメモを追加",

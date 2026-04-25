@@ -705,18 +705,12 @@ export default function ContactDetailPage() {
           await supabase.from('contact_cards').insert({ contact_id: id, card_img_url: urlData.publicUrl, storage_path: filename, label: null })
         })
       )
+      // Only fill empty fields — never overwrite existing data, never log conflicts.
+      // Rationale: a contact may accumulate many business cards over time; later
+      // cards should not pollute interaction history with redundant alternative
+      // values for fields the contact already has.
       if (cardOcrDiff && Object.keys(cardOcrDiff).length > 0) {
         await supabase.from('contacts').update(cardOcrDiff).eq('id', id)
-      }
-      if (cardOcrConflicts && Object.keys(cardOcrConflicts).length > 0) {
-        const noteLines = Object.entries(cardOcrConflicts)
-          .map(([k, v]) => `${OCR_FIELD_LABELS[k] ?? k}：${v.newVal}`)
-          .join('\n')
-        await supabase.from('interaction_logs').insert({
-          contact_id: id,
-          type: 'system',
-          content: t('logCardUpdated', { content: noteLines }),
-        })
       }
       cancelCardUpload()
       load()

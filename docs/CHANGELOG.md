@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v4.3.6 — feat(contacts): 上傳新名片時衝突欄位忽略，不再寫互動紀錄（2026-04-25）
+
+一個聯絡人累積多張名片是常見情境（同一個人可能有舊版/新版名片）。原本網頁上傳新名片時，與現有資料**不同**的欄位會被寫進 `interaction_logs` (type=system)，造成歷史紀錄被「相同人不同名片」的舊資訊洗版。
+
+### 改動
+- `confirmCardSave()` 移除 conflicts → interaction_logs 寫入邏輯
+- 行為：新名片只**填空白欄位**，現有欄位永遠不被覆蓋也不寫紀錄
+- OCR 預覽 modal 的衝突警告文案改成「將忽略，保留現有」（三語）
+- Telegram bot `/a` 流程**不動**（保留歷史用）
+
 ## v4.3.5 — fix(contacts): 上傳新名片後舊名片被隱藏（2026-04-25）
 
 聯絡人詳情頁的名片顯示邏輯把 legacy（`contacts.card_img_url`）和 `contact_cards` 表互斥渲染，導致「上傳新一張名片後，原本的正面圖整個消失」。改成兩者都顯示。
