@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v4.3.4 — fix(newsletter): 大名單超過 1000 人時 contact name 不顯示（2026-04-25）
+
+訂閱者名單詳情頁有 2203 人（超過 Supabase REST 預設 1000 row limit）時，後 1203 人的「CRM 聯絡人」欄只顯示「已連結」而沒名字。原因是 `.in('id', [...])` 查 contacts 被 limit 截斷。
+
+### 改動
+- `loadList()` 內所有 `.in()` 查詢（contacts / blacklist / unsubscribes）都改成 chunk 抓（每 chunk 500）
+- 訂閱者列表本身（`newsletter_subscriber_lists`）也改成用 `.range()` 分頁（每頁 1000）以支援超過 1000 人的大名單
+- 結果：1700+ 個 linked subscriber 全部會顯示完整聯絡人姓名
+
 ## v4.3.3 — fix(dashboard): 國家分布只列前 10，未知獨立分類（2026-04-25）
 
 ### 改動

@@ -78,15 +78,28 @@ export default function ListDetailPage() {
   const [syncMsg, setSyncMsg] = useState<string | null>(null)
 
   const loadList = useCallback(async () => {
-    const [{ data: listData }, { data: memberData }] = await Promise.all([
-      supabase.from('newsletter_lists').select('id, key, name, description').eq('id', id).maybeSingle(),
-      supabase
+    // Page through subscribers (default 1000-row Supabase REST limit not enough for big lists)
+    const { data: listData } = await supabase
+      .from('newsletter_lists').select('id, key, name, description').eq('id', id).maybeSingle()
+    setList((listData ?? null) as ListMeta | null)
+
+    type Mem = { added_at: string; newsletter_subscribers: { id: string; email: string; first_name: string | null; last_name: string | null; contact_id: string | null; unsubscribed_at: string | null } | null }
+    const allMembers: Mem[] = []
+    const PAGE = 1000
+    let from = 0
+    for (;;) {
+      const { data, error } = await supabase
         .from('newsletter_subscriber_lists')
         .select('added_at, newsletter_subscribers(id, email, first_name, last_name, contact_id, unsubscribed_at)')
         .eq('list_id', id)
-        .order('added_at', { ascending: false }),
-    ])
-    setList((listData ?? null) as ListMeta | null)
+        .order('added_at', { ascending: false })
+        .range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      allMembers.push(...(data as unknown as Mem[]))
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    const memberData = allMembers
 
     const rows: SubscriberRow[] = []
     const contactIds: string[] = []
@@ -99,29 +112,40 @@ export default function ListDetailPage() {
       if (s.email) emails.push(s.email.toLowerCase().trim())
     }
 
-    const [contactsRes, blRes, unsubRes] = await Promise.all([
-      contactIds.length > 0
-        ? supabase.from('contacts').select('id, name, name_en, name_local, email_status').in('id', [...new Set(contactIds)])
-        : Promise.resolve({ data: [] as { id: string; name: string | null; name_en: string | null; name_local: string | null; email_status: EmailStatus }[] }),
-      emails.length > 0
-        ? supabase.from('newsletter_blacklist').select('email, status').in('email', [...new Set(emails)])
-        : Promise.resolve({ data: [] as { email: string; status: EmailStatus }[] }),
-      emails.length > 0
-        ? supabase.from('newsletter_unsubscribes').select('email').in('email', [...new Set(emails)])
-        : Promise.resolve({ data: [] as { email: string }[] }),
-    ])
+    // Chunk contact lookups (Supabase REST default 1000-row limit + URL length cap on .in())
+    const uniqueContactIds = [...new Set(contactIds)]
+    const uniqueEmails = [...new Set(emails)]
+    const CHUNK = 500
+    const contactRows: { id: string; name: string | null; name_en: string | null; name_local: string | null; email_status: EmailStatus }[] = []
+    for (let i = 0; i < uniqueContactIds.length; i += CHUNK) {
+      const slice = uniqueContactIds.slice(i, i + CHUNK)
+      const { data } = await supabase.from('contacts').select('id, name, name_en, name_local, email_status').in('id', slice)
+      if (data) contactRows.push(...(data as typeof contactRows))
+    }
+    const blRows: { email: string; status: EmailStatus }[] = []
+    for (let i = 0; i < uniqueEmails.length; i += CHUNK) {
+      const slice = uniqueEmails.slice(i, i + CHUNK)
+      const { data } = await supabase.from('newsletter_blacklist').select('email, status').in('email', slice)
+      if (data) blRows.push(...(data as typeof blRows))
+    }
+    const unsubRows: { email: string }[] = []
+    for (let i = 0; i < uniqueEmails.length; i += CHUNK) {
+      const slice = uniqueEmails.slice(i, i + CHUNK)
+      const { data } = await supabase.from('newsletter_unsubscribes').select('email').in('email', slice)
+      if (data) unsubRows.push(...(data as typeof unsubRows))
+    }
 
     const nameMap = new Map<string, string>()
     const statusByContact = new Map<string, EmailStatus>()
-    for (const c of (contactsRes.data ?? []) as { id: string; name: string | null; name_en: string | null; name_local: string | null; email_status: EmailStatus }[]) {
+    for (const c of contactRows) {
       nameMap.set(c.id, c.name || c.name_en || c.name_local || '')
       statusByContact.set(c.id, c.email_status)
     }
     const blStatusMap = new Map<string, EmailStatus>()
-    for (const r of (blRes.data ?? []) as { email: string; status: EmailStatus }[]) {
+    for (const r of blRows) {
       blStatusMap.set(r.email.toLowerCase().trim(), r.status)
     }
-    const unsubSet = new Set(((unsubRes.data ?? []) as { email: string }[]).map((r) => r.email.toLowerCase().trim()))
+    const unsubSet = new Set(unsubRows.map((r) => r.email.toLowerCase().trim()))
 
     for (const r of rows) {
       if (r.contact_id) r.contact_name = nameMap.get(r.contact_id) ?? null
