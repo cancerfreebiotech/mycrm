@@ -137,6 +137,46 @@ EMAIL,FIRST_NAME,LAST_NAME,ADDRESS_LINE_1,...,CREATED_AT,UPDATED_AT,CONTACT_ID
 
 ---
 
+## メール送信ステータス（`email_status`）— v4.3.x
+
+`contacts.email_status` は 7 種類の値（`null` 含めて 8 種類）。非 null は送信時に**自動除外**され、手動でクリアするまで送信されません。
+
+| ステータス | 永続？ | トリガー |
+|---|---|---|
+| `null` | — | デフォルト、送信可能 |
+| `bounced` | 永続 | `5.1.1` / `5.5.0` / "user unknown" / "bounced address" |
+| `invalid` | 永続 | "mx info missing" / 形式・ドメイン不正 |
+| `unsubscribed` | 永続 | unsubscribe event または SendGrid Suppression API |
+| `deferred` | **回復可** | i/o timeout / `5.0.0` / "service unavailable" / "no route to host" |
+| `mailbox_full` | **回復可** | `5.2.1` / `5.2.2` / "over quota" / "out of storage" |
+| `sender_blocked` | **回復可** | DKIM / SpamTrap / `5.7.134` / SenderNotAuthenticated / Gmail スパム |
+| `recipient_blocked` | **回復可** | Relay denied / Transport rules / hop count / `5.7.129` / `5.4.14` |
+
+### 3 つの同期経路
+
+- **Webhook（リアルタイム）**: SendGrid → `/api/sendgrid/webhook`。SendGrid Dashboard → Mail Settings → Event Webhook で設定。⚠ **Dropped** イベントを必ずチェック。
+- **毎日 Cron（03:00 Asia/Taipei）**: SendGrid Suppressions API（90 日）を取得。`CRON_SECRET` env var 必須。
+- **手動**: リスト詳細ページの「SendGrid 同期」ボタン。
+
+### データストア 2 種
+
+- **CRM 連絡先** → `contacts.email_status`（canonical）
+- **外部購読者**（CRM 連絡先なし）→ `newsletter_blacklist.status`（v4.3.0+）
+
+送信フィルタは 3 テーブルを照合: `contacts.email_status`、`newsletter_blacklist`、`newsletter_unsubscribes`。
+
+### Webhook 自動分類
+
+各 `bounce` / `dropped` / `spamreport` event は `classifyByReason()` が `reason` 内の SMTP コード・キーワードを検査し、適切なステータスにマッピング。詳細は `src/app/api/sendgrid/webhook/route.ts` 参照。
+
+### ステータスの手動クリア
+
+連絡先詳細ページ → email_status バナーの「ステータスをクリア」ボタン → `email_status = null` → 次回送信から再度含まれます。
+
+用途: 受信者がメールボックスの空きを作った、我々が DKIM を修正した、受信者の IT がホワイトリストに入れた、など。
+
+---
+
 ## `last_activity` を汚染しない保証
 
 SendGrid 送信の interaction_logs は全て `send_method='sendgrid'` でタグ付け；`contacts.last_activity_at` の DB trigger 条件 `send_method IS DISTINCT FROM 'sendgrid'` が除外します。

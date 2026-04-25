@@ -137,6 +137,46 @@ Stored in `email_templates` (one per language). Placeholders: `{{subject}}`, `{{
 
 ---
 
+## Email Send Status (`email_status`) — v4.3.x
+
+`contacts.email_status` has 7 values (plus `null` = 8 total). Any non-null value **auto-excludes** from sending until manually cleared.
+
+| Status | Permanent? | Trigger |
+|---|---|---|
+| `null` | — | Default, deliverable |
+| `bounced` | Permanent | `5.1.1` / `5.5.0` / "user unknown" / "bounced address" |
+| `invalid` | Permanent | "mx info missing" / malformed domain |
+| `unsubscribed` | Permanent | unsubscribe event or SendGrid Suppression API |
+| `deferred` | **Recoverable** | i/o timeout / `5.0.0` / "service unavailable" / "no route to host" |
+| `mailbox_full` | **Recoverable** | `5.2.1` / `5.2.2` / "over quota" / "out of storage" |
+| `sender_blocked` | **Recoverable** | DKIM / SpamTrap / `5.7.134` / SenderNotAuthenticated / Gmail spam |
+| `recipient_blocked` | **Recoverable** | Relay denied / Transport rules / hop count / `5.7.129` / `5.4.14` |
+
+### Three sync paths
+
+- **Webhook (real-time)**: SendGrid pushes events to `/api/sendgrid/webhook`. Configure in SendGrid Dashboard → Mail Settings → Event Webhook. ⚠ Must check the **Dropped** event.
+- **Daily Cron (03:00 Asia/Taipei)**: Pulls SendGrid Suppressions API (90 days). Requires `CRON_SECRET` env var.
+- **Manual**: Click "Sync SendGrid" on the list detail page.
+
+### Two data stores
+
+- **CRM contacts** → `contacts.email_status` (canonical)
+- **External subscribers** (no CRM contact) → `newsletter_blacklist.status` (added in v4.3.0)
+
+The send filter checks all three tables: `contacts.email_status`, `newsletter_blacklist`, `newsletter_unsubscribes`.
+
+### Webhook auto-classification
+
+Each `bounce` / `dropped` / `spamreport` event runs through `classifyByReason()` which inspects the `reason` field for SMTP codes and keywords, mapping to the right status. See `src/app/api/sendgrid/webhook/route.ts` for the full keyword list.
+
+### Manually clearing status
+
+Open the contact detail page → click "Clear status" on the email_status banner → `email_status = null` → next send will include this contact again.
+
+Use cases: recipient cleared their full mailbox, we fixed our DKIM, recipient's IT whitelisted us, etc.
+
+---
+
 ## Guarantee: won't pollute `last_activity`
 
 All SendGrid-sent interaction_logs are tagged `send_method='sendgrid'`; the `contacts.last_activity_at` DB trigger filter `send_method IS DISTINCT FROM 'sendgrid'` excludes them.
