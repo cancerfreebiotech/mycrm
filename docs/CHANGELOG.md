@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v4.4.1 — feat(db): 軟刪除聯絡人時自動退訂該 email（2026-04-26）
+
+### 痛點
+聯絡人軟刪除（`contacts.deleted_at` 設為非 null）後，對應的 `newsletter_subscribers` 仍會被當成「外部訂閱者」繼續寄信。手動清理需要 3 步（unsubscribe subscriber + 寫 unsubscribes 表 + 也許還要從 list 移除）。
+
+### 改動
+- **新增 trigger `trg_unsubscribe_on_contact_soft_delete`**：偵測 `OLD.deleted_at IS NULL → NEW.deleted_at IS NOT NULL` 的轉換，自動：
+  1. UPDATE `newsletter_subscribers.unsubscribed_at` for matching email
+  2. UPSERT `newsletter_unsubscribes`（source=`contact_soft_delete`）
+- **不會在還原（restore）時自動再訂閱** — 還原必須手動處理
+- **Backfill**：76 個過去漏網的軟刪除聯絡人都補上 unsubscribes 紀錄；66 個 subscriber 設成已退訂
+
 ## v4.4.0 — feat(bot): 偵測同名重複時，可選擇加到既有聯絡人（2026-04-25）
 
 過去 Telegram bot 拍名片時偵測到同名/同 email 的聯絡人，只能選「✅ 確認存檔（建新檔）」或「❌ 不存檔」。新增第三選項「📌 加到既有」直接把該名片合併到既存聯絡人。
