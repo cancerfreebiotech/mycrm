@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## v4.3.1 — feat(sendgrid): webhook 細分 7 種狀態（2026-04-25）
+
+v4.3.0 加了 4 種新狀態，但 webhook 只能粗分 bounced / invalid / unsubscribed。這版讓 webhook 能根據 SendGrid event 的 `reason` 自動分到 7 種正確類別。
+
+### 改動
+- **`classifyByReason()` 取代 `classifyDropReason()`** — 新增 SMTP code / 關鍵字偵測：
+  - `5.2.1` / `5.2.2` / "mailbox full" / "over quota" → `mailbox_full`
+  - DKIM / SpamTrap / SenderNotAuthenticated / `5.7.134` → `sender_blocked`
+  - "Relay denied" / "Transport rules" / "hop count" / `5.7.129` / `5.4.14` → `recipient_blocked`
+  - i/o timeout / "no route to host" / `5.0.0` / "service unavailable" → `deferred`
+  - "mx info" / "unrecognized address" → `invalid`
+  - `5.1.1` / `5.5.0` / "user unknown" → `bounced`
+- **`bounce` event 也走分類**：原本一律標 `bounced`，現在 `type='blocked'` + reason 會被分到 `recipient_blocked` / `sender_blocked` 等
+- **`spamreport` 改成 `sender_blocked`**：spam 是寄件人聲譽問題，不是收件人故障
+- **`newsletter_blacklist` 寫入時帶 status** — 跟 v4.3.0 加的 column 對齊
+
 ## v4.3.0 — feat(email-status): 新增 4 種細粒度寄送狀態（2026-04-25）
 
 原本 `email_status` 只有 `bounced` / `invalid` / `unsubscribed` 3 種，但 SendGrid Activity log 的失敗 / drop / blocked 還可細分為「暫時錯誤 / 信箱滿 / 寄件方問題 / 收件方擋信」等。新增 4 種狀態，這些都會被自動排除寄送，但聯絡人本人或團隊發現可恢復時，可以手動清除狀態。

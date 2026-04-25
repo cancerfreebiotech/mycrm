@@ -25,7 +25,14 @@ interface SendGridEvent {
   url?: string
 }
 
-type SuppressStatus = 'bounced' | 'invalid' | 'unsubscribed'
+type SuppressStatus =
+  | 'bounced'
+  | 'invalid'
+  | 'unsubscribed'
+  | 'deferred'
+  | 'mailbox_full'
+  | 'sender_blocked'
+  | 'recipient_blocked'
 
 // Canonical suppression update: for CRM contacts → update contacts.email_status;
 // for non-CRM emails → write to newsletter_blacklist (or unsubscribes).
@@ -56,20 +63,60 @@ async function markSuppressed(
   } else {
     await supabase
       .from('newsletter_blacklist')
-      .upsert({ email: normalized, reason }, { onConflict: 'email' })
+      .upsert({ email: normalized, reason, status }, { onConflict: 'email' })
   }
 }
 
-// Classify a SendGrid "dropped" event's reason into a suppression status.
-// SendGrid drop reasons include:
-//   "Bounced Address" / "Invalid" / "Spam Reported" / "Unsubscribed Address" /
-//   "Invalid SMTPAPI header" / "Recipient List over Package Quota"
-function classifyDropReason(reason: string): SuppressStatus | null {
+// Classify a SendGrid event reason (from `bounce`/`dropped` events) into one of
+// the 7 email_status categories. Heuristic — order matters: more specific
+// reasons checked before generic ones.
+function classifyByReason(reason: string): SuppressStatus {
   const r = reason.toLowerCase()
+
+  // ── Mailbox quota / inactive ──
+  if (r.includes('mailbox full') || r.includes('over quota') ||
+      r.includes('out of storage') || r.includes('quota exceeded') ||
+      r.includes('overquota') ||
+      r.match(/5\.2\.[12]/)) return 'mailbox_full'
+
+  // ── Sender side issues (DKIM / spam trap / sender auth) ──
+  if (r.includes('dkim') || r.includes('spamtrap') || r.includes('spam trap') ||
+      r.includes('sendernotauthenticated') || r.includes('not authenticated') ||
+      r.includes('fake sender') || r.includes('unsolicited mail') ||
+      r.includes('5.7.134') || r.includes('5.7.26') ||
+      (r.includes('spam') && !r.includes('spamreport'))) return 'sender_blocked'
+
+  // ── Recipient policy / org blocks ──
+  if (r.includes('relay access denied') || r.includes('relay denied') ||
+      r.includes('not permitted to relay') ||
+      r.includes('transport.rules') || r.includes('transport rules') ||
+      r.includes('rejectmessage') ||
+      r.includes('hop count') || r.includes('mail loop') || r.includes('delivery loop') ||
+      r.includes('restrictedtorecipientspermission') ||
+      r.includes('access denied') ||
+      r.includes('5.7.129') || r.includes('5.4.14')) return 'recipient_blocked'
+
+  // ── Temporary network/server errors ──
+  if (r.includes('i/o timeout') || r.includes('io timeout') ||
+      r.includes('no route to host') || r.includes('connection reset') ||
+      r.includes('connection refused') || r.includes('error dialing') ||
+      r.includes('service unavailable') || r.match(/5\.0\.0/) ||
+      r.includes('try again later')) return 'deferred'
+
+  // ── Unsubscribed (SendGrid suppression) ──
   if (r.includes('unsubscribe')) return 'unsubscribed'
-  if (r.includes('invalid')) return 'invalid'
-  if (r.includes('bounce') || r.includes('spam')) return 'bounced'
-  // Unknown drop reason → conservative: mark as bounced
+
+  // ── Invalid (no MX / domain doesn't exist) ──
+  if (r.includes('mx info') || r.includes('mx record') ||
+      r.includes('unrecognized address')) return 'invalid'
+
+  // ── Permanent address bounces (5.1.1 user unknown / no such user) ──
+  if (r.match(/5\.1\.1/) || r.match(/5\.5\.0/) ||
+      r.includes('user unknown') || r.includes('does not exist') ||
+      r.includes('no such user') || r.includes('recipient not found') ||
+      r.includes('bounced address')) return 'bounced'
+
+  // Unknown / unclassified → conservative: bounced
   return 'bounced'
 }
 
@@ -117,24 +164,25 @@ export async function POST(req: NextRequest) {
         await markSuppressed(supabase, ev.email, 'unsubscribed', 'SendGrid webhook unsubscribe')
         break
 
-      case 'bounce':
-        if (ev.type === 'bounce') {
-          // Hard bounce
-          await markSuppressed(supabase, ev.email, 'bounced', `hard_bounce: ${ev.bounce_classification ?? ''}`.slice(0, 200))
-        }
+      case 'bounce': {
+        // type='bounce' = hard bounce; type='blocked' = SMTP-level block
+        // Classify by reason (SMTP response), fallback by event type
+        const reason = ev.reason ?? ev.bounce_classification ?? ''
+        const status = reason
+          ? classifyByReason(reason)
+          : (ev.type === 'blocked' ? 'recipient_blocked' : 'bounced')
+        await markSuppressed(supabase, ev.email, status, `${ev.type ?? 'bounce'}: ${reason}`.slice(0, 200))
         if (recipientId) {
           await supabase.from('newsletter_recipients').update({ status: 'failed' }).eq('id', recipientId)
         }
         break
+      }
 
       case 'dropped': {
-        // Pre-send drop — SendGrid refused to deliver. Reasons include
-        // bounced address, invalid format, spam, prior unsubscribe etc.
+        // Pre-send drop — classify by reason
         const reason = ev.reason ?? 'dropped'
-        const status = classifyDropReason(reason)
-        if (status) {
-          await markSuppressed(supabase, ev.email, status, `dropped: ${reason}`.slice(0, 200))
-        }
+        const status = classifyByReason(reason)
+        await markSuppressed(supabase, ev.email, status, `dropped: ${reason}`.slice(0, 200))
         if (recipientId) {
           await supabase.from('newsletter_recipients').update({ status: 'failed' }).eq('id', recipientId)
         }
@@ -142,7 +190,8 @@ export async function POST(req: NextRequest) {
       }
 
       case 'spamreport':
-        await markSuppressed(supabase, ev.email, 'bounced', 'spam_report')
+        // Recipient marked as spam — sender-side reputation issue
+        await markSuppressed(supabase, ev.email, 'sender_blocked', 'spam_report')
         break
     }
   }
