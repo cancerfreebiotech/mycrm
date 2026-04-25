@@ -110,18 +110,23 @@ export default function DashboardPage() {
     const { data } = await supabase.rpc('dashboard_country_stats')
     if (!data) return
 
-    const stats: CountryStat[] = []
-    let otherCount = 0
+    const rows = data as { country_code: string | null; name_zh: string | null; emoji: string | null; count: number }[]
 
-    data.forEach((r: { country_code: string | null; name_zh: string | null; emoji: string | null; count: number }) => {
-      if (!r.country_code) {
-        otherCount += Number(r.count)
-      } else {
-        stats.push({ code: r.country_code, name: r.name_zh ?? r.country_code, emoji: r.emoji ?? null, count: Number(r.count) })
-      }
-    })
+    let unknownCount = 0
+    const known: { code: string; name: string; emoji: string | null; count: number }[] = []
+    for (const r of rows) {
+      if (!r.country_code) unknownCount += Number(r.count)
+      else known.push({ code: r.country_code, name: r.name_zh ?? r.country_code, emoji: r.emoji ?? null, count: Number(r.count) })
+    }
+    known.sort((a, b) => b.count - a.count)
 
-    if (otherCount > 0) stats.push({ code: '__other__', name: '', emoji: null, count: otherCount })
+    const TOP_N = 10
+    const top = known.slice(0, TOP_N)
+    const restCount = known.slice(TOP_N).reduce((sum, c) => sum + c.count, 0)
+
+    const stats: CountryStat[] = [...top]
+    if (restCount > 0) stats.push({ code: '__other__', name: '', emoji: null, count: restCount })
+    if (unknownCount > 0) stats.push({ code: '__unknown__', name: '', emoji: null, count: unknownCount })
     setCountryStats(stats)
   }
 
@@ -253,10 +258,12 @@ export default function DashboardPage() {
           </div>
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 max-w-lg space-y-2">
             {countryStats.map((stat) => {
-              const max = countryStats[0]?.count || 1
+              const max = Math.max(...countryStats.map(s => s.count), 1)
               const pct = Math.round((stat.count / max) * 100)
               const label = stat.code === '__other__'
                 ? t('countryOther')
+                : stat.code === '__unknown__'
+                ? t('countryUnknown')
                 : `${stat.emoji ?? ''} ${stat.name}`.trim()
               return (
                 <Link

@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v4.3.3 — fix(dashboard): 國家分布只列前 10，未知獨立分類（2026-04-25）
+
+### 改動
+- 國家分布只顯示前 10 個（按聯絡人數降序）
+- 第 11 名以後合併為「其他國家」一格
+- 沒有 country_code 的聯絡人（過去和「其他」混在一起）獨立成「未知」一格
+- bar chart 的 max 改成所有條目的最大值（避免「其他」過大時其他條目視覺壓縮失真）
+- 新增 i18n key `dashboard.countryUnknown`
+
 ## v4.3.2 — feat(dashboard): Email 寄送狀態總覽 + 補完 in-app 文件（2026-04-25）
 
 📌 補充：v4.3.2 後 `docs_content.user`（三語）也補上了 newsletter 訂閱者管理操作 + 7 種 email status badge 含義 + 手動清除步驟。super_admin 補架構與技術細節，user 補日常操作。

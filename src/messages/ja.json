@@ -89,7 +89,8 @@
     "tagDistribution": "タグ分布",
     "noTags": "タグがまだありません",
     "countryDistribution": "国別分布",
-    "countryOther": "その他",
+    "countryOther": "その他の国",
+    "countryUnknown": "不明",
     "emailStatusSection": "メール送信状況",
     "crmContacts": "CRM 連絡先",
     "externalEmails": "外部購読者（CRM 連携なし）"
