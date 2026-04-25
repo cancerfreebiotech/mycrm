@@ -108,6 +108,7 @@
     "tagFilter": "Filter by Tag",
     "countryFilter": "Filter by Country",
     "countryOther": "Other",
+    "countryUnknown": "Unknown (no country)",
     "importanceFilter": "Filter by Importance",
     "exportNoPermission": "Contact admin to request export permission",
     "metFilter": "Search where we met...",

@@ -108,6 +108,7 @@
     "tagFilter": "タグで絞り込み",
     "countryFilter": "国で絞り込み",
     "countryOther": "その他",
+    "countryUnknown": "不明（未入力）",
     "importanceFilter": "重要度で絞り込み",
     "exportNoPermission": "エクスポート権限については管理者にお問い合わせください",
     "metFilter": "出会った場所を検索...",

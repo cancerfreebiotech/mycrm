@@ -108,6 +108,7 @@
     "tagFilter": "依 Tag 篩選",
     "countryFilter": "依國家篩選",
     "countryOther": "其他",
+    "countryUnknown": "未知（未填國家）",
     "importanceFilter": "依重要程度篩選",
     "exportNoPermission": "請聯絡管理員申請匯出權限",
     "metFilter": "搜尋認識地點...",

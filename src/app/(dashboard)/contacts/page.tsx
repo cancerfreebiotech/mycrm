@@ -496,7 +496,7 @@ export default function ContactsPage() {
                 }`}
               >
                 <span className={`w-3 h-3 border rounded shrink-0 ${selectedCountries.includes('__other__') ? 'bg-blue-500 border-blue-500' : 'border-gray-300 dark:border-gray-600'}`} />
-                {t('countryOther')}
+                {t('countryUnknown')}
               </button>
               {selectedCountries.length > 0 && (
                 <button
