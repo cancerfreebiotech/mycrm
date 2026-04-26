@@ -1807,8 +1807,10 @@ export async function POST(req: NextRequest) {
 
           await answerCallbackQuery(callbackQueryId, m.cbCardSaved)
 
-          // Strip rotation + merge-target hidden fields (OCR/UI-only, no contacts column)
-          const { rotation: _r, _merge_target_id: _mt, ...contactFields } = pending.data as Record<string, unknown>
+          // Strip rotation + merge-target hidden fields, and card image URLs
+          // (multi-card support stores them in contact_cards instead — writing
+          // both makes the detail page show the same image twice)
+          const { rotation: _r, _merge_target_id: _mt, card_img_url: _ci, card_img_back_url: _cb, ...contactFields } = pending.data as Record<string, unknown>
           const { data: inserted, error } = await supabase
             .from('contacts')
             .insert({ ...contactFields, created_by: user.id })

@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v4.4.3 — fix(bot): 名片儲存時不再雙寫導致詳情頁顯示兩張（2026-04-26）
+
+### 痛點
+今天透過 Telegram bot 上傳的 19 張名片，在聯絡人詳情頁都顯示成兩張一樣的圖。
+
+### 原因
+Bot 的 `save_` callback 在新增聯絡人時把 `pending.data` 整包展開 insert 進 `contacts`，於是 `card_img_url` 同時寫到 `contacts.card_img_url` 和 `contact_cards` 兩個地方。詳情頁邏輯永遠把 `contacts.card_img_url` 當「Legacy 正面」先顯示，再列出 `contact_cards` 的所有 row，所以新建聯絡人就會看到同一張兩次。
+
+### 改動
+- `src/app/api/bot/route.ts` — `save_` callback 在 insert `contacts` 時把 `card_img_url` / `card_img_back_url` 從 payload 排除，讓 `contact_cards` 成為唯一來源。
+- DB 資料修復：對今天（Asia/Taipei 0426）建立、且 `contacts.card_img_url` 與 `contact_cards` 中某 row 完全相同的 19 筆聯絡人，將 `contacts.card_img_url` 設為 NULL。Storage 檔案不動。
+
 ## v4.4.2 — fix(dashboard): 外部訂閱者只算「可寄送」的（2026-04-26）
 
 ### 痛點
