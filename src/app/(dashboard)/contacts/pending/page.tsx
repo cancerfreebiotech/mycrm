@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Loader2, Check, RefreshCw, Trash2, GitMerge, ExternalLink, AlertCircle } from 'lucide-react'
@@ -8,7 +8,9 @@ import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 
 type PendingStatus = 'pending' | 'processing' | 'done' | 'failed'
+type StatusFilter = 'all' | 'pending' | 'done' | 'failed'
 
+interface UserRef { display_name: string | null; email: string }
 interface PendingRow {
   id: string
   data: Record<string, unknown>
@@ -18,10 +20,20 @@ interface PendingRow {
   error_message: string | null
   created_at: string
   processed_at: string | null
+  created_by: string | null
+  users: UserRef | null
 }
+
+const LANGUAGES = ['chinese', 'japanese', 'english'] as const
+type Language = typeof LANGUAGES[number]
+const IMPORTANCES = ['high', 'medium', 'low'] as const
+type Importance = typeof IMPORTANCES[number]
 
 function fmtDateTime(iso: string): string {
   return new Date(iso).toLocaleString()
+}
+function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleDateString()
 }
 
 export default function PendingReviewPage() {
@@ -32,11 +44,27 @@ export default function PendingReviewPage() {
   const [rows, setRows] = useState<PendingRow[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [myUserId, setMyUserId] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [uploaderFilter, setUploaderFilter] = useState<string>('all')
+
+  // Resolve own user.id (used to flag "this row is mine") via the users table by email
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user?.email || cancelled) return
+      const { data } = await supabase.from('users').select('id').eq('email', user.email).single()
+      if (cancelled) return
+      setMyUserId(data?.id ?? null)
+    })()
+    return () => { cancelled = true }
+  }, [supabase])
 
   const fetchRows = useCallback(async () => {
     const { data } = await supabase
       .from('pending_contacts')
-      .select('id, data, storage_path, status, retry_count, error_message, created_at, processed_at')
+      .select('id, data, storage_path, status, retry_count, error_message, created_at, processed_at, created_by, users:created_by(display_name, email)')
       .order('created_at', { ascending: false })
     setRows((data as unknown as PendingRow[]) ?? [])
     setLoading(false)
@@ -44,7 +72,6 @@ export default function PendingReviewPage() {
 
   useEffect(() => {
     fetchRows()
-    // poll every 5s while any row is still pending/processing — auto-refresh as worker finishes
     const interval = setInterval(() => {
       setRows((prev) => {
         if (prev.some((r) => r.status === 'pending' || r.status === 'processing')) {
@@ -55,6 +82,26 @@ export default function PendingReviewPage() {
     }, 5000)
     return () => clearInterval(interval)
   }, [fetchRows])
+
+  const uploaders = useMemo(() => {
+    const map = new Map<string, UserRef>()
+    for (const r of rows) {
+      if (r.created_by && r.users) map.set(r.created_by, r.users)
+    }
+    return Array.from(map.entries()).map(([id, u]) => ({ id, ...u }))
+  }, [rows])
+
+  const filteredRows = useMemo(() => {
+    return rows.filter((r) => {
+      if (statusFilter !== 'all') {
+        if (statusFilter === 'pending' && !(r.status === 'pending' || r.status === 'processing')) return false
+        if (statusFilter === 'done' && r.status !== 'done') return false
+        if (statusFilter === 'failed' && r.status !== 'failed') return false
+      }
+      if (uploaderFilter !== 'all' && r.created_by !== uploaderFilter) return false
+      return true
+    })
+  }, [rows, statusFilter, uploaderFilter])
 
   async function callAction(id: string, action: 'save' | 'merge', force = false) {
     setBusyId(id)
@@ -106,12 +153,57 @@ export default function PendingReviewPage() {
     fetchRows()
   }
 
+  // Inline-edit a field on the pending row's data jsonb (e.g., importance, language)
+  async function patchData(id: string, patch: Record<string, unknown>) {
+    const row = rows.find((r) => r.id === id)
+    if (!row) return
+    const newData = { ...row.data, ...patch }
+    await supabase.from('pending_contacts').update({ data: newData }).eq('id', id)
+    setRows((prev) => prev.map((r) => r.id === id ? { ...r, data: newData } : r))
+  }
+
+  const showUploaderFilter = uploaders.length > 1
+
   return (
     <div className="max-w-4xl">
-      <div className="mb-6">
+      <div className="mb-4">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('subtitle')}</p>
       </div>
+
+      {/* Filter toolbar */}
+      {!loading && rows.length > 0 && (
+        <div className="flex flex-wrap gap-3 mb-4 items-center">
+          <FilterDropdown
+            value={statusFilter}
+            onChange={(v) => setStatusFilter(v as StatusFilter)}
+            label={t('filterStatus')}
+            options={[
+              { value: 'all', label: t('filterAll') },
+              { value: 'pending', label: t('statusPending') },
+              { value: 'done', label: t('statusDone') },
+              { value: 'failed', label: t('statusFailed') },
+            ]}
+          />
+          {showUploaderFilter && (
+            <FilterDropdown
+              value={uploaderFilter}
+              onChange={setUploaderFilter}
+              label={t('filterUploader')}
+              options={[
+                { value: 'all', label: t('filterAll') },
+                ...uploaders.map((u) => ({
+                  value: u.id,
+                  label: u.display_name ?? u.email,
+                })),
+              ]}
+            />
+          )}
+          <span className="text-sm text-gray-500 dark:text-gray-400 ml-auto">
+            {t('shownCount', { shown: filteredRows.length, total: rows.length })}
+          </span>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center gap-2 text-gray-400">
@@ -122,17 +214,23 @@ export default function PendingReviewPage() {
           <p className="text-gray-500 dark:text-gray-400">{t('empty')}</p>
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">{t('emptyHint')}</p>
         </div>
+      ) : filteredRows.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 p-8 text-center">
+          <p className="text-gray-500 dark:text-gray-400">{t('noMatchingRows')}</p>
+        </div>
       ) : (
         <div className="space-y-3">
-          {rows.map((r) => (
+          {filteredRows.map((r) => (
             <PendingCard
               key={r.id}
               row={r}
+              isMine={r.created_by === myUserId}
               busy={busyId === r.id}
               onSave={() => callAction(r.id, 'save')}
               onMerge={() => callAction(r.id, 'merge')}
               onDelete={() => deleteRow(r.id)}
               onRetry={() => retryRow(r.id)}
+              onPatch={(patch) => patchData(r.id, patch)}
             />
           ))}
         </div>
@@ -141,20 +239,40 @@ export default function PendingReviewPage() {
   )
 }
 
+function FilterDropdown({
+  value, onChange, label, options,
+}: {
+  value: string
+  onChange: (v: string) => void
+  label: string
+  options: Array<{ value: string; label: string }>
+}) {
+  return (
+    <label className="flex items-center gap-2 text-sm">
+      <span className="text-gray-500 dark:text-gray-400">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-1 text-sm"
+      >
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </label>
+  )
+}
+
 function PendingCard({
-  row,
-  busy,
-  onSave,
-  onMerge,
-  onDelete,
-  onRetry,
+  row, isMine, busy,
+  onSave, onMerge, onDelete, onRetry, onPatch,
 }: {
   row: PendingRow
+  isMine: boolean
   busy: boolean
   onSave: () => void
   onMerge: () => void
   onDelete: () => void
   onRetry: () => void
+  onPatch: (patch: Record<string, unknown>) => void
 }) {
   const t = useTranslations('pendingReview')
   const data = row.data ?? {}
@@ -163,6 +281,10 @@ function PendingCard({
   const mergeTargetName = data._merge_target_name as string | undefined
   const batchDupOfId = data._batch_dup_of_id as string | undefined
   const batchDupOfName = data._batch_dup_of_name as string | undefined
+  const importance = (data.importance as Importance | null | undefined) ?? null
+  const language = (data.language as Language | null | undefined) ?? null
+  const metAt = data.met_at as string | undefined
+  const metDate = data.met_date as string | undefined
 
   const StatusBadge = (() => {
     const cls = 'inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded font-medium'
@@ -181,7 +303,6 @@ function PendingCard({
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
       <div className="flex flex-col sm:flex-row gap-4">
-        {/* Image */}
         <div className="sm:w-40 shrink-0">
           {cardImg ? (
             <a href={cardImg} target="_blank" rel="noreferrer" className="block">
@@ -194,22 +315,68 @@ function PendingCard({
           )}
         </div>
 
-        {/* Body */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
             {StatusBadge}
             <span className="text-xs text-gray-400 dark:text-gray-500">{fmtDateTime(row.created_at)}</span>
+            {!isMine && row.users && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+                {t('uploadedBy', { name: row.users.display_name ?? row.users.email })}
+              </span>
+            )}
           </div>
 
-          {row.status === 'done' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm">
-              <Field label={t('fieldName')} value={data.name as string | undefined} />
-              <Field label={t('fieldCompany')} value={data.company as string | undefined} />
-              <Field label={t('fieldJobTitle')} value={data.job_title as string | undefined} />
-              <Field label={t('fieldEmail')} value={data.email as string | undefined} />
-              <Field label={t('fieldPhone')} value={data.phone as string | undefined} />
-              <Field label={t('fieldCountry')} value={data.country_code as string | undefined} />
+          {(metAt || metDate) && (
+            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+              {metAt && <span className="mr-2">📍 {metAt}</span>}
+              {metDate && <span>📅 {fmtDate(metDate)}</span>}
             </div>
+          )}
+
+          {row.status === 'done' && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                <Field label={t('fieldName')} value={data.name as string | undefined} />
+                <Field label={t('fieldCompany')} value={data.company as string | undefined} />
+                <Field label={t('fieldJobTitle')} value={data.job_title as string | undefined} />
+                <Field label={t('fieldEmail')} value={data.email as string | undefined} />
+                <Field label={t('fieldPhone')} value={data.phone as string | undefined} />
+                <Field label={t('fieldCountry')} value={data.country_code as string | undefined} />
+              </div>
+
+              {/* Inline edit: importance + language */}
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-gray-500 dark:text-gray-400">{t('fieldImportance')}</span>
+                  {IMPORTANCES.map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => onPatch({ importance: importance === v ? null : v })}
+                      className={`w-7 h-6 rounded border transition-colors ${
+                        importance === v
+                          ? 'bg-green-500 border-green-500 text-white'
+                          : 'border-gray-200 dark:border-gray-700 text-gray-400 hover:border-green-400 hover:text-green-500'
+                      }`}
+                    >
+                      {v === 'high' ? 'H' : v === 'low' ? 'L' : 'M'}
+                    </button>
+                  ))}
+                </div>
+                <label className="flex items-center gap-1.5">
+                  <span className="text-gray-500 dark:text-gray-400">{t('fieldLanguage')}</span>
+                  <select
+                    value={language ?? ''}
+                    onChange={(e) => onPatch({ language: e.target.value || null })}
+                    className="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-0.5 text-xs"
+                  >
+                    <option value="">—</option>
+                    <option value="chinese">{t('languageChinese')}</option>
+                    <option value="japanese">{t('languageJapanese')}</option>
+                    <option value="english">{t('languageEnglish')}</option>
+                  </select>
+                </label>
+              </div>
+            </>
           )}
 
           {row.status === 'failed' && row.error_message && (
@@ -222,7 +389,6 @@ function PendingCard({
             </div>
           )}
 
-          {/* Actions */}
           <div className="mt-3 flex flex-wrap gap-2">
             {row.status === 'done' && (
               <>

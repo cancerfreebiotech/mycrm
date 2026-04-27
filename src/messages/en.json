@@ -1013,7 +1013,18 @@
     "actionDelete": "Delete",
     "actionViewImage": "View image",
     "duplicateConfirm": "An existing contact \"{name}\" already has this email. Create a new contact anyway?",
-    "batchDupWarning": "Another card in this batch has the same email ({name}). Consider deleting this one."
+    "batchDupWarning": "Another card in this batch has the same email ({name}). Consider deleting this one.",
+    "filterStatus": "Status",
+    "filterUploader": "Uploader",
+    "filterAll": "All",
+    "shownCount": "{shown} of {total} shown",
+    "noMatchingRows": "No cards match the filter",
+    "uploadedBy": "👤 {name}",
+    "fieldImportance": "Importance",
+    "fieldLanguage": "Language",
+    "languageChinese": "Chinese",
+    "languageJapanese": "Japanese",
+    "languageEnglish": "English"
   },
   "myFailedScans": {
     "title": "My Failed Scans",
@@ -1021,7 +1032,12 @@
     "empty": "No failed scans",
     "deleteConfirm": "Delete this scan?",
     "actionViewImage": "View image",
-    "actionDelete": "Delete"
+    "actionDelete": "Delete",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all",
+    "selectedCount": "{count} selected",
+    "bulkDelete": "Delete selected",
+    "bulkDeleteConfirm": "Delete {count} selected scan(s)?"
   },
   "failedScans": {
     "title": "Failed Scan Review",

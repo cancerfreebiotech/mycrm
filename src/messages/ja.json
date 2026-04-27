@@ -1013,7 +1013,18 @@
     "actionDelete": "削除",
     "actionViewImage": "画像を見る",
     "duplicateConfirm": "同じ email を持つ連絡先「{name}」が既に存在します。新規作成しますか？",
-    "batchDupWarning": "このバッチに同じ email の名刺があります（{name}）。重複を避けるため削除を推奨。"
+    "batchDupWarning": "このバッチに同じ email の名刺があります（{name}）。重複を避けるため削除を推奨。",
+    "filterStatus": "ステータス",
+    "filterUploader": "アップロード者",
+    "filterAll": "すべて",
+    "shownCount": "{shown} / {total} 件表示",
+    "noMatchingRows": "条件に一致する名刺はありません",
+    "uploadedBy": "👤 {name}",
+    "fieldImportance": "重要度",
+    "fieldLanguage": "言語",
+    "languageChinese": "中国語",
+    "languageJapanese": "日本語",
+    "languageEnglish": "英語"
   },
   "myFailedScans": {
     "title": "認識失敗",
@@ -1021,7 +1032,12 @@
     "empty": "認識失敗の記録はありません",
     "deleteConfirm": "削除しますか？",
     "actionViewImage": "画像を見る",
-    "actionDelete": "削除"
+    "actionDelete": "削除",
+    "selectAll": "全選択",
+    "deselectAll": "全選択解除",
+    "selectedCount": "{count} 件選択",
+    "bulkDelete": "選択を削除",
+    "bulkDeleteConfirm": "選択した {count} 件を削除しますか？"
   },
   "failedScans": {
     "title": "スキャン失敗審査",

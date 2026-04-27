@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## v4.6.0 — feat(pending): 上傳者 / filter / inline edit + failed-scans bulk delete（2026-04-28）
+
+### 改動
+
+**Pending 頁**
+- Query join `users:created_by(display_name, email)` — 顯示每張卡的上傳者
+- 不是自己的卡顯示「👤 王小明」 badge（super_admin 看別人的、或 team 內互看）
+- Filter toolbar：狀態（全部 / 待辨識 / 已辨識 / 失敗）+ 上傳者（多人才顯示）
+- 顯示計數「X / Y 張」
+- Inline edit：重要性（H / M / L 點按）、語言（dropdown）— 寫入 `data` jsonb，存檔時帶進 contacts row
+- met_at / met_date 顯示（從 /b 描述帶進來的）
+
+**Failed-scans 頁**
+- 多選 checkbox（全選 / 反選）
+- Bulk delete 按鈕，一次刪 N 張、storage 同步移除
+
+### i18n
+- pendingReview 加 11 個 keys × 三語
+- myFailedScans 加 5 個 keys × 三語
+
 ## v4.5.2 — feat(bot): 邊傳邊 OCR + within-batch dedup + confirm-time 重複再 check（2026-04-28）
 
 ### 改動

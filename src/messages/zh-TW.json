@@ -1013,7 +1013,18 @@
     "actionDelete": "刪除",
     "actionViewImage": "看原圖",
     "duplicateConfirm": "已有相同 email 的聯絡人「{name}」。仍要建立新聯絡人嗎？",
-    "batchDupWarning": "這批裡有另一張 email 相同的卡（{name}）。建議刪除這張，避免重複。"
+    "batchDupWarning": "這批裡有另一張 email 相同的卡（{name}）。建議刪除這張，避免重複。",
+    "filterStatus": "狀態",
+    "filterUploader": "上傳者",
+    "filterAll": "全部",
+    "shownCount": "顯示 {shown} / {total} 張",
+    "noMatchingRows": "沒有符合條件的名片",
+    "uploadedBy": "👤 {name}",
+    "fieldImportance": "重要性",
+    "fieldLanguage": "語言",
+    "languageChinese": "中文",
+    "languageJapanese": "日文",
+    "languageEnglish": "英文"
   },
   "myFailedScans": {
     "title": "我的失敗辨識",
@@ -1021,7 +1032,12 @@
     "empty": "目前沒有失敗辨識紀錄",
     "deleteConfirm": "確定要刪除嗎？",
     "actionViewImage": "看原圖",
-    "actionDelete": "刪除"
+    "actionDelete": "刪除",
+    "selectAll": "全選",
+    "deselectAll": "取消全選",
+    "selectedCount": "已選 {count} 張",
+    "bulkDelete": "刪除已選",
+    "bulkDeleteConfirm": "確定要刪除已選的 {count} 張嗎？"
   },
   "failedScans": {
     "title": "辨識失敗審查",
