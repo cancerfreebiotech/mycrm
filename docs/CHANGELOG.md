@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## v4.5.1 — fix(bot): /done /cancel 被自動清 session 邏輯誤殺（2026-04-28）
+
+### 痛點
+`/b` 進 batch 模式 → 拍完 → `/done` 卻被回「目前不在 batch 模式」。
+
+### 原因
+`handleText` 開頭有「任何 `/` 指令先 clear session」的防呆邏輯（避免使用者卡在 waiting state）。但 `/done` 跟 `/cancel` 是**需要讀舊 session 才能運作**的 stateful 指令，被這層誤殺。
+
+### 改動
+- `src/app/api/bot/route.ts`：自動清 session 的邏輯加白名單 `/done` `/cancel`，這兩個指令保留 session 讓後續 handler 能讀。
+
 ## v4.5.0 — feat(bot): /b 批次模式 + 個人 pending / failed-scans 頁面 + 非同步 OCR worker（2026-04-28）
 
 ### 痛點

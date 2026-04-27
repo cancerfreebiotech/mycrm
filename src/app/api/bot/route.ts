@@ -1183,7 +1183,10 @@ async function handleText(
   const cmd = text.trim()
 
   // ── Clear active session on any slash command (must run before all handlers)
-  if (cmd.startsWith('/') && session?.state) {
+  // Exception: /done and /cancel need to READ the current session to act on it
+  // (e.g., /done finishes batch_mode, /cancel exits whatever state we're in).
+  const stateAware = /^\/(done|cancel)\b/.test(cmd)
+  if (cmd.startsWith('/') && session?.state && !stateAware) {
     await clearSession(fromId)
     session = null
   }
