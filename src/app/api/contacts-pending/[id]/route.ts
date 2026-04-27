@@ -66,8 +66,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     }
 
-    // Strip rotation + merge-target hidden fields + batch-dup markers + card image URLs (multi-card uses contact_cards)
-    const { rotation: _r, _merge_target_id: _mt, _merge_target_name: _mn, _batch_dup_of_id: _bdi, _batch_dup_of_name: _bdn, card_img_url: _ci, card_img_back_url: _cb, ...contactFields } = pdata
+    // Strip rotation + merge-target hidden fields + batch-dup markers + tag ids
+    // (handled separately) + card image URLs (multi-card uses contact_cards)
+    const { rotation: _r, _merge_target_id: _mt, _merge_target_name: _mn, _batch_dup_of_id: _bdi, _batch_dup_of_name: _bdn, _tag_ids: _ti, card_img_url: _ci, card_img_back_url: _cb, ...contactFields } = pdata
+    const tagIds = Array.isArray(_ti) ? (_ti as string[]) : []
     const { data: inserted, error } = await service
       .from('contacts')
       .insert({ ...contactFields, created_by: auth.userId })
@@ -83,6 +85,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       content: '從 Pending 區確認新增名片',
       created_by: auth.userId,
     })
+
+    if (tagIds.length > 0) {
+      await service.from('contact_tags').insert(
+        tagIds.map((tagId) => ({ contact_id: inserted.id, tag_id: tagId }))
+      )
+    }
 
     if (pdata.card_img_url) {
       const now = new Date()
@@ -138,6 +146,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         storage_path: pending.storage_path,
         label: cardLabel,
       })
+    }
+
+    // Apply selected tags to merged target (skip already-attached ones)
+    const mergeTagIds = Array.isArray(pdata._tag_ids) ? (pdata._tag_ids as string[]) : []
+    if (mergeTagIds.length > 0) {
+      const { data: existingLinks } = await service
+        .from('contact_tags')
+        .select('tag_id')
+        .eq('contact_id', targetId)
+      const existingSet = new Set(((existingLinks ?? []) as { tag_id: string }[]).map((r) => r.tag_id))
+      const toAdd = mergeTagIds.filter((id) => !existingSet.has(id))
+      if (toAdd.length > 0) {
+        await service.from('contact_tags').insert(
+          toAdd.map((tagId) => ({ contact_id: targetId, tag_id: tagId }))
+        )
+      }
     }
 
     if (conflicts.length > 0) {

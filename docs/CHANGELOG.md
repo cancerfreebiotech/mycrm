@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v4.6.2 — feat(pending): Tag inline edit（2026-04-28）
+
+### 改動
+- Pending 頁載入所有 tags（一次），每張 done card 顯示 chip-style 多選 tag picker
+- 點擊 toggle → 寫入 `data._tag_ids` 陣列
+- API save action：剝出 `_tag_ids`，contact 建立後 INSERT contact_tags
+- API merge action：把選的 tag merge 到既有聯絡人（跳過已附加的避免重複）
+
 ## v4.6.1 — feat(pending): 手動 rescue 按鈕 + cron 加強 logging（2026-04-28）
 
 ### 痛點

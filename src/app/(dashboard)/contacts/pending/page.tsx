@@ -11,6 +11,7 @@ type PendingStatus = 'pending' | 'processing' | 'done' | 'failed'
 type StatusFilter = 'all' | 'pending' | 'done' | 'failed'
 
 interface UserRef { display_name: string | null; email: string }
+interface Tag { id: string; name: string }
 interface PendingRow {
   id: string
   data: Record<string, unknown>
@@ -48,6 +49,14 @@ export default function PendingReviewPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [uploaderFilter, setUploaderFilter] = useState<string>('all')
   const [rescueBusy, setRescueBusy] = useState(false)
+  const [allTags, setAllTags] = useState<Tag[]>([])
+
+  // Load tags once for the picker
+  useEffect(() => {
+    supabase.from('tags').select('id, name').order('name').then(({ data }) => {
+      setAllTags((data as Tag[] | null) ?? [])
+    })
+  }, [supabase])
 
   // Resolve own user.id (used to flag "this row is mine") via the users table by email
   useEffect(() => {
@@ -257,6 +266,7 @@ export default function PendingReviewPage() {
               row={r}
               isMine={r.created_by === myUserId}
               busy={busyId === r.id}
+              allTags={allTags}
               onSave={() => callAction(r.id, 'save')}
               onMerge={() => callAction(r.id, 'merge')}
               onDelete={() => deleteRow(r.id)}
@@ -293,12 +303,13 @@ function FilterDropdown({
 }
 
 function PendingCard({
-  row, isMine, busy,
+  row, isMine, busy, allTags,
   onSave, onMerge, onDelete, onRetry, onPatch,
 }: {
   row: PendingRow
   isMine: boolean
   busy: boolean
+  allTags: Tag[]
   onSave: () => void
   onMerge: () => void
   onDelete: () => void
@@ -314,8 +325,14 @@ function PendingCard({
   const batchDupOfName = data._batch_dup_of_name as string | undefined
   const importance = (data.importance as Importance | null | undefined) ?? null
   const language = (data.language as Language | null | undefined) ?? null
+  const tagIds = (data._tag_ids as string[] | undefined) ?? []
   const metAt = data.met_at as string | undefined
   const metDate = data.met_date as string | undefined
+
+  function toggleTag(tagId: string) {
+    const next = tagIds.includes(tagId) ? tagIds.filter((id) => id !== tagId) : [...tagIds, tagId]
+    onPatch({ _tag_ids: next })
+  }
 
   const StatusBadge = (() => {
     const cls = 'inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded font-medium'
@@ -407,6 +424,29 @@ function PendingCard({
                   </select>
                 </label>
               </div>
+
+              {/* Tag picker */}
+              {allTags.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">{t('fieldTags')}</span>
+                  {allTags.map((tag) => {
+                    const selected = tagIds.includes(tag.id)
+                    return (
+                      <button
+                        key={tag.id}
+                        onClick={() => toggleTag(tag.id)}
+                        className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${
+                          selected
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'text-gray-500 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-blue-400'
+                        }`}
+                      >
+                        {tag.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </>
           )}
 
