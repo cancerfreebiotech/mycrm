@@ -70,6 +70,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // (handled separately) + card image URLs (multi-card uses contact_cards)
     const { rotation: _r, _merge_target_id: _mt, _merge_target_name: _mn, _batch_dup_of_id: _bdi, _batch_dup_of_name: _bdn, _tag_ids: _ti, card_img_url: _ci, card_img_back_url: _cb, ...contactFields } = pdata
     const tagIds = Array.isArray(_ti) ? (_ti as string[]) : []
+    // Default importance to 'medium' if user didn't explicitly choose
+    if (!contactFields.importance) contactFields.importance = 'medium'
     const { data: inserted, error } = await service
       .from('contacts')
       .insert({ ...contactFields, created_by: auth.userId })
@@ -108,7 +110,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   if (action === 'merge') {
-    const targetId = pdata._merge_target_id as string | undefined
+    // target_id from request body (manual picker) takes precedence over the
+    // OCR-detected duplicate in pdata._merge_target_id (auto-suggested).
+    const manualTargetId = typeof body.target_id === 'string' ? body.target_id : undefined
+    const targetId = manualTargetId ?? (pdata._merge_target_id as string | undefined)
     if (!targetId) return NextResponse.json({ error: 'No merge target' }, { status: 400 })
 
     const { data: existing } = await service

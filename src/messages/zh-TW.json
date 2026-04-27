@@ -1028,7 +1028,11 @@
     "languageEnglish": "英文",
     "rescueButton": "重跑卡住的辨識（{count}）",
     "rescueHint": "把卡住的 pending 重新送 OCR",
-    "rescueQueued": "已啟動重跑 {count} 張，幾分鐘後刷新看結果。"
+    "rescueQueued": "已啟動重跑 {count} 張，幾分鐘後刷新看結果。",
+    "actionMergeManual": "合併到既有...",
+    "mergePickerPlaceholder": "輸入姓名 / 公司 / Email 搜尋",
+    "mergePickerSearching": "搜尋中...",
+    "mergePickerNoResults": "沒有符合的聯絡人"
   },
   "myFailedScans": {
     "title": "我的失敗辨識",

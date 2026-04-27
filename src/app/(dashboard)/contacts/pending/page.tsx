@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { Loader2, Check, RefreshCw, Trash2, GitMerge, ExternalLink, AlertCircle } from 'lucide-react'
+import { Loader2, Check, RefreshCw, Trash2, GitMerge, ExternalLink, AlertCircle, Search, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 
@@ -113,19 +113,19 @@ export default function PendingReviewPage() {
     })
   }, [rows, statusFilter, uploaderFilter])
 
-  async function callAction(id: string, action: 'save' | 'merge', force = false) {
+  async function callAction(id: string, action: 'save' | 'merge', opts: { force?: boolean; targetId?: string } = {}) {
     setBusyId(id)
     const res = await fetch(`/api/contacts-pending/${id}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, force }),
+      body: JSON.stringify({ action, force: opts.force, target_id: opts.targetId }),
     })
     setBusyId(null)
     if (res.status === 409) {
       const err = await res.json().catch(() => ({}))
       const targetName = err.suggested_target_name ?? '已存在'
       const ok = confirm(t('duplicateConfirm', { name: targetName }))
-      if (ok) callAction(id, action, true)
+      if (ok) callAction(id, action, { ...opts, force: true })
       return
     }
     if (!res.ok) {
@@ -269,6 +269,7 @@ export default function PendingReviewPage() {
               allTags={allTags}
               onSave={() => callAction(r.id, 'save')}
               onMerge={() => callAction(r.id, 'merge')}
+              onMergeManual={(targetId) => callAction(r.id, 'merge', { targetId })}
               onDelete={() => deleteRow(r.id)}
               onRetry={() => retryRow(r.id)}
               onPatch={(patch) => patchData(r.id, patch)}
@@ -302,9 +303,11 @@ function FilterDropdown({
   )
 }
 
+interface ContactSearchResult { id: string; name: string | null; name_en: string | null; company: string | null; email: string | null }
+
 function PendingCard({
   row, isMine, busy, allTags,
-  onSave, onMerge, onDelete, onRetry, onPatch,
+  onSave, onMerge, onMergeManual, onDelete, onRetry, onPatch,
 }: {
   row: PendingRow
   isMine: boolean
@@ -312,11 +315,35 @@ function PendingCard({
   allTags: Tag[]
   onSave: () => void
   onMerge: () => void
+  onMergeManual: (targetId: string) => void
   onDelete: () => void
   onRetry: () => void
   onPatch: (patch: Record<string, unknown>) => void
 }) {
   const t = useTranslations('pendingReview')
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerQuery, setPickerQuery] = useState('')
+  const [pickerResults, setPickerResults] = useState<ContactSearchResult[]>([])
+  const [pickerSearching, setPickerSearching] = useState(false)
+
+  // Debounced search when picker is open
+  useEffect(() => {
+    if (!pickerOpen) return
+    const q = pickerQuery.trim()
+    if (q.length < 1) { setPickerResults([]); return }
+    let cancelled = false
+    const handle = setTimeout(async () => {
+      setPickerSearching(true)
+      try {
+        const res = await fetch(`/api/contacts/search?q=${encodeURIComponent(q)}`)
+        const body = await res.json()
+        if (!cancelled) setPickerResults((body.results ?? []) as ContactSearchResult[])
+      } finally {
+        if (!cancelled) setPickerSearching(false)
+      }
+    }, 250)
+    return () => { cancelled = true; clearTimeout(handle) }
+  }, [pickerQuery, pickerOpen])
   const data = row.data ?? {}
   // OCR sets data.card_img_url; before then, derive public URL from storage_path
   // so users see the thumbnail right away rather than a placeholder.
@@ -401,19 +428,23 @@ function PendingCard({
               <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
                 <div className="flex items-center gap-1.5">
                   <span className="text-gray-500 dark:text-gray-400">{t('fieldImportance')}</span>
-                  {IMPORTANCES.map((v) => (
-                    <button
-                      key={v}
-                      onClick={() => onPatch({ importance: importance === v ? null : v })}
-                      className={`w-7 h-6 rounded border transition-colors ${
-                        importance === v
-                          ? 'bg-green-500 border-green-500 text-white'
-                          : 'border-gray-200 dark:border-gray-700 text-gray-400 hover:border-green-400 hover:text-green-500'
-                      }`}
-                    >
-                      {v === 'high' ? 'H' : v === 'low' ? 'L' : 'M'}
-                    </button>
-                  ))}
+                  {IMPORTANCES.map((v) => {
+                    // Default to 'medium' visually if user hasn't picked yet
+                    const effective = importance ?? 'medium'
+                    return (
+                      <button
+                        key={v}
+                        onClick={() => onPatch({ importance: v })}
+                        className={`w-7 h-6 rounded border transition-colors ${
+                          effective === v
+                            ? 'bg-green-500 border-green-500 text-white'
+                            : 'border-gray-200 dark:border-gray-700 text-gray-400 hover:border-green-400 hover:text-green-500'
+                        }`}
+                      >
+                        {v === 'high' ? 'H' : v === 'low' ? 'L' : 'M'}
+                      </button>
+                    )
+                  })}
                 </div>
                 <label className="flex items-center gap-1.5">
                   <span className="text-gray-500 dark:text-gray-400">{t('fieldLanguage')}</span>
@@ -486,6 +517,14 @@ function PendingCard({
                     {t('actionMergeTo', { name: mergeTargetName ?? '' })}
                   </button>
                 )}
+                <button
+                  onClick={() => setPickerOpen((v) => !v)}
+                  disabled={busy}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
+                >
+                  <Search size={14} />
+                  {t('actionMergeManual')}
+                </button>
               </>
             )}
             {row.status === 'failed' && (
@@ -518,6 +557,54 @@ function PendingCard({
               </a>
             )}
           </div>
+
+          {/* Manual merge picker */}
+          {pickerOpen && row.status === 'done' && (
+            <div className="mt-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Search size={14} className="text-gray-400" />
+                <input
+                  type="text"
+                  autoFocus
+                  value={pickerQuery}
+                  onChange={(e) => setPickerQuery(e.target.value)}
+                  placeholder={t('mergePickerPlaceholder')}
+                  className="flex-1 bg-transparent text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 outline-none"
+                />
+                <button
+                  onClick={() => { setPickerOpen(false); setPickerQuery(''); setPickerResults([]) }}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              {pickerSearching && (
+                <div className="flex items-center gap-2 text-xs text-gray-400 px-1">
+                  <Loader2 size={12} className="animate-spin" /> {t('mergePickerSearching')}
+                </div>
+              )}
+              {!pickerSearching && pickerQuery.trim().length > 0 && pickerResults.length === 0 && (
+                <p className="text-xs text-gray-400 px-1">{t('mergePickerNoResults')}</p>
+              )}
+              {pickerResults.length > 0 && (
+                <ul className="divide-y divide-gray-200 dark:divide-gray-700 max-h-60 overflow-y-auto">
+                  {pickerResults.map((c) => (
+                    <li key={c.id}>
+                      <button
+                        onClick={() => onMergeManual(c.id)}
+                        disabled={busy}
+                        className="w-full text-left px-2 py-1.5 text-sm hover:bg-white dark:hover:bg-gray-900 disabled:opacity-50 transition-colors"
+                      >
+                        <span className="font-medium text-gray-900 dark:text-gray-100">{c.name ?? c.name_en ?? '—'}</span>
+                        {c.company && <span className="text-gray-500 dark:text-gray-400 ml-2">{c.company}</span>}
+                        {c.email && <span className="text-gray-400 dark:text-gray-500 ml-2 text-xs">{c.email}</span>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1028,7 +1028,11 @@
     "languageEnglish": "English",
     "rescueButton": "Retry stuck OCR ({count})",
     "rescueHint": "Re-queue stuck pending rows for OCR",
-    "rescueQueued": "Re-queued {count} card(s). Refresh in a few minutes to see results."
+    "rescueQueued": "Re-queued {count} card(s). Refresh in a few minutes to see results.",
+    "actionMergeManual": "Merge to existing...",
+    "mergePickerPlaceholder": "Search by name / company / email",
+    "mergePickerSearching": "Searching...",
+    "mergePickerNoResults": "No matching contacts"
   },
   "myFailedScans": {
     "title": "My Failed Scans",

@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## v4.6.5 — feat(pending): 預設重要性 medium + 手動合併到既有聯絡人（2026-04-28）
+
+### 痛點
+1. Pending 區建立的聯絡人預設沒有重要性（要每張手動點 H/M/L）
+2. 沒被自動偵測為重複的 pending row，沒有方法合併到既有聯絡人——但實務上一個人會有正反面、多張名片都需要併
+
+### 改動
+- **預設重要性 medium**：
+  - UI：未設定時 'M' 鍵預設 highlighted（不是空的）
+  - API save：insert contacts 前若 importance 缺失 → 自動填 'medium'
+- **手動合併 picker**：
+  - 新增 `GET /api/contacts/search?q=...`：依 name / name_en / company / email ilike 搜尋（最多 10 筆）
+  - 每張 done pending row 加「🔍 合併到既有...」按鈕（不只 auto-detected dup）
+  - 點開展開搜尋框 + 結果清單（debounced 250ms）
+  - 點結果 → API merge with target_id
+- **API merge action**：accept body.target_id（手動）優先於 pdata._merge_target_id（自動）
+
+### i18n
+- pendingReview.actionMergeManual / mergePickerPlaceholder / mergePickerSearching / mergePickerNoResults × 三語
+
 ## v4.6.4 — fix(bot): batch_mode 第二張之後遺失 met context（2026-04-28）
 
 ### 痛點
