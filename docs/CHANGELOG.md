@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v4.4.4 — fix(ai): Portkey SDK fetch timeout 拉長到 180s 配合 fallback chain（2026-04-27）
+
+### 痛點
+Portkey config 改成 per-target timeout + Gemma fallback 後，最壞情境 OCR chain 會跑到 ~150s（Gemini ×2 retry + Gemma ×3 fallback）。但 Portkey SDK 預設 fetch timeout 雖然是 5 分鐘，這次顯式設成 180s 文件化時間預算、避免未來改 SDK 預設時破功。
+
+### 改動
+- `src/lib/gemini.ts` `makePortkey()` 加 `timeout: 180_000`，並用註解說明為什麼比 chain 上限大。
+
 ## v4.4.3 — fix(bot): 名片儲存時不再雙寫導致詳情頁顯示兩張（2026-04-26）
 
 ### 痛點

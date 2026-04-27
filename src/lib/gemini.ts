@@ -31,10 +31,15 @@ interface ModelConfig {
 // Portkey gateway: routing strategy (loadbalance across virtual keys) and retry
 // are defined in the Portkey Config referenced by PORTKEY_CONFIG_ID. This keeps
 // the strategy tunable from the dashboard without redeploying the app.
+//
+// timeout (180s) is the SDK-level fetch cap. It must be larger than the worst
+// case Portkey strategy chain (per-target timeouts × retries × fallback layers),
+// otherwise the SDK gives up before fallback finishes.
 function makePortkey(): Portkey {
   return new Portkey({
     apiKey: process.env.PORTKEY_API_KEY!,
     config: process.env.PORTKEY_CONFIG_ID!,
+    timeout: 180_000,
   })
 }
 
