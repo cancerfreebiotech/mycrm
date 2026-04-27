@@ -1024,7 +1024,10 @@
     "fieldLanguage": "言語",
     "languageChinese": "中国語",
     "languageJapanese": "日本語",
-    "languageEnglish": "英語"
+    "languageEnglish": "英語",
+    "rescueButton": "再認識（{count} 件）",
+    "rescueHint": "停止中の pending を OCR キューに戻す",
+    "rescueQueued": "{count} 件を再キューしました。数分後に更新して結果を確認してください。"
   },
   "myFailedScans": {
     "title": "認識失敗",

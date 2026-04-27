@@ -14,13 +14,21 @@ export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    console.warn('[pending-ocr-cron] unauthorized', { hasSecret: !!cronSecret, hasHeader: !!authHeader })
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  console.log('[pending-ocr-cron] start')
   const supabase = createServiceClient()
-  const result = await processPendingBatchAcrossUsers(supabase)
-  console.log('[pending-ocr-cron]', result)
-  return NextResponse.json({ ok: true, ...result })
+  try {
+    const result = await processPendingBatchAcrossUsers(supabase)
+    console.log('[pending-ocr-cron] done', result)
+    return NextResponse.json({ ok: true, ...result })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[pending-ocr-cron] error', msg)
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 })
+  }
 }
 
 export const maxDuration = 300

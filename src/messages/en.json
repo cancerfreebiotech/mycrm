@@ -1024,7 +1024,10 @@
     "fieldLanguage": "Language",
     "languageChinese": "Chinese",
     "languageJapanese": "Japanese",
-    "languageEnglish": "English"
+    "languageEnglish": "English",
+    "rescueButton": "Retry stuck OCR ({count})",
+    "rescueHint": "Re-queue stuck pending rows for OCR",
+    "rescueQueued": "Re-queued {count} card(s). Refresh in a few minutes to see results."
   },
   "myFailedScans": {
     "title": "My Failed Scans",

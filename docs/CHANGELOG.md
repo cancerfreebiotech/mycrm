@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## v4.6.1 — feat(pending): 手動 rescue 按鈕 + cron 加強 logging（2026-04-28）
+
+### 痛點
+有 25 張 pending row 卡住、cron 沒撿（原因未明，需要 log 才能 debug）。沒有手動觸發路徑，使用者只能等。
+
+### 改動
+- **新增 `POST /api/contacts-pending/rescue`**：使用者觸發、用 service role 重置自己的 pending rows（retry_count=0、清 error_message）後 `after()` 跑 `processPendingForUser`
+- **Pending 頁加「重跑卡住的辨識」按鈕**：偵測到使用者自己有 status='pending'/'processing' 的 row 才顯示，按下去 enqueue + 顯示 toast，3 秒後自動 refetch
+- **Cron route 加 try/catch + 詳細 console.log**（start、done、error、unauthorized），未來 Vercel runtime logs 可看到
+- **i18n** rescueButton / rescueHint / rescueQueued × 三語
+
 ## v4.6.0 — feat(pending): 上傳者 / filter / inline edit + failed-scans bulk delete（2026-04-28）
 
 ### 改動

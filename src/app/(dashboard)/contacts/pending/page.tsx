@@ -47,6 +47,7 @@ export default function PendingReviewPage() {
   const [myUserId, setMyUserId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [uploaderFilter, setUploaderFilter] = useState<string>('all')
+  const [rescueBusy, setRescueBusy] = useState(false)
 
   // Resolve own user.id (used to flag "this row is mine") via the users table by email
   useEffect(() => {
@@ -163,12 +164,42 @@ export default function PendingReviewPage() {
   }
 
   const showUploaderFilter = uploaders.length > 1
+  const stuckCount = rows.filter((r) =>
+    (r.status === 'pending' || r.status === 'processing') &&
+    (!myUserId || r.created_by === myUserId)
+  ).length
+
+  async function rescuePending() {
+    setRescueBusy(true)
+    const res = await fetch('/api/contacts-pending/rescue', { method: 'POST' })
+    setRescueBusy(false)
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      alert(body.error ?? tc('error'))
+      return
+    }
+    alert(t('rescueQueued', { count: body.queued ?? 0 }))
+    setTimeout(fetchRows, 3000)
+  }
 
   return (
     <div className="max-w-4xl">
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('subtitle')}</p>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('subtitle')}</p>
+        </div>
+        {stuckCount > 0 && (
+          <button
+            onClick={rescuePending}
+            disabled={rescueBusy}
+            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-gray-50 transition-colors"
+            title={t('rescueHint')}
+          >
+            {rescueBusy ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            {t('rescueButton', { count: stuckCount })}
+          </button>
+        )}
       </div>
 
       {/* Filter toolbar */}

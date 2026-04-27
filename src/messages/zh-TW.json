@@ -1024,7 +1024,10 @@
     "fieldLanguage": "語言",
     "languageChinese": "中文",
     "languageJapanese": "日文",
-    "languageEnglish": "英文"
+    "languageEnglish": "英文",
+    "rescueButton": "重跑卡住的辨識（{count}）",
+    "rescueHint": "把卡住的 pending 重新送 OCR",
+    "rescueQueued": "已啟動重跑 {count} 張，幾分鐘後刷新看結果。"
   },
   "myFailedScans": {
     "title": "我的失敗辨識",
