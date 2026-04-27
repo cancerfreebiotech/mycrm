@@ -66,7 +66,9 @@
     "sidebarExpand": "展開側邊欄",
     "sidebarCollapse": "收合側邊欄",
     "themeLight": "切換淺色",
-    "themeDark": "切換深色"
+    "themeDark": "切換深色",
+    "pendingReview": "待審核名片",
+    "myFailedScans": "我的失敗辨識"
   },
   "auth": {
     "signInWithMicrosoft": "使用 Microsoft 帳號登入",
@@ -987,6 +989,37 @@
     "mergeIrreversible": "來源聯絡人刪除後無法復原",
     "confirmMerge": "確認合併",
     "mergeFailed": "合併失敗"
+  },
+  "pendingReview": {
+    "title": "待審核名片",
+    "subtitle": "從 Telegram batch 模式（/b）上傳的名片，辨識完成後在此確認、合併或刪除。",
+    "empty": "目前沒有待審核的名片",
+    "emptyHint": "用 Telegram bot 打 /b 進入 batch 模式，再傳照片，辨識完成會出現在這裡。",
+    "deleteConfirm": "確定要刪除這張名片嗎？",
+    "statusPending": "辨識中",
+    "statusProcessing": "辨識中",
+    "statusDone": "已辨識",
+    "statusFailed": "失敗",
+    "imagePendingOcr": "等待辨識",
+    "fieldName": "姓名",
+    "fieldCompany": "公司",
+    "fieldJobTitle": "職稱",
+    "fieldEmail": "Email",
+    "fieldPhone": "電話",
+    "fieldCountry": "國家",
+    "actionSave": "確認存檔",
+    "actionMergeTo": "加到「{name}」",
+    "actionRetry": "重試辨識",
+    "actionDelete": "刪除",
+    "actionViewImage": "看原圖"
+  },
+  "myFailedScans": {
+    "title": "我的失敗辨識",
+    "subtitle": "OCR 辨識失敗（無法識別姓名）的圖片。可看原圖或刪除；要重試請用 Telegram bot 重拍上傳。",
+    "empty": "目前沒有失敗辨識紀錄",
+    "deleteConfirm": "確定要刪除嗎？",
+    "actionViewImage": "看原圖",
+    "actionDelete": "刪除"
   },
   "failedScans": {
     "title": "辨識失敗審查",

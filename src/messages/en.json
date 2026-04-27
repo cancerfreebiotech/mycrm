@@ -66,7 +66,9 @@
     "sidebarExpand": "Expand sidebar",
     "sidebarCollapse": "Collapse sidebar",
     "themeLight": "Switch to light",
-    "themeDark": "Switch to dark"
+    "themeDark": "Switch to dark",
+    "pendingReview": "Pending Cards",
+    "myFailedScans": "My Failed Scans"
   },
   "auth": {
     "signInWithMicrosoft": "Sign in with Microsoft",
@@ -987,6 +989,37 @@
     "mergeIrreversible": "The source contact cannot be recovered after deletion",
     "confirmMerge": "Confirm Merge",
     "mergeFailed": "Merge failed"
+  },
+  "pendingReview": {
+    "title": "Pending Cards",
+    "subtitle": "Cards uploaded via Telegram batch mode (/b). Confirm, merge, or delete here once OCR finishes.",
+    "empty": "No cards waiting for review",
+    "emptyHint": "Use the Telegram bot — type /b to enter batch mode, then send photos. They'll appear here once recognized.",
+    "deleteConfirm": "Delete this card?",
+    "statusPending": "Recognizing",
+    "statusProcessing": "Recognizing",
+    "statusDone": "Recognized",
+    "statusFailed": "Failed",
+    "imagePendingOcr": "Awaiting OCR",
+    "fieldName": "Name",
+    "fieldCompany": "Company",
+    "fieldJobTitle": "Job title",
+    "fieldEmail": "Email",
+    "fieldPhone": "Phone",
+    "fieldCountry": "Country",
+    "actionSave": "Save",
+    "actionMergeTo": "Merge into {name}",
+    "actionRetry": "Retry OCR",
+    "actionDelete": "Delete",
+    "actionViewImage": "View image"
+  },
+  "myFailedScans": {
+    "title": "My Failed Scans",
+    "subtitle": "Images where OCR failed to detect a name. View or delete here; to retry, re-upload via the Telegram bot.",
+    "empty": "No failed scans",
+    "deleteConfirm": "Delete this scan?",
+    "actionViewImage": "View image",
+    "actionDelete": "Delete"
   },
   "failedScans": {
     "title": "Failed Scan Review",

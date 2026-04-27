@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { getBotLanguage, BOT_MESSAGES, type BotMessages } from '@/lib/bot-messages'
 import { analyzeBusinessCard, generateEmailContent, parseTaskCommand, parseMeetingCommand, parseMetCommand, parseVisitNote, parseLinkedInScreenshot } from '@/lib/gemini'
@@ -7,6 +7,7 @@ import { checkDuplicates } from '@/lib/duplicate'
 import { sendMail, createCalendarEvent } from '@/lib/graph'
 import { getValidProviderToken } from '@/lib/graph-server'
 import { sendTeamsTaskNotification, sendTeamsMessage } from '@/lib/teams'
+import { processPendingForUser } from '@/lib/pending-ocr-worker'
 
 function countryToLanguage(code: string | null | undefined): string {
   if (code === 'TW' || code === 'CN') return 'chinese'
@@ -659,6 +660,36 @@ async function handlePhoto(
       const msg = err instanceof Error ? err.message : String(err)
       await clearSession(fromId)
       await sendMessage(chatId, `❌ 解析失敗：${msg}`)
+    }
+    return
+  }
+
+  // /b: Batch mode — fast path, no OCR yet, just upload + queue
+  if (session?.state === 'batch_mode') {
+    try {
+      const imgBuffer = await downloadTelegramPhoto(photo.file_id)
+      const compressed = await processCardImage(imgBuffer)
+      const tmpFilename = await generateCardFilename()
+      const storagePath = `cards/${tmpFilename}`
+      const { error: uploadError } = await supabase.storage
+        .from('cards')
+        .upload(storagePath, compressed, { contentType: 'image/jpeg', upsert: false })
+      if (uploadError) throw new Error(uploadError.message ?? String(uploadError))
+
+      const { data: pending, error: pendingError } = await supabase
+        .from('pending_contacts')
+        .insert({ data: {}, created_by: user.id, storage_path: storagePath, status: 'pending' })
+        .select('id')
+        .single()
+      if (pendingError || !pending) throw new Error(pendingError?.message ?? '暫存失敗')
+
+      const existingIds = (session.context?.pending_ids as string[] | undefined) ?? []
+      const newIds = [...existingIds, pending.id]
+      await setSession(fromId, 'batch_mode', { count: newIds.length, pending_ids: newIds })
+      await sendMessage(chatId, `📥 已收第 ${newIds.length} 張。繼續傳送，或打 /done 開始辨識。`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      await sendMessage(chatId, `❌ 收下失敗：${msg}`)
     }
     return
   }
@@ -1742,6 +1773,53 @@ async function handleText(
   if (cmd === '/li' || cmd === '/linkedin') {
     await setSession(fromId, 'waiting_for_li', {})
     await sendMessage(chatId, '📸 請傳送 LinkedIn 個人頁截圖，AI 將自動解析聯絡人資料。')
+    return
+  }
+
+  // ── /b — enter batch mode (collect cards, async OCR via /done) ────────────
+  if (cmd === '/b' || cmd === '/batch') {
+    await setSession(fromId, 'batch_mode', { count: 0, pending_ids: [] })
+    const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+    const link = appUrl ? `\n📋 待審核：<a href="${appUrl}/contacts/pending">${appUrl}/contacts/pending</a>` : ''
+    await sendMessage(chatId,
+      `📦 已進入 batch 模式\n\n繼續傳送名片照片，每張會立即收下、稍後一起辨識。\n\n` +
+      `完成請打 /done，取消打 /cancel。${link}`
+    )
+    return
+  }
+
+  // ── /done — finish batch mode, kick off async OCR ─────────────────────────
+  if (cmd === '/done') {
+    if (session?.state !== 'batch_mode') {
+      await sendMessage(chatId, '目前不在 batch 模式。輸入 /b 進入後再傳照片。')
+      return
+    }
+    const pendingIds = (session.context?.pending_ids as string[] | undefined) ?? []
+    if (pendingIds.length === 0) {
+      await clearSession(fromId)
+      await sendMessage(chatId, '沒有任何名片，已退出 batch 模式。')
+      return
+    }
+    const total = pendingIds.length
+    await clearSession(fromId)
+    const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+    const link = appUrl ? `\n\n📋 <a href="${appUrl}/contacts/pending">${appUrl}/contacts/pending</a>` : ''
+    await sendMessage(chatId,
+      `✅ 共 ${total} 張已送辨識，完成後通知你。${link}`
+    )
+    // waitUntil — runs after response is sent
+    after(async () => {
+      const sb = createServiceClient()
+      await processPendingForUser(sb, user.id, fromId)
+    })
+    return
+  }
+
+  // ── /cancel — abort current session (batch or otherwise) ──────────────────
+  if (cmd === '/cancel') {
+    const wasBatch = session?.state === 'batch_mode'
+    await clearSession(fromId)
+    await sendMessage(chatId, wasBatch ? '已取消 batch 模式（已收的照片留在 pending，可到 web 確認）。' : '已取消。')
     return
   }
 

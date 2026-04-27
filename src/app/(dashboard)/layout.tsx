@@ -104,6 +104,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const memberItems: NavItem[] = [
     { href: '/', label: t('dashboard'), icon: LayoutDashboard },
     { href: '/contacts', label: t('contacts'), icon: Users },
+    { href: '/contacts/pending', label: t('pendingReview'), icon: ScanSearch },
+    { href: '/contacts/failed-scans', label: t('myFailedScans'), icon: ShieldCheck },
     { href: '/photos', label: t('photos'), icon: Images },
     { href: '/notes', label: t('notes'), icon: Search },
     { href: '/tasks', label: t('tasks'), icon: ClipboardList },

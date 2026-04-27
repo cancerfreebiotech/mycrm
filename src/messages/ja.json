@@ -66,7 +66,9 @@
     "sidebarExpand": "サイドバーを展開",
     "sidebarCollapse": "サイドバーを折りたたむ",
     "themeLight": "ライトモードに切り替え",
-    "themeDark": "ダークモードに切り替え"
+    "themeDark": "ダークモードに切り替え",
+    "pendingReview": "確認待ち名刺",
+    "myFailedScans": "認識失敗"
   },
   "auth": {
     "signInWithMicrosoft": "Microsoftアカウントでサインイン",
@@ -987,6 +989,37 @@
     "mergeIrreversible": "ソース連絡先は削除後に復元できません",
     "confirmMerge": "マージを確認",
     "mergeFailed": "マージに失敗しました"
+  },
+  "pendingReview": {
+    "title": "確認待ち名刺",
+    "subtitle": "Telegram バッチモード（/b）で送信された名刺。OCR完了後、ここで確認・統合・削除できます。",
+    "empty": "確認待ちの名刺はありません",
+    "emptyHint": "Telegram bot に /b と入力してバッチモードに入り、写真を送ると、認識完了後にここに表示されます。",
+    "deleteConfirm": "この名刺を削除しますか？",
+    "statusPending": "認識中",
+    "statusProcessing": "認識中",
+    "statusDone": "認識済み",
+    "statusFailed": "失敗",
+    "imagePendingOcr": "OCR待機中",
+    "fieldName": "氏名",
+    "fieldCompany": "会社",
+    "fieldJobTitle": "役職",
+    "fieldEmail": "メール",
+    "fieldPhone": "電話",
+    "fieldCountry": "国",
+    "actionSave": "保存",
+    "actionMergeTo": "「{name}」に統合",
+    "actionRetry": "再認識",
+    "actionDelete": "削除",
+    "actionViewImage": "画像を見る"
+  },
+  "myFailedScans": {
+    "title": "認識失敗",
+    "subtitle": "氏名を認識できなかった画像。ここで確認・削除できます。再試行するには Telegram bot で再アップロードしてください。",
+    "empty": "認識失敗の記録はありません",
+    "deleteConfirm": "削除しますか？",
+    "actionViewImage": "画像を見る",
+    "actionDelete": "削除"
   },
   "failedScans": {
     "title": "スキャン失敗審査",

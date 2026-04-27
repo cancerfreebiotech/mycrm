@@ -14,6 +14,9 @@ nav_order: 2
 | `/visit [name]` | `/v` | Add a visit record for a contact |
 | `/a [name]` | — | Add a business card photo (OCR) for a contact |
 | `/p [name]` | — | Add a group photo for a contact |
+| `/b` | `/batch` | Enter batch mode: shoot many cards in a row, OCR runs in background |
+| `/done` | — | End batch mode and queue OCR |
+| `/cancel` | — | Abort current mode |
 | `/email [keyword]` | `/e` | Send Email from contact details |
 | `/work [description]` | `/w` | AI parses natural language to create a task |
 | `/tasks` | `/t` | List your pending tasks |

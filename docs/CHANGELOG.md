@@ -1,5 +1,53 @@
 # CHANGELOG
 
+## v4.5.0 — feat(bot): /b 批次模式 + 個人 pending / failed-scans 頁面 + 非同步 OCR worker（2026-04-28）
+
+### 痛點
+1. 一次有很多名片要處理時，每張都要等同步 OCR（5-30 秒、有時 timeout），體感極差
+2. `pending_contacts` / `failed_scans` RLS 全開，使用者看不到「自己的」狀態，全部要走 admin
+3. OCR 失敗 / Portkey timeout 直接卡在 Telegram，沒有事後重試或批次救援機制
+
+### 改動
+
+**Bot — 批次模式（`/b` `/done` `/cancel`）**
+- `/b`：進入 batch mode，每張照片即時下載 + 上傳 storage + INSERT pending_contacts(status='pending')，**不當下 OCR**，使用者不用等
+- `/done`：用 Next.js `after()` 觸發背景 worker 跑 OCR；webhook 立刻 return 不卡 Telegram
+- `/cancel`：退出當前模式（已收的照片留在 pending，可在 web 確認）
+- 既有單張同步流程（直接拍照不打指令）**完全不變**，老使用者不影響
+
+**Web — 個人 pending / failed-scans 頁面**
+- `/contacts/pending`：使用者看自己上傳待審核的名片。狀態區分 pending / processing / done / failed；done 可直接 ✅ 確認存檔、📌 加到既有聯絡人、❌ 刪除；failed 可重試或刪除；pending/processing 自動 5 秒輪詢更新
+- `/contacts/failed-scans`：使用者看自己 OCR 失敗（沒抓到姓名）的圖。可看原圖或刪除；要重試請重新拍照上傳
+- Sidebar 加兩個項目（member 可見）：「待審核名片」「我的失敗辨識」
+- 既有 `/admin/camcard` `/admin/failed-scans` 保留作 admin 跨使用者匯總工具
+
+**非同步 OCR worker**
+- `src/lib/pending-ocr-worker.ts`：核心 worker，processOnePending 跑單筆、processPendingForUser 跑某使用者、processPendingBatchAcrossUsers 跨使用者掃 stale rows
+- `/api/cron/process-pending-ocr`：每 2 分鐘 cron 兜底，撈 status='pending' AND created_at < now()-2min AND retry_count<3 的 row 重跑
+- 失敗會重試最多 3 次；OCR 沒抓到姓名 → 自動移到 failed_scans
+- 完成後 sendTelegramMessage 推「✅ 已完成辨識 N/M 張，前往審核」
+
+**API**
+- `POST /api/contacts-pending/[id]` body `{action:'save'|'merge'}` — 從 pending 區建立聯絡人 / 合併到既有
+- `DELETE /api/contacts-pending/[id]` — 刪除 pending row + storage 圖
+
+**Schema 改動（migration: `v450_pending_async_worker_and_per_user_rls`）**
+- `pending_contacts` 加欄位：`status TEXT NOT NULL DEFAULT 'done'`、`retry_count INT DEFAULT 0`、`processed_at TIMESTAMPTZ`、`error_message TEXT`；`data` 預設改 `'{}'::jsonb`；CHECK constraint status IN ('pending','processing','done','failed')；index on (status, created_at) WHERE status IN ('pending','processing')；index on (created_by, status, created_at DESC)
+- **RLS 改寫**：
+  - `pending_contacts_all` (true) → 廢除
+  - 新 `pending_contacts_own_all`：`created_by = me`
+  - 新 `pending_contacts_super_admin_all`：role='super_admin' 全權
+  - `failed_scans_read` (true) → 廢除
+  - 新 `failed_scans_own_all`：`user_id = me`
+  - 既有 `failed_scans_write`（has_feature）跟 super_admin policy 保留
+
+### i18n
+- `nav.pendingReview` / `nav.myFailedScans` × 三語
+- `pendingReview.*`（21 keys）/ `myFailedScans.*`（6 keys）× 三語
+
+### 文件
+- `docs/bot/commands.{md,en.md,ja.md}`：指令表加 `/b` `/done` `/cancel`，新增「批次拍照」章節（zh-TW 詳細版）
+
 ## v4.4.4 — fix(ai): Portkey SDK fetch timeout 拉長到 180s 配合 fallback chain（2026-04-27）
 
 ### 痛點
