@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## v4.5.2 — feat(bot): 邊傳邊 OCR + within-batch dedup + confirm-time 重複再 check（2026-04-28）
+
+### 改動
+
+**邊傳邊辨識（不用等 /done）**
+- batch_mode 每張 photo 進來後立刻用 `after()` 觸發 `processOnePending`，不再等 /done
+- `/done` 只負責結束 + 等待落單者 + 發 summary（最多 polling 60 秒）
+- 新 helper `summarizeBatchAndNotify`：依 pendingIds 等所有 row 完成或 timeout，再發單一 Telegram 訊息
+
+**A — within-batch dedup（worker 主動標記）**
+- `processOnePending` OCR + `checkDuplicates` 之後，再查同使用者其他 status='done' 的 pending row，若 email 完全相同 → 在 `data._batch_dup_of_id` / `_batch_dup_of_name` 標記
+- pending 頁顯示橘色警示 banner「⚠️ 這批裡有另一張 email 相同的卡」
+
+**B — confirm-time 重複再 check（被動防線）**
+- `POST /api/contacts-pending/[id]` body action='save' → INSERT contacts 前 再跑一次 `checkDuplicates`，exact email match 回 409 + suggested target
+- 前端攔 409 → confirm dialog「已有相同 email 的聯絡人 X，仍要建立嗎？」→ 確認則 force=true 重打 API
+
+### i18n
+- `pendingReview.duplicateConfirm` / `pendingReview.batchDupWarning` × 三語
+
 ## v4.5.1 — fix(bot): /done /cancel 被自動清 session 邏輯誤殺（2026-04-28）
 
 ### 痛點

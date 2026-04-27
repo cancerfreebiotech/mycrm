@@ -56,14 +56,21 @@ export default function PendingReviewPage() {
     return () => clearInterval(interval)
   }, [fetchRows])
 
-  async function callAction(id: string, action: 'save' | 'merge') {
+  async function callAction(id: string, action: 'save' | 'merge', force = false) {
     setBusyId(id)
     const res = await fetch(`/api/contacts-pending/${id}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action, force }),
     })
     setBusyId(null)
+    if (res.status === 409) {
+      const err = await res.json().catch(() => ({}))
+      const targetName = err.suggested_target_name ?? '已存在'
+      const ok = confirm(t('duplicateConfirm', { name: targetName }))
+      if (ok) callAction(id, action, true)
+      return
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       alert(err.error ?? tc('error'))
@@ -154,6 +161,8 @@ function PendingCard({
   const cardImg = data.card_img_url as string | undefined
   const mergeTargetId = data._merge_target_id as string | undefined
   const mergeTargetName = data._merge_target_name as string | undefined
+  const batchDupOfId = data._batch_dup_of_id as string | undefined
+  const batchDupOfName = data._batch_dup_of_name as string | undefined
 
   const StatusBadge = (() => {
     const cls = 'inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded font-medium'
@@ -205,6 +214,12 @@ function PendingCard({
 
           {row.status === 'failed' && row.error_message && (
             <p className="text-xs text-red-600 dark:text-red-400 mt-1 break-all">{row.error_message}</p>
+          )}
+
+          {row.status === 'done' && batchDupOfId && (
+            <div className="mt-2 px-2 py-1.5 rounded bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800/40 text-xs text-orange-700 dark:text-orange-400">
+              ⚠️ {t('batchDupWarning', { name: batchDupOfName ?? '' })}
+            </div>
           )}
 
           {/* Actions */}

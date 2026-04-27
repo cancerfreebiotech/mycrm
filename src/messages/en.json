@@ -1011,7 +1011,9 @@
     "actionMergeTo": "Merge into {name}",
     "actionRetry": "Retry OCR",
     "actionDelete": "Delete",
-    "actionViewImage": "View image"
+    "actionViewImage": "View image",
+    "duplicateConfirm": "An existing contact \"{name}\" already has this email. Create a new contact anyway?",
+    "batchDupWarning": "Another card in this batch has the same email ({name}). Consider deleting this one."
   },
   "myFailedScans": {
     "title": "My Failed Scans",

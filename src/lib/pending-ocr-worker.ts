@@ -14,6 +14,8 @@ interface PendingRow {
 
 const MAX_RETRY = 3
 const PER_USER_BATCH_SIZE = 10
+const SUMMARY_POLL_TIMEOUT_MS = 60_000
+const SUMMARY_POLL_INTERVAL_MS = 3_000
 
 function countryToLanguage(code: string | null | undefined): string {
   if (code === 'TW' || code === 'CN') return 'chinese'
@@ -88,6 +90,30 @@ export async function processOnePending(
       mergeTargetName = similar[0].name
     }
 
+    // Within-batch dedup: check earlier DONE pending rows from same user
+    let batchDupOfId: string | null = null
+    let batchDupOfName: string | null = null
+    if (cardData.email || cardData.name) {
+      const { data: peers } = await supabase
+        .from('pending_contacts')
+        .select('id, data')
+        .eq('created_by', row.created_by)
+        .eq('status', 'done')
+        .neq('id', row.id)
+        .order('created_at', { ascending: true })
+        .limit(50)
+      const myEmail = (cardData.email ?? '').toLowerCase().trim()
+      for (const peer of (peers ?? []) as Array<{ id: string; data: Record<string, unknown> }>) {
+        const pdata = peer.data ?? {}
+        const peerEmail = ((pdata.email as string) ?? '').toLowerCase().trim()
+        if (myEmail && peerEmail && myEmail === peerEmail) {
+          batchDupOfId = peer.id
+          batchDupOfName = (pdata.name as string) ?? (pdata.name_en as string) ?? null
+          break
+        }
+      }
+    }
+
     const cardImgUrl = getPublicUrl(supabase, row.storage_path)
     // Preserve fields already set on the row (e.g. met_at / met_date / referred_by
     // carried in from /b 描述). Spread existing first so OCR fields override only
@@ -100,6 +126,8 @@ export async function processOnePending(
       language: countryToLanguage(cardData.country_code),
       _merge_target_id: mergeTargetId,
       _merge_target_name: mergeTargetName,
+      _batch_dup_of_id: batchDupOfId,
+      _batch_dup_of_name: batchDupOfName,
     }
 
     await supabase
@@ -171,6 +199,46 @@ export async function processPendingForUser(
   }
 
   return { done, failed, total: done + failed }
+}
+
+/**
+ * Wait for the given pending IDs to settle (status='done' or 'failed'),
+ * then send a single Telegram summary. Used by /done where each photo's
+ * after() already kicked off processOnePending — this just waits + reports.
+ */
+export async function summarizeBatchAndNotify(
+  supabase: SupabaseClient,
+  pendingIds: string[],
+  telegramId: number,
+): Promise<void> {
+  if (pendingIds.length === 0) return
+
+  const start = Date.now()
+  let rows: Array<{ id: string; status: string }> = []
+  while (Date.now() - start < SUMMARY_POLL_TIMEOUT_MS) {
+    const { data } = await supabase
+      .from('pending_contacts')
+      .select('id, status')
+      .in('id', pendingIds)
+    rows = (data ?? []) as Array<{ id: string; status: string }>
+    const stillRunning = rows.filter((r) => r.status === 'pending' || r.status === 'processing').length
+    if (stillRunning === 0) break
+    await new Promise((r) => setTimeout(r, SUMMARY_POLL_INTERVAL_MS))
+  }
+
+  const total = pendingIds.length
+  const done = rows.filter((r) => r.status === 'done').length
+  const failed = rows.filter((r) => r.status === 'failed').length
+  const droppedOrPending = total - done - failed  // 'no name detected' rows get deleted; or still running
+
+  const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+  const link = appUrl ? `\n\n👉 <a href="${appUrl}/contacts/pending">前往審核</a>` : ''
+  let msg = `✅ 辨識完成 ${done}/${total} 張`
+  if (failed > 0) msg += `\n❌ 失敗 ${failed} 張（已移到「我的失敗辨識」）`
+  if (droppedOrPending > 0) msg += `\n⏳ ${droppedOrPending} 張仍在辨識中（晚點到 web 看結果）`
+  msg += link
+
+  await sendTelegramMessage(telegramId, msg)
 }
 
 export async function processPendingBatchAcrossUsers(

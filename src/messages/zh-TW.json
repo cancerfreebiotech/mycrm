@@ -1011,7 +1011,9 @@
     "actionMergeTo": "加到「{name}」",
     "actionRetry": "重試辨識",
     "actionDelete": "刪除",
-    "actionViewImage": "看原圖"
+    "actionViewImage": "看原圖",
+    "duplicateConfirm": "已有相同 email 的聯絡人「{name}」。仍要建立新聯絡人嗎？",
+    "batchDupWarning": "這批裡有另一張 email 相同的卡（{name}）。建議刪除這張，避免重複。"
   },
   "myFailedScans": {
     "title": "我的失敗辨識",

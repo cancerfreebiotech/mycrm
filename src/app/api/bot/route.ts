@@ -7,7 +7,7 @@ import { checkDuplicates } from '@/lib/duplicate'
 import { sendMail, createCalendarEvent } from '@/lib/graph'
 import { getValidProviderToken } from '@/lib/graph-server'
 import { sendTeamsTaskNotification, sendTeamsMessage } from '@/lib/teams'
-import { processPendingForUser } from '@/lib/pending-ocr-worker'
+import { processOnePending, summarizeBatchAndNotify } from '@/lib/pending-ocr-worker'
 
 function countryToLanguage(code: string | null | undefined): string {
   if (code === 'TW' || code === 'CN') return 'chinese'
@@ -694,7 +694,21 @@ async function handlePhoto(
       const existingIds = (session.context?.pending_ids as string[] | undefined) ?? []
       const newIds = [...existingIds, pending.id]
       await setSession(fromId, 'batch_mode', { count: newIds.length, pending_ids: newIds })
-      await sendMessage(chatId, `📥 已收第 ${newIds.length} 張。繼續傳送，或打 /done 開始辨識。`)
+      await sendMessage(chatId, `📥 已收第 ${newIds.length} 張，背景辨識中。繼續傳送或打 /done 結束。`)
+
+      // Fire OCR immediately in background — no need to wait for /done
+      const rowForWorker = {
+        id: pending.id,
+        storage_path: storagePath,
+        data: initialData,
+        status: 'pending' as const,
+        retry_count: 0,
+        created_by: user.id,
+      }
+      after(async () => {
+        const sb = createServiceClient()
+        await processOnePending(sb, rowForWorker, user.ai_model_id)
+      })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       await sendMessage(chatId, `❌ 收下失敗：${msg}`)
@@ -1828,7 +1842,7 @@ async function handleText(
     return
   }
 
-  // ── /done — finish batch mode, kick off async OCR ─────────────────────────
+  // ── /done — finish batch mode, wait for stragglers + send summary ────────
   if (cmd === '/done') {
     if (session?.state !== 'batch_mode') {
       await sendMessage(chatId, '目前不在 batch 模式。輸入 /b 進入後再傳照片。')
@@ -1842,15 +1856,11 @@ async function handleText(
     }
     const total = pendingIds.length
     await clearSession(fromId)
-    const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
-    const link = appUrl ? `\n\n📋 <a href="${appUrl}/contacts/pending">${appUrl}/contacts/pending</a>` : ''
-    await sendMessage(chatId,
-      `✅ 共 ${total} 張已送辨識，完成後通知你。${link}`
-    )
-    // waitUntil — runs after response is sent
+    await sendMessage(chatId, `✅ 共 ${total} 張已收到，等所有辨識完成後再通知你。`)
+    // Background: poll up to 60s for all rows to finish, then send single summary
     after(async () => {
       const sb = createServiceClient()
-      await processPendingForUser(sb, user.id, fromId)
+      await summarizeBatchAndNotify(sb, pendingIds, fromId)
     })
     return
   }

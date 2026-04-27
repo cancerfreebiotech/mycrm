@@ -1011,7 +1011,9 @@
     "actionMergeTo": "「{name}」に統合",
     "actionRetry": "再認識",
     "actionDelete": "削除",
-    "actionViewImage": "画像を見る"
+    "actionViewImage": "画像を見る",
+    "duplicateConfirm": "同じ email を持つ連絡先「{name}」が既に存在します。新規作成しますか？",
+    "batchDupWarning": "このバッチに同じ email の名刺があります（{name}）。重複を避けるため削除を推奨。"
   },
   "myFailedScans": {
     "title": "認識失敗",

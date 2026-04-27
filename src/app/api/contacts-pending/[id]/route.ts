@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { checkDuplicates } from '@/lib/duplicate'
 
 // User-facing pending review actions: save / merge / delete.
 // RLS on pending_contacts (created_by = current user) is the auth gate.
@@ -44,8 +45,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const pdata = pending.data as Record<string, unknown>
 
   if (action === 'save') {
-    // Strip rotation + merge-target hidden fields + card image URLs (multi-card uses contact_cards)
-    const { rotation: _r, _merge_target_id: _mt, _merge_target_name: _mn, card_img_url: _ci, card_img_back_url: _cb, ...contactFields } = pdata
+    // Defensive re-check: between OCR and now, the user may have already saved
+    // an earlier pending row with the same email. Re-run checkDuplicates and
+    // return 409 if there's an exact email match — frontend shows a dialog.
+    const force = body.force === true
+    if (!force) {
+      const { exact } = await checkDuplicates({
+        email: pdata.email as string | null | undefined,
+        secondEmail: pdata.second_email as string | null | undefined,
+        name: pdata.name as string | null | undefined,
+        nameEn: pdata.name_en as string | null | undefined,
+        nameLocal: pdata.name_local as string | null | undefined,
+      })
+      if (exact.length > 0) {
+        return NextResponse.json({
+          error: 'duplicate_exact',
+          suggested_target_id: exact[0].id,
+          suggested_target_name: exact[0].name,
+        }, { status: 409 })
+      }
+    }
+
+    // Strip rotation + merge-target hidden fields + batch-dup markers + card image URLs (multi-card uses contact_cards)
+    const { rotation: _r, _merge_target_id: _mt, _merge_target_name: _mn, _batch_dup_of_id: _bdi, _batch_dup_of_name: _bdn, card_img_url: _ci, card_img_back_url: _cb, ...contactFields } = pdata
     const { data: inserted, error } = await service
       .from('contacts')
       .insert({ ...contactFields, created_by: auth.userId })
