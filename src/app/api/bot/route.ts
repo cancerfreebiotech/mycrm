@@ -676,9 +676,17 @@ async function handlePhoto(
         .upload(storagePath, compressed, { contentType: 'image/jpeg', upsert: false })
       if (uploadError) throw new Error(uploadError.message ?? String(uploadError))
 
+      // Carry "where met" context from /b 描述 into each photo's pending row;
+      // worker preserves these on OCR completion (see pending-ocr-worker.ts)
+      const met = session.context?.met as { met_at: string | null; met_date: string | null; referred_by: string | null } | null | undefined
+      const initialData: Record<string, unknown> = {}
+      if (met?.met_at) initialData.met_at = met.met_at
+      if (met?.met_date) initialData.met_date = met.met_date
+      if (met?.referred_by) initialData.referred_by = met.referred_by
+
       const { data: pending, error: pendingError } = await supabase
         .from('pending_contacts')
-        .insert({ data: {}, created_by: user.id, storage_path: storagePath, status: 'pending' })
+        .insert({ data: initialData, created_by: user.id, storage_path: storagePath, status: 'pending' })
         .select('id')
         .single()
       if (pendingError || !pending) throw new Error(pendingError?.message ?? '暫存失敗')
@@ -1776,13 +1784,42 @@ async function handleText(
     return
   }
 
-  // ── /b — enter batch mode (collect cards, async OCR via /done) ────────────
-  if (cmd === '/b' || cmd === '/batch') {
-    await setSession(fromId, 'batch_mode', { count: 0, pending_ids: [] })
+  // ── /b [描述] — enter batch mode, optionally with "where met" context ─────
+  const batchMatch = cmd.match(/^\/(b|batch)(?:\s+([\s\S]+))?$/)
+  if (batchMatch) {
+    const description = batchMatch[2]?.trim()
+    let metContext: { met_at: string | null; met_date: string; referred_by: string | null } | null = null
+    if (description) {
+      await sendMessage(chatId, '🤖 解析「在哪裡遇見」...')
+      try {
+        const nowIso = new Date().toISOString()
+        const parsed = await parseMetCommand(description, nowIso, user.ai_model_id)
+        metContext = {
+          met_at: parsed.met_at,
+          met_date: parsed.met_date,
+          referred_by: parsed.referred_by,
+        }
+      } catch (e) {
+        console.error('[bot] /b parseMetCommand error:', e)
+        await sendMessage(chatId, '⚠️ AI 解析失敗，仍進入 batch 模式但「在哪裡遇見」不會自動填')
+      }
+    }
+
+    await setSession(fromId, 'batch_mode', { count: 0, pending_ids: [], met: metContext })
+
+    let metInfo = ''
+    if (metContext) {
+      const parts: string[] = []
+      if (metContext.met_at) parts.push(`📍 ${metContext.met_at}`)
+      if (metContext.met_date) parts.push(`📅 ${metContext.met_date}`)
+      if (metContext.referred_by) parts.push(`🤝 介紹人 ${metContext.referred_by}`)
+      if (parts.length > 0) metInfo = `\n\n這批會自動標記：\n${parts.join('\n')}`
+    }
+
     const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
     const link = appUrl ? `\n📋 待審核：<a href="${appUrl}/contacts/pending">${appUrl}/contacts/pending</a>` : ''
     await sendMessage(chatId,
-      `📦 已進入 batch 模式\n\n繼續傳送名片照片，每張會立即收下、稍後一起辨識。\n\n` +
+      `📦 已進入 batch 模式${metInfo}\n\n繼續傳送名片照片，每張會立即收下、稍後一起辨識。\n\n` +
       `完成請打 /done，取消打 /cancel。${link}`
     )
     return

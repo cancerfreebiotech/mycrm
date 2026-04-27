@@ -89,7 +89,12 @@ export async function processOnePending(
     }
 
     const cardImgUrl = getPublicUrl(supabase, row.storage_path)
+    // Preserve fields already set on the row (e.g. met_at / met_date / referred_by
+    // carried in from /b 描述). Spread existing first so OCR fields override only
+    // OCR-tracked keys (CardData has no met_*).
+    const existingData = (row.data ?? {}) as Record<string, unknown>
     const updatedData = {
+      ...existingData,
       ...cardData,
       card_img_url: cardImgUrl,
       language: countryToLanguage(cardData.country_code),

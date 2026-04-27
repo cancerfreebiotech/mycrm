@@ -8,7 +8,7 @@ import { processPendingBatchAcrossUsers } from '@/lib/pending-ocr-worker'
  *
  * Auth: Vercel sends Authorization: Bearer {CRON_SECRET}.
  *
- * vercel.json: { "path": "/api/cron/process-pending-ocr", "schedule": "*/2 * * * *" }
+ * vercel.json: { "path": "/api/cron/process-pending-ocr", "schedule": "every 2 min" }
  */
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
