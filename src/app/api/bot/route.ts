@@ -693,7 +693,8 @@ async function handlePhoto(
 
       const existingIds = (session.context?.pending_ids as string[] | undefined) ?? []
       const newIds = [...existingIds, pending.id]
-      await setSession(fromId, 'batch_mode', { count: newIds.length, pending_ids: newIds })
+      // Preserve met context (set by /b 描述) for subsequent photos in this batch
+      await setSession(fromId, 'batch_mode', { ...session.context, count: newIds.length, pending_ids: newIds })
       await sendMessage(chatId, `📥 已收第 ${newIds.length} 張，背景辨識中。繼續傳送或打 /done 結束。`)
 
       // Fire OCR immediately in background — no need to wait for /done

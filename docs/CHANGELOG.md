@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v4.6.4 — fix(bot): batch_mode 第二張之後遺失 met context（2026-04-28）
+
+### 痛點
+`/b 描述` 進 batch、AI 解析出 met_at 寫進 session.context.met。第一張 photo 進來時 INSERT pending 帶 met_at 沒問題；但 photo handler 的 `setSession` **沒保留** `met` field（只寫了 count + pending_ids），第二張之後 session.context.met 不見、新 row 的 data 是空的。
+
+### 改動
+- `src/app/api/bot/route.ts` batch_mode photo handler：`setSession` 改成 `{ ...session.context, count, pending_ids }`，spread 既有 context 保留 met
+- DB 修復：對 user pohan.chen@cancerfree.io 今天 batch 中 met_at 為 null 的 17 張 pending row，回填 met_at='Sushitech 2026'、met_date='2026-04-27'
+
 ## v4.6.3 — fix(pending): pending/processing 狀態也顯示縮圖（2026-04-28）
 
 ### 痛點
