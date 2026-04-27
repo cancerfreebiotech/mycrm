@@ -318,7 +318,12 @@ function PendingCard({
 }) {
   const t = useTranslations('pendingReview')
   const data = row.data ?? {}
-  const cardImg = data.card_img_url as string | undefined
+  // OCR sets data.card_img_url; before then, derive public URL from storage_path
+  // so users see the thumbnail right away rather than a placeholder.
+  const cardImgFromData = data.card_img_url as string | undefined
+  const cardImg = cardImgFromData ?? (row.storage_path
+    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/cards/${row.storage_path}`
+    : undefined)
   const mergeTargetId = data._merge_target_id as string | undefined
   const mergeTargetName = data._merge_target_name as string | undefined
   const batchDupOfId = data._batch_dup_of_id as string | undefined

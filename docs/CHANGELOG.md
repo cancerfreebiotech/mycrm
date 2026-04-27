@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v4.6.3 — fix(pending): pending/processing 狀態也顯示縮圖（2026-04-28）
+
+### 痛點
+OCR 跑完前 `data.card_img_url` 還沒寫入，pending 頁顯示「等待辨識」placeholder，使用者看不到自己拍了什麼，誤以為照片沒上傳。
+
+### 改動
+- 縮圖優先用 `data.card_img_url`，沒有就用 `storage_path` 組 supabase public URL（圖檔上傳後立刻可見、不用等 OCR）
+
 ## v4.6.2 — feat(pending): Tag inline edit（2026-04-28）
 
 ### 改動
