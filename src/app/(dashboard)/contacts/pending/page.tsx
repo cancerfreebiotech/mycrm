@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Loader2, Check, RefreshCw, Trash2, GitMerge, ExternalLink, AlertCircle, Search, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
@@ -40,7 +39,6 @@ function fmtDate(iso: string): string {
 export default function PendingReviewPage() {
   const t = useTranslations('pendingReview')
   const tc = useTranslations('common')
-  const router = useRouter()
   const supabase = createBrowserSupabaseClient()
   const [rows, setRows] = useState<PendingRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -134,10 +132,7 @@ export default function PendingReviewPage() {
       return
     }
     setRows((prev) => prev.filter((r) => r.id !== id))
-    if (action === 'save') {
-      const body = await res.json()
-      if (body.contact_id) router.push(`/contacts/${body.contact_id}`)
-    }
+    // Stay on this page after save/merge so user can review next pending row
   }
 
   async function deleteRow(id: string) {

@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v4.6.6 — fix(pending): 確認存檔後不跳轉，留在 pending 頁繼續審（2026-04-28）
+
+### 痛點
+從 pending 區點「確認存檔」會被踢到聯絡人詳情頁，要再 back 才能繼續審下一張，批次審核很煩。
+
+### 改動
+- `src/app/(dashboard)/contacts/pending/page.tsx`：save / merge 成功後不 `router.push`，只把 row 從 list 移除，使用者留在原頁繼續處理。
+- 順便刪掉沒用到的 `useRouter` import。
+
 ## v4.6.5 — feat(pending): 預設重要性 medium + 手動合併到既有聯絡人（2026-04-28）
 
 ### 痛點
