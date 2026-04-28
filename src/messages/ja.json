@@ -1030,9 +1030,15 @@
     "rescueHint": "停止中の pending を OCR キューに戻す",
     "rescueQueued": "{count} 件を再キューしました。数分後に更新して結果を確認してください。",
     "actionMergeManual": "既存に統合...",
+    "actionMergeReplaceTo": "「{name}」を更新（転職）",
+    "actionMergeFillHint": "旧データを保持、空欄のみ新値で埋める",
+    "actionMergeReplaceHint": "新名刺で上書き（転職）、旧値はログに保存",
     "mergePickerPlaceholder": "氏名 / 会社 / Email で検索",
     "mergePickerSearching": "検索中...",
-    "mergePickerNoResults": "該当する連絡先がありません"
+    "mergePickerNoResults": "該当する連絡先がありません",
+    "mergePickerModeLabel": "統合モード：",
+    "mergePickerModeFill": "旧保持",
+    "mergePickerModeReplace": "上書き"
   },
   "myFailedScans": {
     "title": "認識失敗",
@@ -1237,6 +1243,10 @@
     "mergeRule1": "• 名刺の空欄は選択した連絡先に補完されます",
     "mergeRule2": "• 名刺画像は連絡先のギャラリーに追加されます",
     "mergeRule3": "• 名刺の仮記録は確認済みとしてマークされます",
+    "mergeConfirmFill": "📌 統合（旧データ保持）",
+    "mergeConfirmReplace": "🔄 上書き（転職）",
+    "mergeFillHint": "空欄を新データで埋める／衝突欄位は旧値を保持しログに記録",
+    "mergeReplaceHint": "衝突欄位を新値で上書き／旧値はログに保存",
     "bulkSelectedCount": "<b>{count}</b> 枚選択中",
     "bulkConfirmSelected": "選択確認（{count}）枚",
     "bulkDeselect": "選択解除"

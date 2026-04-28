@@ -1030,9 +1030,15 @@
     "rescueHint": "Re-queue stuck pending rows for OCR",
     "rescueQueued": "Re-queued {count} card(s). Refresh in a few minutes to see results.",
     "actionMergeManual": "Merge to existing...",
+    "actionMergeReplaceTo": "Update {name} (career change)",
+    "actionMergeFillHint": "Keep old; fill empty fields with new",
+    "actionMergeReplaceHint": "Overwrite with new card (career change); archive old to log",
     "mergePickerPlaceholder": "Search by name / company / email",
     "mergePickerSearching": "Searching...",
-    "mergePickerNoResults": "No matching contacts"
+    "mergePickerNoResults": "No matching contacts",
+    "mergePickerModeLabel": "Merge mode:",
+    "mergePickerModeFill": "Keep old",
+    "mergePickerModeReplace": "Overwrite"
   },
   "myFailedScans": {
     "title": "My Failed Scans",
@@ -1237,6 +1243,10 @@
     "mergeRule1": "• Blank fields on the card will fill into the selected contact",
     "mergeRule2": "• The card image will be added to the contact's gallery",
     "mergeRule3": "• The staged card record will be marked confirmed",
+    "mergeConfirmFill": "📌 Merge (keep old)",
+    "mergeConfirmReplace": "🔄 Replace (career change)",
+    "mergeFillHint": "Empty fields filled from new data; conflicts kept with old value, logged",
+    "mergeReplaceHint": "Conflicts overwritten with new values; old values archived to log",
     "bulkSelectedCount": "<b>{count}</b> selected",
     "bulkConfirmSelected": "Confirm selected ({count})",
     "bulkDeselect": "Deselect"

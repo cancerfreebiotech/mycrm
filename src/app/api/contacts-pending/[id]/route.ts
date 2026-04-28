@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { checkDuplicates } from '@/lib/duplicate'
+import { mergeIntoContact, type MergeMode } from '@/lib/merge-into-contact'
 
 // User-facing pending review actions: save / merge / delete.
 // RLS on pending_contacts (created_by = current user) is the auth gate.
@@ -116,75 +117,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const targetId = manualTargetId ?? (pdata._merge_target_id as string | undefined)
     if (!targetId) return NextResponse.json({ error: 'No merge target' }, { status: 400 })
 
-    const { data: existing } = await service
-      .from('contacts')
-      .select('id, name, name_en, name_local, company, job_title, email, phone, second_phone, address, website')
-      .eq('id', targetId)
-      .single()
-    if (!existing) return NextResponse.json({ error: 'Target contact not found' }, { status: 404 })
+    const mode: MergeMode = body.mode === 'replace' ? 'replace' : 'fill'
+    const tagIds = Array.isArray(pdata._tag_ids) ? (pdata._tag_ids as string[]) : []
+    const now = new Date()
+    const cardLabel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
-    const FIELD_LABELS: Record<string, string> = {
-      name: '姓名', name_en: '英文名', name_local: '當地語名',
-      company: '公司', job_title: '職稱', email: 'Email',
-      phone: '電話', second_phone: '備用電話', address: '地址', website: '網站',
-    }
-    const toFill: Record<string, string> = {}
-    const conflicts: Array<{ key: string; label: string; newVal: string; oldVal: string }> = []
-    for (const key of Object.keys(FIELD_LABELS)) {
-      const newVal = pdata[key] as string | null | undefined
-      const oldVal = (existing as Record<string, unknown>)[key] as string | null | undefined
-      if (!newVal) continue
-      if (!oldVal) toFill[key] = newVal
-      else if (oldVal !== newVal) conflicts.push({ key, label: FIELD_LABELS[key], newVal, oldVal })
-    }
+    const result = await mergeIntoContact(service, {
+      targetId,
+      newData: pdata,
+      cardImgUrl: pdata.card_img_url as string | undefined,
+      cardImgBackUrl: pdata.card_img_back_url as string | undefined,
+      storagePath: pending.storage_path,
+      cardLabel,
+      mode,
+      userId: auth.userId,
+      tagIds,
+      logPrefix: mode === 'replace' ? '從 Pending 區更新聯絡人' : '從 Pending 區合併新名片',
+    })
 
-    if (Object.keys(toFill).length > 0) {
-      await service.from('contacts').update(toFill).eq('id', targetId)
-    }
-
-    if (pdata.card_img_url) {
-      const now = new Date()
-      const cardLabel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-      await service.from('contact_cards').insert({
-        contact_id: targetId,
-        card_img_url: pdata.card_img_url as string,
-        storage_path: pending.storage_path,
-        label: cardLabel,
-      })
-    }
-
-    // Apply selected tags to merged target (skip already-attached ones)
-    const mergeTagIds = Array.isArray(pdata._tag_ids) ? (pdata._tag_ids as string[]) : []
-    if (mergeTagIds.length > 0) {
-      const { data: existingLinks } = await service
-        .from('contact_tags')
-        .select('tag_id')
-        .eq('contact_id', targetId)
-      const existingSet = new Set(((existingLinks ?? []) as { tag_id: string }[]).map((r) => r.tag_id))
-      const toAdd = mergeTagIds.filter((id) => !existingSet.has(id))
-      if (toAdd.length > 0) {
-        await service.from('contact_tags').insert(
-          toAdd.map((tagId) => ({ contact_id: targetId, tag_id: tagId }))
-        )
-      }
-    }
-
-    if (conflicts.length > 0) {
-      const noteLines = conflicts.map(c => `${c.label}：${c.newVal}（現有：${c.oldVal}）`).join('\n')
-      await service.from('interaction_logs').insert({
-        contact_id: targetId,
-        type: 'system',
-        content: `合併新名片資料（與現有不同的欄位）：\n${noteLines}`,
-        created_by: auth.userId,
-      })
-    }
+    if (!result.ok) return NextResponse.json({ error: result.error ?? 'Merge failed' }, { status: 500 })
 
     await service.from('pending_contacts').delete().eq('id', id)
     return NextResponse.json({
       ok: true,
-      contact_id: targetId,
-      filled: Object.keys(toFill).length,
-      conflicts: conflicts.length,
+      contact_id: result.contact_id,
+      filled: result.filled,
+      replaced: result.replaced,
+      conflicts: result.conflicts,
     })
   }
 

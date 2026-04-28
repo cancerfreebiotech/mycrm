@@ -1030,9 +1030,15 @@
     "rescueHint": "把卡住的 pending 重新送 OCR",
     "rescueQueued": "已啟動重跑 {count} 張，幾分鐘後刷新看結果。",
     "actionMergeManual": "合併到既有...",
+    "actionMergeReplaceTo": "更新「{name}」（換工作）",
+    "actionMergeFillHint": "保留舊資料，空欄補入新值",
+    "actionMergeReplaceHint": "用新名片覆蓋舊資料（換工作場景），舊值寫入互動紀錄",
     "mergePickerPlaceholder": "輸入姓名 / 公司 / Email 搜尋",
     "mergePickerSearching": "搜尋中...",
-    "mergePickerNoResults": "沒有符合的聯絡人"
+    "mergePickerNoResults": "沒有符合的聯絡人",
+    "mergePickerModeLabel": "合併模式：",
+    "mergePickerModeFill": "保留舊",
+    "mergePickerModeReplace": "覆蓋舊"
   },
   "myFailedScans": {
     "title": "我的失敗辨識",
@@ -1237,6 +1243,10 @@
     "mergeRule1": "• 名片的空白欄位將補入所選聯絡人",
     "mergeRule2": "• 名片圖片會加入聯絡人的名片圖庫",
     "mergeRule3": "• 名片暫存記錄標記為已確認",
+    "mergeConfirmFill": "📌 保留舊資料合併",
+    "mergeConfirmReplace": "🔄 用新資料覆蓋（換工作）",
+    "mergeFillHint": "空白欄位補入新值，衝突欄位保留舊值並寫入互動紀錄",
+    "mergeReplaceHint": "衝突欄位用新值覆蓋，舊值寫入互動紀錄保留歷史",
     "bulkSelectedCount": "已選取 <b>{count}</b> 張",
     "bulkConfirmSelected": "確認選取（{count}）張",
     "bulkDeselect": "取消選取"

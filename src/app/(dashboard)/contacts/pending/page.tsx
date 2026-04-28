@@ -111,12 +111,12 @@ export default function PendingReviewPage() {
     })
   }, [rows, statusFilter, uploaderFilter])
 
-  async function callAction(id: string, action: 'save' | 'merge', opts: { force?: boolean; targetId?: string } = {}) {
+  async function callAction(id: string, action: 'save' | 'merge', opts: { force?: boolean; targetId?: string; mode?: 'fill' | 'replace' } = {}) {
     setBusyId(id)
     const res = await fetch(`/api/contacts-pending/${id}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, force: opts.force, target_id: opts.targetId }),
+      body: JSON.stringify({ action, force: opts.force, target_id: opts.targetId, mode: opts.mode }),
     })
     setBusyId(null)
     if (res.status === 409) {
@@ -263,8 +263,8 @@ export default function PendingReviewPage() {
               busy={busyId === r.id}
               allTags={allTags}
               onSave={() => callAction(r.id, 'save')}
-              onMerge={() => callAction(r.id, 'merge')}
-              onMergeManual={(targetId) => callAction(r.id, 'merge', { targetId })}
+              onMerge={(mode) => callAction(r.id, 'merge', { mode })}
+              onMergeManual={(targetId, mode) => callAction(r.id, 'merge', { targetId, mode })}
               onDelete={() => deleteRow(r.id)}
               onRetry={() => retryRow(r.id)}
               onPatch={(patch) => patchData(r.id, patch)}
@@ -309,8 +309,8 @@ function PendingCard({
   busy: boolean
   allTags: Tag[]
   onSave: () => void
-  onMerge: () => void
-  onMergeManual: (targetId: string) => void
+  onMerge: (mode: 'fill' | 'replace') => void
+  onMergeManual: (targetId: string, mode: 'fill' | 'replace') => void
   onDelete: () => void
   onRetry: () => void
   onPatch: (patch: Record<string, unknown>) => void
@@ -320,6 +320,7 @@ function PendingCard({
   const [pickerQuery, setPickerQuery] = useState('')
   const [pickerResults, setPickerResults] = useState<ContactSearchResult[]>([])
   const [pickerSearching, setPickerSearching] = useState(false)
+  const [pickerMode, setPickerMode] = useState<'fill' | 'replace'>('fill')
 
   // Debounced search when picker is open
   useEffect(() => {
@@ -503,14 +504,26 @@ function PendingCard({
                   {t('actionSave')}
                 </button>
                 {mergeTargetId && (
-                  <button
-                    onClick={onMerge}
-                    disabled={busy}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-gray-50 transition-colors"
-                  >
-                    <GitMerge size={14} />
-                    {t('actionMergeTo', { name: mergeTargetName ?? '' })}
-                  </button>
+                  <>
+                    <button
+                      onClick={() => onMerge('fill')}
+                      disabled={busy}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-gray-50 transition-colors"
+                      title={t('actionMergeFillHint')}
+                    >
+                      <GitMerge size={14} />
+                      {t('actionMergeTo', { name: mergeTargetName ?? '' })}
+                    </button>
+                    <button
+                      onClick={() => onMerge('replace')}
+                      disabled={busy}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-gray-50 transition-colors"
+                      title={t('actionMergeReplaceHint')}
+                    >
+                      <RefreshCw size={14} />
+                      {t('actionMergeReplaceTo', { name: mergeTargetName ?? '' })}
+                    </button>
+                  </>
                 )}
                 <button
                   onClick={() => setPickerOpen((v) => !v)}
@@ -573,6 +586,30 @@ function PendingCard({
                   <X size={14} />
                 </button>
               </div>
+              {/* Mode toggle: fill vs replace, applied to whichever result is clicked */}
+              <div className="flex items-center gap-2 mb-2 text-xs">
+                <span className="text-gray-500 dark:text-gray-400">{t('mergePickerModeLabel')}</span>
+                <button
+                  onClick={() => setPickerMode('fill')}
+                  className={`px-2 py-0.5 rounded border transition-colors ${
+                    pickerMode === 'fill'
+                      ? 'bg-blue-600 border-blue-600 text-white'
+                      : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400'
+                  }`}
+                >
+                  {t('mergePickerModeFill')}
+                </button>
+                <button
+                  onClick={() => setPickerMode('replace')}
+                  className={`px-2 py-0.5 rounded border transition-colors ${
+                    pickerMode === 'replace'
+                      ? 'bg-orange-600 border-orange-600 text-white'
+                      : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400'
+                  }`}
+                >
+                  {t('mergePickerModeReplace')}
+                </button>
+              </div>
               {pickerSearching && (
                 <div className="flex items-center gap-2 text-xs text-gray-400 px-1">
                   <Loader2 size={12} className="animate-spin" /> {t('mergePickerSearching')}
@@ -586,7 +623,7 @@ function PendingCard({
                   {pickerResults.map((c) => (
                     <li key={c.id}>
                       <button
-                        onClick={() => onMergeManual(c.id)}
+                        onClick={() => onMergeManual(c.id, pickerMode)}
                         disabled={busy}
                         className="w-full text-left px-2 py-1.5 text-sm hover:bg-white dark:hover:bg-gray-900 disabled:opacity-50 transition-colors"
                       >

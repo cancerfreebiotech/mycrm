@@ -300,7 +300,7 @@ export default function CamcardPage() {
     setMergeSearching(false)
   }
 
-  async function handleMergeConfirm() {
+  async function handleMergeConfirm(mode: 'fill' | 'replace' = 'fill') {
     if (!mergeAction || !mergeSelectedContact) return
     setMergeSaving(true)
     const user = await resolveUser()
@@ -308,7 +308,7 @@ export default function CamcardPage() {
       const res = await fetch(`/api/camcard/${mergeAction.pendingId}/merge`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contactId: mergeSelectedContact.id, confirmedByUserId: user?.id, confirmedByName: user?.display_name }),
+        body: JSON.stringify({ contactId: mergeSelectedContact.id, mode, confirmedByUserId: user?.id, confirmedByName: user?.display_name }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
       removeCard(mergeAction.pendingId)
@@ -1085,14 +1085,26 @@ export default function CamcardPage() {
 
             <div className="flex justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
               <button onClick={() => setMergeAction(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">{tc('cancel')}</button>
-              <button
-                onClick={handleMergeConfirm}
-                disabled={mergeSaving || !mergeSelectedContact}
-                className="flex items-center gap-2 px-4 py-2 text-sm bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
-              >
-                {mergeSaving ? <Loader2 size={14} className="animate-spin" /> : <Merge size={14} />}
-                確認合併
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleMergeConfirm('fill')}
+                  disabled={mergeSaving || !mergeSelectedContact}
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  title={t('mergeFillHint')}
+                >
+                  {mergeSaving ? <Loader2 size={14} className="animate-spin" /> : <Merge size={14} />}
+                  {t('mergeConfirmFill')}
+                </button>
+                <button
+                  onClick={() => handleMergeConfirm('replace')}
+                  disabled={mergeSaving || !mergeSelectedContact}
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
+                  title={t('mergeReplaceHint')}
+                >
+                  {mergeSaving ? <Loader2 size={14} className="animate-spin" /> : <Merge size={14} />}
+                  {t('mergeConfirmReplace')}
+                </button>
+              </div>
             </div>
           </div>
         </div>

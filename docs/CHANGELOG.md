@@ -1,5 +1,45 @@
 # CHANGELOG
 
+## v4.7.0 — feat(merge): 合併聯絡人加 replace mode（換工作場景）（2026-04-29）
+
+### 痛點
+原本的 merge 邏輯永遠是「保留舊、新填空白、衝突寫互動紀錄」——對「同公司繼續」場景對，但當對方**換公司 / 換工作**時剛好相反：應該用新資料覆蓋舊、舊變歷史。
+
+### 設計
+新增 `replace` mode 跟既有 `fill` mode 並列，三個入口都可選：
+
+| Mode | 行為 |
+|---|---|
+| `fill`（預設） | 空欄填新值；衝突欄位**保留舊**並寫互動紀錄 |
+| `replace` | 衝突欄位**用新值覆蓋**；**舊值寫互動紀錄**留歷史 |
+
+### 改動
+
+**新增 `src/lib/merge-into-contact.ts`** — 三個入口共用的 helper
+- 19 個欄位 diff（name/company/email 等含 _en/_local 變體）
+- contact_cards / contact_tags 一起搬
+- 自動寫互動紀錄（fill 跟 replace 各自的格式）
+
+**Telegram bot**（`merge_` + `replace_` callback）
+- OCR 結果有 dup target → 顯示 4 顆按鈕：✅ 仍建立 / 📌 加到 X / 🔄 更新 X / ❌ 不存檔
+- 共用 `mergeIntoContact` helper，replace_callback 處理「換工作」流程
+
+**Pending review web 頁** (`/api/contacts-pending/[id]` action=merge)
+- Body 加 `mode: 'fill' | 'replace'`（預設 fill）
+- Auto-detected merge 顯示兩顆按鈕（藍色 fill / 橘色 replace）
+- 手動 picker 加 mode toggle（保留舊 / 覆蓋舊）
+
+**Admin camcard 區** (`/api/camcard/[id]/merge`)
+- Body 加 `mode`
+- 確認 dialog 底部兩顆按鈕：📌 保留舊 / 🔄 用新資料覆蓋
+
+### i18n
+- `pendingReview.actionMergeReplaceTo` / `mergePickerModeFill/Replace` 等 9 keys × 三語
+- `camcard.mergeConfirmFill/Replace` / `mergeFillHint/ReplaceHint` × 三語
+
+### 文件
+- `docs/bot/commands.md`：傳送名片章節補上偵測既有聯絡人的 4 顆按鈕說明
+
 ## v4.6.6 — fix(pending): 確認存檔後不跳轉，留在 pending 頁繼續審（2026-04-28）
 
 ### 痛點

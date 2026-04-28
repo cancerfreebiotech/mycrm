@@ -8,6 +8,7 @@ import { sendMail, createCalendarEvent } from '@/lib/graph'
 import { getValidProviderToken } from '@/lib/graph-server'
 import { sendTeamsTaskNotification, sendTeamsMessage } from '@/lib/teams'
 import { processOnePending, summarizeBatchAndNotify } from '@/lib/pending-ocr-worker'
+import { mergeIntoContact, type MergeMode } from '@/lib/merge-into-contact'
 
 function countryToLanguage(code: string | null | undefined): string {
   if (code === 'TW' || code === 'CN') return 'chinese'
@@ -880,6 +881,9 @@ async function handlePhoto(
     if (mergeTargetId && mergeTargetName) {
       cardButtons.push([
         { text: `📌 加到「${mergeTargetName}」`, callback_data: `merge_${pending.id}` },
+      ])
+      cardButtons.push([
+        { text: `🔄 更新「${mergeTargetName}」（換工作）`, callback_data: `replace_${pending.id}` },
       ])
     }
     cardButtons.push([{ text: '❌ 不存檔', callback_data: `cancel_${pending.id}` }])
@@ -1990,9 +1994,11 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // ── Merge to existing contact (when dup detected) ─────────────────────
-        else if (data?.startsWith('merge_')) {
-          const pendingId = data.replace('merge_', '')
+        // ── Merge / Replace into existing contact (when dup detected) ────────
+        else if (data?.startsWith('merge_') || data?.startsWith('replace_')) {
+          const isReplace = data.startsWith('replace_')
+          const mode: MergeMode = isReplace ? 'replace' : 'fill'
+          const pendingId = data.replace(/^(merge_|replace_)/, '')
           const { data: pending } = await supabase
             .from('pending_contacts')
             .select('data, storage_path')
@@ -2013,72 +2019,38 @@ export async function POST(req: NextRequest) {
 
           await answerCallbackQuery(callbackQueryId, '處理中...')
 
-          // Fetch target contact's current fields
-          const { data: existing } = await supabase
-            .from('contacts')
-            .select('id, name, name_en, name_local, company, job_title, email, phone, second_phone, address, website')
-            .eq('id', targetId)
-            .single()
-          if (!existing) {
-            await sendMessage(from.id, '❌ 目標聯絡人已不存在')
+          const now = new Date()
+          const cardLabel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+          const result = await mergeIntoContact(supabase, {
+            targetId,
+            newData: pdata,
+            cardImgUrl: pdata.card_img_url as string | undefined,
+            cardImgBackUrl: pdata.card_img_back_url as string | undefined,
+            storagePath: pending.storage_path,
+            cardLabel,
+            mode,
+            userId: user.id,
+            logPrefix: isReplace ? 'Telegram bot 更新聯絡人' : 'Telegram bot 合併新名片',
+          })
+
+          if (!result.ok) {
+            await sendMessage(from.id, `❌ ${result.error ?? '合併失敗'}`)
             return NextResponse.json({ ok: true })
-          }
-
-          // Compute toFill (OCR has, contact empty) + conflicts
-          const FIELD_LABELS: Record<string, string> = {
-            name: '姓名', name_en: '英文名', name_local: '當地語名',
-            company: '公司', job_title: '職稱', email: 'Email',
-            phone: '電話', second_phone: '備用電話', address: '地址', website: '網站',
-          }
-          const toFill: Record<string, string> = {}
-          const conflicts: Array<{ key: string; label: string; newVal: string; oldVal: string }> = []
-          for (const key of Object.keys(FIELD_LABELS)) {
-            const newVal = pdata[key] as string | null | undefined
-            const oldVal = (existing as Record<string, unknown>)[key] as string | null | undefined
-            if (!newVal) continue
-            if (!oldVal) toFill[key] = newVal
-            else if (oldVal !== newVal) conflicts.push({ key, label: FIELD_LABELS[key], newVal, oldVal })
-          }
-
-          // Apply: fill empty fields
-          if (Object.keys(toFill).length > 0) {
-            await supabase.from('contacts').update(toFill).eq('id', targetId)
-          }
-
-          // Insert card image to contact_cards
-          if (pdata.card_img_url) {
-            const now = new Date()
-            const cardLabel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-            await supabase.from('contact_cards').insert({
-              contact_id: targetId,
-              card_img_url: pdata.card_img_url as string,
-              storage_path: pending.storage_path,
-              label: cardLabel,
-            })
-          }
-
-          // Conflicts → system log so info isn't lost
-          if (conflicts.length > 0) {
-            const noteLines = conflicts.map(c => `${c.label}：${c.newVal}（現有：${c.oldVal}）`).join('\n')
-            await supabase.from('interaction_logs').insert({
-              contact_id: targetId,
-              type: 'system',
-              content: `合併新名片資料（與現有不同的欄位）：\n${noteLines}`,
-              created_by: user.id,
-            })
           }
 
           await supabase.from('pending_contacts').delete().eq('id', pendingId)
           await updateLastContact(from.id, targetId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
 
-          const summary = []
-          if (Object.keys(toFill).length > 0) summary.push(`✅ 填入 ${Object.keys(toFill).length} 個空白欄位`)
-          if (conflicts.length > 0) summary.push(`📝 ${conflicts.length} 個衝突欄位寫入互動紀錄`)
-          summary.push('🖼 名片圖已加入')
+          const summary: string[] = []
+          if (result.filled > 0) summary.push(`✅ 填入 ${result.filled} 個空白欄位`)
+          if (isReplace && result.replaced > 0) summary.push(`🔄 覆蓋 ${result.replaced} 個欄位（舊值寫入互動紀錄）`)
+          if (!isReplace && result.conflicts > 0) summary.push(`📝 ${result.conflicts} 個衝突欄位寫入互動紀錄`)
+          if (pdata.card_img_url) summary.push('🖼 名片圖已加入')
           const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
-          const link = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${targetId}">查看 ${existing.name}</a>` : ''
-          await sendMessage(from.id, `已加到「${existing.name}」：\n${summary.join('\n')}${link}`)
+          const link = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${targetId}">查看 ${result.contact_name ?? ''}</a>` : ''
+          const verb = isReplace ? '已更新' : '已加到'
+          await sendMessage(from.id, `${verb}「${result.contact_name ?? ''}」：\n${summary.join('\n')}${link}`)
         }
 
         // ── Cancel card ───────────────────────────────────────────────────────
