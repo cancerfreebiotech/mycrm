@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v4.7.1 — fix(pending): worker 死掉的卡會自動 unstick（2026-04-29）
+
+### 痛點
+有 2 張 row 在 `status='processing'` 卡了一整天。原因是 worker 跑到一半被 Vercel kill（function timeout / crash / deploy），claimed 之後沒人撿。Cron 跟 rescue 都只看 `status='pending'`，processing 就漏網。
+
+### 改動
+- **Cron `processPendingBatchAcrossUsers`**：開頭多一個 unstick pass — `status='processing'` 且 `created_at > 10 min` 的 row 自動 reset 成 `pending`。下個 tick cron 自然會撿
+- **Rescue endpoint**：也把使用者自己的 stuck-processing 一起 flip 回 pending
+- DB 修復：今天 2 張 stuck > 6 小時的 row 已手動 reset
+
+10 分鐘 threshold 比一般 OCR 久很多（Portkey chain max ~150s），所以正常進行中的 worker 不會被誤踢。
+
 ## v4.7.0 — feat(merge): 合併聯絡人加 replace mode（換工作場景）（2026-04-29）
 
 ### 痛點

@@ -17,6 +17,13 @@ export async function POST() {
     .single()
   if (!u?.id) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
+  // Also flip rows stuck in 'processing' (worker died mid-OCR) back to pending
+  await service
+    .from('pending_contacts')
+    .update({ status: 'pending' })
+    .eq('created_by', u.id)
+    .eq('status', 'processing')
+
   const { count } = await service
     .from('pending_contacts')
     .select('*', { count: 'exact', head: true })

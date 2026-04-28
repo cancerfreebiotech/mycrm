@@ -243,7 +243,20 @@ export async function summarizeBatchAndNotify(
 
 export async function processPendingBatchAcrossUsers(
   supabase: SupabaseClient
-): Promise<{ users_processed: number; total: number }> {
+): Promise<{ users_processed: number; total: number; unstuck: number }> {
+  // First: rescue rows stuck in 'processing' (worker claimed but died mid-OCR
+  // due to function timeout / crash / deploy). After 10 min in 'processing'
+  // it's safe to assume the worker is gone and reset to 'pending'.
+  const stuckCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+  const { data: stuckRows } = await supabase
+    .from('pending_contacts')
+    .update({ status: 'pending' })
+    .eq('status', 'processing')
+    .lt('created_at', stuckCutoff)
+    .select('id')
+  const unstuck = (stuckRows ?? []).length
+  if (unstuck > 0) console.log('[pending-ocr-cron] unstuck', unstuck, 'rows from processing → pending')
+
   // Cron-mode: pick stale pending rows (>2 min old) across all users, group by user
   const cutoffIso = new Date(Date.now() - 2 * 60 * 1000).toISOString()
   const { data: rows } = await supabase
@@ -254,7 +267,7 @@ export async function processPendingBatchAcrossUsers(
     .lt('created_at', cutoffIso)
     .limit(100)
 
-  if (!rows || rows.length === 0) return { users_processed: 0, total: 0 }
+  if (!rows || rows.length === 0) return { users_processed: 0, total: 0, unstuck }
 
   const uniqueUsers = Array.from(
     new Set(rows.map((r) => r.created_by as string | null).filter((id): id is string => !!id))
@@ -272,5 +285,5 @@ export async function processPendingBatchAcrossUsers(
     total += result.total
   }
 
-  return { users_processed: uniqueUsers.length, total }
+  return { users_processed: uniqueUsers.length, total, unstuck }
 }
