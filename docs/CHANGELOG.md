@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## v4.11.2 — feat(contacts): 建立清單支援 filter 模式（2026-05-02）
+
+原本只能勾 checkbox 後才出現「建立清單」按鈕。改成 filter 也算數：套用 filter 但沒勾人時，按鈕也會出現，count 顯示 filter 後的總數，建 list 時用整個 filter 結果。Modal hint 跟著切換。三語 i18n 加 4 keys。
+
 ## v4.11.1 — fix(contacts): 排除分類優先級調成 blacklist 第一（2026-05-02）
 
 報告：選「中文」一個篩選，banner 顯示「黑名單 42」，但實際 XX-tagged 中文 = 45。差 3 是因為 3 個 XX-tagged 但沒 email 的人被算去 no_email 桶。

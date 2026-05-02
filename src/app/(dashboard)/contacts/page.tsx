@@ -277,6 +277,12 @@ export default function ContactsPage() {
       setListError(t('listNameRequired'))
       return
     }
+    // Source IDs: explicit selection if any, otherwise the entire filtered set
+    const sourceIds = selectedIds.size > 0 ? Array.from(selectedIds) : sorted.map((c) => c.id)
+    if (sourceIds.length === 0) {
+      setListError(t('listNoContacts'))
+      return
+    }
     setListCreating(true)
     setListError(null)
     try {
@@ -286,7 +292,7 @@ export default function ContactsPage() {
         body: JSON.stringify({
           name: listForm.name.trim(),
           description: listForm.description.trim() || undefined,
-          contactIds: Array.from(selectedIds),
+          contactIds: sourceIds,
         }),
       })
       const data = await res.json()
@@ -436,12 +442,13 @@ export default function ContactsPage() {
               <Check size={14} /> 批次編輯（{selectedIds.size}）
             </button>
           )}
-          {selectedIds.size > 0 && canNewsletter && (
+          {canNewsletter && (selectedIds.size > 0 || hasFilter) && (
             <button
               onClick={() => { setListForm({ name: '', description: '' }); setListError(null); setListModalOpen(true) }}
               className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700"
+              title={selectedIds.size === 0 ? t('createListFromFilterHint') : undefined}
             >
-              <Users size={14} /> {t('createListButton', { count: selectedIds.size })}
+              <Users size={14} /> {t('createListButton', { count: selectedIds.size > 0 ? selectedIds.size : sorted.length })}
             </button>
           )}
           <div className="relative">
@@ -1097,7 +1104,9 @@ export default function ContactsPage() {
               <button onClick={() => !listCreating && setListModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"><X size={18} /></button>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-              {t('createListHint', { count: selectedIds.size })}
+              {selectedIds.size > 0
+                ? t('createListHint', { count: selectedIds.size })
+                : t('createListHintFiltered', { count: sorted.length })}
             </p>
             <div className="space-y-3">
               <div>
