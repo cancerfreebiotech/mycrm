@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Search, Download, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Copy, Check, Loader2, X, Linkedin, Mail } from 'lucide-react'
+import { Search, Download, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Copy, Check, Loader2, X, Linkedin, Mail, Users } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 interface Tag {
@@ -94,6 +94,11 @@ export default function ContactsPage() {
   const [batchForm, setBatchForm] = useState({ met_at: '', met_date: new Date().toISOString().slice(0, 10), referred_by: '' })
   const [batchSaving, setBatchSaving] = useState(false)
   const [canExport, setCanExport] = useState(false)
+  const [canNewsletter, setCanNewsletter] = useState(false)
+  const [listModalOpen, setListModalOpen] = useState(false)
+  const [listForm, setListForm] = useState({ name: '', description: '' })
+  const [listCreating, setListCreating] = useState(false)
+  const [listError, setListError] = useState<string | null>(null)
 
   function copyEmail(email: string) {
     navigator.clipboard.writeText(email)
@@ -120,6 +125,7 @@ export default function ContactsPage() {
     const isSuperAdmin = userData?.role === 'super_admin'
     const grantedFeatures: string[] = userData?.granted_features ?? []
     setCanExport(isSuperAdmin || grantedFeatures.includes('export_contacts'))
+    setCanNewsletter(isSuperAdmin || grantedFeatures.includes('newsletter'))
     const tags = tagData ?? []
     setContacts((Array.isArray(contactRes) ? contactRes : []) as Contact[])
     setAllTags(tags)
@@ -260,6 +266,38 @@ export default function ContactsPage() {
     }
   }
 
+  async function handleCreateList() {
+    if (!listForm.name.trim()) {
+      setListError(t('listNameRequired'))
+      return
+    }
+    setListCreating(true)
+    setListError(null)
+    try {
+      const res = await fetch('/api/newsletter/lists/from-contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: listForm.name.trim(),
+          description: listForm.description.trim() || undefined,
+          contactIds: Array.from(selectedIds),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setListError(data.error ?? t('listCreateFailed'))
+        return
+      }
+      setListModalOpen(false)
+      setSelectedIds(new Set())
+      router.push(`/admin/newsletter/lists/${data.list_id}`)
+    } catch (e) {
+      setListError(e instanceof Error ? e.message : t('listCreateFailed'))
+    } finally {
+      setListCreating(false)
+    }
+  }
+
   async function handleBatchSave() {
     setBatchSaving(true)
     const supabase = createBrowserSupabaseClient()
@@ -390,6 +428,14 @@ export default function ContactsPage() {
               className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600"
             >
               <Check size={14} /> 批次編輯（{selectedIds.size}）
+            </button>
+          )}
+          {selectedIds.size > 0 && canNewsletter && (
+            <button
+              onClick={() => { setListForm({ name: '', description: '' }); setListError(null); setListModalOpen(true) }}
+              className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700"
+            >
+              <Users size={14} /> {t('createListButton', { count: selectedIds.size })}
             </button>
           )}
           <div className="relative">
@@ -1031,6 +1077,61 @@ export default function ContactsPage() {
                 className="flex items-center gap-1.5 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
                 {batchSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                 {t('batchEditApply')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Create-list Modal */}
+      {listModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !listCreating && setListModalOpen(false)}>
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('createListTitle')}</h2>
+              <button onClick={() => !listCreating && setListModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"><X size={18} /></button>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              {t('createListHint', { count: selectedIds.size })}
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  {t('createListNameLabel')} <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={listForm.name}
+                  onChange={(e) => setListForm((p) => ({ ...p, name: e.target.value }))}
+                  placeholder={t('createListNamePlaceholder')}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('createListDescLabel')}</label>
+                <textarea
+                  value={listForm.description}
+                  onChange={(e) => setListForm((p) => ({ ...p, description: e.target.value }))}
+                  rows={2}
+                  placeholder={t('createListDescPlaceholder')}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+                />
+              </div>
+            </div>
+            {listError && (
+              <div className="mt-3 px-3 py-2 text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg">
+                {listError}
+              </div>
+            )}
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => setListModalOpen(false)} disabled={listCreating}
+                className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50">
+                {tc('cancel')}
+              </button>
+              <button onClick={handleCreateList} disabled={listCreating || !listForm.name.trim()}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50">
+                {listCreating ? <Loader2 size={14} className="animate-spin" /> : <Users size={14} />}
+                {t('createListSubmit')}
               </button>
             </div>
           </div>

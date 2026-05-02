@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## v4.10.0 — feat(contacts): 從聯絡人選單建立 newsletter list（2026-05-02）
+
+聯絡人頁勾選一群人 → teal 按鈕「建立清單」→ 彈 modal 輸入 list 名稱（+ 可選備註）→ 建新 newsletter_lists row + find-or-create subscribers + 加入 subscriber_lists → 跳到 `/admin/newsletter/lists/[id]`。
+
+排除規則跟寄信一致：`!email || email_opt_out || email_status` 任一不加入。回傳 `{added, excluded: {no_email, opt_out, bad_status}}`。Key 自動從 name slugify（中文等非 ASCII fallback `list-{stamp36}`），collision 補 stamp。
+
+權限：限有 `newsletter` granted_feature 或 super_admin（前端 button 才顯示、後端 API 也 gate）。
+
+API：`POST /api/newsletter/lists/from-contacts`
+i18n：三語同步加 11 個 key。
+
 ## v4.9.3 — feat(contacts): 寄信時自動排除明細顯示（2026-05-02）
 
 從聯絡人寄信時系統會自動排除（無 email、退訂、退信、寄送異常），但原本沒任何提示。改成：button 上加「排除 N」小 badge，並在 toolbar 下方顯示 banner「將寄送給 X 人，自動排除 Y 人：N 無 email、N 已退訂、N 退信/無效、N 寄送異常」。`/api/contacts/all` 加 `email_opt_out` 到 SELECT，前端才能正確算入。三語 i18n 同步。
