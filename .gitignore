@@ -60,3 +60,6 @@ next-env.d.ts
 
 .env*.local
 image/
+
+# build artifacts
+/skills/newsletter-composer/newsletter-composer.zip

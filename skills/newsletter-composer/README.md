@@ -24,11 +24,11 @@ A Claude.ai web Skill for composing the cancerfree.io monthly newsletter inside 
 
 ## Install in Claude.ai
 
-1. **Build the upload zip** from this folder:
+1. **Build the upload zip** (cross-platform, uses jszip already in deps):
    ```sh
-   cd skills/newsletter-composer
-   zip -r newsletter-composer.zip SKILL.md manifest-schema.json assets examples
+   node scripts/build-skill-zip.js
    ```
+   Output: `skills/newsletter-composer/newsletter-composer.zip` (~10 KB)
 2. **Upload to a Claude Project**:
    - claude.ai → New Project → name it "Newsletter Composer"
    - Project settings → Skills → upload `newsletter-composer.zip`
