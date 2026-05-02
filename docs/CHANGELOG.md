@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v4.15.8 — fix: stats `.in()` 分批 + PDF 檔名 + 圖片 max-height（2026-05-02）
+
+### 三個修
+1. **stats route**：`badContacts = .from('contacts').in('id', contactIds)` 沒分批，1500+ UUID 塞 URL 又超 PostgREST ~32 KB 限制 → 部分 contacts 抓不到 → eligible 數膨脹（quick-send 顯示 2018 但 list detail 1738）。改成 200/批分批撈。
+2. **PDF 檔名**：原本 `document.title = pdfFilename` 設在 `document.close()` 之後，print dialog 開的時候 Chrome 已經抓到原本 HTML 的 `<title>{{subject}}</title>`（含中文、括號等）→ filename 變空 / 怪。改成在 previewHtml 寫入 window 前直接 replace `<title>` 內容為 `Newsletter-{slug}`，dialog 直接讀到正確值。
+3. **直立照變窄**：v4.15.7 把 `max-height: 200mm` 套到 story 圖，portrait 照（aspect 0.5-0.6）寬度被算成 100-130mm，看起來窄。放寬到 260mm（A4 內容 ~281mm），portrait 可以更高 → 寬度也增加。
+
+bump 4.15.7 → 4.15.8
+
 ## v4.15.7 — fix(newsletter/print): logo/icons 維持 HTML 屬性的尺寸（2026-05-02）
 
 5-2.pdf logo 變超大跨大半頁。`max-width: 100% !important` 蓋掉 inline `max-width:180px`，加上 v4.15.4 transform 把 logo natural 變 1200px → 拉滿欄寬。

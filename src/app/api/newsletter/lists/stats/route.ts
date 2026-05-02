@@ -58,10 +58,16 @@ export async function GET() {
   const unsubSet = new Set(unsubRows.map((r) => r.email.toLowerCase().trim()))
   const contactIds = [...new Set(rows.map((r) => r.newsletter_subscribers?.contact_id).filter((x): x is string => !!x))]
 
+  // Batch the contact lookup — `.in('id', uuids)` becomes a URL query param
+  // and >~200 UUIDs breaks PostgREST's ~32 KB URL limit (returns partial /
+  // empty), undercounting suppressed contacts and inflating eligible. Same
+  // pattern fixed in v4.11.4 for from-contacts/email-send.
   const badContactIds = new Set<string>()
-  if (contactIds.length > 0) {
+  const ID_BATCH = 200
+  for (let i = 0; i < contactIds.length; i += ID_BATCH) {
+    const slice = contactIds.slice(i, i + ID_BATCH)
     const { data: badContacts } = await service
-      .from('contacts').select('id').in('id', contactIds).not('email_status', 'is', null)
+      .from('contacts').select('id').in('id', slice).not('email_status', 'is', null)
     for (const c of (badContacts ?? []) as { id: string }[]) badContactIds.add(c.id)
   }
 

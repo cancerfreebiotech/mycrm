@@ -117,12 +117,15 @@ export default function QuickSendPage() {
   img { object-fit: contain; vertical-align: middle; }
   /* Story photos (no width attribute) get the page-fit treatment:
        max-width 100% so they don't overflow narrow columns;
-       max-height 200mm (~70% of A4 content area) so a portrait photo
-       doesn't dominate a page and leave gaps elsewhere;
-       block + auto-margin to centre within the centred parent div. */
+       max-height 260mm — A4 content area is ~281mm; 260mm lets a tall
+       portrait photo grow as tall as possible while still leaving a
+       sliver of margin. Without this generous cap, portraits got
+       squeezed narrow (~30% page width) because max-height drove the
+       width through the aspect ratio.
+       height: auto + display: block + auto-margin to centre. */
   img:not([width]) {
     max-width: 100% !important;
-    max-height: 200mm !important;
+    max-height: 260mm !important;
     height: auto !important;
     display: block;
     margin: 0 auto;
@@ -350,11 +353,23 @@ export default function QuickSendPage() {
       setBanner({ kind: 'err', msg: '瀏覽器阻擋了彈出視窗，請允許後再試' })
       return
     }
+    // Inject our preferred PDF filename as <title> BEFORE writing the doc —
+    // browsers read document.title at the moment "Save as PDF" dialog opens,
+    // so setting it via JS after document.close() can be too late on some
+    // platforms (the dialog grabs the original "<title>{{subject}}</title>"
+    // from the email skeleton and fills the filename input with that, which
+    // contains 中文 and brackets that break the OS filesystem).
+    const escapedTitle = pdfFilename.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    let html = previewHtml
+    if (/<title>[\s\S]*?<\/title>/i.test(html)) {
+      html = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapedTitle}</title>`)
+    } else if (/<head[^>]*>/i.test(html)) {
+      html = html.replace(/<head[^>]*>/i, (m) => `${m}<title>${escapedTitle}</title>`)
+    }
     w.document.open()
-    w.document.write(previewHtml)
+    w.document.write(html)
     w.document.close()
-    // Set document.title so Chrome's "Save as PDF" uses it as default filename.
-    try { w.document.title = pdfFilename } catch { /* cross-origin etc., ignore */ }
+    try { w.document.title = pdfFilename } catch { /* keep as belt-and-braces */ }
     // Wait for images to load before printing so PDF isn't cut off mid-load
     const triggerPrint = () => { w.focus(); w.print() }
     const imgs = w.document.images
