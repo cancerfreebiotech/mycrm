@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## v4.9.2 — feat(admin/users): 表頭可點擊排序（2026-05-02）
+
+`/admin/users` 7 個欄位（姓名、Email、Telegram、Teams、Role、最後登入、MFA）都加上可點擊排序，asc/desc 切換 + chevron icon。預設依姓名 asc。Actions 欄不排序。
+
 ## v4.9.1 — fix(newsletter/import): 用對欄位名 + hasFeature helper（2026-05-02）
 
 import route 的權限檢查讀錯欄位 — 寫成 `permissions`，但 schema 是 `granted_features`。任何非 super_admin 都會被擋成 403「Forbidden — newsletter permission required」即使有權限。改成沿用 `src/lib/features.ts` 的 `hasFeature(role, grantedFeatures, 'newsletter')`，與 PermissionGate 同步。

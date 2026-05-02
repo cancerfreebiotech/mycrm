@@ -1,10 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
+import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { ALL_FEATURE_KEYS, FEATURE_LABELS } from '@/lib/features'
+
+type SortKey = 'name' | 'email' | 'telegram' | 'teams' | 'role' | 'last_login' | 'mfa'
+type SortDir = 'asc' | 'desc'
 
 interface CrmUser {
   id: string
@@ -30,6 +34,66 @@ export default function AdminUsersPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [resetMfaId, setResetMfaId] = useState<string | null>(null)
   const [mfaStatus, setMfaStatus] = useState<Record<string, boolean>>({})
+  const [sortKey, setSortKey] = useState<SortKey>('name')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  const sortedUsers = useMemo(() => {
+    const arr = [...users]
+    const dir = sortDir === 'asc' ? 1 : -1
+    arr.sort((a, b) => {
+      let av: string | number, bv: string | number
+      switch (sortKey) {
+        case 'name':
+          av = (a.display_name || a.email || '').toLowerCase()
+          bv = (b.display_name || b.email || '').toLowerCase()
+          break
+        case 'email':
+          av = (a.email || '').toLowerCase()
+          bv = (b.email || '').toLowerCase()
+          break
+        case 'telegram':
+          av = a.telegram_id ? 1 : 0
+          bv = b.telegram_id ? 1 : 0
+          break
+        case 'teams':
+          av = a.teams_user_id ? 1 : 0
+          bv = b.teams_user_id ? 1 : 0
+          break
+        case 'role':
+          av = a.role === 'super_admin' ? 1 : 0
+          bv = b.role === 'super_admin' ? 1 : 0
+          break
+        case 'last_login':
+          av = a.last_login_at ? new Date(a.last_login_at).getTime() : 0
+          bv = b.last_login_at ? new Date(b.last_login_at).getTime() : 0
+          break
+        case 'mfa':
+          av = mfaStatus[a.email] ? 1 : 0
+          bv = mfaStatus[b.email] ? 1 : 0
+          break
+      }
+      if (av < bv) return -1 * dir
+      if (av > bv) return 1 * dir
+      return 0
+    })
+    return arr
+  }, [users, sortKey, sortDir, mfaStatus])
+
+  function SortIcon({ k }: { k: SortKey }) {
+    if (sortKey !== k) return <ChevronsUpDown size={12} className="text-gray-300 dark:text-gray-600" />
+    return sortDir === 'asc'
+      ? <ChevronUp size={12} className="text-gray-700 dark:text-gray-300" />
+      : <ChevronDown size={12} className="text-gray-700 dark:text-gray-300" />
+  }
 
   useEffect(() => {
     async function load() {
@@ -119,9 +183,26 @@ export default function AdminUsersPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <tr>
-              {[t('colName'), t('colEmail'), t('colTelegram'), t('colTeams'), t('colRole'), t('colLastLogin'), 'MFA', t('colActions')].map((h) => (
-                <th key={h} className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">{h}</th>
+              {([
+                ['name', t('colName')],
+                ['email', t('colEmail')],
+                ['telegram', t('colTelegram')],
+                ['teams', t('colTeams')],
+                ['role', t('colRole')],
+                ['last_login', t('colLastLogin')],
+                ['mfa', 'MFA'],
+              ] as const).map(([key, label]) => (
+                <th key={key} className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">
+                  <button
+                    onClick={() => toggleSort(key as SortKey)}
+                    className="inline-flex items-center gap-1 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                  >
+                    {label}
+                    <SortIcon k={key as SortKey} />
+                  </button>
+                </th>
               ))}
+              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">{t('colActions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -134,7 +215,7 @@ export default function AdminUsersPage() {
                 <td colSpan={8} className="px-4 py-8 text-center text-gray-400">{t('noUsers')}</td>
               </tr>
             ) : (
-              users.map((u) => (
+              sortedUsers.map((u) => (
                 <tr key={u.id} className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
                   <td className="px-4 py-3 text-gray-900 dark:text-gray-100 font-medium">{u.display_name || '—'}</td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{u.email}</td>
