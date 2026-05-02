@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v4.15.5 — fix(newsletter/print): social icons 在 PDF 維持橫向（2026-05-02）
+
+PDF footer 的 3 個 social icon（FB / LinkedIn / Website）變直排了 — 因為 v4.15.3 給所有 img 加 `display: block`，icon 從 inline 變 block 換行。改成 `display: block` 只套到 story 大圖（沒有 width 屬性的 img），icons（width="24"）保留 inline 維持橫向。
+
+bump 4.15.4 → 4.15.5
+
 ## v4.15.4 — feat(newsletter/print): PDF 自動命名 + 縮小檔案大小（2026-05-02）
 
 匯出 PDF：

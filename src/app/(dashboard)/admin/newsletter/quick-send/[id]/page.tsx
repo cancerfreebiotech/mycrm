@@ -115,7 +115,11 @@ export default function QuickSendPage() {
      room for caption / next paragraph on the same page. Without this cap
      a tall image would either get pushed to its own page (leaving big
      empty space on the prior page) or split awkwardly. */
-  img { max-width: 100% !important; max-height: 200mm !important; height: auto !important; display: block; margin: 0 auto; object-fit: contain; }
+  img { max-width: 100% !important; max-height: 200mm !important; height: auto !important; object-fit: contain; vertical-align: middle; }
+  /* Story images (no width attribute) center via block layout; the email
+     skeleton's social icons (width="24") stay inline so they line up
+     horizontally in the footer like in the email view. */
+  img:not([width]) { display: block; margin: 0 auto; }
   /* Keep headings glued to following content so they don't strand at page bottom */
   h1, h2, h3, h4 { page-break-after: avoid !important; break-after: avoid !important; }
   p { orphans: 3; widows: 3; }
