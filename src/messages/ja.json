@@ -1343,5 +1343,11 @@
   },
   "app": {
     "description": "Telegram名刺認識CRMシステム"
+  },
+  "newsletterLists": {
+    "deleteHint": "リストを削除（連絡先・購読者は削除されません）",
+    "confirmDelete": "このリストを削除しますか？",
+    "deleteOk": "削除しました（{cleared} 件の campaign から参照を削除）",
+    "deleteFailed": "削除に失敗しました"
   }
 }

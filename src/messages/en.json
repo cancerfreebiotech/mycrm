@@ -1343,5 +1343,11 @@
   },
   "app": {
     "description": "Telegram business-card CRM system"
+  },
+  "newsletterLists": {
+    "deleteHint": "Delete list (contacts and subscribers are kept)",
+    "confirmDelete": "Delete this list?",
+    "deleteOk": "Deleted (removed reference from {cleared} campaign(s))",
+    "deleteFailed": "Failed to delete"
   }
 }

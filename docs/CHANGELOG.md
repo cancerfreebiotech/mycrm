@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v4.12.0 — feat(newsletter/lists): 刪除清單按鈕（2026-05-02）
+
+`/admin/newsletter/lists` 每行加 trash 圖示 + inline 二次確認。刪除動作只移除 `newsletter_lists` row 跟 `newsletter_subscriber_lists` join rows，**訂閱者本體 (`newsletter_subscribers`) 跟聯絡人 (`contacts`) 都保留**。同時把該 list_id 從任何 `newsletter_campaigns.list_ids` array 中清掉，避免 dangling 引用。
+
+API：`DELETE /api/newsletter/lists/[id]`，需 newsletter 權限。回傳 `{ ok, deleted_list_id, cleared_from_campaigns }`。i18n 三語加 namespace `newsletterLists`。
+
+bump 4.11.5 → 4.12.0
+
 ## v4.11.5 — perf(newsletter/lists/from-contacts): bulk subscriber 操作（2026-05-02）
 
 2000 個聯絡人建 list 時 button 轉超過一分鐘 — 原因是逐個跑 find-or-create subscriber + insert link，4000+ sequential queries。
