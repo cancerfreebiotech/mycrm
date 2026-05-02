@@ -32,9 +32,10 @@ A Claude.ai web Skill for composing the cancerfree.io monthly newsletter inside 
 2. **Upload to a Claude Project**:
    - claude.ai → New Project → name it "Newsletter Composer"
    - Project settings → Skills → upload `newsletter-composer.zip`
-3. **Add to Project Knowledge** (optional but recommended):
-   - `tone-samples/2026-04-zh.md`, `2026-04-en.md`, `2026-04-ja.md` — past newsletters per language for tone reference
-   - Update `assets/brand-info.md` with current company facts before zipping
+3. **Upload tone samples to Project Knowledge** (the past newsletters in `tone-samples/`):
+   - Drag the contents of `skills/newsletter-composer/tone-samples/` into the Project's Knowledge files
+   - These are extracted from past newsletters (2026-01 through 2026-04, three languages each) — they are the gold standard for voice
+   - Update `assets/brand-info.md` with current company facts before zipping the skill
 4. **Add team members** to the Project so anyone on staff can drop content
 
 ## Monthly usage
@@ -64,3 +65,13 @@ A Claude.ai web Skill for composing the cancerfree.io monthly newsletter inside 
 ## Editing the skill
 
 This source lives in the myCRM repo (`skills/newsletter-composer/`) so changes are version-controlled. After editing, re-zip and re-upload to the Claude Project to update.
+
+## Updating tone samples (when new newsletters are sent)
+
+When a new monthly newsletter goes out, drop the HTML exports into `C:\Users\PoChen\Downloads\newsletter\` (filename pattern: `YYMM 中文電子報.txt` / `YYMM 英文電子報.txt` / `YYMM 日文電子報.txt`) and run:
+
+```sh
+node scripts/extract-tone-samples.js
+```
+
+The script regenerates everything in `skills/newsletter-composer/tone-samples/` from the source HTML. Then upload the new files to the Claude Project Knowledge.

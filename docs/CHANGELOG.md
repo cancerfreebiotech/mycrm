@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## v4.8.2 — docs(skill): newsletter tone-samples 從 11 份過往電子報抽取（2026-05-02）
+
+從 `~/Downloads/newsletter/*.txt` 抽 11 份（2026-01 到 2026-04，3 語各 4 份；2026-02 英文版原檔空缺）到 `skills/newsletter-composer/tone-samples/`，給 Claude.ai Project Knowledge 用。新增 `scripts/extract-tone-samples.js` 一次性 HTML→markdown 抽取腳本（之後新一期 newsletter 也可重跑）。README 新增「Updating tone samples」段落。
+
 ## v4.8.1 — docs(skill): brand-info v2.3 對齊 example-manifest（2026-05-02）
 
 example-manifest.json 換掉跟 brand-info.md 衝突的 placeholder（虛構 biomarker panel、九州大學 MOU、partner@…）→ 改成 brand-aligned 範例：EVA Select / Prometheus Lab AI、紐約 / 沖繩 / 東京 / 台北、info@cancerfree.io。brand-info.md 地點例子加上紐約。
