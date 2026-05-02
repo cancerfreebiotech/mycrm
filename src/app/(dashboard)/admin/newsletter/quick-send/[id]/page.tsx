@@ -110,34 +110,24 @@ export default function QuickSendPage() {
   }
   body > div, body > table { padding: 0 !important; background: #FFFFFF !important; }
   table[align="center"], table { max-width: 100% !important; width: 100% !important; }
-  /* All images: keep aspect ratio + neutral baseline. Don't force max-width or
-     height here — that would override the email skeleton's explicit width=180
-     on the logo and width=24 on social icons (turning them into giant
-     full-width banners). */
-  img { object-fit: contain; vertical-align: middle; }
-  /* Story photos (no width attribute) get the page-fit treatment:
-       max-width 100% so they don't overflow narrow columns;
-       max-height 260mm — A4 content area is ~281mm; 260mm lets a tall
-       portrait photo grow as tall as possible while still leaving a
-       sliver of margin. Without this generous cap, portraits got
-       squeezed narrow (~30% page width) because max-height drove the
-       width through the aspect ratio.
-       height: auto + display: block + auto-margin to centre. */
-  img:not([width]) {
-    max-width: 100% !important;
-    max-height: 260mm !important;
-    height: auto !important;
-    display: block;
-    margin: 0 auto;
-  }
-  /* Keep headings glued to following content so they don't strand at page bottom */
+  /* Reverted to v4.15.2 print CSS for visual comparison (per user feedback
+     "要不要恢復原本的設定 比較好看看"). Keep page-break-inside:avoid on
+     images / tr / td / numbered story divs. Trade-off vs the relaxed
+     version: portrait photos render full-width on their own page (looks
+     denser per image), but the prior page may show empty space below
+     when content can't fit alongside.
+     Logo (width=180) and social icons (width=24) still bypass the
+     max-width:100% override via their HTML width attribute and the
+     :not([width]) selector below. */
+  img { max-width: 100% !important; height: auto !important; page-break-inside: avoid !important; break-inside: avoid !important; vertical-align: middle; }
+  img:not([width]) { display: block; margin: 0 auto; }
   h1, h2, h3, h4 { page-break-after: avoid !important; break-after: avoid !important; }
   p { orphans: 3; widows: 3; }
-  /* NOTE: removed earlier "page-break-inside: avoid" on tr/td/img/story-divs.
-     Those rules caused large empty gaps because any block bigger than the
-     remaining page space got pushed entirely to the next page. Letting
-     content flow naturally + the image height cap above gives much denser
-     layout in the resulting PDF. */
+  tr, td { page-break-inside: avoid !important; break-inside: avoid !important; }
+  /* Numbered story blocks: each sits in its own padded div — keep together */
+  div[style*="padding:0 24px"],
+  div[style*="padding:0px 24px"],
+  div[style*="padding:16px 24px"] { page-break-inside: avoid !important; break-inside: avoid !important; }
   /* Link styling: override listmonk's inline text-decoration:none so URLs are
      visible and distinguishable in PDF (helps anchor detection by PDF viewers). */
   a { color: #0D9488 !important; text-decoration: underline !important; word-break: break-all; }

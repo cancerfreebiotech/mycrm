@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v4.15.9 — revert(newsletter/print): CSS 回到 v4.15.2 給 user 比較（2026-05-03）
+
+User 連續測新 PDF 仍覺得排版不滿意（"story 的圖 變得很窄 被截掉"），表示「要不要恢復原本的設定 比較好看看」。回滾 print CSS 中的 image / tr / td / story-div 的 `page-break-inside: avoid` 規則，讓 user 直接對比兩種策略：
+- **舊（現在）**：portrait 圖被推到自己一頁，圖大但前頁空白
+- **新（v4.15.3-8）**：圖隨 flow，max-height 限制寬度，portrait 偏窄但無空白
+
+保留 logo `width=180` / icons `width=24` 屬性走 inline 不被 max-width 蓋的修正。保留 PDF metadata title 注入跟 `?width=1200` transform。
+
+bump 4.15.8 → 4.15.9
+
 ## v4.15.8 — fix: stats `.in()` 分批 + PDF 檔名 + 圖片 max-height（2026-05-02）
 
 ### 三個修
