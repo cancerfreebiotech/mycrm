@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v4.14.1 — feat(contacts): 排除 banner 顯示 unique email count（2026-05-02）
+
+`/contacts` 排除 banner 從「將寄送給 71 人，自動排除 9 人：...」改成「將寄送給 71 人（X 個 unique email），自動排除 9 人：...」 — 多個 contact 共用 email 時實際寄出去的 email 數會比 contact 數少，現在一眼可見。三語 i18n 同步。建 list modal 的 uniqueEmailCount 改為共用變數。
+
+bump 4.14.0 → 4.14.1
+
 ## v4.14.0 — refactor(unsubscribe): newsletter_unsubscribes 為 single source of truth（2026-05-02）
 
 ### 痛點

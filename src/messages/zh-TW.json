@@ -120,7 +120,7 @@
     "emailButtonLabel": "寄信給 {count} 人",
     "emailExcludedBadge": "排除 {count}",
     "emailExcludedTooltip": "已排除：{breakdown}",
-    "emailExcludedBanner": "將寄送給 {sending} 人，自動排除 {excluded} 人：",
+    "emailExcludedBanner": "將寄送給 {sending} 人（{uniqueEmails} 個 unique email），自動排除 {excluded} 人：",
     "emailExcludedNoEmail": "{count} 無 email",
     "emailExcludedUnsub": "{count} 已退訂",
     "emailExcludedBounced": "{count} 退信/無效",

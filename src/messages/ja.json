@@ -120,7 +120,7 @@
     "emailButtonLabel": "{count} 人へメール",
     "emailExcludedBadge": "{count} 件除外",
     "emailExcludedTooltip": "除外：{breakdown}",
-    "emailExcludedBanner": "{sending} 人へ送信、{excluded} 人を自動除外：",
+    "emailExcludedBanner": "{sending} 人へ送信（ユニーク email {uniqueEmails} 件）、{excluded} 人を自動除外：",
     "emailExcludedNoEmail": "{count} 件 email なし",
     "emailExcludedUnsub": "{count} 件 配信停止",
     "emailExcludedBounced": "{count} 件 バウンス/無効",

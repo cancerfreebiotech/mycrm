@@ -120,7 +120,7 @@
     "emailButtonLabel": "Email {count}",
     "emailExcludedBadge": "{count} excluded",
     "emailExcludedTooltip": "Excluded: {breakdown}",
-    "emailExcludedBanner": "Sending to {sending}; auto-excluded {excluded}:",
+    "emailExcludedBanner": "Sending to {sending} ({uniqueEmails} unique emails); auto-excluded {excluded}:",
     "emailExcludedNoEmail": "{count} no email",
     "emailExcludedUnsub": "{count} unsubscribed",
     "emailExcludedBounced": "{count} bounced/invalid",

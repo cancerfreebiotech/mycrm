@@ -234,6 +234,7 @@ export default function ContactsPage() {
   const isEmailable = (c: Contact) => !!c.email && !c.email_status && !c.email_opt_out && !isBlacklisted(c)
   const emailPool = selectedIds.size > 0 ? sorted.filter(c => selectedIds.has(c.id)) : sorted
   const emailTargets = emailPool.filter(isEmailable)
+  const uniqueEmailCount = new Set(emailTargets.map((c) => c.email!.trim().toLowerCase())).size
   const showEmailBtn = emailTargets.length > 0 && (selectedIds.size > 0 || hasFilter)
   // Exclusion breakdown — single-bucket per contact, blacklist FIRST so that
   // a blacklisted contact is always counted as blacklist regardless of whether
@@ -488,7 +489,7 @@ export default function ContactsPage() {
         <div className="mb-4 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 text-xs text-blue-800 dark:text-blue-300 flex items-start gap-2">
           <Mail size={14} className="mt-0.5 shrink-0" />
           <div>
-            {t('emailExcludedBanner', { sending: emailTargets.length, excluded: excludedTotal })}
+            {t('emailExcludedBanner', { sending: emailTargets.length, uniqueEmails: uniqueEmailCount, excluded: excludedTotal })}
             <span className="text-blue-600 dark:text-blue-400 ml-1">{excludedBreakdown}</span>
           </div>
         </div>
@@ -1106,8 +1107,8 @@ export default function ContactsPage() {
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
               {selectedIds.size > 0
-                ? t('createListHint', { selected: selectedIds.size, uniqueEmails: new Set(emailTargets.map((c) => c.email!.trim().toLowerCase())).size })
-                : t('createListHintFiltered', { filtered: sorted.length, uniqueEmails: new Set(emailTargets.map((c) => c.email!.trim().toLowerCase())).size })}
+                ? t('createListHint', { selected: selectedIds.size, uniqueEmails: uniqueEmailCount })
+                : t('createListHintFiltered', { filtered: sorted.length, uniqueEmails: uniqueEmailCount })}
             </p>
             <div className="space-y-3">
               <div>
