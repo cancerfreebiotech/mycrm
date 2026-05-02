@@ -139,7 +139,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const valid = contacts.filter(c => {
+  // Filter then dedupe by email — multiple CRM contacts sharing one email
+  // (couples / shared inboxes) should produce ONE send, not N.
+  const filtered = contacts.filter(c => {
     if (!c.email?.trim()) return false
     if (unsubEmails.has(c.email.trim().toLowerCase())) return false
     if (c.email_opt_out) return false
@@ -148,6 +150,14 @@ export async function POST(req: NextRequest) {
     if (tags.some((ct) => ct.tags?.is_email_blacklist)) return false
     return true
   })
+  const seenEmails = new Set<string>()
+  const valid: typeof filtered = []
+  for (const c of filtered) {
+    const lc = c.email!.trim().toLowerCase()
+    if (seenEmails.has(lc)) continue
+    seenEmails.add(lc)
+    valid.push(c)
+  }
   if (valid.length === 0) {
     return NextResponse.json({ error: '沒有有效的收件人' }, { status: 400 })
   }

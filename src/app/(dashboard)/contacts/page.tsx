@@ -421,14 +421,24 @@ export default function ContactsPage() {
           {showEmailBtn && (
             <button
               onClick={() => {
-                sessionStorage.setItem('emailRecipients', JSON.stringify(emailTargets.map(c => c.id)))
+                // Dedupe by email so we send once per unique address; multiple
+                // CRM contacts sharing one email collapse to one send.
+                const seen = new Set<string>()
+                const deduped: typeof emailTargets = []
+                for (const c of emailTargets) {
+                  const lc = c.email!.trim().toLowerCase()
+                  if (seen.has(lc)) continue
+                  seen.add(lc)
+                  deduped.push(c)
+                }
+                sessionStorage.setItem('emailRecipients', JSON.stringify(deduped.map(c => c.id)))
                 router.push('/email/compose')
               }}
               title={excludedTotal > 0 ? t('emailExcludedTooltip', { breakdown: excludedBreakdown }) : undefined}
               className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700"
             >
               <Mail size={14} />
-              {t('emailButtonLabel', { count: emailTargets.length })}
+              {t('emailButtonLabel', { count: uniqueEmailCount })}
               {excludedTotal > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 text-[10px] rounded bg-green-800/50 dark:bg-green-900/70">
                   {t('emailExcludedBadge', { count: excludedTotal })}

@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v4.15.1 — fix(email): 寄信按 unique email 去重，不重複寄（2026-05-02）
+
+回報：filter 中文 2003 contacts / 1937 unique emails，按寄信會寄 2003 次（66 個 email 重複寄一遍）— 因為前後端都按 contact 數送。
+
+- `/contacts` 寄信按鈕：點擊時先用 lowercase email 去重才存進 sessionStorage，compose 頁收到的就是 unique 收件人
+- 按鈕文字從 `{contacts}` 改成 `{uniqueEmailCount}` — 顯示真正會寄的數量
+- `/api/email/send` route：filter 後再做一次 server-side 去重防禦，即使前端漏掉也保證不重複寄
+
+bump 4.15.0 → 4.15.1
+
 ## v4.15.0 — feat(newsletter/lists): 名單編輯 + CSV 匯出（2026-05-02）
 
 `/admin/newsletter/lists` 每行多兩個按鈕：
