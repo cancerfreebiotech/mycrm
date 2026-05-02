@@ -235,17 +235,20 @@ export default function ContactsPage() {
   const emailPool = selectedIds.size > 0 ? sorted.filter(c => selectedIds.has(c.id)) : sorted
   const emailTargets = emailPool.filter(isEmailable)
   const showEmailBtn = emailTargets.length > 0 && (selectedIds.size > 0 || hasFilter)
-  // Exclusion breakdown — counted in priority order so each contact only falls
-  // into one bucket. Order: no-email > blacklist > unsub > bounced > transient.
-  const excludedNoEmail = emailPool.filter(c => !c.email).length
-  const excludedBlacklist = emailPool.filter(c => c.email && isBlacklisted(c)).length
-  const excludedUnsub = emailPool.filter(c => c.email && !isBlacklisted(c) && (c.email_opt_out || c.email_status === 'unsubscribed')).length
-  const excludedBounced = emailPool.filter(c => c.email && !isBlacklisted(c) && !c.email_opt_out && (c.email_status === 'bounced' || c.email_status === 'invalid')).length
-  const excludedTransient = emailPool.filter(c => c.email && !isBlacklisted(c) && !c.email_opt_out && (c.email_status === 'deferred' || c.email_status === 'mailbox_full' || c.email_status === 'sender_blocked' || c.email_status === 'recipient_blocked')).length
+  // Exclusion breakdown — single-bucket per contact, blacklist FIRST so that
+  // a blacklisted contact is always counted as blacklist regardless of whether
+  // they also have no email / opt_out / etc. (matches user mental model: a
+  // blacklist tag means "always exclude this person", everything else is moot.)
+  // Priority: blacklist > no_email > unsub > bounced > transient.
+  const excludedBlacklist = emailPool.filter(c => isBlacklisted(c)).length
+  const excludedNoEmail = emailPool.filter(c => !isBlacklisted(c) && !c.email).length
+  const excludedUnsub = emailPool.filter(c => !isBlacklisted(c) && c.email && (c.email_opt_out || c.email_status === 'unsubscribed')).length
+  const excludedBounced = emailPool.filter(c => !isBlacklisted(c) && c.email && !c.email_opt_out && (c.email_status === 'bounced' || c.email_status === 'invalid')).length
+  const excludedTransient = emailPool.filter(c => !isBlacklisted(c) && c.email && !c.email_opt_out && (c.email_status === 'deferred' || c.email_status === 'mailbox_full' || c.email_status === 'sender_blocked' || c.email_status === 'recipient_blocked')).length
   const excludedTotal = excludedNoEmail + excludedBlacklist + excludedUnsub + excludedBounced + excludedTransient
   const excludedBreakdownParts: string[] = []
-  if (excludedNoEmail > 0) excludedBreakdownParts.push(t('emailExcludedNoEmail', { count: excludedNoEmail }))
   if (excludedBlacklist > 0) excludedBreakdownParts.push(t('emailExcludedBlacklist', { count: excludedBlacklist }))
+  if (excludedNoEmail > 0) excludedBreakdownParts.push(t('emailExcludedNoEmail', { count: excludedNoEmail }))
   if (excludedUnsub > 0) excludedBreakdownParts.push(t('emailExcludedUnsub', { count: excludedUnsub }))
   if (excludedBounced > 0) excludedBreakdownParts.push(t('emailExcludedBounced', { count: excludedBounced }))
   if (excludedTransient > 0) excludedBreakdownParts.push(t('emailExcludedTransient', { count: excludedTransient }))

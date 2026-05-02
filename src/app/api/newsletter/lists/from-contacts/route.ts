@@ -100,8 +100,10 @@ export async function POST(req: NextRequest) {
   const excluded = { no_email: 0, opt_out: 0, bad_status: 0, blacklist: 0 }
   const valid: ContactRow[] = []
   for (const c of rows) {
-    if (!c.email || !c.email.trim()) { excluded.no_email++; continue }
+    // Priority: blacklist > no_email > opt_out > bad_status. Blacklist is the
+    // strongest signal — always count as blacklist regardless of other gaps.
     if ((c.contact_tags ?? []).some((ct) => ct.tags?.is_email_blacklist)) { excluded.blacklist++; continue }
+    if (!c.email || !c.email.trim()) { excluded.no_email++; continue }
     if (c.email_opt_out) { excluded.opt_out++; continue }
     if (c.email_status) { excluded.bad_status++; continue }
     valid.push(c)

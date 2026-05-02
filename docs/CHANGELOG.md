@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v4.11.1 — fix(contacts): 排除分類優先級調成 blacklist 第一（2026-05-02）
+
+報告：選「中文」一個篩選，banner 顯示「黑名單 42」，但實際 XX-tagged 中文 = 45。差 3 是因為 3 個 XX-tagged 但沒 email 的人被算去 no_email 桶。
+
+調整優先級：blacklist > no_email > unsub > bounced > transient。黑名單 tag 的人**一律**算成黑名單，不管其他狀態（符合「打了這 tag = 永遠不寄」的心智模型）。`/contacts` UI 跟 `/api/newsletter/lists/from-contacts` 的 excluded 計數同步調整。
+
 ## v4.11.0 — feat(tags): Email 黑名單 tag 機制（2026-05-02）
 
 某些 tag（例如「XX」）的聯絡人應自動排除於寄信和清單建立。原本沒這機制，必須手動取消勾選。改成可在 tag 層級標記任意 tag 為 Email 黑名單。
