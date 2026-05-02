@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## v4.8.1 — docs(skill): brand-info v2.3 對齊 example-manifest（2026-05-02）
+
+example-manifest.json 換掉跟 brand-info.md 衝突的 placeholder（虛構 biomarker panel、九州大學 MOU、partner@…）→ 改成 brand-aligned 範例：EVA Select / Prometheus Lab AI、紐約 / 沖繩 / 東京 / 台北、info@cancerfree.io。brand-info.md 地點例子加上紐約。
+
 ## v4.8.0 — feat(newsletter): Claude.ai skill + zip 匯入流程（2026-05-02）
 
 ### 痛點
