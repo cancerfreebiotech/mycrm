@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v4.15.6 — fix(newsletter/print): logo/icons 不走 image transform（2026-05-02）
+
+v4.15.4 把所有 Supabase storage 的 img URL 轉成 render/image+width=1200&quality=80，但 shared/ 資料夾的靜態小 PNG（logo 180px、social icons 24px）跟著被升尺寸 + JPEG 壓縮，透明背景變灰、邊緣模糊。改成只 transform 不在 `/shared/` 路徑下的圖（即使用者上傳的 story 大圖），靜態素材維持原圖。
+
+bump 4.15.5 → 4.15.6
+
 ## v4.15.5 — fix(newsletter/print): social icons 在 PDF 維持橫向（2026-05-02）
 
 PDF footer 的 3 個 social icon（FB / LinkedIn / Website）變直排了 — 因為 v4.15.3 給所有 img 加 `display: block`，icon 從 inline 變 block 換行。改成 `display: block` 只套到 story 大圖（沒有 width 屬性的 img），icons（width="24"）保留 inline 維持橫向。

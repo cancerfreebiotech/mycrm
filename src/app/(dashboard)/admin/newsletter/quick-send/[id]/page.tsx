@@ -157,13 +157,19 @@ export default function QuickSendPage() {
   }
 }
 </style>`.trim()
-    // Apply Supabase Storage image transformation: serving public images
-    // through the /render/image/ path lets us downsize on the fly. Cuts the
-    // exported PDF size from ~4 MB to ~1-1.5 MB for a typical 7-page issue.
+    // Apply Supabase Storage image transformation to user-uploaded story
+    // photos so the exported PDF stays small. Static assets in the `shared/`
+    // folder (logo, social icons — small PNGs with transparency) are served
+    // as-is; running them through the render/image pipeline upscales them
+    // to 1200px and JPEG-compresses, killing transparency and adding
+    // artefacts. Story photos in `{period}/imported/` folders benefit
+    // strongly (1-4 MB → 200-400 KB each).
     const compactHtml = contentHtml.replace(
       /(<img[^>]+src=")(https:\/\/[^"]+\.supabase\.co)\/storage\/v1\/object\/public\/([^"]+\.(?:jpg|jpeg|png|webp))(?:\?[^"]*)?(")/gi,
-      (_m, prefix, host, path, suffix) =>
-        `${prefix}${host}/storage/v1/render/image/public/${path}?width=1200&quality=80${suffix}`,
+      (m, prefix, host, path, suffix) => {
+        if (path.includes('/shared/')) return m
+        return `${prefix}${host}/storage/v1/render/image/public/${path}?width=1200&quality=80${suffix}`
+      },
     )
     // Inject before </head> when present; else prepend to <body>; else wrap.
     if (/<\/head>/i.test(compactHtml)) return compactHtml.replace(/<\/head>/i, `${PRINT_CSS}</head>`)
