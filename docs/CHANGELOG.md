@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v4.15.4 — feat(newsletter/print): PDF 自動命名 + 縮小檔案大小（2026-05-02）
+
+匯出 PDF：
+- **自動命名**：原本 Chrome 預設用空白 / `untitled`；改成設 `document.title = "Newsletter-{slug}"`（e.g. `Newsletter-2026-05-zh-tw-moo2zn4z`），Save as PDF 時直接帶入
+- **檔案大小**：原本 5 月 PDF 4.4 MB（每張原圖 1-4 MB）。previewHtml 把 Supabase Storage `<img src="...storage/v1/object/public/...">` 自動換成 `storage/v1/render/image/public/...?width=1200&quality=80`（Supabase 的 image transform endpoint），單張圖大概縮到 200-400 KB，預期 4.4 MB → ~1-1.5 MB
+
+bump 4.15.3 → 4.15.4
+
 ## v4.15.3 — fix(newsletter/print): 移除過度激進的 page-break 規則（2026-05-02）
 
 實測 5 月電子報匯出 PDF 7 頁，1-3 頁大量空白：

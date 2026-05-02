@@ -153,11 +153,29 @@ export default function QuickSendPage() {
   }
 }
 </style>`.trim()
+    // Apply Supabase Storage image transformation: serving public images
+    // through the /render/image/ path lets us downsize on the fly. Cuts the
+    // exported PDF size from ~4 MB to ~1-1.5 MB for a typical 7-page issue.
+    const compactHtml = contentHtml.replace(
+      /(<img[^>]+src=")(https:\/\/[^"]+\.supabase\.co)\/storage\/v1\/object\/public\/([^"]+\.(?:jpg|jpeg|png|webp))(?:\?[^"]*)?(")/gi,
+      (_m, prefix, host, path, suffix) =>
+        `${prefix}${host}/storage/v1/render/image/public/${path}?width=1200&quality=80${suffix}`,
+    )
     // Inject before </head> when present; else prepend to <body>; else wrap.
-    if (/<\/head>/i.test(contentHtml)) return contentHtml.replace(/<\/head>/i, `${PRINT_CSS}</head>`)
-    if (/<body[^>]*>/i.test(contentHtml)) return contentHtml.replace(/<body[^>]*>/i, (m) => `${m}${PRINT_CSS}`)
-    return `<!doctype html><html><head>${PRINT_CSS}</head><body>${contentHtml}</body></html>`
+    if (/<\/head>/i.test(compactHtml)) return compactHtml.replace(/<\/head>/i, `${PRINT_CSS}</head>`)
+    if (/<body[^>]*>/i.test(compactHtml)) return compactHtml.replace(/<body[^>]*>/i, (m) => `${m}${PRINT_CSS}`)
+    return `<!doctype html><html><head>${PRINT_CSS}</head><body>${compactHtml}</body></html>`
   }, [contentHtml])
+
+  // PDF download filename — Chrome's "Save as PDF" defaults to document.title.
+  // Prefix with "Newsletter-" so end-users see a recognisable name even if
+  // multiple PDFs end up in the same Downloads folder.
+  const pdfFilename = useMemo(() => {
+    const slug = campaign?.slug?.trim()
+    if (slug) return `Newsletter-${slug}`
+    const title = (campaign?.title ?? '').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '-')
+    return title ? `Newsletter-${title}` : `Newsletter-${id}`
+  }, [campaign, id])
 
   // Derive Storage folder from campaign slug (e.g. "2026-04-zh-tw" → "2026-04")
   // Fall back to current year-month if slug is missing / unparseable.
@@ -318,6 +336,8 @@ export default function QuickSendPage() {
     w.document.open()
     w.document.write(previewHtml)
     w.document.close()
+    // Set document.title so Chrome's "Save as PDF" uses it as default filename.
+    try { w.document.title = pdfFilename } catch { /* cross-origin etc., ignore */ }
     // Wait for images to load before printing so PDF isn't cut off mid-load
     const triggerPrint = () => { w.focus(); w.print() }
     const imgs = w.document.images
