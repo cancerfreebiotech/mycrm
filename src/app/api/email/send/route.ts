@@ -122,8 +122,26 @@ export async function POST(req: NextRequest) {
   }
   const contacts = fetchedContacts
 
-  const valid = (contacts ?? []).filter(c => {
+  // Look up canonical unsubscribe table once for all recipients
+  const allEmails = Array.from(
+    new Set(contacts.map((c) => c.email?.trim().toLowerCase()).filter((e): e is string => !!e)),
+  )
+  const unsubEmails = new Set<string>()
+  const UNSUB_BATCH = 200
+  for (let i = 0; i < allEmails.length; i += UNSUB_BATCH) {
+    const batch = allEmails.slice(i, i + UNSUB_BATCH)
+    const { data: unsubs } = await supabase
+      .from('newsletter_unsubscribes')
+      .select('email')
+      .in('email', batch)
+    for (const u of unsubs ?? []) {
+      if (u.email) unsubEmails.add((u.email as string).toLowerCase())
+    }
+  }
+
+  const valid = contacts.filter(c => {
     if (!c.email?.trim()) return false
+    if (unsubEmails.has(c.email.trim().toLowerCase())) return false
     if (c.email_opt_out) return false
     if (c.email_status) return false
     const tags = (c as unknown as { contact_tags?: { tags: { is_email_blacklist: boolean | null } | null }[] }).contact_tags ?? []

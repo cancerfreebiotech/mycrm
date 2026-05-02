@@ -105,13 +105,35 @@ export async function POST(req: NextRequest) {
     fetchedRows.push(...((data ?? []) as unknown as ContactRow[]))
   }
   const rows = fetchedRows
-  const excluded = { no_email: 0, opt_out: 0, bad_status: 0, blacklist: 0 }
+
+  // Unsubscribe pre-pass: `newsletter_unsubscribes` is the canonical source
+  // of truth (it's the audit log; subscribers.unsubscribed_at + contacts
+  // .email_status='unsubscribed' are denormalized views of this).
+  const QUERY_BATCH = 200
+  const allRowEmails = Array.from(
+    new Set(rows.map((r) => r.email?.trim().toLowerCase()).filter((e): e is string => !!e)),
+  )
+  const unsubEmails = new Set<string>()
+  for (let i = 0; i < allRowEmails.length; i += QUERY_BATCH) {
+    const batch = allRowEmails.slice(i, i + QUERY_BATCH)
+    const { data } = await service
+      .from('newsletter_unsubscribes')
+      .select('email')
+      .in('email', batch)
+    for (const u of data ?? []) {
+      if (u.email) unsubEmails.add((u.email as string).toLowerCase())
+    }
+  }
+
+  const excluded = { no_email: 0, opt_out: 0, bad_status: 0, blacklist: 0, unsubscribed: 0 }
   const valid: ContactRow[] = []
   for (const c of rows) {
-    // Priority: blacklist > no_email > opt_out > bad_status. Blacklist is the
-    // strongest signal — always count as blacklist regardless of other gaps.
+    // Priority: blacklist > unsubscribed > no_email > opt_out > bad_status.
+    // Blacklist always wins (per-tag policy); unsubscribed is a hard legal
+    // gate (CAN-SPAM/GDPR) regardless of email-health state.
     if ((c.contact_tags ?? []).some((ct) => ct.tags?.is_email_blacklist)) { excluded.blacklist++; continue }
     if (!c.email || !c.email.trim()) { excluded.no_email++; continue }
+    if (unsubEmails.has(c.email.trim().toLowerCase())) { excluded.unsubscribed++; continue }
     if (c.email_opt_out) { excluded.opt_out++; continue }
     if (c.email_status) { excluded.bad_status++; continue }
     valid.push(c)
@@ -124,7 +146,6 @@ export async function POST(req: NextRequest) {
 
   // Step 1: bulk lookup existing subscribers by contact_id
   const validIds = valid.map((c) => c.id)
-  const QUERY_BATCH = 200
   for (let i = 0; i < validIds.length; i += QUERY_BATCH) {
     const batch = validIds.slice(i, i + QUERY_BATCH)
     const { data } = await service
@@ -190,43 +211,24 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Step 4b: re-fetch subscriber IDs by email, EXCLUDING those already
-  // marked unsubscribed at the subscriber level (newsletter_subscribers
-  // .unsubscribed_at). They shouldn't be added to a fresh list.
+  // Step 4b: re-fetch subscriber IDs by email (canonical mapping for link rows).
+  // No need to filter by unsubscribed_at here — unsubscribed contacts have
+  // already been excluded above via the newsletter_unsubscribes pre-pass.
   const allEmails = Array.from(new Set(valid.map((c) => c.email!.trim()).filter(Boolean)))
-  const unsubscribedSubEmails = new Set<string>()
-  subscriberIdByEmail.clear()  // rebuild fresh — earlier set may have stale unsubscribed entries
+  subscriberIdByEmail.clear()
   for (let i = 0; i < allEmails.length; i += QUERY_BATCH) {
     const batch = allEmails.slice(i, i + QUERY_BATCH)
     const { data } = await service
       .from('newsletter_subscribers')
-      .select('id, email, unsubscribed_at')
+      .select('id, email')
       .in('email', batch)
     for (const s of data ?? []) {
-      if (!s.email) continue
-      const lc = (s.email as string).toLowerCase()
-      if (s.unsubscribed_at) {
-        unsubscribedSubEmails.add(lc)
-        continue
-      }
-      subscriberIdByEmail.set(lc, s.id as string)
+      if (s.email) subscriberIdByEmail.set((s.email as string).toLowerCase(), s.id as string)
     }
   }
-  // Resolve subscriberIdByContact for any contact still unmapped
-  // (and clear out any contact whose subscriber is unsubscribed).
-  let excludedUnsubscribedSubscriber = 0
-  const droppedContactIds = new Set<string>()
   for (const c of valid) {
-    const lc = c.email!.trim().toLowerCase()
-    if (unsubscribedSubEmails.has(lc)) {
-      excludedUnsubscribedSubscriber++
-      droppedContactIds.add(c.id)
-      // also clear if Step 1 mapped it via contact_id (shouldn't happen but safe)
-      subscriberIdByContact.delete(c.id)
-      continue
-    }
     if (subscriberIdByContact.has(c.id)) continue
-    const sid = subscriberIdByEmail.get(lc)
+    const sid = subscriberIdByEmail.get(c.email!.trim().toLowerCase())
     if (sid) subscriberIdByContact.set(c.id, sid)
   }
 
@@ -260,7 +262,7 @@ export async function POST(req: NextRequest) {
     list_name: created.name,
     total_input: rows.length,
     added,
-    excluded: { ...excluded, unsubscribed_subscriber: excludedUnsubscribedSubscriber },
+    excluded,
     errors: errors.length > 0 ? errors : undefined,
   })
 }

@@ -1669,45 +1669,60 @@ export default function ContactDetailPage() {
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
         <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('interactionLogs')}</h2>
 
-        {/* Email status banner — interactive */}
-        {contact.email_status ? (
+        {/* Email status banner — interactive.
+            `displayedEmailStatus` derives 'unsubscribed' from newsletter_unsubscribes
+            (canonical) when contact.email_status is null. When the status is derived
+            (not on the contact row itself), the clear button is hidden — the user
+            would need to remove the entry from newsletter_unsubscribes to reset. */}
+        {(() => {
+          const derivedUnsubscribed = !contact.email_status && contact.email
+            ? !!emailSuppressions[contact.email]?.unsubscribed
+            : false
+          const displayedEmailStatus = contact.email_status || (derivedUnsubscribed ? 'unsubscribed' : null)
+          const isDerived = !contact.email_status && derivedUnsubscribed
+          if (!displayedEmailStatus) return null
+          return (
           <div className={`flex items-center justify-between mb-4 px-3 py-2.5 rounded-lg border text-sm ${
-            contact.email_status === 'bounced'
+            displayedEmailStatus === 'bounced'
               ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800 text-red-700 dark:text-red-400'
-              : contact.email_status === 'unsubscribed'
+              : displayedEmailStatus === 'unsubscribed'
               ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-400'
-              : contact.email_status === 'sender_blocked' || contact.email_status === 'recipient_blocked'
+              : displayedEmailStatus === 'sender_blocked' || displayedEmailStatus === 'recipient_blocked'
               ? 'bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-400'
               : 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-400'
           }`}>
             <div className="flex items-start gap-2">
               <span className="font-semibold shrink-0">
-                {contact.email_status === 'bounced' && t('emailStatusBounced')}
-                {contact.email_status === 'unsubscribed' && t('emailStatusUnsubscribed')}
-                {contact.email_status === 'invalid' && t('emailStatusInvalid')}
-                {contact.email_status === 'deferred' && t('emailStatusDeferred')}
-                {contact.email_status === 'mailbox_full' && t('emailStatusMailboxFull')}
-                {contact.email_status === 'sender_blocked' && t('emailStatusSenderBlocked')}
-                {contact.email_status === 'recipient_blocked' && t('emailStatusRecipientBlocked')}
+                {displayedEmailStatus === 'bounced' && t('emailStatusBounced')}
+                {displayedEmailStatus === 'unsubscribed' && t('emailStatusUnsubscribed')}
+                {displayedEmailStatus === 'invalid' && t('emailStatusInvalid')}
+                {displayedEmailStatus === 'deferred' && t('emailStatusDeferred')}
+                {displayedEmailStatus === 'mailbox_full' && t('emailStatusMailboxFull')}
+                {displayedEmailStatus === 'sender_blocked' && t('emailStatusSenderBlocked')}
+                {displayedEmailStatus === 'recipient_blocked' && t('emailStatusRecipientBlocked')}
               </span>
               <span className="text-xs opacity-75">
-                {contact.email_status === 'bounced' && t('emailStatusBouncedDesc')}
-                {contact.email_status === 'unsubscribed' && t('emailStatusUnsubscribedDesc')}
-                {contact.email_status === 'invalid' && t('emailStatusInvalidDesc')}
-                {contact.email_status === 'deferred' && t('emailStatusDeferredDesc')}
-                {contact.email_status === 'mailbox_full' && t('emailStatusMailboxFullDesc')}
-                {contact.email_status === 'sender_blocked' && t('emailStatusSenderBlockedDesc')}
-                {contact.email_status === 'recipient_blocked' && t('emailStatusRecipientBlockedDesc')}
+                {displayedEmailStatus === 'bounced' && t('emailStatusBouncedDesc')}
+                {displayedEmailStatus === 'unsubscribed' && t('emailStatusUnsubscribedDesc')}
+                {displayedEmailStatus === 'invalid' && t('emailStatusInvalidDesc')}
+                {displayedEmailStatus === 'deferred' && t('emailStatusDeferredDesc')}
+                {displayedEmailStatus === 'mailbox_full' && t('emailStatusMailboxFullDesc')}
+                {displayedEmailStatus === 'sender_blocked' && t('emailStatusSenderBlockedDesc')}
+                {displayedEmailStatus === 'recipient_blocked' && t('emailStatusRecipientBlockedDesc')}
               </span>
             </div>
-            <button
-              onClick={() => patchEmailStatus(null)}
-              className="text-xs px-2 py-1 rounded border border-current opacity-60 hover:opacity-100 shrink-0"
-            >
-              {t('clearStatusBadge')}
-            </button>
+            {!isDerived && (
+              <button
+                onClick={() => patchEmailStatus(null)}
+                className="text-xs px-2 py-1 rounded border border-current opacity-60 hover:opacity-100 shrink-0"
+              >
+                {t('clearStatusBadge')}
+              </button>
+            )}
           </div>
-        ) : contact.email && (
+          )
+        })()}
+        {!contact.email_status && !emailSuppressions[contact.email ?? '']?.unsubscribed && contact.email && (
           <div className="flex items-center gap-2 mb-4">
             <button
               onClick={() => patchEmailStatus('bounced')}

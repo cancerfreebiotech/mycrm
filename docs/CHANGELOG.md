@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## v4.14.0 — refactor(unsubscribe): newsletter_unsubscribes 為 single source of truth（2026-05-02）
+
+### 痛點
+退訂狀態之前散在 3 個地方，不同 route / UI 讀不同的源：
+- `newsletter_unsubscribes`（84 筆，audit log，最完整）
+- `newsletter_subscribers.unsubscribed_at`（67 筆，subset）
+- `contacts.email_status='unsubscribed'`（7 筆，少數手動標記）
+
+導致 v4.13.0 寫的 from-contacts route 用 subscribers.unsubscribed_at 過濾，會漏掉 17 個沒 subscriber row 但已退訂的 email。
+
+### 改動
+**Server**：所有寄送相關判斷統一改讀 `newsletter_unsubscribes`：
+- `/api/newsletter/lists/from-contacts`：filter loop pre-pass query newsletter_unsubscribes，priority 改為 blacklist > unsubscribed > no_email > opt_out > bad_status；移除 Step 4b 的 subscriber.unsubscribed_at 過濾（改在 contact 層更早攔下）
+- `/api/email/send`：加 newsletter_unsubscribes pre-pass
+- `/api/contacts/all`：derive `email_status='unsubscribed'` 從 newsletter_unsubscribes（之前用 subscribers.unsubscribed_at，漏 17 筆）
+
+**前端**：`/contacts/[id]` 的 email-status banner 加 derive 邏輯 — 當 `contact.email_status` 為 null 但 `newsletter_unsubscribes` 有該 email 時，顯示 'unsubscribed' banner。derived 來源時隱藏「清除」按鈕（避免誤導）。
+
+### 待手動執行（程式 deploy 後）
+- SQL 1：sync `subscribers.unsubscribed_at` 從 newsletter_unsubscribes（保持 list-state 一致，17 筆）
+- SQL 2：清空 `contacts.email_status='unsubscribed'`（7 筆 → null）
+
+bump 4.13.0 → 4.14.0
+
 ## v4.13.0 — feat: 共用 Email 查看頁 + 退訂統一 + Modal 顯示 unique-email count（2026-05-02）
 
 ### 痛點
