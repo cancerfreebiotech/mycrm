@@ -110,13 +110,20 @@ export default function QuickSendPage() {
   }
   body > div, body > table { padding: 0 !important; background: #FFFFFF !important; }
   table[align="center"], table { max-width: 100% !important; width: 100% !important; }
-  img { max-width: 100% !important; height: auto !important; page-break-inside: avoid !important; break-inside: avoid !important; display: block; margin: 0 auto; }
+  /* Cap image height so a single portrait photo can't dominate a page —
+     A4 minus 8mm margins ≈ 281mm content, so 200mm ≈ 70% which leaves
+     room for caption / next paragraph on the same page. Without this cap
+     a tall image would either get pushed to its own page (leaving big
+     empty space on the prior page) or split awkwardly. */
+  img { max-width: 100% !important; max-height: 200mm !important; height: auto !important; display: block; margin: 0 auto; object-fit: contain; }
+  /* Keep headings glued to following content so they don't strand at page bottom */
   h1, h2, h3, h4 { page-break-after: avoid !important; break-after: avoid !important; }
   p { orphans: 3; widows: 3; }
-  tr, td { page-break-inside: avoid !important; break-inside: avoid !important; }
-  /* Numbered story blocks: each sits in its own padded div — keep together */
-  div[style*="padding:0px 24px"],
-  div[style*="padding:16px 24px"] { page-break-inside: avoid !important; break-inside: avoid !important; }
+  /* NOTE: removed earlier "page-break-inside: avoid" on tr/td/img/story-divs.
+     Those rules caused large empty gaps because any block bigger than the
+     remaining page space got pushed entirely to the next page. Letting
+     content flow naturally + the image height cap above gives much denser
+     layout in the resulting PDF. */
   /* Link styling: override listmonk's inline text-decoration:none so URLs are
      visible and distinguishable in PDF (helps anchor detection by PDF viewers). */
   a { color: #0D9488 !important; text-decoration: underline !important; word-break: break-all; }

@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## v4.15.3 — fix(newsletter/print): 移除過度激進的 page-break 規則（2026-05-02）
+
+實測 5 月電子報匯出 PDF 7 頁，1-3 頁大量空白：
+- p1：開場段半頁 + 下半頁全空
+- p2：section heading + Story 1 文字 → 後 70% 空
+- p3：只有一張 OIST 直立照片，整頁就一張
+
+原因：`img { break-inside: avoid }` + `tr/td/div { break-inside: avoid }` 太激進。tall portrait 圖片觸發 break-inside-avoid → 整張被推到下一頁 → 上一頁底部留白。
+
+改動：
+- 拿掉 `img / tr / td / story-div` 的 `page-break-inside: avoid`
+- 加 `img { max-height: 200mm; object-fit: contain }` — A4 內容高 ~281mm，限 200mm 約 70% 高，留得下後續段落
+- 保留 `h1-h4 { page-break-after: avoid }`（headings 還是該黏住下面）
+
+bump 4.15.2 → 4.15.3
+
 ## v4.15.2 — fix(newsletter/stats): list 訂閱者統計分頁避免 1000 行截斷（2026-05-02）
 
 quick-send 頁旁邊的 list 選單顯示 0 訂閱者（實際 1937）— 因為 `/api/newsletter/lists/stats` route fetch `newsletter_subscriber_lists` 沒分頁，PostgREST 預設 1000 行截斷，後幾百筆漏掉導致該 list 的累計都被算到別的 list 或丟失。
