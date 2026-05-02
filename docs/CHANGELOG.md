@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v4.15.2 — fix(newsletter/stats): list 訂閱者統計分頁避免 1000 行截斷（2026-05-02）
+
+quick-send 頁旁邊的 list 選單顯示 0 訂閱者（實際 1937）— 因為 `/api/newsletter/lists/stats` route fetch `newsletter_subscriber_lists` 沒分頁，PostgREST 預設 1000 行截斷，後幾百筆漏掉導致該 list 的累計都被算到別的 list 或丟失。
+
+改成三個 select（memberships / blacklist / unsubscribes）都用 1000/批 paginate while-loop。
+
+bump 4.15.1 → 4.15.2
+
 ## v4.15.1 — fix(email): 寄信按 unique email 去重，不重複寄（2026-05-02）
 
 回報：filter 中文 2003 contacts / 1937 unique emails，按寄信會寄 2003 次（66 個 email 重複寄一遍）— 因為前後端都按 contact 數送。

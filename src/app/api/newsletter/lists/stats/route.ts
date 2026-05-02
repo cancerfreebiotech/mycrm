@@ -16,20 +16,46 @@ export async function GET() {
 
   const service = createServiceClient()
 
-  const [{ data: memberships }, { data: blacklist }, { data: unsubs }] = await Promise.all([
-    service
-      .from('newsletter_subscriber_lists')
-      .select('list_id, newsletter_subscribers(id, email, contact_id, unsubscribed_at)'),
-    service.from('newsletter_blacklist').select('email'),
-    service.from('newsletter_unsubscribes').select('email'),
-  ])
-
-  const blSet = new Set(((blacklist ?? []) as { email: string }[]).map((r) => r.email.toLowerCase().trim()))
-  const unsubSet = new Set(((unsubs ?? []) as { email: string }[]).map((r) => r.email.toLowerCase().trim()))
-
-  // Collect contact IDs to look up email_status
+  // Paginate memberships fetch — PostgREST default caps at 1000 rows; a single
+  // list with 1937 members + others would silently truncate, making the stats
+  // for the truncated lists show 0.
   type Membership = { list_id: string; newsletter_subscribers: { id: string; email: string; contact_id: string | null; unsubscribed_at: string | null } | null }
-  const rows = (memberships ?? []) as unknown as Membership[]
+  const rows: Membership[] = []
+  const BATCH = 1000
+  let mFrom = 0
+  while (true) {
+    const { data, error } = await service
+      .from('newsletter_subscriber_lists')
+      .select('list_id, newsletter_subscribers(id, email, contact_id, unsubscribed_at)')
+      .range(mFrom, mFrom + BATCH - 1)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!data || data.length === 0) break
+    rows.push(...(data as unknown as Membership[]))
+    if (data.length < BATCH) break
+    mFrom += BATCH
+  }
+
+  // Same paginate for blacklist + unsubs (could grow too)
+  const blRows: { email: string }[] = []
+  let bFrom = 0
+  while (true) {
+    const { data } = await service.from('newsletter_blacklist').select('email').range(bFrom, bFrom + BATCH - 1)
+    if (!data || data.length === 0) break
+    blRows.push(...(data as { email: string }[]))
+    if (data.length < BATCH) break
+    bFrom += BATCH
+  }
+  const unsubRows: { email: string }[] = []
+  let uFrom = 0
+  while (true) {
+    const { data } = await service.from('newsletter_unsubscribes').select('email').range(uFrom, uFrom + BATCH - 1)
+    if (!data || data.length === 0) break
+    unsubRows.push(...(data as { email: string }[]))
+    if (data.length < BATCH) break
+    uFrom += BATCH
+  }
+  const blSet = new Set(blRows.map((r) => r.email.toLowerCase().trim()))
+  const unsubSet = new Set(unsubRows.map((r) => r.email.toLowerCase().trim()))
   const contactIds = [...new Set(rows.map((r) => r.newsletter_subscribers?.contact_id).filter((x): x is string => !!x))]
 
   const badContactIds = new Set<string>()
