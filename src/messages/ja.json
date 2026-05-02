@@ -124,6 +124,7 @@
     "emailExcludedUnsub": "{count} 件 配信停止",
     "emailExcludedBounced": "{count} 件 バウンス/無効",
     "emailExcludedTransient": "{count} 件 配信エラー",
+    "emailExcludedBlacklist": "{count} 件 ブラックリスト",
     "createListButton": "リスト作成（{count}）",
     "createListTitle": "ニュースレターリストを作成",
     "createListHint": "{count} 件の連絡先を選択中。リスト作成時、email なし・配信停止・バウンス・配信エラーの方は自動的に除外されます。",
@@ -471,7 +472,11 @@
     "contactCount": "{n} 件の連絡先",
     "deleteConfirm": "このタグを削除しますか？すべての連絡先からも削除されます。",
     "duplicateName": "このタグ名は既に存在します",
-    "errorDuplicate": "このタグ名は既に存在します"
+    "errorDuplicate": "このタグ名は既に存在します",
+    "blacklistBadge": "ブラックリスト",
+    "blacklistTooltip": "このタグは Email ブラックリストに指定されており、対象連絡先はメール送信とリスト作成から自動的に除外されます",
+    "blacklistAdd": "Email ブラックリストに指定",
+    "blacklistRemove": "Email ブラックリスト解除"
   },
   "users": {
     "title": "ユーザー管理",

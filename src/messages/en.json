@@ -124,6 +124,7 @@
     "emailExcludedUnsub": "{count} unsubscribed",
     "emailExcludedBounced": "{count} bounced/invalid",
     "emailExcludedTransient": "{count} delivery issues",
+    "emailExcludedBlacklist": "{count} blacklist",
     "createListButton": "Create list ({count})",
     "createListTitle": "Create newsletter list",
     "createListHint": "{count} contacts selected. After creating the list, those without email or with opt-out / bounced / delivery issues will be auto-excluded.",
@@ -471,7 +472,11 @@
     "contactCount": "{n} contacts",
     "deleteConfirm": "Delete this tag? It will be removed from all contacts.",
     "duplicateName": "This tag name already exists",
-    "errorDuplicate": "This tag name already exists"
+    "errorDuplicate": "This tag name already exists",
+    "blacklistBadge": "Blacklist",
+    "blacklistTooltip": "This tag is marked as an Email blacklist; tagged contacts are auto-excluded from sending and list creation",
+    "blacklistAdd": "Mark as Email blacklist",
+    "blacklistRemove": "Remove Email blacklist"
   },
   "users": {
     "title": "User Management",

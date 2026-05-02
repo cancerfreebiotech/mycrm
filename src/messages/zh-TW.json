@@ -124,6 +124,7 @@
     "emailExcludedUnsub": "{count} 已退訂",
     "emailExcludedBounced": "{count} 退信/無效",
     "emailExcludedTransient": "{count} 寄送異常",
+    "emailExcludedBlacklist": "{count} 黑名單",
     "createListButton": "建立清單（{count}）",
     "createListTitle": "建立電子報清單",
     "createListHint": "已選 {count} 位聯絡人。建立新清單後，沒 email、退訂、退信、寄送異常者會自動排除。",
@@ -471,7 +472,11 @@
     "contactCount": "{n} 位聯絡人",
     "deleteConfirm": "確定要刪除此 Tag？刪除後所有聯絡人的此 Tag 將一併移除。",
     "duplicateName": "此 Tag 名稱已存在",
-    "errorDuplicate": "此 Tag 名稱已存在"
+    "errorDuplicate": "此 Tag 名稱已存在",
+    "blacklistBadge": "黑名單",
+    "blacklistTooltip": "此 Tag 標記為 Email 黑名單，相關聯絡人會自動排除於寄信和清單建立",
+    "blacklistAdd": "標記為 Email 黑名單",
+    "blacklistRemove": "取消 Email 黑名單"
   },
   "users": {
     "title": "使用者管理",

@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## v4.11.0 — feat(tags): Email 黑名單 tag 機制（2026-05-02）
+
+某些 tag（例如「XX」）的聯絡人應自動排除於寄信和清單建立。原本沒這機制，必須手動取消勾選。改成可在 tag 層級標記任意 tag 為 Email 黑名單。
+
+### DB
+- `tags` 加 `is_email_blacklist boolean default false`
+- 既有 `XX` tag 自動 set 為 true
+
+### 後端
+- `/api/email/send`：fetch contact_tags + 排除任一 `is_email_blacklist` 的聯絡人；同時補上 `email_status` 排除（之前漏）
+- `/api/newsletter/lists/from-contacts`：同樣排除規則 + 回傳 `excluded.blacklist` 計數
+- `/api/contacts/all`：SELECT 加 `is_email_blacklist`
+
+### 前端
+- `/contacts` 排除明細多一個分類「N 黑名單」
+- `/admin/tags` 每個 tag row 多一個盾牌 icon（綠盾 = 一般，紅盾 = 黑名單），點擊切換；黑名單 tag chip 變紅底 + 紅色「黑名單」徽章
+
+### i18n
+- 三語同步加 5 keys（4 在 tags 命名空間 + 1 emailExcludedBlacklist）
+
+bump 4.10.0 → 4.11.0
+
 ## v4.10.0 — feat(contacts): 從聯絡人選單建立 newsletter list（2026-05-02）
 
 聯絡人頁勾選一群人 → teal 按鈕「建立清單」→ 彈 modal 輸入 list 名稱（+ 可選備註）→ 建新 newsletter_lists row + find-or-create subscribers + 加入 subscriber_lists → 跳到 `/admin/newsletter/lists/[id]`。

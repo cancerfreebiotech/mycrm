@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Plus, Pencil, Trash2, Check, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, Check, X, ShieldOff, Shield } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
 
 interface Tag {
@@ -11,6 +11,7 @@ interface Tag {
   name: string
   count: number
   created_at: string
+  is_email_blacklist: boolean
 }
 
 export default function TagsPage() {
@@ -34,17 +35,30 @@ export default function TagsPage() {
     setLoading(true)
     const { data } = await supabase
       .from('tags')
-      .select('id, name, created_at, contact_tags(count)')
+      .select('id, name, created_at, is_email_blacklist, contact_tags(count)')
       .order('name')
     setTags(
       (data ?? []).map((tag) => ({
         id: tag.id,
         name: tag.name,
         created_at: tag.created_at,
+        is_email_blacklist: !!tag.is_email_blacklist,
         count: (tag.contact_tags as unknown as { count: number }[])?.[0]?.count ?? 0,
       }))
     )
     setLoading(false)
+  }
+
+  async function toggleBlacklist(tag: Tag) {
+    const next = !tag.is_email_blacklist
+    setSavingId(tag.id); setError(null)
+    const { error: err } = await supabase.from('tags').update({ is_email_blacklist: next }).eq('id', tag.id)
+    if (err) {
+      setError(err.message)
+    } else {
+      setTags((prev) => prev.map((x) => x.id === tag.id ? { ...x, is_email_blacklist: next } : x))
+    }
+    setSavingId(null)
   }
 
   async function handleAdd() {
@@ -144,9 +158,20 @@ export default function TagsPage() {
                         className="text-sm px-2 py-1 border border-blue-400 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 w-40"
                       />
                     ) : (
-                      <span className="inline-flex items-center text-xs bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-2.5 py-1 rounded-full font-medium">
-                        {tag.name}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-medium ${
+                          tag.is_email_blacklist
+                            ? 'bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300'
+                            : 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300'
+                        }`}>
+                          {tag.name}
+                        </span>
+                        {tag.is_email_blacklist && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 font-medium" title={t('blacklistTooltip')}>
+                            <ShieldOff size={10} /> {t('blacklistBadge')}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{t('contactCount', { n: tag.count })}</td>
@@ -174,6 +199,18 @@ export default function TagsPage() {
                         </>
                       ) : (
                         <>
+                          <button
+                            onClick={() => toggleBlacklist(tag)}
+                            disabled={savingId === tag.id}
+                            title={tag.is_email_blacklist ? t('blacklistRemove') : t('blacklistAdd')}
+                            className={`disabled:opacity-40 ${
+                              tag.is_email_blacklist
+                                ? 'text-red-500 hover:text-red-600 dark:text-red-400'
+                                : 'text-gray-400 hover:text-red-500 dark:hover:text-red-400'
+                            }`}
+                          >
+                            {tag.is_email_blacklist ? <ShieldOff size={15} /> : <Shield size={15} />}
+                          </button>
                           <button onClick={() => { setEditingId(tag.id); setEditName(tag.name); setError(null) }}
                             className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400">
                             <Pencil size={15} />

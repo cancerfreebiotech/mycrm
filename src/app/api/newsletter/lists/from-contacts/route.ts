@@ -24,6 +24,7 @@ interface ContactRow {
   name_en: string | null
   name_local: string | null
   company: string | null
+  contact_tags: { tags: { is_email_blacklist: boolean | null } | null }[]
 }
 
 function slugify(name: string): string {
@@ -85,21 +86,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: createErr?.message ?? 'failed to create list' }, { status: 500 })
   }
 
-  // Fetch contacts
+  // Fetch contacts (with tag blacklist info via embedded join)
   const { data: contacts, error: cErr } = await service
     .from('contacts')
-    .select('id, email, email_opt_out, email_status, name, name_en, name_local, company')
+    .select('id, email, email_opt_out, email_status, name, name_en, name_local, company, contact_tags(tags(is_email_blacklist))')
     .in('id', body.contactIds)
     .is('deleted_at', null)
   if (cErr) {
     return NextResponse.json({ error: cErr.message }, { status: 500 })
   }
 
-  const rows = (contacts ?? []) as ContactRow[]
-  const excluded = { no_email: 0, opt_out: 0, bad_status: 0 }
+  const rows = (contacts ?? []) as unknown as ContactRow[]
+  const excluded = { no_email: 0, opt_out: 0, bad_status: 0, blacklist: 0 }
   const valid: ContactRow[] = []
   for (const c of rows) {
     if (!c.email || !c.email.trim()) { excluded.no_email++; continue }
+    if ((c.contact_tags ?? []).some((ct) => ct.tags?.is_email_blacklist)) { excluded.blacklist++; continue }
     if (c.email_opt_out) { excluded.opt_out++; continue }
     if (c.email_status) { excluded.bad_status++; continue }
     valid.push(c)

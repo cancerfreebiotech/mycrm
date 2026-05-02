@@ -105,17 +105,24 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServiceClient()
 
-  // Fetch contacts with valid emails, excluding opted-out
+  // Fetch contacts with valid emails, excluding opted-out, blacklisted-tag, and bad email_status
   const { data: contacts, error: cErr } = await supabase
     .from('contacts')
-    .select('id, name, email, company, job_title, email_opt_out')
+    .select('id, name, email, company, job_title, email_opt_out, email_status, contact_tags(tags(is_email_blacklist))')
     .in('id', contactIds)
     .is('deleted_at', null)
     .not('email', 'is', null)
 
   if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 })
 
-  const valid = (contacts ?? []).filter(c => c.email?.trim() && !c.email_opt_out)
+  const valid = (contacts ?? []).filter(c => {
+    if (!c.email?.trim()) return false
+    if (c.email_opt_out) return false
+    if (c.email_status) return false
+    const tags = (c as unknown as { contact_tags?: { tags: { is_email_blacklist: boolean | null } | null }[] }).contact_tags ?? []
+    if (tags.some((ct) => ct.tags?.is_email_blacklist)) return false
+    return true
+  })
   if (valid.length === 0) {
     return NextResponse.json({ error: '沒有有效的收件人' }, { status: 400 })
   }
