@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v4.12.1 — fix(newsletter/lists/from-contacts): bulk insert 容錯（2026-05-02）
+
+回報：2000 中文聯絡人建 list 後只有 118 人。原因：bulk `insert(chunk)` 一個 batch 中若有 email 重複（多個 CRM contact 共用 email），unique constraint 觸發整個 batch fail，後續 batch 全沒進。
+
+改動：
+- Step 3 在送進 toCreate 前先 dedupe by email（`seenInsertEmails`）
+- Step 4 改用 `.upsert(chunk, { onConflict: 'email', ignoreDuplicates: true })` — citext case mismatch 或 race condition 都不會炸 batch
+- Step 4b 新增：upsert 完之後再用 `IN(email)` 重新撈所有 subscriber ID（涵蓋既存與剛 upsert 的）
+- Step 5 link rows 用 `seenSubIds` dedupe，避免多個 contact 共用 email 時重複插入 join row
+
+bump 4.12.0 → 4.12.1
+
 ## v4.12.0 — feat(newsletter/lists): 刪除清單按鈕（2026-05-02）
 
 `/admin/newsletter/lists` 每行加 trash 圖示 + inline 二次確認。刪除動作只移除 `newsletter_lists` row 跟 `newsletter_subscriber_lists` join rows，**訂閱者本體 (`newsletter_subscribers`) 跟聯絡人 (`contacts`) 都保留**。同時把該 list_id 從任何 `newsletter_campaigns.list_ids` array 中清掉，避免 dangling 引用。

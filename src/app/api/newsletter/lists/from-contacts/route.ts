@@ -151,15 +151,21 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Step 3: build bulk-insert payload for subscribers we still need to create
+  // Step 3: build bulk-insert payload, deduped by email. Multiple CRM contacts
+  // can share an email (e.g., shared inboxes); we want one subscriber per email
+  // and link all those CRM contacts to the same subscriber.
   type NewSub = { email: string; contact_id: string; first_name: string | null; last_name: string | null; company: string | null; source: string }
+  const seenInsertEmails = new Set<string>()
   const toCreate: NewSub[] = []
   for (const c of needEmailLookup) {
-    const existing = subscriberIdByEmail.get(c.email!.trim().toLowerCase())
+    const lc = c.email!.trim().toLowerCase()
+    const existing = subscriberIdByEmail.get(lc)
     if (existing) {
       subscriberIdByContact.set(c.id, existing)
       continue
     }
+    if (seenInsertEmails.has(lc)) continue  // another contact with same email already queued
+    seenInsertEmails.add(lc)
     const dn = (c.name || c.name_en || c.name_local || '').split(' ')
     toCreate.push({
       email: c.email!,
@@ -171,28 +177,50 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // Step 4: bulk insert new subscribers
+  // Step 4: upsert with ignoreDuplicates so a stray case-insensitive collision
+  // doesn't kill the whole batch. Returns nothing useful; we re-fetch IDs next.
   const INSERT_BATCH = 500
   for (let i = 0; i < toCreate.length; i += INSERT_BATCH) {
     const chunk = toCreate.slice(i, i + INSERT_BATCH)
-    const { data: createdSubs, error: insErr } = await service
+    const { error: insErr } = await service
       .from('newsletter_subscribers')
-      .insert(chunk)
-      .select('id, contact_id')
+      .upsert(chunk, { onConflict: 'email', ignoreDuplicates: true })
     if (insErr) {
-      errors.push(`bulk insert subscribers (batch ${i / INSERT_BATCH}): ${insErr.message}`)
-      continue
-    }
-    for (const s of createdSubs ?? []) {
-      if (s.contact_id) subscriberIdByContact.set(s.contact_id as string, s.id as string)
+      errors.push(`bulk upsert subscribers (batch ${i / INSERT_BATCH}): ${insErr.message}`)
     }
   }
 
-  // Step 5: bulk insert subscriber_list links
-  const linkRows = valid
-    .map((c) => subscriberIdByContact.get(c.id))
-    .filter((sid): sid is string => !!sid)
-    .map((sid) => ({ list_id: created.id, subscriber_id: sid }))
+  // Step 4b: re-fetch ALL subscriber IDs by email (covers the just-inserted
+  // and anything that already existed). This is the canonical mapping for
+  // building the link rows below.
+  const allEmails = Array.from(new Set(valid.map((c) => c.email!.trim()).filter(Boolean)))
+  for (let i = 0; i < allEmails.length; i += QUERY_BATCH) {
+    const batch = allEmails.slice(i, i + QUERY_BATCH)
+    const { data } = await service
+      .from('newsletter_subscribers')
+      .select('id, email')
+      .in('email', batch)
+    for (const s of data ?? []) {
+      if (s.email) subscriberIdByEmail.set((s.email as string).toLowerCase(), s.id as string)
+    }
+  }
+  // Resolve subscriberIdByContact for any contact still unmapped
+  for (const c of valid) {
+    if (subscriberIdByContact.has(c.id)) continue
+    const sid = subscriberIdByEmail.get(c.email!.trim().toLowerCase())
+    if (sid) subscriberIdByContact.set(c.id, sid)
+  }
+
+  // Step 5: build link rows, deduped by subscriber_id (multiple contacts
+  // sharing one email collapse to one membership row).
+  const seenSubIds = new Set<string>()
+  const linkRows: { list_id: string; subscriber_id: string }[] = []
+  for (const c of valid) {
+    const sid = subscriberIdByContact.get(c.id)
+    if (!sid || seenSubIds.has(sid)) continue
+    seenSubIds.add(sid)
+    linkRows.push({ list_id: created.id, subscriber_id: sid })
+  }
 
   let added = 0
   for (let i = 0; i < linkRows.length; i += INSERT_BATCH) {
