@@ -1,6 +1,17 @@
 # CHANGELOG
 
-## v4.7.1 — fix(pending): worker 死掉的卡會自動 unstick（2026-04-29）
+## v4.7.2 — docs: Telegram batch mode（/b /done /cancel）補齊（2026-05-02）
+
+### 痛點
+1. 登入前的 `/docs` quick start 看不到 — `docs_content` 的 RLS policy 只開給 `authenticated`，anon 全擋。
+2. `/b` 批次模式三語使用者文件都沒寫；bot 自己的 `/help` 也沒列。
+
+### 改動
+- **DB（Supabase migration）**：加 policy `docs_content_read_quick_start_anon` — 只讓 anon 讀 `section = 'quick_start'`，其他 section 仍要登入。
+- **`docs_content` 三語 user guide**：「常用指令」表新增 `/b`、`/done`、`/cancel`；新增「批次模式」小節（用法、`/b 描述` 自動帶「在哪裡遇見」、與單張辨識的差別、流程 mermaid）。
+- **`src/lib/bot-messages.ts`**：三語 `/help` 訊息把 `/b`、`/done`、`/cancel` 放在 photo 行下面（同一群組）。
+
+
 
 ### 痛點
 有 2 張 row 在 `status='processing'` 卡了一整天。原因是 worker 跑到一半被 Vercel kill（function timeout / crash / deploy），claimed 之後沒人撿。Cron 跟 rescue 都只看 `status='pending'`，processing 就漏網。

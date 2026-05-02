@@ -163,6 +163,9 @@ const zh: BotMessages = {
   help:
     '🤖 <b>myCRM Bot 指令列表</b>\n\n' +
     '📷 <b>傳送照片</b> — 掃描名片，AI 辨識後存入 CRM\n\n' +
+    '/b [描述]　　　　　　 — 批次模式（可選帶「在哪裡遇見」）\n' +
+    '/done　　　　　　　　 — 結束批次模式並回傳總結\n' +
+    '/cancel　　　　　　　 — 取消批次模式\n\n' +
     '/search [關鍵字]　/s — 搜尋聯絡人\n' +
     '/n [姓名]　　　　　　 — 新增筆記\n' +
     '/v [姓名]　　　　　　 — 記錄拜訪\n' +
@@ -267,6 +270,9 @@ const en: BotMessages = {
   help:
     '🤖 <b>myCRM Bot Commands</b>\n\n' +
     '📷 <b>Send a photo</b> — Scan business card, AI extracts info to CRM\n\n' +
+    '/b [description]　　　 — Batch mode (optional "where met")\n' +
+    '/done　　　　　　　　　　 — End batch mode and get summary\n' +
+    '/cancel　　　　　　　　　 — Cancel batch mode\n\n' +
     '/search [keyword]　/s — Search contacts\n' +
     '/n [name]　　　　　　　 — Add note\n' +
     '/v [name]　　　　　　　 — Log a visit\n' +
@@ -371,6 +377,9 @@ const ja: BotMessages = {
   help:
     '🤖 <b>myCRM Bot コマンド一覧</b>\n\n' +
     '📷 <b>写真を送信</b> — 名刺をスキャン、AI解析してCRMに保存\n\n' +
+    '/b [説明]　　　　　　　 — バッチモード（任意で「出会いの場」）\n' +
+    '/done　　　　　　　　　　 — バッチモード終了、まとめ通知\n' +
+    '/cancel　　　　　　　　　 — バッチモードを中止\n\n' +
     '/search [キーワード]　/s — 連絡先を検索\n' +
     '/n [名前]　　　　　　　　 — メモを追加\n' +
     '/v [名前]　　　　　　　　 — 訪問を記録\n' +
