@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## v4.11.5 — perf(newsletter/lists/from-contacts): bulk subscriber 操作（2026-05-02）
+
+2000 個聯絡人建 list 時 button 轉超過一分鐘 — 原因是逐個跑 find-or-create subscriber + insert link，4000+ sequential queries。
+
+改成 bulk 流程：
+1. `IN(contact_id)` batched lookup 已存在的 subscriber
+2. `IN(email)` fallback lookup（contact_id 沒匹配的）
+3. bulk insert 新 subscriber（500/批）
+4. bulk insert subscriber_list links（500/批）
+
+從 4000+ queries → ~6-10 queries，2000 人應該幾秒內完成。
+
+也設 `export const maxDuration = 300` 給 Pro plan 5 分鐘 timeout 上限（Hobby 仍 10 秒會 timeout，但 Hobby 也不會跑這量級）。
+
+bump 4.11.4 → 4.11.5
+
 ## v4.11.4 — fix(newsletter/email): `.in('id', uuids)` 切批次避免 URL 太長（2026-05-02）
 
 ### 痛點

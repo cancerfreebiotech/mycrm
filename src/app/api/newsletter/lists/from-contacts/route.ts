@@ -117,57 +117,94 @@ export async function POST(req: NextRequest) {
     valid.push(c)
   }
 
-  let added = 0
+  // Bulk find-or-create + link, in batches. Replaces 4000+ sequential queries
+  // (which on 2000 contacts took >60s) with ~6-10 batched queries.
   const errors: string[] = []
-  for (const c of valid) {
-    // find-or-create subscriber (prefer match by contact_id, fallback by email)
-    let subscriberId: string | null = null
-    const { data: byContact } = await service
-      .from('newsletter_subscribers')
-      .select('id')
-      .eq('contact_id', c.id)
-      .maybeSingle()
-    if (byContact) subscriberId = byContact.id as string
-    if (!subscriberId) {
-      const { data: byEmail } = await service
-        .from('newsletter_subscribers')
-        .select('id')
-        .eq('email', c.email!)
-        .maybeSingle()
-      if (byEmail) subscriberId = byEmail.id as string
-    }
-    if (!subscriberId) {
-      const dn = (c.name || c.name_en || c.name_local || '').split(' ')
-      const { data: createdSub, error: subErr } = await service
-        .from('newsletter_subscribers')
-        .insert({
-          email: c.email,
-          contact_id: c.id,
-          first_name: dn[0] || null,
-          last_name: dn.slice(1).join(' ') || null,
-          company: c.company,
-          source: 'crm',
-        })
-        .select('id')
-        .single()
-      if (subErr || !createdSub) {
-        errors.push(`${c.email}: ${subErr?.message ?? 'subscriber insert failed'}`)
-        continue
-      }
-      subscriberId = createdSub.id as string
-    }
+  const subscriberIdByContact = new Map<string, string>()
 
+  // Step 1: bulk lookup existing subscribers by contact_id
+  const validIds = valid.map((c) => c.id)
+  const QUERY_BATCH = 200
+  for (let i = 0; i < validIds.length; i += QUERY_BATCH) {
+    const batch = validIds.slice(i, i + QUERY_BATCH)
+    const { data } = await service
+      .from('newsletter_subscribers')
+      .select('id, contact_id')
+      .in('contact_id', batch)
+    for (const s of data ?? []) {
+      if (s.contact_id) subscriberIdByContact.set(s.contact_id as string, s.id as string)
+    }
+  }
+
+  // Step 2: for contacts not yet matched, fall back to email lookup
+  const needEmailLookup = valid.filter((c) => !subscriberIdByContact.has(c.id))
+  const emailLookup = needEmailLookup.map((c) => c.email!.trim()).filter((e) => !!e)
+  const subscriberIdByEmail = new Map<string, string>()
+  for (let i = 0; i < emailLookup.length; i += QUERY_BATCH) {
+    const batch = emailLookup.slice(i, i + QUERY_BATCH)
+    const { data } = await service
+      .from('newsletter_subscribers')
+      .select('id, email')
+      .in('email', batch)
+    for (const s of data ?? []) {
+      if (s.email) subscriberIdByEmail.set((s.email as string).toLowerCase(), s.id as string)
+    }
+  }
+
+  // Step 3: build bulk-insert payload for subscribers we still need to create
+  type NewSub = { email: string; contact_id: string; first_name: string | null; last_name: string | null; company: string | null; source: string }
+  const toCreate: NewSub[] = []
+  for (const c of needEmailLookup) {
+    const existing = subscriberIdByEmail.get(c.email!.trim().toLowerCase())
+    if (existing) {
+      subscriberIdByContact.set(c.id, existing)
+      continue
+    }
+    const dn = (c.name || c.name_en || c.name_local || '').split(' ')
+    toCreate.push({
+      email: c.email!,
+      contact_id: c.id,
+      first_name: dn[0] || null,
+      last_name: dn.slice(1).join(' ') || null,
+      company: c.company,
+      source: 'crm',
+    })
+  }
+
+  // Step 4: bulk insert new subscribers
+  const INSERT_BATCH = 500
+  for (let i = 0; i < toCreate.length; i += INSERT_BATCH) {
+    const chunk = toCreate.slice(i, i + INSERT_BATCH)
+    const { data: createdSubs, error: insErr } = await service
+      .from('newsletter_subscribers')
+      .insert(chunk)
+      .select('id, contact_id')
+    if (insErr) {
+      errors.push(`bulk insert subscribers (batch ${i / INSERT_BATCH}): ${insErr.message}`)
+      continue
+    }
+    for (const s of createdSubs ?? []) {
+      if (s.contact_id) subscriberIdByContact.set(s.contact_id as string, s.id as string)
+    }
+  }
+
+  // Step 5: bulk insert subscriber_list links
+  const linkRows = valid
+    .map((c) => subscriberIdByContact.get(c.id))
+    .filter((sid): sid is string => !!sid)
+    .map((sid) => ({ list_id: created.id, subscriber_id: sid }))
+
+  let added = 0
+  for (let i = 0; i < linkRows.length; i += INSERT_BATCH) {
+    const chunk = linkRows.slice(i, i + INSERT_BATCH)
     const { error: linkErr } = await service
       .from('newsletter_subscriber_lists')
-      .insert({ list_id: created.id, subscriber_id: subscriberId })
+      .insert(chunk)
     if (linkErr) {
-      // duplicate key means already linked — count as added (shouldn't happen on a new list, but safe)
-      if (!linkErr.message.toLowerCase().includes('duplicate')) {
-        errors.push(`${c.email}: ${linkErr.message}`)
-        continue
-      }
+      errors.push(`bulk insert links (batch ${i / INSERT_BATCH}): ${linkErr.message}`)
+      continue
     }
-    added++
+    added += chunk.length
   }
 
   return NextResponse.json({
@@ -180,3 +217,7 @@ export async function POST(req: NextRequest) {
     errors: errors.length > 0 ? errors : undefined,
   })
 }
+
+// Allow up to 5 minutes for very large lists (Vercel Pro / Enterprise).
+// Default Hobby plan caps at 10s and will still time out for 2k+ contacts.
+export const maxDuration = 300
