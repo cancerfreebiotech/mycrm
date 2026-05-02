@@ -1,0 +1,97 @@
+{
+  "period": "2026-05",
+  "intro": {
+    "zh-TW": "<p>各位夥伴好，5 月對 CancerFree Biotech 是充實的一個月。我們在 BioAsia 發表了第二代腫瘤標誌物面板的初步數據，也與九州大學完成了第一階段的合作備忘錄。下個月將參與東京 Bio Japan，並在台北辦一場小型臨床醫師交流會，期待與各位現場見面。</p>",
+    "en": "<p>Hello everyone — May was a full month for CancerFree Biotech. We presented preliminary data on our second-generation tumor marker panel at BioAsia, and signed the first phase of our collaboration MOU with Kyushu University. June will bring our participation in Bio Japan (Tokyo) and a small clinician roundtable in Taipei. We look forward to seeing many of you there.</p>",
+    "ja": "<p>皆様、こんにちは。CancerFree Biotech にとって 5 月は充実した月となりました。BioAsia では第二世代腫瘍マーカーパネルの初期データを発表し、九州大学との第一段階の共同研究覚書も締結しました。6 月は東京の Bio Japan に出展し、台北では小規模な臨床医交流会を開催予定です。会場でお会いできるのを楽しみにしています。</p>"
+  },
+  "stories": [
+    {
+      "section": "last_month",
+      "title": {
+        "zh-TW": "BioAsia 2026 發表第二代腫瘤標誌物面板",
+        "en": "Presenting the second-generation tumor marker panel at BioAsia 2026",
+        "ja": "BioAsia 2026 で第二世代腫瘍マーカーパネルを発表"
+      },
+      "content_html": {
+        "zh-TW": "<p>5 月 12-14 日於高雄展覽館舉行的 BioAsia 2026，我們首次公開第二代腫瘤標誌物面板的初步驗證數據。本次面板涵蓋 8 個關鍵 biomarker，在 320 例樣本中達到 91% 的敏感度與 87% 的特異度。</p><p>展期間共接洽超過 40 組訪客，包含 5 家亞洲區醫院實驗室及 2 家日本研究機構。會後已啟動 3 件正式技術評估流程。完整研究數據將於下半年投稿至國際期刊。</p>",
+        "en": "<p>From May 12-14 at the Kaohsiung Exhibition Center, we made the first public presentation of preliminary validation data for our second-generation tumor marker panel at BioAsia 2026. The panel covers 8 key biomarkers and achieved 91% sensitivity and 87% specificity across 320 samples.</p><p>We engaged over 40 visiting groups during the show, including 5 Asian hospital labs and 2 Japanese research institutions. Three formal technical evaluations have already begun. Full study results will be submitted to an international journal in the second half of the year.</p>",
+        "ja": "<p>5 月 12 日〜14 日に高雄展示場で開催された BioAsia 2026 にて、第二世代腫瘍マーカーパネルの初期検証データを初公開しました。本パネルは 8 種の主要バイオマーカーを対象とし、320 検体において感度 91%、特異度 87% を達成しました。</p><p>会期中、アジア圏の病院検査室 5 社と日本の研究機関 2 社を含む 40 組以上の訪問を受け、現在 3 件の正式な技術評価を開始しています。完全な研究データは今年後半に国際誌へ投稿予定です。</p>"
+      },
+      "image_files": [
+        "images/01-bioasia-2026-booth.jpg",
+        "images/01-bioasia-2026-poster.jpg"
+      ],
+      "links": [
+        {
+          "url": "https://bioasia.example.com/2026/cancerfree",
+          "label": {
+            "zh-TW": "BioAsia 官方報導",
+            "en": "Coverage on BioAsia official site",
+            "ja": "BioAsia 公式の紹介記事"
+          }
+        }
+      ]
+    },
+    {
+      "section": "last_month",
+      "title": {
+        "zh-TW": "與九州大學簽署第一階段合作備忘錄",
+        "en": "First-phase MOU signed with Kyushu University",
+        "ja": "九州大学と第一段階の共同研究覚書を締結"
+      },
+      "content_html": {
+        "zh-TW": "<p>5 月 22 日，我們與九州大學醫學研究院完成第一階段合作備忘錄簽署。雙方將在未來 18 個月內共同進行胃癌早期篩檢 biomarker 的人群驗證研究，目標收集 600 例樣本。</p><p>此合作為公司在日本市場的第一個正式學術夥伴，後續將協助臨床數據累積與在地法規諮詢。</p>",
+        "en": "<p>On May 22, we signed the first-phase memorandum of understanding with Kyushu University's Graduate School of Medical Sciences. Over the next 18 months, both parties will jointly conduct a population-validation study for gastric cancer early-detection biomarkers, targeting 600 samples.</p><p>This is our first formal academic partnership in the Japanese market and will support clinical data accumulation and local regulatory consultation.</p>",
+        "ja": "<p>5 月 22 日、九州大学大学院医学研究院と第一段階の共同研究覚書を締結しました。今後 18 か月間、両者は胃がん早期スクリーニングのバイオマーカーに関する集団検証研究を共同実施し、600 検体の収集を目指します。</p><p>本提携は日本市場における初の正式な学術パートナーシップであり、今後の臨床データ蓄積と現地規制対応を強化します。</p>"
+      },
+      "image_files": [
+        "images/02-kyushu-mou-signing.jpg"
+      ],
+      "links": []
+    },
+    {
+      "section": "next_month",
+      "title": {
+        "zh-TW": "Bio Japan 2026 東京參展（6/24-26）",
+        "en": "Bio Japan 2026 Tokyo (June 24-26)",
+        "ja": "Bio Japan 2026 東京（6/24-26）"
+      },
+      "content_html": {
+        "zh-TW": "<p>6 月 24-26 日，我們將首次以獨立攤位（K-12）參展東京 Bio Japan，主題為「精準腫瘤檢測在亞洲市場的落地路徑」。展期間將提供現場 demo 與一對一商務洽談。</p><p>有興趣的合作夥伴歡迎來信預約 30 分鐘 slot：partner@cancerfree.io</p>",
+        "en": "<p>From June 24-26, we will exhibit at Bio Japan in Tokyo for the first time with our own booth (K-12). The theme is \"Bringing precision oncology diagnostics to Asian markets.\" Live demos and 1-on-1 business meetings will be available throughout the show.</p><p>Partners interested in booking a 30-minute slot are welcome to email partner@cancerfree.io</p>",
+        "ja": "<p>6 月 24 日〜26 日、東京の Bio Japan に独自ブース（K-12）にて初出展します。テーマは「精密がん診断のアジア市場での実装」です。会期中、ライブデモと 1 対 1 の商談を実施いたします。</p><p>30 分のミーティング枠をご希望のパートナー様は partner@cancerfree.io までご連絡ください。</p>"
+      },
+      "image_files": [
+        "images/03-bio-japan-2026-booth-render.jpg"
+      ],
+      "links": [
+        {
+          "url": "https://bio-japan.example.com/2026",
+          "label": {
+            "zh-TW": "Bio Japan 2026 官網",
+            "en": "Bio Japan 2026 official site",
+            "ja": "Bio Japan 2026 公式サイト"
+          }
+        }
+      ]
+    },
+    {
+      "section": "next_month",
+      "title": {
+        "zh-TW": "台北臨床醫師交流會（6/15）",
+        "en": "Taipei clinician roundtable (June 15)",
+        "ja": "台北 臨床医交流会（6/15）"
+      },
+      "content_html": {
+        "zh-TW": "<p>6 月 15 日（週六）下午，我們將於台北 W Hotel 舉辦小型臨床醫師交流會，主題為「液態切片在台灣 NHI 體系下的實際應用挑戰」。會議採邀請制，預計 25-30 位醫師到場，會後備有晚宴。</p>",
+        "en": "<p>On Saturday afternoon, June 15, we will host a small clinician roundtable at Taipei W Hotel. The theme is \"Real-world challenges of liquid biopsy under Taiwan's NHI system.\" The session is invitation-only with 25-30 physicians expected to attend, followed by a dinner.</p>",
+        "ja": "<p>6 月 15 日（土）午後、台北 W Hotel にて小規模な臨床医交流会を開催します。テーマは「台湾 NHI 制度下におけるリキッドバイオプシーの実装課題」です。招待制で 25〜30 名の医師の出席を予定し、終了後にディナーを設けます。</p>"
+      },
+      "image_files": [
+        "images/04-taipei-clinician-event.jpg"
+      ],
+      "links": []
+    }
+  ]
+}

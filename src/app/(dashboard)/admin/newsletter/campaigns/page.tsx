@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { PermissionGate } from '@/components/PermissionGate'
-import { Loader2, Send, Rss, Mail, Plus, Copy, Wand2 } from 'lucide-react'
+import { Loader2, Send, Rss, Mail, Plus, Copy, Wand2, Package } from 'lucide-react'
 
 interface CampaignRow {
   id: string
@@ -84,6 +84,14 @@ export default function CampaignsIndexPage() {
             <a href="/admin/newsletter/lists" className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
               收件名單管理 →
             </a>
+            <Link
+              href="/admin/newsletter/import"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700"
+              title="從 Claude.ai newsletter-composer skill 匯入 zip"
+            >
+              <Package size={14} />
+              Skill 匯入
+            </Link>
             <Link
               href="/admin/newsletter/ai-compose"
               className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700"

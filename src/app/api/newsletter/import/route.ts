@@ -1,0 +1,396 @@
+import { NextRequest, NextResponse } from 'next/server'
+import JSZip from 'jszip'
+import { createClient, createServiceClient } from '@/lib/supabase'
+
+// POST /api/newsletter/import
+//
+// Multipart upload of a zip produced by the Claude.ai newsletter-composer skill.
+// Zip layout:
+//   manifest.json   ← schema in skills/newsletter-composer/manifest-schema.json
+//   images/         ← png/jpg/jpeg/webp, referenced by manifest.stories[].image_files
+//
+// Behavior:
+// 1. Auth + newsletter permission gate (re-uses RLS — service client only after check)
+// 2. Parse zip, validate manifest, ensure every referenced image exists in the zip
+// 3. Upload images to Supabase Storage `newsletter-assets/{period}/imported/{filename}`,
+//    build path → public URL map
+// 4. For each lang in [zh-TW, en, ja]:
+//    - Load skeleton from email_templates
+//    - Render stories into sections (last_month + next_month with section headings)
+//    - Substitute {{subject}}, {{period_label}}, {{intro_html}}, {{stories_html}}
+//    - Insert newsletter_campaigns row, status=draft
+// 5. Return { campaigns: [{ lang, id, slug }], image_count }
+
+type Lang = 'zh-TW' | 'en' | 'ja'
+type Section = 'last_month' | 'next_month'
+
+interface TrilingualText {
+  'zh-TW': string
+  'en': string
+  'ja': string
+}
+
+interface ManifestLink {
+  url: string
+  label: TrilingualText
+}
+
+interface ManifestStory {
+  section: Section
+  title: TrilingualText
+  content_html: TrilingualText
+  image_files: string[]
+  links?: ManifestLink[]
+}
+
+interface Manifest {
+  period: string
+  intro: TrilingualText
+  stories: ManifestStory[]
+}
+
+const SKELETON_TITLE: Record<Lang, string> = {
+  'zh-TW': 'Newsletter Skeleton — 中文月報',
+  'en': 'Newsletter Skeleton — English',
+  'ja': 'Newsletter Skeleton — 日本語',
+}
+
+const PERIOD_LABEL_FMT: Record<Lang, (p: string) => string> = {
+  'zh-TW': (p) => { const [y, m] = p.split('-'); return `${y} 年 ${Number(m)} 月` },
+  'en': (p) => {
+    const [y, m] = p.split('-')
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+    return `${months[Number(m) - 1]} ${y}`
+  },
+  'ja': (p) => { const [y, m] = p.split('-'); return `${y} 年 ${Number(m)} 月` },
+}
+
+const SUBJECT_FMT: Record<Lang, (label: string) => string> = {
+  'zh-TW': (label) => `【CancerFree Biotech】${label} 電子報`,
+  'en': (label) => `CancerFree Biotech Newsletter — ${label}`,
+  'ja': (label) => `CancerFree Biotech ニュースレター ${label}`,
+}
+
+const SECTION_LABEL: Record<Section, Record<Lang, string>> = {
+  last_month: {
+    'zh-TW': '上月回顧',
+    'en': 'Last Month',
+    'ja': '先月のまとめ',
+  },
+  next_month: {
+    'zh-TW': '下月預告',
+    'en': 'Coming Up',
+    'ja': '来月の予定',
+  },
+}
+
+const LINKS_LABEL: Record<Lang, string> = {
+  'zh-TW': '相關連結',
+  'en': 'Links',
+  'ja': '関連リンク',
+}
+
+const TITLE_BY_LANG: Record<Lang, (period: string) => string> = {
+  'zh-TW': (p) => `${p} 中文月報`,
+  'en': (p) => `${p} English Newsletter`,
+  'ja': (p) => `${p} 日本語ニュースレター`,
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+function validateTrilingual(v: unknown, fieldPath: string, errors: string[]): v is TrilingualText {
+  if (!isPlainObject(v)) { errors.push(`${fieldPath}: expected object`); return false }
+  let ok = true
+  for (const lang of ['zh-TW', 'en', 'ja'] as const) {
+    if (typeof v[lang] !== 'string' || (v[lang] as string).length === 0) {
+      errors.push(`${fieldPath}.${lang}: required non-empty string`)
+      ok = false
+    }
+  }
+  return ok
+}
+
+function validateManifest(raw: unknown): { ok: true; manifest: Manifest } | { ok: false; errors: string[] } {
+  const errors: string[] = []
+  if (!isPlainObject(raw)) return { ok: false, errors: ['manifest must be an object'] }
+
+  if (typeof raw.period !== 'string' || !/^\d{4}-\d{2}$/.test(raw.period)) {
+    errors.push('period: required, must match YYYY-MM')
+  }
+  validateTrilingual(raw.intro, 'intro', errors)
+
+  if (!Array.isArray(raw.stories) || raw.stories.length === 0) {
+    errors.push('stories: required non-empty array')
+  } else {
+    raw.stories.forEach((s, i) => {
+      const path = `stories[${i}]`
+      if (!isPlainObject(s)) { errors.push(`${path}: expected object`); return }
+      if (s.section !== 'last_month' && s.section !== 'next_month') {
+        errors.push(`${path}.section: must be 'last_month' or 'next_month'`)
+      }
+      validateTrilingual(s.title, `${path}.title`, errors)
+      validateTrilingual(s.content_html, `${path}.content_html`, errors)
+      if (!Array.isArray(s.image_files) || s.image_files.length < 1 || s.image_files.length > 2) {
+        errors.push(`${path}.image_files: must be 1-2 entries`)
+      } else {
+        s.image_files.forEach((f, fi) => {
+          if (typeof f !== 'string' || !/^images\/[a-z0-9][a-z0-9-]{0,59}\.(jpg|jpeg|png|webp)$/.test(f)) {
+            errors.push(`${path}.image_files[${fi}]: must match images/<slug>.{jpg,jpeg,png,webp}`)
+          }
+        })
+      }
+      if (s.links !== undefined) {
+        if (!Array.isArray(s.links)) {
+          errors.push(`${path}.links: must be array if present`)
+        } else {
+          s.links.forEach((l, li) => {
+            if (!isPlainObject(l)) { errors.push(`${path}.links[${li}]: expected object`); return }
+            if (typeof l.url !== 'string' || !/^https?:\/\//.test(l.url)) {
+              errors.push(`${path}.links[${li}].url: must be http(s) URL`)
+            }
+            validateTrilingual(l.label, `${path}.links[${li}].label`, errors)
+          })
+        }
+      }
+    })
+  }
+
+  if (errors.length > 0) return { ok: false, errors }
+  return { ok: true, manifest: raw as unknown as Manifest }
+}
+
+const CONTENT_TAG_ALLOW = /^<\/?(p|strong|em|ul|li|br|a)(\s[^<>]*)?\/?>$/i
+
+function sanitizeContentHtml(html: string): string {
+  // Strip any tag that isn't in the allowlist. Keep text content.
+  return html.replace(/<\/?[^>]+>/g, (tag) => (CONTENT_TAG_ALLOW.test(tag) ? tag : ''))
+}
+
+function renderLinksHtml(links: ManifestLink[] | undefined, lang: Lang): string {
+  if (!links || links.length === 0) return ''
+  return `<div style="padding-top:12px;font-size:14px;line-height:1.6;">
+<strong style="color:#555;">🔗 ${LINKS_LABEL[lang]}</strong><br>
+${links.map((l) => `<a href="${escapeHtml(l.url)}" style="color:#0D9488;text-decoration:underline;">${escapeHtml(l.label[lang])}</a>`).join('<br>')}
+</div>`
+}
+
+function renderImagesHtml(urls: string[]): string {
+  if (urls.length === 0) return ''
+  if (urls.length === 1) {
+    return `<div style="padding-top:16px;text-align:center;"><img src="${escapeHtml(urls[0])}" alt="" style="max-width:100%;border:0;display:block;margin:0 auto;"></div>`
+  }
+  return `<div style="padding-top:16px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">${urls
+    .map((u) => `<img src="${escapeHtml(u)}" alt="" style="flex:1;min-width:240px;max-width:48%;border:0;display:block;">`)
+    .join('')}</div>`
+}
+
+function renderStoryBlock(
+  story: ManifestStory,
+  storyNumber: number,
+  lang: Lang,
+  imagePathToUrl: Map<string, string>,
+): string {
+  const titleForLang = story.title[lang]
+  const contentSafe = sanitizeContentHtml(story.content_html[lang])
+  const imageUrls = story.image_files
+    .map((p) => imagePathToUrl.get(p))
+    .filter((u): u is string => !!u)
+  const imagesHtml = renderImagesHtml(imageUrls)
+  const linksHtml = renderLinksHtml(story.links, lang)
+
+  return `<div style="padding:0 24px 24px 24px;">
+<h2 style="font-size:20px;font-weight:bold;padding-left:12px;border-left:6px solid #0D9488;line-height:1.4;margin:24px 0 16px 0;color:#262626;">${storyNumber}｜${escapeHtml(titleForLang)}</h2>
+<div style="font-size:16px;line-height:1.7;color:#262626;">${contentSafe}</div>
+${imagesHtml}
+${linksHtml}
+</div>`
+}
+
+function renderSectionHeading(section: Section, lang: Lang): string {
+  return `<div style="padding:8px 24px 0 24px;">
+<div style="font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#0D9488;border-bottom:1px solid #E5E7EB;padding-bottom:6px;margin-top:24px;">${escapeHtml(SECTION_LABEL[section][lang])}</div>
+</div>`
+}
+
+function renderStoriesHtml(manifest: Manifest, lang: Lang, imagePathToUrl: Map<string, string>): string {
+  const blocks: string[] = []
+  let counter = 0
+  for (const section of ['last_month', 'next_month'] as Section[]) {
+    const storiesInSection = manifest.stories.filter((s) => s.section === section)
+    if (storiesInSection.length === 0) continue
+    blocks.push(renderSectionHeading(section, lang))
+    for (const story of storiesInSection) {
+      counter++
+      blocks.push(renderStoryBlock(story, counter, lang, imagePathToUrl))
+    }
+  }
+  return blocks.join('\n')
+}
+
+function safeImagePath(period: string, originalPath: string): string {
+  // originalPath = "images/01-event-slug.jpg"
+  const base = originalPath.replace(/^images\//, '')
+  return `${period}/imported/${Date.now().toString(36)}-${base}`
+}
+
+export async function POST(req: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const service = createServiceClient()
+
+  // Permission check: super_admin OR has 'newsletter' permission
+  const { data: me } = await service
+    .from('users')
+    .select('id, role, permissions')
+    .ilike('email', user.email)
+    .maybeSingle()
+  const isSuperAdmin = me?.role === 'super_admin'
+  const hasNewsletterPerm = Array.isArray(me?.permissions) && (me?.permissions as string[]).includes('newsletter')
+  if (!isSuperAdmin && !hasNewsletterPerm) {
+    return NextResponse.json({ error: 'Forbidden — newsletter permission required' }, { status: 403 })
+  }
+
+  // Read multipart form
+  const form = await req.formData()
+  const file = form.get('zip')
+  if (!(file instanceof File)) return NextResponse.json({ error: 'zip file required (field name: zip)' }, { status: 400 })
+  if (file.size > 30 * 1024 * 1024) return NextResponse.json({ error: 'zip too large (max 30MB)' }, { status: 400 })
+
+  // Parse zip
+  let zip: JSZip
+  try {
+    zip = await JSZip.loadAsync(await file.arrayBuffer())
+  } catch (e) {
+    return NextResponse.json({ error: `invalid zip: ${e instanceof Error ? e.message : String(e)}` }, { status: 400 })
+  }
+
+  const manifestEntry = zip.file('manifest.json')
+  if (!manifestEntry) return NextResponse.json({ error: 'manifest.json missing in zip' }, { status: 400 })
+
+  let manifestRaw: unknown
+  try {
+    manifestRaw = JSON.parse(await manifestEntry.async('string'))
+  } catch (e) {
+    return NextResponse.json({ error: `manifest.json invalid JSON: ${e instanceof Error ? e.message : String(e)}` }, { status: 400 })
+  }
+
+  const validation = validateManifest(manifestRaw)
+  if (!validation.ok) {
+    return NextResponse.json({ error: 'manifest validation failed', details: validation.errors }, { status: 400 })
+  }
+  const manifest = validation.manifest
+
+  // Verify all referenced images exist in zip
+  const referencedImages = new Set<string>()
+  for (const s of manifest.stories) for (const f of s.image_files) referencedImages.add(f)
+  const missing: string[] = []
+  for (const imgPath of referencedImages) {
+    if (!zip.file(imgPath)) missing.push(imgPath)
+  }
+  if (missing.length > 0) {
+    return NextResponse.json({ error: 'images referenced in manifest but missing in zip', details: missing }, { status: 400 })
+  }
+
+  // Upload images to Supabase Storage, build path → public URL map
+  const imagePathToUrl = new Map<string, string>()
+  const uploadErrors: string[] = []
+  for (const imgPath of referencedImages) {
+    const entry = zip.file(imgPath)!
+    const buf = await entry.async('uint8array')
+    const ext = imgPath.split('.').pop()!.toLowerCase()
+    const contentType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
+    const storagePath = safeImagePath(manifest.period, imgPath)
+    const { error: upErr } = await service.storage
+      .from('newsletter-assets')
+      .upload(storagePath, buf, { contentType, upsert: false })
+    if (upErr) {
+      uploadErrors.push(`${imgPath}: ${upErr.message}`)
+      continue
+    }
+    const { data: pub } = service.storage.from('newsletter-assets').getPublicUrl(storagePath)
+    imagePathToUrl.set(imgPath, pub.publicUrl)
+  }
+  if (uploadErrors.length > 0) {
+    return NextResponse.json({ error: 'image upload failed', details: uploadErrors }, { status: 500 })
+  }
+
+  // Load all 3 skeletons
+  const skeletonsByLang: Partial<Record<Lang, string>> = {}
+  for (const lang of ['zh-TW', 'en', 'ja'] as Lang[]) {
+    const { data } = await service
+      .from('email_templates')
+      .select('body_content')
+      .eq('title', SKELETON_TITLE[lang])
+      .single()
+    if (!data?.body_content) {
+      return NextResponse.json({ error: `skeleton not found for ${lang} (title: ${SKELETON_TITLE[lang]})` }, { status: 500 })
+    }
+    skeletonsByLang[lang] = data.body_content as string
+  }
+
+  // Map language → default newsletter list
+  const listIdsByLang: Partial<Record<Lang, string[]>> = {}
+  for (const lang of ['zh-TW', 'en', 'ja'] as Lang[]) {
+    const { data: listRow } = await service
+      .from('newsletter_lists')
+      .select('id')
+      .eq('key', lang)
+      .maybeSingle()
+    listIdsByLang[lang] = listRow?.id ? [listRow.id] : []
+  }
+
+  // Render + insert each lang
+  const results: { lang: Lang; id: string; slug: string; error?: string }[] = []
+  const importStamp = Date.now().toString(36)
+  for (const lang of ['zh-TW', 'en', 'ja'] as Lang[]) {
+    try {
+      const periodLabel = PERIOD_LABEL_FMT[lang](manifest.period)
+      const subject = SUBJECT_FMT[lang](periodLabel)
+      const introHtml = sanitizeContentHtml(manifest.intro[lang])
+      const storiesHtml = renderStoriesHtml(manifest, lang, imagePathToUrl)
+
+      const content = skeletonsByLang[lang]!
+        .replaceAll('{{subject}}', escapeHtml(subject))
+        .replaceAll('{{period_label}}', escapeHtml(periodLabel))
+        .replaceAll('{{intro_html}}', introHtml)
+        .replaceAll('{{stories_html}}', storiesHtml)
+
+      const slug = `${manifest.period}-${lang === 'zh-TW' ? 'zh-tw' : lang}-${importStamp}`
+
+      const { data: inserted, error } = await service
+        .from('newsletter_campaigns')
+        .insert({
+          title: TITLE_BY_LANG[lang](manifest.period),
+          subject,
+          preview_text: manifest.intro['zh-TW']?.replace(/<[^>]+>/g, '').slice(0, 120) ?? null,
+          content_html: content,
+          list_ids: listIdsByLang[lang] ?? [],
+          status: 'draft',
+          slug,
+          created_by: me?.id ?? null,
+        })
+        .select('id, slug')
+        .single()
+
+      if (error) throw new Error(error.message)
+      results.push({ lang, id: inserted!.id as string, slug: inserted!.slug as string })
+    } catch (e) {
+      results.push({ lang, id: '', slug: '', error: e instanceof Error ? e.message : String(e) })
+    }
+  }
+
+  return NextResponse.json({
+    period: manifest.period,
+    image_count: imagePathToUrl.size,
+    story_count: manifest.stories.length,
+    campaigns: results,
+  })
+}

@@ -1,6 +1,39 @@
 # CHANGELOG
 
-## v4.7.2 — docs: Telegram batch mode（/b /done /cancel）補齊（2026-05-02）
+## v4.8.0 — feat(newsletter): Claude.ai skill + zip 匯入流程（2026-05-02）
+
+### 痛點
+每月 newsletter 在 Claude.ai 對話寫稿很順（vision 看圖 + 多輪改文 + 翻譯），但寫完要手動拆成 mycrm 內 ai-compose 表單一格一格填，照片重新上傳，三語各跑一次。重複勞動。
+
+### 設計
+保留 in-app `ai-compose`（短任務還是好用），新增「Skill 匯入」並行：
+- Claude.ai Project + skill 整月累積素材，月底打包成 zip
+- mycrm 一個 import endpoint 吃 zip → 上傳圖 + 套既有 skeleton + 建 3 語 draft
+
+### 改動
+- **新增 `skills/newsletter-composer/`**（給 Claude.ai 上傳的 source）
+  - `SKILL.md`：Capture / Refine / Package 三模式行為定義
+  - `manifest-schema.json`：trilingual title/content_html、image_files、links
+  - `examples/example-manifest.json`：完整範例
+  - `assets/brand-info.md`：品牌語氣（待負責人填正式內容）
+  - `README.md`：怎麼裝到 Claude.ai、月度流程
+- **新增 `POST /api/newsletter/import`**（`src/app/api/newsletter/import/route.ts`）
+  - multipart zip → JSZip 解壓 → manifest validate → 上傳到 `newsletter-assets/{period}/imported/` → 套三語 skeleton（沿用 `email_templates`）→ 建 3 個 draft 進 `newsletter_campaigns`
+  - 自動加 section heading（last_month / next_month）
+  - 連結文字、標題、段落都吃 trilingual
+- **新增 `/admin/newsletter/import` 頁**：drag-drop zip、parse error 細項、建立後直接連到 quick-send 編輯
+- **`/admin/newsletter/campaigns` 加「Skill 匯入」按鈕**（teal）放在「AI 撰寫」旁
+- **deps**：`jszip` ^3.10.1
+
+### 為什麼跟 ai-compose 並存
+| | ai-compose（in-app） | Skill import |
+|---|---|---|
+| 適合 | 一次坐下花 1 小時寫完 | 整月慢慢累積 |
+| 寫稿引擎 | Gemini via Portkey | Claude.ai（vision、多輪改稿） |
+| 翻譯時機 | 寫完即翻 | 月底一次翻 |
+| 共享 | 單人 | Claude Project 可加成員 |
+
+
 
 ### 痛點
 1. 登入前的 `/docs` quick start 看不到 — `docs_content` 的 RLS policy 只開給 `authenticated`，anon 全擋。
