@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## v4.9.3 — feat(contacts): 寄信時自動排除明細顯示（2026-05-02）
+
+從聯絡人寄信時系統會自動排除（無 email、退訂、退信、寄送異常），但原本沒任何提示。改成：button 上加「排除 N」小 badge，並在 toolbar 下方顯示 banner「將寄送給 X 人，自動排除 Y 人：N 無 email、N 已退訂、N 退信/無效、N 寄送異常」。`/api/contacts/all` 加 `email_opt_out` 到 SELECT，前端才能正確算入。三語 i18n 同步。
+
 ## v4.9.2 — feat(admin/users): 表頭可點擊排序（2026-05-02）
 
 `/admin/users` 7 個欄位（姓名、Email、Telegram、Teams、Role、最後登入、MFA）都加上可點擊排序，asc/desc 切換 + chevron icon。預設依姓名 asc。Actions 欄不排序。

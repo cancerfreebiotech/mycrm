@@ -33,6 +33,7 @@ interface Contact {
   importance: string
   language: string | null
   email_status: 'bounced' | 'unsubscribed' | 'invalid' | 'deferred' | 'mailbox_full' | 'sender_blocked' | 'recipient_blocked' | null
+  email_opt_out: boolean | null
   created_by: string | null
   users: { display_name: string | null } | null
   contact_tags: { tags: Tag }[]
@@ -221,13 +222,25 @@ export default function ContactsPage() {
       })
     : filtered
 
-  const emailable = sorted.filter(c => c.email && !c.email_status)
   const hasFilter = !!(query || metQuery || selectedTags.length > 0 || selectedCountries.length > 0 || selectedImportance || selectedLanguage || selectedEmailStatus || selectedCreators.length > 0)
-  const selectedEmailable = selectedIds.size > 0
-    ? sorted.filter(c => selectedIds.has(c.id) && c.email && !c.email_status)
-    : []
-  const emailTargets = selectedIds.size > 0 ? selectedEmailable : emailable
+  const isEmailable = (c: Contact) => !!c.email && !c.email_status && !c.email_opt_out
+  const emailPool = selectedIds.size > 0 ? sorted.filter(c => selectedIds.has(c.id)) : sorted
+  const emailTargets = emailPool.filter(isEmailable)
   const showEmailBtn = emailTargets.length > 0 && (selectedIds.size > 0 || hasFilter)
+  // Exclusion breakdown for "{X} 寄信" button: only count contacts excluded
+  // by the rules (no email / opt-out / bounced / etc), not contacts already
+  // not selected. Shown next to the button so users know who got skipped and why.
+  const excludedNoEmail = emailPool.filter(c => !c.email).length
+  const excludedUnsub = emailPool.filter(c => c.email && (c.email_opt_out || c.email_status === 'unsubscribed')).length
+  const excludedBounced = emailPool.filter(c => c.email && !c.email_opt_out && (c.email_status === 'bounced' || c.email_status === 'invalid')).length
+  const excludedTransient = emailPool.filter(c => c.email && !c.email_opt_out && (c.email_status === 'deferred' || c.email_status === 'mailbox_full' || c.email_status === 'sender_blocked' || c.email_status === 'recipient_blocked')).length
+  const excludedTotal = excludedNoEmail + excludedUnsub + excludedBounced + excludedTransient
+  const excludedBreakdownParts: string[] = []
+  if (excludedNoEmail > 0) excludedBreakdownParts.push(t('emailExcludedNoEmail', { count: excludedNoEmail }))
+  if (excludedUnsub > 0) excludedBreakdownParts.push(t('emailExcludedUnsub', { count: excludedUnsub }))
+  if (excludedBounced > 0) excludedBreakdownParts.push(t('emailExcludedBounced', { count: excludedBounced }))
+  if (excludedTransient > 0) excludedBreakdownParts.push(t('emailExcludedTransient', { count: excludedTransient }))
+  const excludedBreakdown = excludedBreakdownParts.join('、')
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
   const paginated = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
@@ -359,9 +372,16 @@ export default function ContactsPage() {
                 sessionStorage.setItem('emailRecipients', JSON.stringify(emailTargets.map(c => c.id)))
                 router.push('/email/compose')
               }}
+              title={excludedTotal > 0 ? t('emailExcludedTooltip', { breakdown: excludedBreakdown }) : undefined}
               className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700"
             >
-              <Mail size={14} /> 寄信給 {emailTargets.length} 人
+              <Mail size={14} />
+              {t('emailButtonLabel', { count: emailTargets.length })}
+              {excludedTotal > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 text-[10px] rounded bg-green-800/50 dark:bg-green-900/70">
+                  {t('emailExcludedBadge', { count: excludedTotal })}
+                </span>
+              )}
             </button>
           )}
           {selectedIds.size > 0 && (
@@ -403,6 +423,16 @@ export default function ContactsPage() {
           </div>
         </div>
       </div>
+
+      {showEmailBtn && excludedTotal > 0 && (
+        <div className="mb-4 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 text-xs text-blue-800 dark:text-blue-300 flex items-start gap-2">
+          <Mail size={14} className="mt-0.5 shrink-0" />
+          <div>
+            {t('emailExcludedBanner', { sending: emailTargets.length, excluded: excludedTotal })}
+            <span className="text-blue-600 dark:text-blue-400 ml-1">{excludedBreakdown}</span>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
