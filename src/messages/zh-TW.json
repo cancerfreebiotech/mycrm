@@ -1362,6 +1362,12 @@
     "deleteHint": "刪除清單（不會刪除聯絡人或訂閱者）",
     "confirmDelete": "確定刪除此清單？",
     "deleteOk": "已刪除（從 {cleared} 個 campaign 移除引用）",
-    "deleteFailed": "刪除失敗"
+    "deleteFailed": "刪除失敗",
+    "editHint": "編輯名稱與備註",
+    "saveFailed": "儲存失敗",
+    "nameRequired": "名稱不可為空",
+    "descriptionPlaceholder": "備註（可選）",
+    "exportHint": "匯出此清單訂閱者為 CSV",
+    "exportFailed": "匯出失敗"
   }
 }

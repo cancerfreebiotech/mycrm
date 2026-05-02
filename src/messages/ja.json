@@ -1362,6 +1362,12 @@
     "deleteHint": "リストを削除（連絡先・購読者は削除されません）",
     "confirmDelete": "このリストを削除しますか？",
     "deleteOk": "削除しました（{cleared} 件の campaign から参照を削除）",
-    "deleteFailed": "削除に失敗しました"
+    "deleteFailed": "削除に失敗しました",
+    "editHint": "名前と備考を編集",
+    "saveFailed": "保存に失敗しました",
+    "nameRequired": "名前は必須です",
+    "descriptionPlaceholder": "備考（任意）",
+    "exportHint": "このリストの購読者を CSV エクスポート",
+    "exportFailed": "エクスポートに失敗しました"
   }
 }

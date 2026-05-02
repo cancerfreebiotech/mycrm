@@ -73,4 +73,56 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
   })
 }
 
+// PATCH /api/newsletter/lists/[id]
+//
+// Updates list name and/or description. Slug-key stays put (it's used in
+// public unsubscribe URLs and shouldn't change once created).
+
+export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params
+  if (!id || !/^[0-9a-f-]{36}$/i.test(id)) {
+    return NextResponse.json({ error: 'invalid list id' }, { status: 400 })
+  }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const service = createServiceClient()
+  const { data: me } = await service
+    .from('users')
+    .select('id, role, granted_features')
+    .ilike('email', user.email)
+    .maybeSingle()
+  if (!me || !hasFeature(me.role ?? '', (me.granted_features as string[]) ?? [], 'newsletter')) {
+    return NextResponse.json({ error: 'Forbidden — newsletter permission required' }, { status: 403 })
+  }
+
+  const body = (await req.json().catch(() => ({}))) as { name?: string; description?: string | null }
+  const patch: { name?: string; description?: string | null } = {}
+  if (typeof body.name === 'string') {
+    const trimmed = body.name.trim()
+    if (!trimmed) return NextResponse.json({ error: 'name cannot be empty' }, { status: 400 })
+    patch.name = trimmed
+  }
+  if (body.description !== undefined) {
+    patch.description = body.description ? String(body.description).trim() || null : null
+  }
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: 'no fields to update' }, { status: 400 })
+  }
+
+  const { data: updated, error } = await service
+    .from('newsletter_lists')
+    .update(patch)
+    .eq('id', id)
+    .select('id, key, name, description')
+    .single()
+  if (error || !updated) {
+    return NextResponse.json({ error: error?.message ?? 'failed to update' }, { status: 500 })
+  }
+
+  return NextResponse.json({ ok: true, list: updated })
+}
+
 export const maxDuration = 30

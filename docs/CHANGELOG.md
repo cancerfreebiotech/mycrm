@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v4.15.0 — feat(newsletter/lists): 名單編輯 + CSV 匯出（2026-05-02）
+
+`/admin/newsletter/lists` 每行多兩個按鈕：
+- **Pencil（藍）**：inline 編輯名稱與備註，Enter 儲存 / Esc 取消。`PATCH /api/newsletter/lists/[id]`，slug-key 不動（保留 unsubscribe URL 穩定）
+- **Download（綠）**：下載該 list 訂閱者 CSV。`GET /api/newsletter/lists/[id]/export` → email/first_name/last_name/company/source/joined_at/unsubscribed 7 欄；UTF-8 BOM 讓 Excel 開中文/日文不亂碼；unsubscribed 從 `newsletter_unsubscribes` canonical 取
+
+三語 i18n 加 6 keys（editHint / saveFailed / nameRequired / descriptionPlaceholder / exportHint / exportFailed）。
+
+bump 4.14.1 → 4.15.0
+
 ## v4.14.1 — feat(contacts): 排除 banner 顯示 unique email count（2026-05-02）
 
 `/contacts` 排除 banner 從「將寄送給 71 人，自動排除 9 人：...」改成「將寄送給 71 人（X 個 unique email），自動排除 9 人：...」 — 多個 contact 共用 email 時實際寄出去的 email 數會比 contact 數少，現在一眼可見。三語 i18n 同步。建 list modal 的 uniqueEmailCount 改為共用變數。

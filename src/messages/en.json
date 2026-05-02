@@ -1362,6 +1362,12 @@
     "deleteHint": "Delete list (contacts and subscribers are kept)",
     "confirmDelete": "Delete this list?",
     "deleteOk": "Deleted (removed reference from {cleared} campaign(s))",
-    "deleteFailed": "Failed to delete"
+    "deleteFailed": "Failed to delete",
+    "editHint": "Edit name and description",
+    "saveFailed": "Failed to save",
+    "nameRequired": "Name cannot be empty",
+    "descriptionPlaceholder": "Description (optional)",
+    "exportHint": "Export this list's subscribers to CSV",
+    "exportFailed": "Export failed"
   }
 }
