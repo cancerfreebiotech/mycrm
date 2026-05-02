@@ -1106,8 +1106,8 @@ export default function ContactsPage() {
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
               {selectedIds.size > 0
-                ? t('createListHint', { selected: selectedIds.size, willAdd: emailTargets.length })
-                : t('createListHintFiltered', { filtered: sorted.length, willAdd: emailTargets.length })}
+                ? t('createListHint', { selected: selectedIds.size, uniqueEmails: new Set(emailTargets.map((c) => c.email!.trim().toLowerCase())).size })
+                : t('createListHintFiltered', { filtered: sorted.length, uniqueEmails: new Set(emailTargets.map((c) => c.email!.trim().toLowerCase())).size })}
             </p>
             <div className="space-y-3">
               <div>

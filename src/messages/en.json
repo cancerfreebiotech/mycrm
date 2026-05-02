@@ -54,6 +54,7 @@
     "newsletter": "Newsletter",
     "failedScans": "Failed Scans",
     "duplicates": "Duplicates",
+    "sharedEmailsNav": "Shared Emails",
     "camcard": "CamCard Import",
     "health": "System Health",
     "trash": "Trash",
@@ -127,8 +128,8 @@
     "emailExcludedBlacklist": "{count} blacklist",
     "createListButton": "Create list ({count})",
     "createListTitle": "Create newsletter list",
-    "createListHint": "{selected} contacts selected; {willAdd} will be added (blacklist / no email / opt-out / bounced / delivery issues already excluded).",
-    "createListHintFiltered": "{filtered} contacts match the current filters (none individually selected); {willAdd} will be added (blacklist / no email / opt-out / bounced / delivery issues already excluded).",
+    "createListHint": "{selected} contacts selected → {uniqueEmails} unique emails will be added (blacklist / no email / opt-out / bounced / delivery issues already excluded; multiple contacts sharing one email are merged).",
+    "createListHintFiltered": "{filtered} contacts match the current filters (none individually selected) → {uniqueEmails} unique emails will be added (blacklist / no email / opt-out / bounced / delivery issues already excluded; multiple contacts sharing one email are merged).",
     "createListFromFilterHint": "No individual selection — will use current filter results",
     "listNoContacts": "No contacts available to create a list",
     "createListNameLabel": "List name",
@@ -1343,6 +1344,19 @@
   },
   "app": {
     "description": "Telegram business-card CRM system"
+  },
+  "sharedEmails": {
+    "title": "Shared-email Contacts",
+    "subtitle": "Find contacts where 2+ records share one email (couples, family, shared inboxes)",
+    "totalGroups": "Shared email groups",
+    "totalContacts": "Affected contacts",
+    "searchPlaceholder": "Search email, name, or company...",
+    "noMatch": "No matches",
+    "noShared": "No shared-email contacts",
+    "colEmail": "Email",
+    "colCount": "# of Contacts",
+    "colContacts": "Contacts",
+    "loadFailed": "Failed to load"
   },
   "newsletterLists": {
     "deleteHint": "Delete list (contacts and subscribers are kept)",

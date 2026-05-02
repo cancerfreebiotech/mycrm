@@ -190,24 +190,43 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Step 4b: re-fetch ALL subscriber IDs by email (covers the just-inserted
-  // and anything that already existed). This is the canonical mapping for
-  // building the link rows below.
+  // Step 4b: re-fetch subscriber IDs by email, EXCLUDING those already
+  // marked unsubscribed at the subscriber level (newsletter_subscribers
+  // .unsubscribed_at). They shouldn't be added to a fresh list.
   const allEmails = Array.from(new Set(valid.map((c) => c.email!.trim()).filter(Boolean)))
+  const unsubscribedSubEmails = new Set<string>()
+  subscriberIdByEmail.clear()  // rebuild fresh — earlier set may have stale unsubscribed entries
   for (let i = 0; i < allEmails.length; i += QUERY_BATCH) {
     const batch = allEmails.slice(i, i + QUERY_BATCH)
     const { data } = await service
       .from('newsletter_subscribers')
-      .select('id, email')
+      .select('id, email, unsubscribed_at')
       .in('email', batch)
     for (const s of data ?? []) {
-      if (s.email) subscriberIdByEmail.set((s.email as string).toLowerCase(), s.id as string)
+      if (!s.email) continue
+      const lc = (s.email as string).toLowerCase()
+      if (s.unsubscribed_at) {
+        unsubscribedSubEmails.add(lc)
+        continue
+      }
+      subscriberIdByEmail.set(lc, s.id as string)
     }
   }
   // Resolve subscriberIdByContact for any contact still unmapped
+  // (and clear out any contact whose subscriber is unsubscribed).
+  let excludedUnsubscribedSubscriber = 0
+  const droppedContactIds = new Set<string>()
   for (const c of valid) {
+    const lc = c.email!.trim().toLowerCase()
+    if (unsubscribedSubEmails.has(lc)) {
+      excludedUnsubscribedSubscriber++
+      droppedContactIds.add(c.id)
+      // also clear if Step 1 mapped it via contact_id (shouldn't happen but safe)
+      subscriberIdByContact.delete(c.id)
+      continue
+    }
     if (subscriberIdByContact.has(c.id)) continue
-    const sid = subscriberIdByEmail.get(c.email!.trim().toLowerCase())
+    const sid = subscriberIdByEmail.get(lc)
     if (sid) subscriberIdByContact.set(c.id, sid)
   }
 
@@ -241,7 +260,7 @@ export async function POST(req: NextRequest) {
     list_name: created.name,
     total_input: rows.length,
     added,
-    excluded,
+    excluded: { ...excluded, unsubscribed_subscriber: excludedUnsubscribedSubscriber },
     errors: errors.length > 0 ? errors : undefined,
   })
 }

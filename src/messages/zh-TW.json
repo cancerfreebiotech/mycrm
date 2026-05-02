@@ -54,6 +54,7 @@
     "newsletter": "電子報",
     "failedScans": "失敗掃描",
     "duplicates": "重複聯絡人",
+    "sharedEmailsNav": "共用 Email",
     "camcard": "CamCard 匯入",
     "health": "系統健康",
     "trash": "回收區",
@@ -127,8 +128,8 @@
     "emailExcludedBlacklist": "{count} 黑名單",
     "createListButton": "建立清單（{count}）",
     "createListTitle": "建立電子報清單",
-    "createListHint": "已選 {selected} 位聯絡人，將加入 {willAdd} 位（黑名單、無 email、退訂、退信、寄送異常者已排除）。",
-    "createListHintFiltered": "依目前篩選共 {filtered} 位聯絡人（未勾選個別人員），將加入 {willAdd} 位（黑名單、無 email、退訂、退信、寄送異常者已排除）。",
+    "createListHint": "已選 {selected} 位聯絡人 → {uniqueEmails} 個唯一 email 將寫入清單（黑名單、無 email、退訂、退信、寄送異常已排除；多 contact 共用 email 自動合併）。",
+    "createListHintFiltered": "依目前篩選共 {filtered} 位聯絡人（未勾選個別人員）→ {uniqueEmails} 個唯一 email 將寫入清單（黑名單、無 email、退訂、退信、寄送異常已排除；多 contact 共用 email 自動合併）。",
     "createListFromFilterHint": "未勾選個別聯絡人時，會用目前篩選結果建立",
     "listNoContacts": "找不到任何聯絡人可建立清單",
     "createListNameLabel": "清單名稱",
@@ -1343,6 +1344,19 @@
   },
   "app": {
     "description": "Telegram 名片辨識 CRM 系統"
+  },
+  "sharedEmails": {
+    "title": "共用 Email 聯絡人",
+    "subtitle": "找出兩個以上 contact 共用同一個 email（夫妻、家人、共用信箱）",
+    "totalGroups": "共用 email 組數",
+    "totalContacts": "受影響聯絡人數",
+    "searchPlaceholder": "搜尋 email、姓名或公司...",
+    "noMatch": "找不到符合的結果",
+    "noShared": "目前沒有共用 email 的聯絡人",
+    "colEmail": "Email",
+    "colCount": "Contact 數",
+    "colContacts": "聯絡人",
+    "loadFailed": "載入失敗"
   },
   "newsletterLists": {
     "deleteHint": "刪除清單（不會刪除聯絡人或訂閱者）",

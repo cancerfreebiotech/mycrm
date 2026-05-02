@@ -54,6 +54,7 @@
     "newsletter": "ニュースレター",
     "failedScans": "スキャン失敗",
     "duplicates": "重複連絡先",
+    "sharedEmailsNav": "共用 Email",
     "camcard": "CamCard取込",
     "health": "システム健全性",
     "trash": "ゴミ箱",
@@ -127,8 +128,8 @@
     "emailExcludedBlacklist": "{count} 件 ブラックリスト",
     "createListButton": "リスト作成（{count}）",
     "createListTitle": "ニュースレターリストを作成",
-    "createListHint": "{selected} 件選択中、{willAdd} 件を追加します（ブラックリスト・email なし・配信停止・バウンス・配信エラーは除外済み）。",
-    "createListHintFiltered": "現在のフィルター条件に一致する {filtered} 件（個別選択なし）、{willAdd} 件を追加します（ブラックリスト・email なし・配信停止・バウンス・配信エラーは除外済み）。",
+    "createListHint": "{selected} 件選択中 → ユニーク email {uniqueEmails} 件を追加します（ブラックリスト・email なし・配信停止・バウンス・配信エラー除外済み、複数連絡先で同一 email は自動合併）。",
+    "createListHintFiltered": "フィルター条件に一致する {filtered} 件（個別選択なし）→ ユニーク email {uniqueEmails} 件を追加します（ブラックリスト・email なし・配信停止・バウンス・配信エラー除外済み、複数連絡先で同一 email は自動合併）。",
     "createListFromFilterHint": "個別選択がない場合、現在のフィルター結果でリストを作成します",
     "listNoContacts": "リスト作成可能な連絡先がありません",
     "createListNameLabel": "リスト名",
@@ -1343,6 +1344,19 @@
   },
   "app": {
     "description": "Telegram名刺認識CRMシステム"
+  },
+  "sharedEmails": {
+    "title": "共用 Email の連絡先",
+    "subtitle": "同じ email を 2 件以上の連絡先で共有しているケース（夫婦・家族・共用受信箱）",
+    "totalGroups": "共用 email グループ数",
+    "totalContacts": "対象連絡先数",
+    "searchPlaceholder": "email、氏名、会社で検索...",
+    "noMatch": "一致する結果がありません",
+    "noShared": "共用 email の連絡先はありません",
+    "colEmail": "Email",
+    "colCount": "連絡先数",
+    "colContacts": "連絡先",
+    "loadFailed": "読み込みに失敗しました"
   },
   "newsletterLists": {
     "deleteHint": "リストを削除（連絡先・購読者は削除されません）",

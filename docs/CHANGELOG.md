@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## v4.13.0 — feat: 共用 Email 查看頁 + 退訂統一 + Modal 顯示 unique-email count（2026-05-02）
+
+### 痛點
+建 list 後使用者問：
+1. 為什麼 1938 ≠ filter 中文的 2004？（不知道有 66 個 contact 跟別人共用 email）
+2. 為什麼 list 還有 1 退訂？（subscriber.unsubscribed_at 跟 contact.email_status 兩層退訂沒對齊）
+3. 想看到底哪些聯絡人共用 email
+
+### 改動
+**(A) 建 list 排除 subscriber 層退訂**：`POST /api/newsletter/lists/from-contacts` Step 4b 改成只撈 `unsubscribed_at IS NULL` 的 subscriber，匹配到歷史退訂者的 contact 不寫進 list。回傳 `excluded.unsubscribed_subscriber` 計數。
+
+**(B) Modal hint 顯示 unique-email count**：建 list modal 從只顯示 `{willAdd}` 改成 `{selected/filtered} contacts → {uniqueEmails} unique emails`，使用者一眼看到「合併」會發生。三語 i18n 同步。
+
+**(C) 新增 `/admin/shared-emails` 頁**：列出所有 ≥2 contact 共用同一 email 的群組。每行顯示 email、共用 contact 數、所有 contact 的 link。GET `/api/contacts/shared-emails` 回傳分組資料。Sidebar 加 nav 連結（grantable，要 `bulk_email` 權限）。
+
+bump 4.12.1 → 4.13.0
+
+### 後續還沒做
+SendGrid webhook 同步 `contacts.email_status` ↔ `newsletter_subscribers.unsubscribed_at` 的整合（兩層真正合一）— 需要動 webhook handler，是另一個 sprint。
+
 ## v4.12.1 — fix(newsletter/lists/from-contacts): bulk insert 容錯（2026-05-02）
 
 回報：2000 中文聯絡人建 list 後只有 118 人。原因：bulk `insert(chunk)` 一個 batch 中若有 email 重複（多個 CRM contact 共用 email），unique constraint 觸發整個 batch fail，後續 batch 全沒進。

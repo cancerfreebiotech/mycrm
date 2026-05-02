@@ -125,6 +125,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/admin/newsletter/campaigns', label: t('newsletter'), icon: Newspaper },
     { href: '/admin/failed-scans', label: t('failedScans'), icon: ShieldCheck },
     { href: '/admin/duplicates', label: t('duplicates'), icon: ScanSearch },
+    { href: '/admin/shared-emails', label: t('sharedEmailsNav'), icon: Mail },
     { href: '/admin/camcard', label: t('camcard'), icon: FolderInput },
     { href: '/admin/trash', label: t('trash'), icon: Trash2 },
   ]
