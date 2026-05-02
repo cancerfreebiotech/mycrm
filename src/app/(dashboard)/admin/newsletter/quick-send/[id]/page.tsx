@@ -110,16 +110,23 @@ export default function QuickSendPage() {
   }
   body > div, body > table { padding: 0 !important; background: #FFFFFF !important; }
   table[align="center"], table { max-width: 100% !important; width: 100% !important; }
-  /* Cap image height so a single portrait photo can't dominate a page —
-     A4 minus 8mm margins ≈ 281mm content, so 200mm ≈ 70% which leaves
-     room for caption / next paragraph on the same page. Without this cap
-     a tall image would either get pushed to its own page (leaving big
-     empty space on the prior page) or split awkwardly. */
-  img { max-width: 100% !important; max-height: 200mm !important; height: auto !important; object-fit: contain; vertical-align: middle; }
-  /* Story images (no width attribute) center via block layout; the email
-     skeleton's social icons (width="24") stay inline so they line up
-     horizontally in the footer like in the email view. */
-  img:not([width]) { display: block; margin: 0 auto; }
+  /* All images: keep aspect ratio + neutral baseline. Don't force max-width or
+     height here — that would override the email skeleton's explicit width=180
+     on the logo and width=24 on social icons (turning them into giant
+     full-width banners). */
+  img { object-fit: contain; vertical-align: middle; }
+  /* Story photos (no width attribute) get the page-fit treatment:
+       max-width 100% so they don't overflow narrow columns;
+       max-height 200mm (~70% of A4 content area) so a portrait photo
+       doesn't dominate a page and leave gaps elsewhere;
+       block + auto-margin to centre within the centred parent div. */
+  img:not([width]) {
+    max-width: 100% !important;
+    max-height: 200mm !important;
+    height: auto !important;
+    display: block;
+    margin: 0 auto;
+  }
   /* Keep headings glued to following content so they don't strand at page bottom */
   h1, h2, h3, h4 { page-break-after: avoid !important; break-after: avoid !important; }
   p { orphans: 3; widows: 3; }

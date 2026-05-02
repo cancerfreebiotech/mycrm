@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v4.15.7 — fix(newsletter/print): logo/icons 維持 HTML 屬性的尺寸（2026-05-02）
+
+5-2.pdf logo 變超大跨大半頁。`max-width: 100% !important` 蓋掉 inline `max-width:180px`，加上 v4.15.4 transform 把 logo natural 變 1200px → 拉滿欄寬。
+
+改成只把 `max-width / max-height / display: block / margin: 0 auto` 套到「沒有 width 屬性的 img」（user-uploaded 大圖）。logo `width="180"` 跟 icons `width="24"` 維持 HTML 屬性指定的尺寸。
+
+bump 4.15.6 → 4.15.7
+
 ## v4.15.6 — fix(newsletter/print): logo/icons 不走 image transform（2026-05-02）
 
 v4.15.4 把所有 Supabase storage 的 img URL 轉成 render/image+width=1200&quality=80，但 shared/ 資料夾的靜態小 PNG（logo 180px、social icons 24px）跟著被升尺寸 + JPEG 壓縮，透明背景變灰、邊緣模糊。改成只 transform 不在 `/shared/` 路徑下的圖（即使用者上傳的 story 大圖），靜態素材維持原圖。
