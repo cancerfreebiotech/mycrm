@@ -1,5 +1,36 @@
 # CHANGELOG
 
+## v4.9.0 — feat(newsletter): import 改 browser-side 解壓 + 直連 Storage（2026-05-02）
+
+### 痛點
+第一次實測 Claude.ai 產出的 zip 拿去 import → 「Unexpected token 'R', \"Request En\"...」。debug 後發現 zip 11.2 MB（4 張原圖 332KB-4.2MB），破 Vercel function body 4.5MB 上限。Vercel 直接回 plain text `Request Entity Too Large`，前端 `res.json()` 爆。
+
+順便發現 Claude.ai 產出 manifest 跟我訂的 schema 有 4 處出入：
+1. zip 多包一層 `newsletter-2026-05/` 資料夾
+2. manifest 用 `{ last_month: [], next_month: [] }` 而不是 `{ stories: [{section}] }`
+3. `image_files` 沒有 `images/` 前綴
+4. 部分 story 沒圖（schema 要求 1-2）
+
+### 改動
+- **`/admin/newsletter/import` page 重寫**：
+  - browser 端用 jszip 解壓
+  - 偵測單一 wrapping folder 自動 strip
+  - 圖片直接 PUT 到 Supabase Storage（`newsletter-assets/{period}/imported/...`），不經 Vercel function
+  - 只把 `manifest + imageMap` 當 JSON POST 給 API（< 50KB）
+  - 三階段 progress bar（解壓 / 上傳 N/M / 建立草稿）
+  - JSON parse 失敗顯示 raw text 開頭，避免「Unexpected token」錯誤
+- **`POST /api/newsletter/import` 改 JSON shape**（不再吃 multipart）：
+  - 接受 `{ manifest, imageMap }`
+  - normalize 寬鬆：自動把 `{ last_month, next_month }` 攤平成 `stories[]`、補 `images/` 前綴
+  - validate 改成允許 0-2 張圖
+- **schema + SKILL.md 更新**：
+  - `image_files` minItems 改 0（允許 link-only story 沒圖）
+  - SKILL.md 強調 zip layout MUST 不要包資料夾、manifest MUST 用 flat stories array
+- bump 4.8.3 → 4.9.0
+
+### 為什麼要 lenient parser
+即使 SKILL.md 講清楚，Claude.ai 的 model 仍可能依語意改寫 schema（例如把 last_month/next_month 當 top-level key 比較直覺）。寬鬆 parser 確保 import 不會因為 model 偶爾偏離 schema 而失敗。
+
 ## v4.8.3 — chore(skill): cross-platform zip 打包腳本（2026-05-02）
 
 `scripts/build-skill-zip.js` 用 jszip（已在 deps）打包 skill source，Windows / macOS / Linux 都能跑。原本 README 教用 `zip -r`，Windows cmd/PowerShell 沒這指令。產出 `.zip` 已加 `.gitignore`。

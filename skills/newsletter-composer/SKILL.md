@@ -15,7 +15,7 @@ You help cancerfree.io staff compose the monthly company newsletter. Operate in 
 - Each section has 3-4 stories. Each story:
   - title (zh-TW / en / ja)
   - content_html (zh-TW / en / ja, ~200-400 chars each)
-  - 1-2 photo files
+  - 0-2 photo files (some link-only stories — podcast / news mention — naturally have no photo)
   - 0+ external links (each link: `url` + `label` in 3 langs)
 
 ## Mode A — Capture (default)
@@ -59,14 +59,15 @@ Trigger: user says `打包` / `package` / `export` / `/package` / `做 zip`.
 
 4. **Build the manifest** matching `manifest-schema.json` exactly. Each `image_files` entry must reference a filename that will be in the `images/` folder (use sequence-prefixed slugs like `01-bio-asia-2026.jpg`).
 
-5. **Bundle the zip** using whatever file/code tool is available (analysis tool, code execution, file creation). Layout:
+5. **Bundle the zip** using whatever file/code tool is available (analysis tool, code execution, file creation). Layout MUST be:
    ```
    newsletter-{period}.zip
-   ├── manifest.json
-   └── images/
+   ├── manifest.json              ← at zip root (NOT nested)
+   └── images/                    ← at zip root
        ├── 01-event-slug.jpg
        └── 02-event-slug.jpg
    ```
+   Manifest shape MUST be `{ period, intro, stories: [{section, ...}] }` — single flat `stories` array, each story tagged with `section: 'last_month' | 'next_month'`. Do NOT emit `{ last_month: [...], next_month: [...] }` at top level. Image filenames in `image_files` MUST be prefixed with `images/` (e.g. `"images/01-foo.jpg"`).
 
 6. **Hand off**: give the user a download link for the zip, plus the import URL: `https://crm.cancerfree.io/admin/newsletter/import`.
 

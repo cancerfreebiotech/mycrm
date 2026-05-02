@@ -1,25 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
-import JSZip from 'jszip'
 import { createClient, createServiceClient } from '@/lib/supabase'
 
 // POST /api/newsletter/import
 //
-// Multipart upload of a zip produced by the Claude.ai newsletter-composer skill.
-// Zip layout:
-//   manifest.json   ← schema in skills/newsletter-composer/manifest-schema.json
-//   images/         ← png/jpg/jpeg/webp, referenced by manifest.stories[].image_files
+// Accepts JSON body { manifest, imageMap } produced by the import page after
+// browser-side unzip + direct Supabase Storage upload. This bypasses Vercel's
+// 4.5MB function body limit (which the previous multipart-zip flow hit when
+// users uploaded zips with original-resolution photos).
+//
+// Body shape:
+//   {
+//     manifest: <validated against schema in skills/newsletter-composer/manifest-schema.json>,
+//     imageMap: { "images/01-foo.jpg": "https://....supabase.co/storage/v1/object/public/...", ... }
+//   }
 //
 // Behavior:
-// 1. Auth + newsletter permission gate (re-uses RLS — service client only after check)
-// 2. Parse zip, validate manifest, ensure every referenced image exists in the zip
-// 3. Upload images to Supabase Storage `newsletter-assets/{period}/imported/{filename}`,
-//    build path → public URL map
+// 1. Auth + newsletter permission gate
+// 2. Validate manifest (same rules as before)
+// 3. Validate imageMap covers every referenced image_file
 // 4. For each lang in [zh-TW, en, ja]:
 //    - Load skeleton from email_templates
-//    - Render stories into sections (last_month + next_month with section headings)
+//    - Render stories into sections
 //    - Substitute {{subject}}, {{period_label}}, {{intro_html}}, {{stories_html}}
 //    - Insert newsletter_campaigns row, status=draft
-// 5. Return { campaigns: [{ lang, id, slug }], image_count }
+// 5. Return { campaigns, image_count, story_count }
 
 type Lang = 'zh-TW' | 'en' | 'ja'
 type Section = 'last_month' | 'next_month'
@@ -72,22 +76,12 @@ const SUBJECT_FMT: Record<Lang, (label: string) => string> = {
 }
 
 const SECTION_LABEL: Record<Section, Record<Lang, string>> = {
-  last_month: {
-    'zh-TW': '上月回顧',
-    'en': 'Last Month',
-    'ja': '先月のまとめ',
-  },
-  next_month: {
-    'zh-TW': '下月預告',
-    'en': 'Coming Up',
-    'ja': '来月の予定',
-  },
+  last_month: { 'zh-TW': '上月回顧', 'en': 'Last Month', 'ja': '先月のまとめ' },
+  next_month: { 'zh-TW': '下月預告', 'en': 'Coming Up', 'ja': '来月の予定' },
 }
 
 const LINKS_LABEL: Record<Lang, string> = {
-  'zh-TW': '相關連結',
-  'en': 'Links',
-  'ja': '関連リンク',
+  'zh-TW': '相關連結', 'en': 'Links', 'ja': '関連リンク',
 }
 
 const TITLE_BY_LANG: Record<Lang, (period: string) => string> = {
@@ -116,6 +110,37 @@ function validateTrilingual(v: unknown, fieldPath: string, errors: string[]): v 
   return ok
 }
 
+function normalizeImageFile(f: unknown): string | null {
+  if (typeof f !== 'string') return null
+  // Accept both "images/X" and "X" — normalize to "images/X"
+  const stripped = f.replace(/^\.?\/?(images\/)?/, '')
+  return `images/${stripped}`
+}
+
+function normalizeManifest(raw: unknown): unknown {
+  // Accept either:
+  //   { stories: [{section, ...}] }                              ← schema
+  //   { last_month: [...], next_month: [...] }                   ← Claude.ai often emits this
+  // Also normalize image_files to have "images/" prefix.
+  if (!isPlainObject(raw)) return raw
+  let stories = Array.isArray(raw.stories) ? [...raw.stories] : []
+  if (!stories.length && (Array.isArray(raw.last_month) || Array.isArray(raw.next_month))) {
+    if (Array.isArray(raw.last_month)) {
+      for (const s of raw.last_month) if (isPlainObject(s)) stories.push({ ...s, section: 'last_month' })
+    }
+    if (Array.isArray(raw.next_month)) {
+      for (const s of raw.next_month) if (isPlainObject(s)) stories.push({ ...s, section: 'next_month' })
+    }
+  }
+  stories = stories.map((s) => {
+    if (!isPlainObject(s)) return s
+    const imgs = Array.isArray(s.image_files) ? s.image_files.map(normalizeImageFile).filter((x): x is string => !!x) : []
+    return { ...s, image_files: imgs }
+  })
+  const out: Record<string, unknown> = { period: raw.period, intro: raw.intro, stories }
+  return out
+}
+
 function validateManifest(raw: unknown): { ok: true; manifest: Manifest } | { ok: false; errors: string[] } {
   const errors: string[] = []
   if (!isPlainObject(raw)) return { ok: false, errors: ['manifest must be an object'] }
@@ -126,7 +151,7 @@ function validateManifest(raw: unknown): { ok: true; manifest: Manifest } | { ok
   validateTrilingual(raw.intro, 'intro', errors)
 
   if (!Array.isArray(raw.stories) || raw.stories.length === 0) {
-    errors.push('stories: required non-empty array')
+    errors.push('stories: required non-empty array (or use last_month / next_month top-level arrays)')
   } else {
     raw.stories.forEach((s, i) => {
       const path = `stories[${i}]`
@@ -136,12 +161,13 @@ function validateManifest(raw: unknown): { ok: true; manifest: Manifest } | { ok
       }
       validateTrilingual(s.title, `${path}.title`, errors)
       validateTrilingual(s.content_html, `${path}.content_html`, errors)
-      if (!Array.isArray(s.image_files) || s.image_files.length < 1 || s.image_files.length > 2) {
-        errors.push(`${path}.image_files: must be 1-2 entries`)
+      // image_files: allow 0-2 (some stories are link-only)
+      if (!Array.isArray(s.image_files) || s.image_files.length > 2) {
+        errors.push(`${path}.image_files: must be array with 0-2 entries`)
       } else {
         s.image_files.forEach((f, fi) => {
-          if (typeof f !== 'string' || !/^images\/[a-z0-9][a-z0-9-]{0,59}\.(jpg|jpeg|png|webp)$/.test(f)) {
-            errors.push(`${path}.image_files[${fi}]: must match images/<slug>.{jpg,jpeg,png,webp}`)
+          if (typeof f !== 'string' || !/^images\/[a-z0-9][a-z0-9-_]{0,99}\.(jpg|jpeg|png|webp)$/i.test(f)) {
+            errors.push(`${path}.image_files[${fi}]: must match images/<filename>.{jpg,jpeg,png,webp} (got: ${f})`)
           }
         })
       }
@@ -168,7 +194,6 @@ function validateManifest(raw: unknown): { ok: true; manifest: Manifest } | { ok
 const CONTENT_TAG_ALLOW = /^<\/?(p|strong|em|ul|li|br|a)(\s[^<>]*)?\/?>$/i
 
 function sanitizeContentHtml(html: string): string {
-  // Strip any tag that isn't in the allowlist. Keep text content.
   return html.replace(/<\/?[^>]+>/g, (tag) => (CONTENT_TAG_ALLOW.test(tag) ? tag : ''))
 }
 
@@ -233,12 +258,6 @@ function renderStoriesHtml(manifest: Manifest, lang: Lang, imagePathToUrl: Map<s
   return blocks.join('\n')
 }
 
-function safeImagePath(period: string, originalPath: string): string {
-  // originalPath = "images/01-event-slug.jpg"
-  const base = originalPath.replace(/^images\//, '')
-  return `${period}/imported/${Date.now().toString(36)}-${base}`
-}
-
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -246,7 +265,7 @@ export async function POST(req: NextRequest) {
 
   const service = createServiceClient()
 
-  // Permission check: super_admin OR has 'newsletter' permission
+  // Permission check
   const { data: me } = await service
     .from('users')
     .select('id, role, permissions')
@@ -258,71 +277,44 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden — newsletter permission required' }, { status: 403 })
   }
 
-  // Read multipart form
-  const form = await req.formData()
-  const file = form.get('zip')
-  if (!(file instanceof File)) return NextResponse.json({ error: 'zip file required (field name: zip)' }, { status: 400 })
-  if (file.size > 30 * 1024 * 1024) return NextResponse.json({ error: 'zip too large (max 30MB)' }, { status: 400 })
-
-  // Parse zip
-  let zip: JSZip
+  // Parse JSON body
+  let body: unknown
   try {
-    zip = await JSZip.loadAsync(await file.arrayBuffer())
+    body = await req.json()
   } catch (e) {
-    return NextResponse.json({ error: `invalid zip: ${e instanceof Error ? e.message : String(e)}` }, { status: 400 })
+    return NextResponse.json({ error: `invalid JSON: ${e instanceof Error ? e.message : String(e)}` }, { status: 400 })
+  }
+  if (!isPlainObject(body)) {
+    return NextResponse.json({ error: 'body must be an object' }, { status: 400 })
   }
 
-  const manifestEntry = zip.file('manifest.json')
-  if (!manifestEntry) return NextResponse.json({ error: 'manifest.json missing in zip' }, { status: 400 })
-
-  let manifestRaw: unknown
-  try {
-    manifestRaw = JSON.parse(await manifestEntry.async('string'))
-  } catch (e) {
-    return NextResponse.json({ error: `manifest.json invalid JSON: ${e instanceof Error ? e.message : String(e)}` }, { status: 400 })
-  }
-
-  const validation = validateManifest(manifestRaw)
+  const validation = validateManifest(normalizeManifest(body.manifest))
   if (!validation.ok) {
     return NextResponse.json({ error: 'manifest validation failed', details: validation.errors }, { status: 400 })
   }
   const manifest = validation.manifest
 
-  // Verify all referenced images exist in zip
-  const referencedImages = new Set<string>()
-  for (const s of manifest.stories) for (const f of s.image_files) referencedImages.add(f)
-  const missing: string[] = []
-  for (const imgPath of referencedImages) {
-    if (!zip.file(imgPath)) missing.push(imgPath)
+  // Validate imageMap covers all referenced images
+  const rawMap = body.imageMap
+  if (!isPlainObject(rawMap)) {
+    return NextResponse.json({ error: 'imageMap missing or not an object' }, { status: 400 })
   }
-  if (missing.length > 0) {
-    return NextResponse.json({ error: 'images referenced in manifest but missing in zip', details: missing }, { status: 400 })
-  }
-
-  // Upload images to Supabase Storage, build path → public URL map
   const imagePathToUrl = new Map<string, string>()
-  const uploadErrors: string[] = []
-  for (const imgPath of referencedImages) {
-    const entry = zip.file(imgPath)!
-    const buf = await entry.async('uint8array')
-    const ext = imgPath.split('.').pop()!.toLowerCase()
-    const contentType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
-    const storagePath = safeImagePath(manifest.period, imgPath)
-    const { error: upErr } = await service.storage
-      .from('newsletter-assets')
-      .upload(storagePath, buf, { contentType, upsert: false })
-    if (upErr) {
-      uploadErrors.push(`${imgPath}: ${upErr.message}`)
-      continue
+  for (const [k, v] of Object.entries(rawMap)) {
+    if (typeof v !== 'string' || !/^https?:\/\//.test(v)) {
+      return NextResponse.json({ error: `imageMap[${k}]: expected http(s) URL` }, { status: 400 })
     }
-    const { data: pub } = service.storage.from('newsletter-assets').getPublicUrl(storagePath)
-    imagePathToUrl.set(imgPath, pub.publicUrl)
+    imagePathToUrl.set(k, v)
   }
-  if (uploadErrors.length > 0) {
-    return NextResponse.json({ error: 'image upload failed', details: uploadErrors }, { status: 500 })
+  const referenced = new Set<string>()
+  for (const s of manifest.stories) for (const f of s.image_files) referenced.add(f)
+  const missing: string[] = []
+  for (const f of referenced) if (!imagePathToUrl.has(f)) missing.push(f)
+  if (missing.length > 0) {
+    return NextResponse.json({ error: 'imageMap missing entries for referenced images', details: missing }, { status: 400 })
   }
 
-  // Load all 3 skeletons
+  // Load skeletons
   const skeletonsByLang: Partial<Record<Lang, string>> = {}
   for (const lang of ['zh-TW', 'en', 'ja'] as Lang[]) {
     const { data } = await service
@@ -336,7 +328,7 @@ export async function POST(req: NextRequest) {
     skeletonsByLang[lang] = data.body_content as string
   }
 
-  // Map language → default newsletter list
+  // Default lists per lang
   const listIdsByLang: Partial<Record<Lang, string[]>> = {}
   for (const lang of ['zh-TW', 'en', 'ja'] as Lang[]) {
     const { data: listRow } = await service
@@ -347,7 +339,6 @@ export async function POST(req: NextRequest) {
     listIdsByLang[lang] = listRow?.id ? [listRow.id] : []
   }
 
-  // Render + insert each lang
   const results: { lang: Lang; id: string; slug: string; error?: string }[] = []
   const importStamp = Date.now().toString(36)
   for (const lang of ['zh-TW', 'en', 'ja'] as Lang[]) {

@@ -3,6 +3,8 @@
 import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import JSZip from 'jszip'
+import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { PermissionGate } from '@/components/PermissionGate'
 import { ArrowLeft, Upload, Package, AlertTriangle, CheckCircle2, Loader2, FileArchive } from 'lucide-react'
 
@@ -19,12 +21,49 @@ const LANG_LABEL: Record<string, string> = {
   'ja': '日本語',
 }
 
+// Detect single common root folder in zip and return its prefix (with trailing slash)
+// e.g. ['newsletter-2026-05/manifest.json', 'newsletter-2026-05/images/x.jpg'] → 'newsletter-2026-05/'
+// Returns '' if files are at root.
+function detectRootPrefix(zip: JSZip): string {
+  const paths: string[] = []
+  zip.forEach((rel) => paths.push(rel))
+  if (paths.length === 0) return ''
+  const firstSegments = new Set<string>()
+  for (const p of paths) {
+    const slash = p.indexOf('/')
+    if (slash < 0) {
+      firstSegments.add('')  // file at root
+    } else {
+      firstSegments.add(p.slice(0, slash))
+    }
+  }
+  if (firstSegments.size === 1) {
+    const only = [...firstSegments][0]
+    if (only !== '') return `${only}/`
+  }
+  return ''
+}
+
+function normalizeImageFile(f: string): string {
+  const stripped = f.replace(/^\.?\/?(images\/)?/, '')
+  return `images/${stripped}`
+}
+
+function contentTypeFromName(name: string): string {
+  const ext = name.split('.').pop()?.toLowerCase() ?? ''
+  if (ext === 'png') return 'image/png'
+  if (ext === 'webp') return 'image/webp'
+  return 'image/jpeg'
+}
+
 export default function NewsletterImportPage() {
   const router = useRouter()
   const fileInput = useRef<HTMLInputElement>(null)
+  const supabase = createBrowserSupabaseClient()
   const [file, setFile] = useState<File | null>(null)
   const [dragActive, setDragActive] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
+  const [phase, setPhase] = useState<'idle' | 'parsing' | 'uploading' | 'submitting'>('idle')
+  const [progress, setProgress] = useState<{ done: number; total: number; current?: string }>({ done: 0, total: 0 })
   const [result, setResult] = useState<ImportResult | null>(null)
   const [error, setError] = useState<{ msg: string; details?: string[] } | null>(null)
 
@@ -36,8 +75,8 @@ export default function NewsletterImportPage() {
       setError({ msg: '只接受 .zip 檔（newsletter-composer skill 輸出）' })
       return
     }
-    if (picked.size > 30 * 1024 * 1024) {
-      setError({ msg: 'zip 超過 30MB 上限' })
+    if (picked.size > 200 * 1024 * 1024) {
+      setError({ msg: 'zip 超過 200MB（過大）' })
       return
     }
     setFile(picked)
@@ -51,23 +90,100 @@ export default function NewsletterImportPage() {
 
   async function submit() {
     if (!file) return
-    setSubmitting(true)
     setError(null)
     setResult(null)
+
     try {
-      const fd = new FormData()
-      fd.append('zip', file)
-      const res = await fetch('/api/newsletter/import', { method: 'POST', body: fd })
-      const data = await res.json()
+      // Phase 1: parse zip in browser
+      setPhase('parsing')
+      const zip = await JSZip.loadAsync(await file.arrayBuffer())
+      const prefix = detectRootPrefix(zip)
+      const manifestEntry = zip.file(`${prefix}manifest.json`)
+      if (!manifestEntry) {
+        setError({ msg: `manifest.json 沒在 zip 裡找到（搜尋路徑: ${prefix || '(root)'}manifest.json）` })
+        setPhase('idle')
+        return
+      }
+      let manifest: Record<string, unknown>
+      try {
+        manifest = JSON.parse(await manifestEntry.async('string'))
+      } catch (e) {
+        setError({ msg: `manifest.json 解析失敗: ${e instanceof Error ? e.message : String(e)}` })
+        setPhase('idle')
+        return
+      }
+
+      // Collect all referenced image_files (after normalization to images/X)
+      const stories = collectStories(manifest)
+      const referenced = new Set<string>()
+      for (const s of stories) {
+        if (Array.isArray(s.image_files)) {
+          for (const f of s.image_files) {
+            if (typeof f === 'string') referenced.add(normalizeImageFile(f))
+          }
+        }
+      }
+
+      // Phase 2: upload each image directly to Supabase Storage
+      setPhase('uploading')
+      setProgress({ done: 0, total: referenced.size })
+      const period = typeof manifest.period === 'string' ? manifest.period : 'unknown-period'
+      const stamp = Date.now().toString(36)
+      const imageMap: Record<string, string> = {}
+
+      let i = 0
+      for (const refPath of referenced) {
+        i++
+        // Try multiple candidate paths in zip (with prefix, w/o, with images/, w/o)
+        const baseFilename = refPath.replace(/^images\//, '')
+        const candidates = [
+          `${prefix}${refPath}`,                   // newsletter-2026-05/images/X
+          `${prefix}${baseFilename}`,              // newsletter-2026-05/X
+          refPath,                                 // images/X
+          baseFilename,                            // X
+        ]
+        const entry = candidates.map((p) => zip.file(p)).find((e) => e)
+        if (!entry) {
+          throw new Error(`圖片 ${refPath} 在 zip 裡找不到（試過: ${candidates.join(', ')}）`)
+        }
+        setProgress({ done: i - 1, total: referenced.size, current: baseFilename })
+        const buf = await entry.async('uint8array')
+        const storagePath = `${period}/imported/${stamp}-${baseFilename.toLowerCase()}`
+        const { error: upErr } = await supabase.storage
+          .from('newsletter-assets')
+          .upload(storagePath, buf, { contentType: contentTypeFromName(baseFilename), upsert: false })
+        if (upErr) throw new Error(`上傳 ${baseFilename} 失敗: ${upErr.message}`)
+        const { data: pub } = supabase.storage.from('newsletter-assets').getPublicUrl(storagePath)
+        imageMap[refPath] = pub.publicUrl
+      }
+      setProgress({ done: referenced.size, total: referenced.size })
+
+      // Phase 3: submit manifest + imageMap as JSON
+      setPhase('submitting')
+      const res = await fetch('/api/newsletter/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manifest, imageMap }),
+      })
+      const text = await res.text()
+      let data: { error?: string; details?: string[] } & Partial<ImportResult>
+      try {
+        data = JSON.parse(text)
+      } catch {
+        setError({ msg: `伺服器回應非 JSON (HTTP ${res.status})`, details: [text.slice(0, 300)] })
+        setPhase('idle')
+        return
+      }
       if (!res.ok) {
         setError({ msg: data.error ?? '匯入失敗', details: Array.isArray(data.details) ? data.details : undefined })
+        setPhase('idle')
         return
       }
       setResult(data as ImportResult)
+      setPhase('idle')
     } catch (e) {
       setError({ msg: e instanceof Error ? e.message : '匯入失敗' })
-    } finally {
-      setSubmitting(false)
+      setPhase('idle')
     }
   }
 
@@ -75,10 +191,13 @@ export default function NewsletterImportPage() {
     setFile(null)
     setResult(null)
     setError(null)
+    setProgress({ done: 0, total: 0 })
+    setPhase('idle')
     if (fileInput.current) fileInput.current.value = ''
   }
 
   const zhCampaign = result?.campaigns.find((c) => c.lang === 'zh-TW' && !c.error)
+  const busy = phase !== 'idle'
 
   return (
     <PermissionGate feature="newsletter">
@@ -102,24 +221,26 @@ export default function NewsletterImportPage() {
               onDragOver={(e) => { e.preventDefault(); setDragActive(true) }}
               onDragLeave={() => setDragActive(false)}
               onDrop={onDrop}
-              onClick={() => fileInput.current?.click()}
+              onClick={() => !busy && fileInput.current?.click()}
               className={`cursor-pointer rounded-xl border-2 border-dashed transition-colors p-8 text-center ${
                 dragActive
                   ? 'border-teal-500 bg-teal-50 dark:bg-teal-950/30'
                   : 'border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-gray-400 dark:hover:border-gray-600'
-              }`}
+              } ${busy ? 'opacity-60 pointer-events-none' : ''}`}
             >
               {file ? (
                 <div className="flex flex-col items-center gap-3">
                   <FileArchive size={40} className="text-teal-500" />
                   <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{file.name}</div>
-                  <div className="text-xs text-gray-500">{(file.size / 1024).toFixed(1)} KB</div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); reset() }}
-                    className="text-xs text-red-500 hover:underline"
-                  >
-                    換一個
-                  </button>
+                  <div className="text-xs text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</div>
+                  {!busy && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); reset() }}
+                      className="text-xs text-red-500 hover:underline"
+                    >
+                      換一個
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-3">
@@ -141,6 +262,22 @@ export default function NewsletterImportPage() {
               />
             </div>
 
+            {phase !== 'idle' && (
+              <div className="mt-4 px-4 py-3 rounded-lg text-sm bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-2">
+                <Loader2 size={16} className="animate-spin shrink-0" />
+                <div className="flex-1">
+                  {phase === 'parsing' && '解壓 zip…'}
+                  {phase === 'uploading' && (
+                    <span>
+                      上傳圖片 {progress.done}/{progress.total}
+                      {progress.current && <span className="text-blue-500"> · {progress.current}</span>}
+                    </span>
+                  )}
+                  {phase === 'submitting' && '建立 3 語草稿中…'}
+                </div>
+              </div>
+            )}
+
             {error && (
               <div className="mt-4 px-4 py-3 rounded-lg text-sm bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">
                 <div className="flex items-start gap-2">
@@ -160,10 +297,10 @@ export default function NewsletterImportPage() {
             <div className="mt-4 flex justify-end">
               <button
                 onClick={submit}
-                disabled={!file || submitting}
+                disabled={!file || busy}
                 className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700 disabled:opacity-50"
               >
-                {submitting ? <Loader2 size={14} className="animate-spin" /> : <Package size={14} />}
+                {busy ? <Loader2 size={14} className="animate-spin" /> : <Package size={14} />}
                 匯入並建立草稿
               </button>
             </div>
@@ -175,7 +312,10 @@ export default function NewsletterImportPage() {
 └── images/
     ├── 01-event-slug.jpg
     └── ...`}</pre>
-              <div className="mt-2">完整 schema：<code className="text-[11px]">skills/newsletter-composer/manifest-schema.json</code></div>
+              <div className="mt-2">
+                也接受多包一層資料夾（<code>newsletter-YYYY-MM/manifest.json</code>）。
+                圖片檔在瀏覽器端直接上傳到 Supabase Storage，不受 Vercel 4.5MB body 限制。
+              </div>
             </div>
           </>
         )}
@@ -247,4 +387,25 @@ export default function NewsletterImportPage() {
       </div>
     </PermissionGate>
   )
+}
+
+interface RawStory {
+  section?: unknown
+  image_files?: unknown
+  [k: string]: unknown
+}
+
+function collectStories(manifest: Record<string, unknown>): RawStory[] {
+  const out: RawStory[] = []
+  if (Array.isArray(manifest.stories)) {
+    for (const s of manifest.stories) if (s && typeof s === 'object') out.push(s as RawStory)
+  } else {
+    if (Array.isArray(manifest.last_month)) {
+      for (const s of manifest.last_month as unknown[]) if (s && typeof s === 'object') out.push(s as RawStory)
+    }
+    if (Array.isArray(manifest.next_month)) {
+      for (const s of manifest.next_month as unknown[]) if (s && typeof s === 'object') out.push(s as RawStory)
+    }
+  }
+  return out
 }
