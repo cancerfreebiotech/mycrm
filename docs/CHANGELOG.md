@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## v4.15.10 — fix(newsletter/print): 圖片 max-height 160mm + 文字自由 flow（2026-05-03）
+
+v4.15.9 回滾後 PDF 變 20 頁（"上月回顧" 4 字單獨佔一整頁）— 因為 tr/td/story-div 的 page-break-inside avoid 把 story 整塊推下去留白。
+
+新策略 — user 要求「照片不要跨頁，擠到前一頁空白處」：
+- `img { max-height: 160mm; break-inside: avoid }` — 圖片夠小（A4 內容 281mm 的 ~57%）能放進大部分剩餘空間，且保留「不切圖中間」防護
+- 拿掉 `tr/td/story-div { break-inside: avoid }` — 文字段落自由 flow，不會整塊推下頁
+- `img[width] { max-height: none }` — logo / social icons 的 HTML width 屬性繼續生效
+
+預期 portrait 照（aspect 0.5-0.6）：寬 80-100mm，高 160mm，可隨段落 inline 放入。Landscape 照寬度可達頁寬，高度按比例最多 160mm。
+
+bump 4.15.9 → 4.15.10
+
 ## v4.15.9 — revert(newsletter/print): CSS 回到 v4.15.2 給 user 比較（2026-05-03）
 
 User 連續測新 PDF 仍覺得排版不滿意（"story 的圖 變得很窄 被截掉"），表示「要不要恢復原本的設定 比較好看看」。回滾 print CSS 中的 image / tr / td / story-div 的 `page-break-inside: avoid` 規則，讓 user 直接對比兩種策略：

@@ -110,24 +110,20 @@ export default function QuickSendPage() {
   }
   body > div, body > table { padding: 0 !important; background: #FFFFFF !important; }
   table[align="center"], table { max-width: 100% !important; width: 100% !important; }
-  /* Reverted to v4.15.2 print CSS for visual comparison (per user feedback
-     "要不要恢復原本的設定 比較好看看"). Keep page-break-inside:avoid on
-     images / tr / td / numbered story divs. Trade-off vs the relaxed
-     version: portrait photos render full-width on their own page (looks
-     denser per image), but the prior page may show empty space below
-     when content can't fit alongside.
-     Logo (width=180) and social icons (width=24) still bypass the
-     max-width:100% override via their HTML width attribute and the
-     :not([width]) selector below. */
-  img { max-width: 100% !important; height: auto !important; page-break-inside: avoid !important; break-inside: avoid !important; vertical-align: middle; }
+  /* User wants: 照片不要跨頁 + 不要被推到下一頁留前面空白。CSS 沒辦法
+     讓圖「縮放成正好填滿剩餘空間」，所以折衷：
+     - 圖片 max-height 限制較小（160mm，~57% A4 內容高），讓圖在大部分
+       剩餘空間都能放下，不需推到下一頁
+     - break-inside: avoid 留在圖片上，避免跨頁切到圖中間
+     - 不在 tr/td/story-div 加 break-inside avoid，文字段落自由 flow，
+       不會因為「story 整塊不夠放」而整塊推到下一頁留白 */
+  img { max-width: 100% !important; max-height: 160mm !important; height: auto !important; page-break-inside: avoid !important; break-inside: avoid !important; vertical-align: middle; }
   img:not([width]) { display: block; margin: 0 auto; }
+  /* Logo/icons (HTML width attribute) bypass max-height to keep their
+     designed size. */
+  img[width] { max-height: none !important; }
   h1, h2, h3, h4 { page-break-after: avoid !important; break-after: avoid !important; }
   p { orphans: 3; widows: 3; }
-  tr, td { page-break-inside: avoid !important; break-inside: avoid !important; }
-  /* Numbered story blocks: each sits in its own padded div — keep together */
-  div[style*="padding:0 24px"],
-  div[style*="padding:0px 24px"],
-  div[style*="padding:16px 24px"] { page-break-inside: avoid !important; break-inside: avoid !important; }
   /* Link styling: override listmonk's inline text-decoration:none so URLs are
      visible and distinguishable in PDF (helps anchor detection by PDF viewers). */
   a { color: #0D9488 !important; text-decoration: underline !important; word-break: break-all; }
