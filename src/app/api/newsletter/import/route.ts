@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { hasFeature } from '@/lib/features'
 
 // POST /api/newsletter/import
 //
@@ -265,15 +266,13 @@ export async function POST(req: NextRequest) {
 
   const service = createServiceClient()
 
-  // Permission check
+  // Permission check (same pattern as PermissionGate / src/lib/features.ts)
   const { data: me } = await service
     .from('users')
-    .select('id, role, permissions')
+    .select('id, role, granted_features')
     .ilike('email', user.email)
     .maybeSingle()
-  const isSuperAdmin = me?.role === 'super_admin'
-  const hasNewsletterPerm = Array.isArray(me?.permissions) && (me?.permissions as string[]).includes('newsletter')
-  if (!isSuperAdmin && !hasNewsletterPerm) {
+  if (!me || !hasFeature(me.role ?? '', (me.granted_features as string[]) ?? [], 'newsletter')) {
     return NextResponse.json({ error: 'Forbidden — newsletter permission required' }, { status: 403 })
   }
 
