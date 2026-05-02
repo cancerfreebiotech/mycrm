@@ -86,17 +86,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: createErr?.message ?? 'failed to create list' }, { status: 500 })
   }
 
-  // Fetch contacts (with tag blacklist info via embedded join)
-  const { data: contacts, error: cErr } = await service
-    .from('contacts')
-    .select('id, email, email_opt_out, email_status, name, name_en, name_local, company, contact_tags(tags(is_email_blacklist))')
-    .in('id', body.contactIds)
-    .is('deleted_at', null)
-  if (cErr) {
-    return NextResponse.json({ error: cErr.message }, { status: 500 })
+  // Fetch contacts in batches — `.in('id', [...uuids])` becomes a URL query
+  // param, and >~200 uuids easily breaks the ~32 KB PostgREST URL limit
+  // (silently returning an empty array). Real-world calls send 2000+ ids
+  // when the user creates a list from a big language filter.
+  const FETCH_BATCH = 200
+  const fetchedRows: ContactRow[] = []
+  for (let i = 0; i < body.contactIds.length; i += FETCH_BATCH) {
+    const batch = body.contactIds.slice(i, i + FETCH_BATCH)
+    const { data, error } = await service
+      .from('contacts')
+      .select('id, email, email_opt_out, email_status, name, name_en, name_local, company, contact_tags(tags(is_email_blacklist))')
+      .in('id', batch)
+      .is('deleted_at', null)
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    fetchedRows.push(...((data ?? []) as unknown as ContactRow[]))
   }
-
-  const rows = (contacts ?? []) as unknown as ContactRow[]
+  const rows = fetchedRows
   const excluded = { no_email: 0, opt_out: 0, bad_status: 0, blacklist: 0 }
   const valid: ContactRow[] = []
   for (const c of rows) {

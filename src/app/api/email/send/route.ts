@@ -105,15 +105,22 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServiceClient()
 
-  // Fetch contacts with valid emails, excluding opted-out, blacklisted-tag, and bad email_status
-  const { data: contacts, error: cErr } = await supabase
-    .from('contacts')
-    .select('id, name, email, company, job_title, email_opt_out, email_status, contact_tags(tags(is_email_blacklist))')
-    .in('id', contactIds)
-    .is('deleted_at', null)
-    .not('email', 'is', null)
-
-  if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 })
+  // Fetch contacts in batches — `.in('id', [...uuids])` URL param breaks
+  // around 200 uuids (~32 KB). SendGrid mode supports up to thousands.
+  const FETCH_BATCH = 200
+  const fetchedContacts: { id: string; name: string | null; email: string | null; company: string | null; job_title: string | null; email_opt_out: boolean | null; email_status: string | null }[] = []
+  for (let i = 0; i < contactIds.length; i += FETCH_BATCH) {
+    const batch = contactIds.slice(i, i + FETCH_BATCH)
+    const { data: chunk, error: cErr } = await supabase
+      .from('contacts')
+      .select('id, name, email, company, job_title, email_opt_out, email_status, contact_tags(tags(is_email_blacklist))')
+      .in('id', batch)
+      .is('deleted_at', null)
+      .not('email', 'is', null)
+    if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 })
+    fetchedContacts.push(...(chunk ?? []))
+  }
+  const contacts = fetchedContacts
 
   const valid = (contacts ?? []).filter(c => {
     if (!c.email?.trim()) return false

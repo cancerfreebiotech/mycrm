@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## v4.11.4 — fix(newsletter/email): `.in('id', uuids)` 切批次避免 URL 太長（2026-05-02）
+
+### 痛點
+從 `/contacts` filter 中文（2004 個合格聯絡人）建立清單 → 後台 list 建好但 0 人加入。
+debug 後發現 `service.from('contacts').select(...).in('id', body.contactIds)` 會把所有 UUID 塞進 URL query param。2000 個 UUID = 72 KB+，超過 PostgREST 預設 ~32 KB 限制 → query 靜默回空 → 後續迴圈完全沒執行 → list 空。
+
+### 改動
+- `POST /api/newsletter/lists/from-contacts`：`.in('id', batch)` 切 200 一批，迴圈累積結果
+- `POST /api/email/send`：同樣修法（450+ 收件人 SendGrid 模式時也會爆）
+- en + ja `docs_content/user` 完整翻譯（從原本骨架擴充到 11173/6819 chars，跟 zh 對齊）
+
+bump 4.11.3 → 4.11.4
+
 ## v4.11.3 — fix(contacts): 建立清單套用跟寄信一致的排除（2026-05-02）
 
 寄信按鈕會 client-filter 排除黑名單/無 email/退訂/退信/寄送異常，建 list 按鈕沒套同樣 filter — 結果是 button count 顯示 filter 後總數而不是真正會加入的數，且送 API 也送進去（雖然 server 還是會擋）。改成跟寄信一致用 `emailTargets` — button count = 真正會加入的人數，sourceIds 也只送 emailable。Modal hint 多了 `{selected/filtered, willAdd}` 變數讓使用者一眼看到差距。
