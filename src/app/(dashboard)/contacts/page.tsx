@@ -277,8 +277,9 @@ export default function ContactsPage() {
       setListError(t('listNameRequired'))
       return
     }
-    // Source IDs: explicit selection if any, otherwise the entire filtered set
-    const sourceIds = selectedIds.size > 0 ? Array.from(selectedIds) : sorted.map((c) => c.id)
+    // Source IDs: emailable subset (same rules as 寄信), so blacklist /
+    // opt-out / no-email / bad-status contacts never enter the list.
+    const sourceIds = emailTargets.map((c) => c.id)
     if (sourceIds.length === 0) {
       setListError(t('listNoContacts'))
       return
@@ -442,13 +443,13 @@ export default function ContactsPage() {
               <Check size={14} /> 批次編輯（{selectedIds.size}）
             </button>
           )}
-          {canNewsletter && (selectedIds.size > 0 || hasFilter) && (
+          {canNewsletter && (selectedIds.size > 0 || hasFilter) && emailTargets.length > 0 && (
             <button
               onClick={() => { setListForm({ name: '', description: '' }); setListError(null); setListModalOpen(true) }}
               className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700"
               title={selectedIds.size === 0 ? t('createListFromFilterHint') : undefined}
             >
-              <Users size={14} /> {t('createListButton', { count: selectedIds.size > 0 ? selectedIds.size : sorted.length })}
+              <Users size={14} /> {t('createListButton', { count: emailTargets.length })}
             </button>
           )}
           <div className="relative">
@@ -1105,8 +1106,8 @@ export default function ContactsPage() {
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
               {selectedIds.size > 0
-                ? t('createListHint', { count: selectedIds.size })
-                : t('createListHintFiltered', { count: sorted.length })}
+                ? t('createListHint', { selected: selectedIds.size, willAdd: emailTargets.length })
+                : t('createListHintFiltered', { filtered: sorted.length, willAdd: emailTargets.length })}
             </p>
             <div className="space-y-3">
               <div>

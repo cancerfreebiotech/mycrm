@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v4.11.3 — fix(contacts): 建立清單套用跟寄信一致的排除（2026-05-02）
+
+寄信按鈕會 client-filter 排除黑名單/無 email/退訂/退信/寄送異常，建 list 按鈕沒套同樣 filter — 結果是 button count 顯示 filter 後總數而不是真正會加入的數，且送 API 也送進去（雖然 server 還是會擋）。改成跟寄信一致用 `emailTargets` — button count = 真正會加入的人數，sourceIds 也只送 emailable。Modal hint 多了 `{selected/filtered, willAdd}` 變數讓使用者一眼看到差距。
+
+zh-TW user guide 同步重寫為 v2.0（從 4067 → 6257 chars），涵蓋每個 Telegram 指令完整列表 + 每個網頁功能頁說明 + FAQ。en/ja 對應翻譯後續再做。
+
 ## v4.11.2 — feat(contacts): 建立清單支援 filter 模式（2026-05-02）
 
 原本只能勾 checkbox 後才出現「建立清單」按鈕。改成 filter 也算數：套用 filter 但沒勾人時，按鈕也會出現，count 顯示 filter 後的總數，建 list 時用整個 filter 結果。Modal hint 跟著切換。三語 i18n 加 4 keys。
