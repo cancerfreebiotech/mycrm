@@ -11,7 +11,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const service = createServiceClient()
   const { data, error } = await service
     .from('newsletter_campaigns')
-    .select('id, title, subject, preview_text, content_html, list_ids, status, slug, published_at, sent_at, sent_count, total_recipients, created_at')
+    .select('id, title, subject, preview_text, content_html, list_ids, status, slug, published_at, sent_at, sent_count, total_recipients, created_at, promo_text')
     .eq('id', id)
     .maybeSingle()
 
@@ -29,7 +29,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const body = (await req.json().catch(() => ({}))) as {
     title?: string; subject?: string; preview_text?: string;
-    content_html?: string; list_ids?: string[]
+    content_html?: string; list_ids?: string[]; promo_text?: string | null
   }
 
   const update: Record<string, unknown> = {}
@@ -38,6 +38,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (typeof body.preview_text === 'string') update.preview_text = body.preview_text
   if (typeof body.content_html === 'string') update.content_html = body.content_html
   if (Array.isArray(body.list_ids)) update.list_ids = body.list_ids
+  if (body.promo_text !== undefined) update.promo_text = body.promo_text
 
   if (Object.keys(update).length === 0) return NextResponse.json({ ok: true, noChange: true })
 

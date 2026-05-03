@@ -1,5 +1,10 @@
 {
   "period": "2026-05",
+  "promo": {
+    "zh-TW": "CancerFree 2026 年 5 月電子報出爐！本期重點：Prometheus Lab AI 沖繩首次部署、EVA Select 紐約研討會發表第二輪臨床數據。完整內容請查收 email 或聯絡我們。",
+    "en": "CancerFree's May 2026 newsletter is out! Highlights: Prometheus Lab AI's first Okinawa lab deployment, and EVA Select's second-phase clinical data presented in New York. Check your email for the full issue or reach out.",
+    "ja": "CancerFree の 2026 年 5 月号ニュースレターが公開されました！今号のハイライト：Prometheus Lab AI の沖縄ラボ初導入、EVA Select の第二段階臨床データをニューヨークで発表。詳細は email にてご確認、またはお問い合わせください。"
+  },
   "intro": {
     "zh-TW": "<p>各位夥伴好，5 月 CancerFree Biotech 跨足紐約、沖繩、東京、台北四個據點同步推進。Prometheus Lab AI 完成沖繩臨床實驗室的首次部署，EVA Select 也於紐約精準醫療研討會上發表了第二輪臨床數據。下個月將在東京舉辦 Prometheus Lab AI 實機 demo，並於台北辦一場小型臨床醫師交流會。期待與各位現場交流。</p>",
     "en": "<p>Hello everyone — May saw CancerFree Biotech moving forward across four locations: New York, Okinawa, Tokyo, and Taipei. Prometheus Lab AI completed its first deployment in our Okinawa clinical lab, and EVA Select presented its second round of clinical data at a precision medicine symposium in New York. June brings a live Prometheus Lab AI demo in Tokyo and a small clinician roundtable in Taipei. We look forward to meeting many of you in person.</p>",

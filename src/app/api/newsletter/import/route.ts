@@ -52,6 +52,7 @@ interface Manifest {
   period: string
   intro: TrilingualText
   stories: ManifestStory[]
+  promo?: TrilingualText
 }
 
 const SKELETON_TITLE: Record<Lang, string> = {
@@ -150,6 +151,11 @@ function validateManifest(raw: unknown): { ok: true; manifest: Manifest } | { ok
     errors.push('period: required, must match YYYY-MM')
   }
   validateTrilingual(raw.intro, 'intro', errors)
+
+  // Optional promo (single-paragraph LINE/Slack promo). Validate if provided.
+  if (raw.promo !== undefined && raw.promo !== null) {
+    validateTrilingual(raw.promo, 'promo', errors)
+  }
 
   if (!Array.isArray(raw.stories) || raw.stories.length === 0) {
     errors.push('stories: required non-empty array (or use last_month / next_month top-level arrays)')
@@ -365,6 +371,7 @@ export async function POST(req: NextRequest) {
           list_ids: listIdsByLang[lang] ?? [],
           status: 'draft',
           slug,
+          promo_text: manifest.promo?.[lang] ?? null,
           created_by: me?.id ?? null,
         })
         .select('id, slug')

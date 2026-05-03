@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## v4.17.0 — feat(newsletter): LINE 宣傳短文 + 回 v4.15.4 PDF CSS（2026-05-03）
+
+### Two changes
+1. **PDF CSS 回 v4.15.4 風格**（user 說 "輸出的 PDF 大概是 7 頁 看起來檔案圖檔沒有被壓縮到 分頁也還可以接受"）：story img max-height 200mm + object-fit contain + 文字自由 flow，logo / icons 維持 HTML width 屬性的尺寸。
+2. **新增 LINE 宣傳短文功能**：
+   - DB migration: `newsletter_campaigns.promo_text TEXT`
+   - skill manifest 加 optional `promo: { zh-TW, en, ja }`（80-150 字 plain text）
+   - SKILL.md Mode C 新增 step 3a 指示 Claude 產 promo
+   - example-manifest.json 加範例
+   - `POST /api/newsletter/import` 把 `manifest.promo[lang]` 寫進對應語系 campaign
+   - `GET / PATCH /api/newsletter/campaigns/[id]` 包含 promo_text 欄位
+   - quick-send 頁多一個 textarea「LINE / 群組宣傳短文」+「複製」+「儲存」按鈕，可手動編輯也可從 skill 自動帶入
+
+bump 4.16.1 → 4.17.0
+
 ## v4.16.1 — fix(newsletter/image): footer social icons 在匯出圖片強制 inline（2026-05-03）
 
 匯出 PNG 時 footer 3 個 social icon 變垂直堆疊。html2canvas 對 inline `<a><img></a>` 渲染不正確。加注 `<style>` 塊強制 `a:has(>img[width])` 跟 `img[width="24"]` 用 `display: inline-block`，icons 改回橫向。

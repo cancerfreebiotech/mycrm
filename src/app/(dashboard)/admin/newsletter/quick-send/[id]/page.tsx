@@ -20,6 +20,7 @@ interface Campaign {
   sent_at: string | null
   sent_count: number | null
   total_recipients: number | null
+  promo_text: string | null
 }
 
 interface List {
@@ -51,6 +52,9 @@ export default function QuickSendPage() {
   // Editable fields
   const [subject, setSubject] = useState('')
   const [previewText, setPreviewText] = useState('')
+  const [promoText, setPromoText] = useState('')
+  const [promoCopied, setPromoCopied] = useState(false)
+  const [savingPromo, setSavingPromo] = useState(false)
   const [listIds, setListIds] = useState<string[]>([])
   const [contentHtml, setContentHtml] = useState('')
   type ViewMode = 'preview' | 'edit' | 'split'
@@ -74,6 +78,7 @@ export default function QuickSendPage() {
       setCampaign(c)
       setSubject(c.subject ?? '')
       setPreviewText(c.preview_text ?? '')
+      setPromoText(c.promo_text ?? '')
       setListIds(c.list_ids ?? [])
       setContentHtml(c.content_html ?? '')
 
@@ -111,18 +116,19 @@ export default function QuickSendPage() {
   }
   body > div, body > table { padding: 0 !important; background: #FFFFFF !important; }
   table[align="center"], table { max-width: 100% !important; width: 100% !important; }
-  /* User wants: 照片不要跨頁 + 不要被推到下一頁留前面空白。CSS 沒辦法
-     讓圖「縮放成正好填滿剩餘空間」，所以折衷：
-     - 圖片 max-height 限制較小（160mm，~57% A4 內容高），讓圖在大部分
-       剩餘空間都能放下，不需推到下一頁
-     - break-inside: avoid 留在圖片上，避免跨頁切到圖中間
-     - 不在 tr/td/story-div 加 break-inside avoid，文字段落自由 flow，
-       不會因為「story 整塊不夠放」而整塊推到下一頁留白 */
-  img { max-width: 100% !important; max-height: 160mm !important; height: auto !important; page-break-inside: avoid !important; break-inside: avoid !important; vertical-align: middle; }
-  img:not([width]) { display: block; margin: 0 auto; }
-  /* Logo/icons (HTML width attribute) bypass max-height to keep their
-     designed size. */
-  img[width] { max-height: none !important; }
+  /* Restored to v4.15.4-style image CSS (user feedback "看起來圖檔沒有
+     被壓縮到 分頁也還可以接受"). Story photos cap at 200mm tall (~71%
+     of A4 content), text flows freely. Logo / social icons keep their
+     HTML width-attribute sizes by virtue of the :not([width]) selector. */
+  img { vertical-align: middle; }
+  img:not([width]) {
+    max-width: 100% !important;
+    max-height: 200mm !important;
+    height: auto !important;
+    display: block;
+    margin: 0 auto;
+    object-fit: contain;
+  }
   h1, h2, h3, h4 { page-break-after: avoid !important; break-after: avoid !important; }
   p { orphans: 3; widows: 3; }
   /* Link styling: override listmonk's inline text-decoration:none so URLs are
@@ -518,6 +524,57 @@ export default function QuickSendPage() {
                   onChange={(e) => setPreviewText(e.target.value)}
                   className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  LINE / 群組宣傳短文
+                  <span className="text-gray-400 ml-1">— 可貼到 LINE / Slack</span>
+                </label>
+                <textarea
+                  value={promoText}
+                  onChange={(e) => setPromoText(e.target.value)}
+                  rows={3}
+                  placeholder="（由 Claude.ai newsletter-composer skill 自動產出，或手動填寫）"
+                  className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+                <div className="flex justify-end gap-2 mt-1">
+                  {promoText && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(promoText)
+                          setPromoCopied(true)
+                          setTimeout(() => setPromoCopied(false), 1500)
+                        } catch {/* ignore */}
+                      }}
+                      className="text-xs px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
+                      {promoCopied ? '✓ 已複製' : '複製'}
+                    </button>
+                  )}
+                  <button
+                    onClick={async () => {
+                      setSavingPromo(true)
+                      try {
+                        const res = await fetch(`/api/newsletter/campaigns/${id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ promo_text: promoText.trim() || null }),
+                        })
+                        if (!res.ok) {
+                          const data = await res.json()
+                          setBanner({ kind: 'err', msg: data.error ?? '儲存失敗' })
+                        } else {
+                          setBanner({ kind: 'ok', msg: '宣傳短文已儲存' })
+                        }
+                      } finally { setSavingPromo(false) }
+                    }}
+                    disabled={savingPromo}
+                    className="text-xs px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+                  >
+                    {savingPromo ? '儲存中…' : '儲存'}
+                  </button>
+                </div>
               </div>
               <div className="flex gap-2">
                 <button

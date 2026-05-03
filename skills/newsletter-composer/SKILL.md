@@ -57,6 +57,11 @@ Trigger: user says `打包` / `package` / `export` / `/package` / `做 zip`.
 
 3. **Translate** title + content + link labels into **English** and **Japanese**. Natural prose, not literal. Keep paragraph structure.
 
+3a. **Generate promo text** (`manifest.promo`) — a short PLAIN-TEXT paragraph (80-150 chars zh / 100-200 chars en / 80-150 chars ja) for sharing on chat platforms (LINE, Slack, line groups). It is NOT HTML. Tone: casual but professional, action-oriented, mention the period + 1-2 highlights + a "see full newsletter" call-to-action. Example zh-TW:
+   > CancerFree 2026 年 5 月電子報出爐！本期重點：Prometheus Lab AI 沖繩首次部署、EVA Select 紐約研討會發表。完整內容請查收 email 或聯絡我們。
+   
+   This text gets imported into `newsletter_campaigns.promo_text` so the user can copy-paste from the mycrm quick-send page directly to LINE.
+
 4. **Build the manifest** matching `manifest-schema.json` exactly. Each `image_files` entry must reference a filename that will be in the `images/` folder (use sequence-prefixed slugs like `01-bio-asia-2026.jpg`).
 
 5. **Bundle the zip** using whatever file/code tool is available (analysis tool, code execution, file creation). Layout MUST be:
