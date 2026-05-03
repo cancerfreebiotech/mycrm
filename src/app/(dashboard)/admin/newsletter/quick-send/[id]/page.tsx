@@ -348,7 +348,15 @@ export default function QuickSendPage() {
       // Stripped-down HTML for the image (no print CSS — we want screen
       // colours / sizes). Replace listmonk unsubscribe anchor placeholders
       // with "#" so the renderer doesn't choke on `{{{unsubscribe}}}`.
-      const renderHtml = contentHtml
+      // Also inject inline-block CSS for icon rows because html2canvas
+      // misrenders inline <a><img></a> as block (stacking 3 icons vertically
+      // in the footer) on some configs.
+      const FORCE_INLINE_ICONS = `
+<style>
+  a > img[width="24"], a > img[width="32"] { display: inline-block !important; vertical-align: middle !important; }
+  a:has(> img[width]) { display: inline-block !important; }
+</style>`
+      const renderHtml = FORCE_INLINE_ICONS + contentHtml
         .replace(/\{\{\{unsubscribe(?:_preferences)?\}\}\}/g, '#')
       host = document.createElement('div')
       host.style.position = 'fixed'

@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v4.16.1 — fix(newsletter/image): footer social icons 在匯出圖片強制 inline（2026-05-03）
+
+匯出 PNG 時 footer 3 個 social icon 變垂直堆疊。html2canvas 對 inline `<a><img></a>` 渲染不正確。加注 `<style>` 塊強制 `a:has(>img[width])` 跟 `img[width="24"]` 用 `display: inline-block`，icons 改回橫向。
+
+bump 4.16.0 → 4.16.1
+
 ## v4.16.0 — feat(newsletter): 匯出整個 newsletter 為單張長圖（2026-05-03）
 
 PDF 分頁的取捨太多（圖片大小 vs 留白 vs 跨頁），user 直接要新功能：HTML 整封渲染成一張 PNG（不分頁），適合貼 LINE / Substack / 公司群組等場景。
