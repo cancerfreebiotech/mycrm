@@ -607,6 +607,57 @@ export default function QuickSendPage() {
                   {exportingImage ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />}
                   匯出圖片
                 </button>
+                <button
+                  onClick={async () => {
+                    if (!campaign?.published_at) {
+                      setBanner({ kind: 'err', msg: '請先發布到 RSS 才會有公開連結' })
+                      return
+                    }
+                    const slug = campaign.slug ?? campaign.id
+                    const url = `${window.location.origin}/newsletter/view/${slug}`
+                    try {
+                      await navigator.clipboard.writeText(url)
+                      setBanner({ kind: 'ok', msg: `已複製連結 → 貼到 Substack「Import from URL」` })
+                    } catch {
+                      setBanner({ kind: 'err', msg: `複製失敗，連結：${url}` })
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  title={campaign?.published_at ? '複製公開連結，貼到 Substack 的 Import from URL' : '請先發布到 RSS 才會有公開連結'}
+                >
+                  🔗 Substack 連結
+                </button>
+                <button
+                  onClick={async () => {
+                    // Extract clean body from email skeleton: drop logo header
+                    // (first <tr>) + footer (last <tr> with social icons /
+                    // unsubscribe). Keep intro + stories in between.
+                    try {
+                      const doc = new DOMParser().parseFromString(contentHtml, 'text/html')
+                      // Drop unsubscribe links
+                      doc.querySelectorAll('a[href*="unsubscribe"], a[href*="{{{unsubscribe"]').forEach((el) => el.closest('div, td, tr')?.remove())
+                      // Drop social icon row (table cells whose <a> wraps an alt="Facebook"/"LinkedIn"/"Website")
+                      doc.querySelectorAll('a > img[alt="Facebook"], a > img[alt="LinkedIn"], a > img[alt="Website"]').forEach((el) => el.closest('tr')?.remove())
+                      // Drop logo row (anchor wrapping img alt="CancerFree Biotech")
+                      doc.querySelectorAll('a > img[alt="CancerFree Biotech"]').forEach((el) => el.closest('tr')?.remove())
+                      // Drop "CancerFree Biotech · Taipei, Taiwan" footer line
+                      doc.querySelectorAll('td').forEach((td) => {
+                        if (td.children.length === 0 && /CancerFree Biotech.*Taipei/.test(td.textContent ?? '')) {
+                          td.closest('tr')?.remove()
+                        }
+                      })
+                      const body = doc.body.innerHTML
+                      await navigator.clipboard.writeText(body)
+                      setBanner({ kind: 'ok', msg: '已複製內文 HTML → 貼到 Substack 編輯器（Source / HTML 模式）' })
+                    } catch (e) {
+                      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : '複製失敗' })
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  title="抽掉 logo / 社群圖示 / 退訂連結，輸出純內文 HTML 到剪貼簿"
+                >
+                  📋 內文 HTML
+                </button>
               </div>
             </div>
 

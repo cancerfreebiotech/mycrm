@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## v4.19.0 — feat(newsletter): Substack 友善複製按鈕（2026-05-03）
+
+quick-send 加 2 個按鈕簡化貼到 Substack：
+
+1. **🔗 Substack 連結** — 複製 `crm.cancerfree.io/newsletter/view/{slug}` 公開連結到剪貼簿。貼到 Substack「Import from URL」讓它自動 scrape。需 published（published_at IS NOT NULL）才能用。
+2. **📋 內文 HTML** — DOMParser 解析 content_html，移除 logo header / social icon footer / unsubscribe links / 「CancerFree Biotech · Taipei, Taiwan」尾標，留下 intro + stories 純內文 HTML 到剪貼簿。可貼到 Substack 編輯器的 HTML / Source 模式。
+
+兩種互補：URL import 是 Substack scrape 自動處理，HTML 直接貼是手動但完全控制格式。
+
+bump 4.18.1 → 4.19.0
+
 ## v4.18.1 — fix(newsletter/print): 移除 Supabase image transform（EXIF 被破壞）（2026-05-03）
 
 User 回報「story 裡圖檔在 HTML 裡就被裁掉」— 查到原 zip 圖是 5712×4284 landscape (EXIF Orientation=6 旋轉 90° 顯示為 4284×5712 portrait)，但 Supabase `/storage/v1/render/image/public/?width=1200` 處理 EXIF 錯誤，輸出 1200×5712 極端 portrait（5712 變成高度而非寬度）。
