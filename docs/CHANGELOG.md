@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## v4.19.3 — fix(newsletter): RSS feed regex 太貪心、把內文也吃掉（2026-05-03）
+
+v4.19.2 的 `stripEmailSkeleton()` regex 從「外層 `<tr>` 開始 + 內層 `</tr>` 結束」匹配，結果整個外層 wrapper TR 連帶內層 header/intro/stories/footer 全被吃掉，RSS 出來只剩 `<table></table>` 空殼。
+
+實際 layout：外層 `<tr><td align="center">` 包一個內層 table，內層有 4 個 TR — header（td 帶 `border-bottom:1px solid #EEEEEE`）、intro、stories、footer（td 帶 `border-top:1px solid #EEEEEE`）。
+
+新 regex 改成 anchor 在內層 TD 的 border style 上：
+
+```
+<tr[^>]*>\s*<td[^>]*style="[^"]*border-bottom:1px solid #EEEEEE[^"]*"[^>]*>[\s\S]*?</td>\s*</tr>
+```
+
+`<tr>` 後緊接 `<td>` 帶特定 border，再 lazy 到該 td 的 `</td></tr>`。內層 header/footer TD 沒有 nested table，這個 lazy match 會停在正確位置。
+
+bump 4.19.2 → 4.19.3
+
 ## v4.19.2 — fix(newsletter): RSS 清掉 email skeleton + 圖檔匯出 PNG→JPEG（2026-05-03）
 
 ### Substack RSS 內文太肥

@@ -22,14 +22,21 @@ function cdata(s: string | null | undefined): string {
 // Strip the email skeleton (logo header, social-icon footer, unsubscribe
 // links, "CancerFree Biotech · Taipei, Taiwan" sign-off) from content_html
 // before publishing to RSS. Subscribers (Substack) want the article body,
-// not the email chrome. Regex-based because no DOM parser on the server.
+// not the email chrome.
+//
+// The email layout is: outer <tr><td align="center"> wraps an inner table
+// containing 4 TRs — header (TD has border-bottom:1px solid #EEEEEE),
+// intro, stories, footer (TD has border-top:1px solid #EEEEEE). We anchor
+// on the inner TD's distinctive border style so the regex doesn't span
+// the outer wrapper TR and eat the body. The header/footer TDs contain
+// no nested tables, so [\s\S]*?</td></tr> matches the correct closing.
 function stripEmailSkeleton(html: string): string {
   let out = html
-  // Drop the entire <tr> containing the logo (anchor wrapping img alt="CancerFree Biotech")
-  out = out.replace(/<tr[^>]*>[^]*?<a[^>]*href="https:\/\/cancerfree\.io"[^>]*>[^]*?<\/a>[^]*?<\/tr>/gi, '')
-  // Drop the entire <tr> containing the footer (border-top + social icons + unsubscribe)
-  out = out.replace(/<tr[^>]*>[^]*?border-top:1px solid #EEEEEE[^]*?<\/tr>/gi, '')
-  // Drop any remaining standalone unsubscribe anchors (defensive — usually inside the footer tr already)
+  // Drop the header TR (TD has border-bottom:1px solid #EEEEEE — contains logo + period label)
+  out = out.replace(/<tr[^>]*>\s*<td[^>]*style="[^"]*border-bottom:1px solid #EEEEEE[^"]*"[^>]*>[\s\S]*?<\/td>\s*<\/tr>/gi, '')
+  // Drop the footer TR (TD has border-top:1px solid #EEEEEE — contains social icons + unsubscribe)
+  out = out.replace(/<tr[^>]*>\s*<td[^>]*style="[^"]*border-top:1px solid #EEEEEE[^"]*"[^>]*>[\s\S]*?<\/td>\s*<\/tr>/gi, '')
+  // Defensive: drop any remaining unsubscribe anchors
   out = out.replace(/<a[^>]*href="[^"]*unsubscribe[^"]*"[^>]*>[\s\S]*?<\/a>/gi, '')
   out = out.replace(/<a[^>]*href="\{\{\{unsubscribe[^"]*"[^>]*>[\s\S]*?<\/a>/gi, '')
   return out
