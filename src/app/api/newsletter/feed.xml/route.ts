@@ -19,6 +19,22 @@ function cdata(s: string | null | undefined): string {
   return `<![CDATA[${(s ?? '').replace(/]]>/g, ']]]]><![CDATA[>')}]]>`
 }
 
+// Strip the email skeleton (logo header, social-icon footer, unsubscribe
+// links, "CancerFree Biotech · Taipei, Taiwan" sign-off) from content_html
+// before publishing to RSS. Subscribers (Substack) want the article body,
+// not the email chrome. Regex-based because no DOM parser on the server.
+function stripEmailSkeleton(html: string): string {
+  let out = html
+  // Drop the entire <tr> containing the logo (anchor wrapping img alt="CancerFree Biotech")
+  out = out.replace(/<tr[^>]*>[^]*?<a[^>]*href="https:\/\/cancerfree\.io"[^>]*>[^]*?<\/a>[^]*?<\/tr>/gi, '')
+  // Drop the entire <tr> containing the footer (border-top + social icons + unsubscribe)
+  out = out.replace(/<tr[^>]*>[^]*?border-top:1px solid #EEEEEE[^]*?<\/tr>/gi, '')
+  // Drop any remaining standalone unsubscribe anchors (defensive — usually inside the footer tr already)
+  out = out.replace(/<a[^>]*href="[^"]*unsubscribe[^"]*"[^>]*>[\s\S]*?<\/a>/gi, '')
+  out = out.replace(/<a[^>]*href="\{\{\{unsubscribe[^"]*"[^>]*>[\s\S]*?<\/a>/gi, '')
+  return out
+}
+
 function toRFC822(d: Date): string {
   return d.toUTCString()
 }
@@ -51,7 +67,7 @@ export async function GET() {
       <guid isPermaLink="false">${esc(c.id as string)}</guid>
       <pubDate>${pub}</pubDate>
       ${c.preview_text ? `<description>${esc(c.preview_text)}</description>` : ''}
-      <content:encoded>${cdata(c.content_html)}</content:encoded>
+      <content:encoded>${cdata(stripEmailSkeleton((c.content_html as string) ?? ''))}</content:encoded>
     </item>`
   }).join('\n')
 

@@ -387,18 +387,23 @@ export default function QuickSendPage() {
       )
       const canvas = await html2canvas(host, {
         backgroundColor: '#FFFFFF',
-        scale: Math.min(window.devicePixelRatio || 1, 2),
+        // 1.5x is the sweet spot — sharp enough for retina viewing while
+        // halving PNG file size vs 2x. Drop further if user's display is 1x.
+        scale: Math.min(window.devicePixelRatio || 1, 1.5),
         useCORS: true,
         logging: false,
         windowWidth: 600,
       })
-      // Convert to blob → trigger download
-      const blob: Blob | null = await new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'))
+      // Output as JPEG q=0.85 instead of PNG — newsletter content is mostly
+      // photos + text; JPEG cuts file size by ~70% with no perceptible loss.
+      const blob: Blob | null = await new Promise((resolve) =>
+        canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.85),
+      )
       if (!blob) throw new Error('canvas → blob 失敗')
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${pdfFilename}.png`
+      a.download = `${pdfFilename}.jpg`
       document.body.appendChild(a)
       a.click()
       a.remove()

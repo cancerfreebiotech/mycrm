@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## v4.19.2 — fix(newsletter): RSS 清掉 email skeleton + 圖檔匯出 PNG→JPEG（2026-05-03）
+
+### Substack RSS 內文太肥
+RSS feed 把整封 email skeleton（logo header + social-icon footer + 「CancerFree Biotech · Taipei, Taiwan」尾標 + 退訂連結）都送出去了，Substack 匯入後底部出現直立排列的 social icons，logo 也重複。
+
+`/api/newsletter/feed.xml` 加 `stripEmailSkeleton()`：regex 把首列（含 logo 的 `<a href="cancerfree.io">` 那一 `<tr>`）跟尾列（border-top + social + unsubscribe 那一 `<tr>`）整段移除，只保留 intro + stories 給 RSS。
+
+### 圖檔匯出檔太大
+原本 PNG + 2x devicePixelRatio scale → 5-15 MB。改成：
+- scale 從 `min(dpr, 2)` 降到 `min(dpr, 1.5)`（Retina 還夠銳）
+- output 從 `image/png` 改 `image/jpeg quality=0.85`（newsletter 多照片，JPEG 比 PNG 小 ~70% 無感差）
+- 副檔名 `.png` → `.jpg`
+
+預期 5-15 MB 圖檔降到 ~1-3 MB。
+
+PDF 大小不在這次處理範圍 — 要做的話需要圖片上傳時 pre-process（rotate per EXIF + resize），會是另一個 sprint。
+
+bump 4.19.1 → 4.19.2
+
 ## v4.19.1 — fix(newsletter): Substack 三個障礙修光（2026-05-03）
 
 User 試 v4.19.0 三個按鈕，發現：
