@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { ScanSearch, Loader2, Merge, X, ExternalLink } from 'lucide-react'
+import { ScanSearch, Loader2, Merge, X, ExternalLink, CheckSquare, Square } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { PermissionGate } from '@/components/PermissionGate'
 
@@ -46,6 +46,53 @@ export default function DuplicatesPage() {
   const [mergeAction, setMergeAction] = useState<MergeAction>(null)
   const [mergeSaving, setMergeSaving] = useState(false)
   const [ignoring, setIgnoring] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkIgnoring, setBulkIgnoring] = useState(false)
+
+  function togglePair(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll(visibleIds: string[]) {
+    setSelectedIds((prev) => {
+      const allSelected = visibleIds.every((id) => prev.has(id))
+      if (allSelected) {
+        const next = new Set(prev)
+        for (const id of visibleIds) next.delete(id)
+        return next
+      } else {
+        const next = new Set(prev)
+        for (const id of visibleIds) next.add(id)
+        return next
+      }
+    })
+  }
+
+  async function handleBulkIgnore() {
+    if (selectedIds.size === 0) return
+    if (!confirm(t('confirmBulkIgnore', { count: selectedIds.size }))) return
+    setBulkIgnoring(true)
+    try {
+      const ids = Array.from(selectedIds)
+      // Batch update in chunks of 200 to avoid PostgREST URL limit on .in()
+      const BATCH = 200
+      for (let i = 0; i < ids.length; i += BATCH) {
+        const slice = ids.slice(i, i + BATCH)
+        const { error } = await supabase.from('duplicate_pairs').update({ is_ignored: true }).in('id', slice)
+        if (error) throw error
+      }
+      setPairs((prev) => prev.filter((p) => !selectedIds.has(p.id)))
+      setSelectedIds(new Set())
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'bulk update failed')
+    } finally {
+      setBulkIgnoring(false)
+    }
+  }
 
   useEffect(() => { fetchPairs() }, [])
 
@@ -154,9 +201,17 @@ export default function DuplicatesPage() {
   function PairRow({ pair }: { pair: DupPair }) {
     const a = pair.contact_a
     const b = pair.contact_b
+    const checked = selectedIds.has(pair.id)
     return (
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+      <div className={`rounded-xl border p-4 ${checked ? 'border-blue-400 bg-blue-50/40 dark:border-blue-700 dark:bg-blue-950/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900'}`}>
         <div className="flex items-start gap-3">
+          <button
+            onClick={() => togglePair(pair.id)}
+            className="mt-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+            title={t('selectForBulk')}
+          >
+            {checked ? <CheckSquare size={18} className="text-blue-600 dark:text-blue-400" /> : <Square size={18} />}
+          </button>
           <div className="flex-1 grid grid-cols-2 gap-3">
             <ContactCard c={a} />
             <ContactCard c={b} />
@@ -215,6 +270,36 @@ export default function DuplicatesPage() {
       {fetchError && (
         <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-4 text-sm text-red-700 dark:text-red-400">
           查詢失敗：{fetchError}
+        </div>
+      )}
+      {selectedIds.size > 0 && (
+        <div className="sticky top-0 z-10 mb-4 px-4 py-3 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 flex items-center justify-between gap-3">
+          <span className="text-sm text-blue-800 dark:text-blue-300">
+            {t('selectedCount', { count: selectedIds.size })}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => toggleAll(pairs.map((p) => p.id))}
+              className="text-xs px-2 py-1 rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+            >
+              {pairs.every((p) => selectedIds.has(p.id)) ? t('deselectAll') : t('selectAll', { count: pairs.length })}
+            </button>
+            <button
+              onClick={handleBulkIgnore}
+              disabled={bulkIgnoring}
+              className="flex items-center gap-1.5 text-xs px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {bulkIgnoring ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
+              {t('bulkMarkNotDuplicate', { count: selectedIds.size })}
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              disabled={bulkIgnoring}
+              className="text-xs px-2 py-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+            >
+              {tc('cancel')}
+            </button>
+          </div>
         </div>
       )}
       {loading ? (

@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## v4.17.1 — feat(duplicates): 多選批次標記為非重複（2026-05-03）
+
+`/admin/duplicates` 每對重複聯絡人加 checkbox。≥1 對被勾選時，頁首出現 sticky 工具列：
+- 「全選 N 對」/「取消全選」
+- **「標記為非重複（N）」** 一次處理所有勾選的（200/批 PostgREST update）
+- 「取消」清空選擇
+
+合併動作仍然單對處理（每對需要選擇保留哪邊，無法批次）。i18n 三語加 6 keys。
+
+bump 4.17.0 → 4.17.1
+
 ## v4.17.0 — feat(newsletter): LINE 宣傳短文 + 回 v4.15.4 PDF CSS（2026-05-03）
 
 ### Two changes
