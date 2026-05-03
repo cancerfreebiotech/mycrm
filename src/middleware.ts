@@ -12,7 +12,13 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/sendgrid') ||
     pathname === '/api/set-locale' ||
     pathname.startsWith('/api/admin/') ||
-    pathname.startsWith('/unsubscribe')
+    pathname.startsWith('/unsubscribe') ||
+    // Public newsletter assets — Substack RSS importer + Import-from-URL
+    // both need to fetch these without authentication. Plus the read-only
+    // public newsletter view (/newsletter/view/[slug]) so subscribers can
+    // open "view in browser" links from received emails.
+    pathname === '/api/newsletter/feed.xml' ||
+    pathname.startsWith('/newsletter/view/')
   ) {
     return NextResponse.next()
   }
@@ -44,9 +50,10 @@ export async function middleware(request: NextRequest) {
   const isMaintenancePage = pathname === '/maintenance'
   const isMfaPage = pathname.startsWith('/mfa/')
   const isDocsPage = pathname.startsWith('/docs')
+  const isPublicNewsletter = pathname.startsWith('/newsletter/view/')
 
   // Redirect unauthenticated users to login
-  if (!user && !isLoginPage && !isMaintenancePage && !isDocsPage) {
+  if (!user && !isLoginPage && !isMaintenancePage && !isDocsPage && !isPublicNewsletter) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 

@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## v4.19.1 — fix(newsletter): Substack 三個障礙修光（2026-05-03）
+
+User 試 v4.19.0 三個按鈕，發現：
+1. 「複製內文 HTML」貼到 Substack 變成裸 HTML 文字（不是渲染的 rich content）
+2. 「Substack 連結」URL import 失敗
+3. RSS import 找不到文章
+
+Root cause：
+- (1) `navigator.clipboard.writeText()` 只寫 `text/plain`，rich-text 編輯器需要 `text/html` 才會渲染
+- (2)(3) middleware 把 `/newsletter/view/*` 跟 `/api/newsletter/feed.xml` 也擋了 → 未登入的 Substack scraper 被 redirect 到 `/login`，看不到內容
+
+修法：
+- middleware 加白名單：`/api/newsletter/feed.xml` 跟 `/newsletter/view/*` 不需要 auth
+- 「複製內文」改用 `ClipboardItem` 同時寫 `text/html` 和 `text/plain` mime types，Substack 編輯器收到 HTML 自動渲染為格式化內容
+- 按鈕 label 從「內文 HTML」改成「複製內文」（rich text 行為更名實相符）
+
+bump 4.19.0 → 4.19.1
+
 ## v4.19.0 — feat(newsletter): Substack 友善複製按鈕（2026-05-03）
 
 quick-send 加 2 個按鈕簡化貼到 Substack：

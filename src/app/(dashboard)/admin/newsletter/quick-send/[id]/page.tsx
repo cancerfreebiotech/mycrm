@@ -629,34 +629,51 @@ export default function QuickSendPage() {
                 </button>
                 <button
                   onClick={async () => {
-                    // Extract clean body from email skeleton: drop logo header
-                    // (first <tr>) + footer (last <tr> with social icons /
-                    // unsubscribe). Keep intro + stories in between.
+                    // Extract clean body from email skeleton: drop logo /
+                    // social-icon footer / unsubscribe / "Taipei, Taiwan"
+                    // sign-off. Keep intro + stories.
+                    //
+                    // Write to clipboard with BOTH text/html and text/plain
+                    // mime types so Substack's rich-text editor sees the HTML
+                    // and pastes formatted content. navigator.clipboard.writeText()
+                    // alone produces text/plain only, which the editor renders
+                    // as literal HTML source. ClipboardItem with multi-mime is
+                    // the recipe for "paste as rich text".
                     try {
                       const doc = new DOMParser().parseFromString(contentHtml, 'text/html')
-                      // Drop unsubscribe links
                       doc.querySelectorAll('a[href*="unsubscribe"], a[href*="{{{unsubscribe"]').forEach((el) => el.closest('div, td, tr')?.remove())
-                      // Drop social icon row (table cells whose <a> wraps an alt="Facebook"/"LinkedIn"/"Website")
                       doc.querySelectorAll('a > img[alt="Facebook"], a > img[alt="LinkedIn"], a > img[alt="Website"]').forEach((el) => el.closest('tr')?.remove())
-                      // Drop logo row (anchor wrapping img alt="CancerFree Biotech")
                       doc.querySelectorAll('a > img[alt="CancerFree Biotech"]').forEach((el) => el.closest('tr')?.remove())
-                      // Drop "CancerFree Biotech · Taipei, Taiwan" footer line
                       doc.querySelectorAll('td').forEach((td) => {
                         if (td.children.length === 0 && /CancerFree Biotech.*Taipei/.test(td.textContent ?? '')) {
                           td.closest('tr')?.remove()
                         }
                       })
-                      const body = doc.body.innerHTML
-                      await navigator.clipboard.writeText(body)
-                      setBanner({ kind: 'ok', msg: '已複製內文 HTML → 貼到 Substack 編輯器（Source / HTML 模式）' })
+                      const html = doc.body.innerHTML
+                      // text/plain fallback: a stripped, line-broken version
+                      const plain = doc.body.textContent?.replace(/\n{3,}/g, '\n\n').trim() ?? ''
+
+                      // Use ClipboardItem so rich-text editors see HTML mime type
+                      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+                        await navigator.clipboard.write([
+                          new ClipboardItem({
+                            'text/html': new Blob([html], { type: 'text/html' }),
+                            'text/plain': new Blob([plain], { type: 'text/plain' }),
+                          }),
+                        ])
+                      } else {
+                        // Fallback for browsers without ClipboardItem
+                        await navigator.clipboard.writeText(html)
+                      }
+                      setBanner({ kind: 'ok', msg: '已複製內文 → 直接貼到 Substack 編輯器（會自動渲染成格式化內容）' })
                     } catch (e) {
                       setBanner({ kind: 'err', msg: e instanceof Error ? e.message : '複製失敗' })
                     }
                   }}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-                  title="抽掉 logo / 社群圖示 / 退訂連結，輸出純內文 HTML 到剪貼簿"
+                  title="抽掉 logo / 社群圖示 / 退訂連結，複製為「rich text」可直接貼到 Substack 編輯器"
                 >
-                  📋 內文 HTML
+                  📋 複製內文
                 </button>
               </div>
             </div>
