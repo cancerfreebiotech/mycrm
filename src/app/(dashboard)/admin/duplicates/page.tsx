@@ -46,51 +46,87 @@ export default function DuplicatesPage() {
   const [mergeAction, setMergeAction] = useState<MergeAction>(null)
   const [mergeSaving, setMergeSaving] = useState(false)
   const [ignoring, setIgnoring] = useState<string | null>(null)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [bulkIgnoring, setBulkIgnoring] = useState(false)
+  type BulkAction = 'mergeLeft' | 'mergeRight' | 'ignore'
+  const [bulkActions, setBulkActions] = useState<Map<string, BulkAction>>(new Map())
+  const [bulkExecuting, setBulkExecuting] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
 
-  function togglePair(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
+  function setBulkAction(pairId: string, action: BulkAction | null) {
+    setBulkActions((prev) => {
+      const next = new Map(prev)
+      if (action === null || prev.get(pairId) === action) next.delete(pairId)
+      else next.set(pairId, action)
       return next
     })
   }
 
-  function toggleAll(visibleIds: string[]) {
-    setSelectedIds((prev) => {
-      const allSelected = visibleIds.every((id) => prev.has(id))
-      if (allSelected) {
-        const next = new Set(prev)
-        for (const id of visibleIds) next.delete(id)
-        return next
+  async function executeBulk() {
+    if (bulkActions.size === 0) return
+    const ignores: string[] = []
+    const merges: { pairId: string; keepId: string; sourceId: string }[] = []
+    for (const [pairId, action] of bulkActions) {
+      const pair = pairs.find((p) => p.id === pairId)
+      if (!pair) continue
+      if (action === 'ignore') {
+        ignores.push(pairId)
       } else {
-        const next = new Set(prev)
-        for (const id of visibleIds) next.add(id)
-        return next
+        const keepId = action === 'mergeLeft' ? pair.contact_id_a : pair.contact_id_b
+        const sourceId = action === 'mergeLeft' ? pair.contact_id_b : pair.contact_id_a
+        merges.push({ pairId, keepId, sourceId })
       }
-    })
-  }
+    }
+    if (!confirm(t('confirmBulkExecute', { merge: merges.length, ignore: ignores.length }))) return
 
-  async function handleBulkIgnore() {
-    if (selectedIds.size === 0) return
-    if (!confirm(t('confirmBulkIgnore', { count: selectedIds.size }))) return
-    setBulkIgnoring(true)
+    setBulkExecuting(true)
+    const total = ignores.length + merges.length
+    setBulkProgress({ done: 0, total })
+    let done = 0
     try {
-      const ids = Array.from(selectedIds)
-      // Batch update in chunks of 200 to avoid PostgREST URL limit on .in()
-      const BATCH = 200
-      for (let i = 0; i < ids.length; i += BATCH) {
-        const slice = ids.slice(i, i + BATCH)
-        const { error } = await supabase.from('duplicate_pairs').update({ is_ignored: true }).in('id', slice)
-        if (error) throw error
+      // Batch ignore first (cheap DB update)
+      if (ignores.length > 0) {
+        const BATCH = 200
+        for (let i = 0; i < ignores.length; i += BATCH) {
+          const slice = ignores.slice(i, i + BATCH)
+          await supabase.from('duplicate_pairs').update({ is_ignored: true }).in('id', slice)
+        }
+        done += ignores.length
+        setBulkProgress({ done, total })
       }
-      setPairs((prev) => prev.filter((p) => !selectedIds.has(p.id)))
-      setSelectedIds(new Set())
+      // Sequential merges (each call cascades + cleans related pairs)
+      const removedSourceIds = new Set<string>()
+      for (const m of merges) {
+        // Skip if either contact already merged in earlier step
+        if (removedSourceIds.has(m.keepId) || removedSourceIds.has(m.sourceId)) {
+          done++
+          setBulkProgress({ done, total })
+          continue
+        }
+        const res = await fetch(`/api/contacts/${m.keepId}/merge`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sourceId: m.sourceId }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(`合併失敗 (${m.pairId}): ${err.error ?? res.status}`)
+        }
+        removedSourceIds.add(m.sourceId)
+        done++
+        setBulkProgress({ done, total })
+      }
+      // Update local state — drop processed pairs + any pair referencing a merged source
+      setPairs((prev) => prev.filter((p) =>
+        !ignores.includes(p.id) &&
+        !merges.some((m) => m.pairId === p.id) &&
+        !removedSourceIds.has(p.contact_id_a) &&
+        !removedSourceIds.has(p.contact_id_b),
+      ))
+      setBulkActions(new Map())
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'bulk update failed')
+      alert(e instanceof Error ? e.message : 'bulk execute failed')
     } finally {
-      setBulkIgnoring(false)
+      setBulkExecuting(false)
+      setBulkProgress(null)
     }
   }
 
@@ -201,42 +237,70 @@ export default function DuplicatesPage() {
   function PairRow({ pair }: { pair: DupPair }) {
     const a = pair.contact_a
     const b = pair.contact_b
-    const checked = selectedIds.has(pair.id)
+    const action = bulkActions.get(pair.id)
+    const queued = !!action
+    const borderClass = queued
+      ? action === 'mergeLeft' ? 'border-orange-400 bg-orange-50/40 dark:border-orange-700 dark:bg-orange-950/20'
+      : action === 'mergeRight' ? 'border-orange-400 bg-orange-50/40 dark:border-orange-700 dark:bg-orange-950/20'
+      : 'border-blue-400 bg-blue-50/40 dark:border-blue-700 dark:bg-blue-950/20'
+      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900'
+    const CheckIcon = ({ on }: { on: boolean }) => on
+      ? <CheckSquare size={14} className="text-current" />
+      : <Square size={14} className="text-gray-400" />
     return (
-      <div className={`rounded-xl border p-4 ${checked ? 'border-blue-400 bg-blue-50/40 dark:border-blue-700 dark:bg-blue-950/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900'}`}>
+      <div className={`rounded-xl border p-4 ${borderClass}`}>
         <div className="flex items-start gap-3">
-          <button
-            onClick={() => togglePair(pair.id)}
-            className="mt-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
-            title={t('selectForBulk')}
-          >
-            {checked ? <CheckSquare size={18} className="text-blue-600 dark:text-blue-400" /> : <Square size={18} />}
-          </button>
           <div className="flex-1 grid grid-cols-2 gap-3">
             <ContactCard c={a} />
             <ContactCard c={b} />
           </div>
           <div className="flex flex-col gap-2 shrink-0 mt-1">
-            <button
-              onClick={() => setMergeAction({ pairId: pair.id, keepId: a.id, sourceId: b.id })}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-600 text-white rounded-lg hover:bg-orange-700"
-            >
-              <Merge size={12} /> {t('keepLeft')}
-            </button>
-            <button
-              onClick={() => setMergeAction({ pairId: pair.id, keepId: b.id, sourceId: a.id })}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-600 text-white rounded-lg hover:bg-orange-700"
-            >
-              <Merge size={12} /> {t('keepRight')}
-            </button>
-            <button
-              onClick={() => handleIgnore(pair.id)}
-              disabled={ignoring === pair.id}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
-            >
-              {ignoring === pair.id ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
-              {t('notDuplicate')}
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setBulkAction(pair.id, 'mergeLeft')}
+                disabled={bulkExecuting}
+                title={t('selectForBulk')}
+                className={`text-xs ${action === 'mergeLeft' ? 'text-orange-600' : 'text-gray-400 hover:text-orange-500'}`}
+              ><CheckIcon on={action === 'mergeLeft'} /></button>
+              <button
+                onClick={() => setMergeAction({ pairId: pair.id, keepId: a.id, sourceId: b.id })}
+                disabled={bulkExecuting}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
+              >
+                <Merge size={12} /> {t('keepLeft')}
+              </button>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setBulkAction(pair.id, 'mergeRight')}
+                disabled={bulkExecuting}
+                title={t('selectForBulk')}
+                className={`text-xs ${action === 'mergeRight' ? 'text-orange-600' : 'text-gray-400 hover:text-orange-500'}`}
+              ><CheckIcon on={action === 'mergeRight'} /></button>
+              <button
+                onClick={() => setMergeAction({ pairId: pair.id, keepId: b.id, sourceId: a.id })}
+                disabled={bulkExecuting}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
+              >
+                <Merge size={12} /> {t('keepRight')}
+              </button>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setBulkAction(pair.id, 'ignore')}
+                disabled={bulkExecuting}
+                title={t('selectForBulk')}
+                className={`text-xs ${action === 'ignore' ? 'text-blue-600' : 'text-gray-400 hover:text-blue-500'}`}
+              ><CheckIcon on={action === 'ignore'} /></button>
+              <button
+                onClick={() => handleIgnore(pair.id)}
+                disabled={ignoring === pair.id || bulkExecuting}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
+              >
+                {ignoring === pair.id ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
+                {t('notDuplicate')}
+              </button>
+            </div>
           </div>
         </div>
         {pair.match_type === 'similar_name' && pair.similarity_score != null && (
@@ -272,29 +336,32 @@ export default function DuplicatesPage() {
           查詢失敗：{fetchError}
         </div>
       )}
-      {selectedIds.size > 0 && (
+      {bulkActions.size > 0 && (
         <div className="sticky top-0 z-10 mb-4 px-4 py-3 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 flex items-center justify-between gap-3">
           <span className="text-sm text-blue-800 dark:text-blue-300">
-            {t('selectedCount', { count: selectedIds.size })}
+            {(() => {
+              const m = [...bulkActions.values()].filter((a) => a !== 'ignore').length
+              const i = [...bulkActions.values()].filter((a) => a === 'ignore').length
+              return t('bulkSummary', { merge: m, ignore: i })
+            })()}
+            {bulkProgress && (
+              <span className="ml-2 text-xs">
+                {bulkProgress.done}/{bulkProgress.total}
+              </span>
+            )}
           </span>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => toggleAll(pairs.map((p) => p.id))}
-              className="text-xs px-2 py-1 rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40"
-            >
-              {pairs.every((p) => selectedIds.has(p.id)) ? t('deselectAll') : t('selectAll', { count: pairs.length })}
-            </button>
-            <button
-              onClick={handleBulkIgnore}
-              disabled={bulkIgnoring}
+              onClick={executeBulk}
+              disabled={bulkExecuting || bulkActions.size === 0}
               className="flex items-center gap-1.5 text-xs px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
             >
-              {bulkIgnoring ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
-              {t('bulkMarkNotDuplicate', { count: selectedIds.size })}
+              {bulkExecuting ? <Loader2 size={12} className="animate-spin" /> : null}
+              {t('bulkExecute', { count: bulkActions.size })}
             </button>
             <button
-              onClick={() => setSelectedIds(new Set())}
-              disabled={bulkIgnoring}
+              onClick={() => setBulkActions(new Map())}
+              disabled={bulkExecuting}
               className="text-xs px-2 py-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             >
               {tc('cancel')}

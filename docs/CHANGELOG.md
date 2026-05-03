@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v4.18.0 — feat: 三件套（duplicates 批次合併 + promo 三語匯入 + PDF 130mm）（2026-05-03）
+
+1. **`/admin/duplicates` 真正的批次合併**：原本只能批次標記非重複，現在每對左右兩側 + 非重複 各有獨立 checkbox。勾「保留左」進合併佇列、保留右同理、X 進非重複佇列。Toolbar 顯示「N 對合併、M 對非重複」+ 「執行批次」一次跑完（合併走 sequential `/api/contacts/[id]/merge`，ignore batched 200/批）。Progress 計數顯示。
+
+2. **Promo 三語批次匯入**：quick-send 頁原本要切到 zh/en/ja 各 campaign 各填一次。新增「三語批次匯入」紫色按鈕，modal 一次貼 3 語，後端 `POST /api/newsletter/campaigns/[id]/promo-batch` 解析 slug 找出三個 sibling campaigns（period+stamp 相同）一次更新 promo_text。
+
+3. **PDF max-height 200 → 130mm**：v4.17.0 改成 200mm 後 PDF 變 11 頁、圖過大。降到 130mm 約 46% A4 內容高，讓多 story 能擠在同頁。aspect ratio 維持，沒裁切。
+
+bump 4.17.1 → 4.18.0
+
 ## v4.17.1 — feat(duplicates): 多選批次標記為非重複（2026-05-03）
 
 `/admin/duplicates` 每對重複聯絡人加 checkbox。≥1 對被勾選時，頁首出現 sticky 工具列：

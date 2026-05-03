@@ -55,6 +55,9 @@ export default function QuickSendPage() {
   const [promoText, setPromoText] = useState('')
   const [promoCopied, setPromoCopied] = useState(false)
   const [savingPromo, setSavingPromo] = useState(false)
+  const [promoBatchOpen, setPromoBatchOpen] = useState(false)
+  const [promoBatch, setPromoBatch] = useState({ 'zh-TW': '', 'en': '', 'ja': '' })
+  const [promoBatchSaving, setPromoBatchSaving] = useState(false)
   const [listIds, setListIds] = useState<string[]>([])
   const [contentHtml, setContentHtml] = useState('')
   type ViewMode = 'preview' | 'edit' | 'split'
@@ -116,14 +119,15 @@ export default function QuickSendPage() {
   }
   body > div, body > table { padding: 0 !important; background: #FFFFFF !important; }
   table[align="center"], table { max-width: 100% !important; width: 100% !important; }
-  /* Restored to v4.15.4-style image CSS (user feedback "看起來圖檔沒有
-     被壓縮到 分頁也還可以接受"). Story photos cap at 200mm tall (~71%
-     of A4 content), text flows freely. Logo / social icons keep their
-     HTML width-attribute sizes by virtue of the :not([width]) selector. */
+  /* Story photos cap at 130mm tall (~46% of A4 content). User wants
+     "稍微縮小圖片" so multiple stories can fit on one page instead of
+     each photo dominating its own page. Aspect preserved via height: auto
+     (no object-fit: cover, no stretching). 200mm was too generous and
+     produced 11-page PDFs; 130mm typically yields 6-7 pages. */
   img { vertical-align: middle; }
   img:not([width]) {
     max-width: 100% !important;
-    max-height: 200mm !important;
+    max-height: 130mm !important;
     height: auto !important;
     display: block;
     margin: 0 auto;
@@ -538,6 +542,13 @@ export default function QuickSendPage() {
                   className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
                 <div className="flex justify-end gap-2 mt-1">
+                  <button
+                    onClick={() => { setPromoBatch({ 'zh-TW': '', 'en': '', 'ja': '' }); setPromoBatchOpen(true) }}
+                    className="text-xs px-2 py-1 rounded-lg border border-purple-300 dark:border-purple-700 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30"
+                    title="一次貼三種語言、套用到 3 個同期 campaign（zh/en/ja）"
+                  >
+                    三語批次匯入
+                  </button>
                   {promoText && (
                     <button
                       onClick={async () => {
@@ -788,6 +799,77 @@ export default function QuickSendPage() {
           ← 返回
         </button>
       </div>
+
+      {/* 三語批次匯入 promo modal */}
+      {promoBatchOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !promoBatchSaving && setPromoBatchOpen(false)}>
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-2xl mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">三語批次匯入 LINE 短文</h2>
+              <button onClick={() => !promoBatchSaving && setPromoBatchOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">×</button>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              貼上 3 種語言的短文，會同時套用到本期 zh / en / ja 三個 campaign。可只填部分（空的不會覆蓋）。
+            </p>
+            <div className="space-y-3">
+              {(['zh-TW', 'en', 'ja'] as const).map((lang) => (
+                <div key={lang}>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{lang}</label>
+                  <textarea
+                    value={promoBatch[lang]}
+                    onChange={(e) => setPromoBatch((prev) => ({ ...prev, [lang]: e.target.value }))}
+                    rows={3}
+                    placeholder={lang === 'zh-TW' ? '繁中短文...' : lang === 'en' ? 'English promo text...' : '日本語の短文...'}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                onClick={() => setPromoBatchOpen(false)}
+                disabled={promoBatchSaving}
+                className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={async () => {
+                  setPromoBatchSaving(true)
+                  try {
+                    const res = await fetch(`/api/newsletter/campaigns/${id}/promo-batch`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ promo: promoBatch }),
+                    })
+                    const data = await res.json()
+                    if (!res.ok) {
+                      setBanner({ kind: 'err', msg: data.error ?? '批次匯入失敗' })
+                      return
+                    }
+                    const updated = (data.results as { lang: string; updated: boolean }[]).filter((r) => r.updated).length
+                    setBanner({ kind: 'ok', msg: `三語批次匯入成功（${updated} 個 campaign 更新）` })
+                    // Update local promo if current campaign was one of the updated
+                    const currentLangPromo = promoBatch['zh-TW'] && (campaign?.slug?.includes('-zh-tw-')) ? promoBatch['zh-TW']
+                      : promoBatch['en'] && (campaign?.slug?.includes('-en-')) ? promoBatch['en']
+                      : promoBatch['ja'] && (campaign?.slug?.includes('-ja-')) ? promoBatch['ja']
+                      : null
+                    if (currentLangPromo) setPromoText(currentLangPromo)
+                    setPromoBatchOpen(false)
+                  } catch (e) {
+                    setBanner({ kind: 'err', msg: e instanceof Error ? e.message : '批次匯入失敗' })
+                  } finally { setPromoBatchSaving(false) }
+                }}
+                disabled={promoBatchSaving}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+              >
+                {promoBatchSaving ? <Loader2 size={14} className="animate-spin" /> : null}
+                匯入並儲存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </PermissionGate>
   )
 }
