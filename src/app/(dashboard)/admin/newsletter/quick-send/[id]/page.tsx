@@ -43,6 +43,7 @@ export default function QuickSendPage() {
   const [saving, setSaving] = useState(false)
   const [sending, setSending] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [exportingImage, setExportingImage] = useState(false)
   const [testEmail, setTestEmail] = useState('')
   const [sendingTest, setSendingTest] = useState(false)
   const [banner, setBanner] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null)
@@ -329,6 +330,75 @@ export default function QuickSendPage() {
     } finally { setPublishing(false) }
   }
 
+  async function exportImage() {
+    // Render the newsletter HTML to a single (potentially very long) PNG.
+    // No pagination — the entire content is captured as one image, ideal
+    // for posting on platforms like LINE / Substack / WeChat where one
+    // tall image > a multi-page PDF.
+    //
+    // We render off-screen at email's natural width (600 px = the skeleton
+    // table max-width) and let height grow as needed. Upscale by devicePixelRatio
+    // so the result is sharp on retina displays / when zoomed.
+    setExportingImage(true)
+    setBanner(null)
+    let host: HTMLDivElement | null = null
+    try {
+      const html2canvasMod = await import('html2canvas')
+      const html2canvas = html2canvasMod.default
+      // Stripped-down HTML for the image (no print CSS — we want screen
+      // colours / sizes). Replace listmonk unsubscribe anchor placeholders
+      // with "#" so the renderer doesn't choke on `{{{unsubscribe}}}`.
+      const renderHtml = contentHtml
+        .replace(/\{\{\{unsubscribe(?:_preferences)?\}\}\}/g, '#')
+      host = document.createElement('div')
+      host.style.position = 'fixed'
+      host.style.left = '-99999px'
+      host.style.top = '0'
+      host.style.width = '600px'
+      host.style.background = '#FFFFFF'
+      host.innerHTML = renderHtml
+      document.body.appendChild(host)
+      // Wait for all images inside to load (html2canvas hangs otherwise on broken images)
+      const imgs = Array.from(host.querySelectorAll('img'))
+      await Promise.all(
+        imgs.map((img) => {
+          if (img.complete && img.naturalWidth > 0) return Promise.resolve()
+          return new Promise<void>((resolve) => {
+            const done = () => resolve()
+            img.addEventListener('load', done, { once: true })
+            img.addEventListener('error', done, { once: true })
+            // Safety timeout
+            setTimeout(done, 5000)
+          })
+        }),
+      )
+      const canvas = await html2canvas(host, {
+        backgroundColor: '#FFFFFF',
+        scale: Math.min(window.devicePixelRatio || 1, 2),
+        useCORS: true,
+        logging: false,
+        windowWidth: 600,
+      })
+      // Convert to blob → trigger download
+      const blob: Blob | null = await new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'))
+      if (!blob) throw new Error('canvas → blob 失敗')
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${pdfFilename}.png`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      setBanner({ kind: 'ok', msg: `已匯出 ${(blob.size / 1024 / 1024).toFixed(1)} MB 圖片` })
+    } catch (e) {
+      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : '匯出圖片失敗' })
+    } finally {
+      if (host && host.parentNode) host.parentNode.removeChild(host)
+      setExportingImage(false)
+    }
+  }
+
   function exportPdf() {
     // Open a fresh window with the full HTML + injected print CSS, then
     // trigger print. This avoids a known Chrome quirk where iframe printing
@@ -456,6 +526,15 @@ export default function QuickSendPage() {
                 >
                   <FileDown size={14} />
                   匯出 PDF
+                </button>
+                <button
+                  onClick={exportImage}
+                  disabled={exportingImage}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+                  title="把整封 newsletter 渲染成一張長圖（不分頁）"
+                >
+                  {exportingImage ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />}
+                  匯出圖片
                 </button>
               </div>
             </div>

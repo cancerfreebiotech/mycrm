@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v4.16.0 — feat(newsletter): 匯出整個 newsletter 為單張長圖（2026-05-03）
+
+PDF 分頁的取捨太多（圖片大小 vs 留白 vs 跨頁），user 直接要新功能：HTML 整封渲染成一張 PNG（不分頁），適合貼 LINE / Substack / 公司群組等場景。
+
+quick-send 頁加「匯出圖片」按鈕（FileDown 旁），用 `html2canvas` 把 contentHtml 在離屏 600px 寬容器渲染後輸出 PNG，scale 跟著 devicePixelRatio（最多 2x，retina 也清晰），檔名同 `Newsletter-{slug}.png`。處理中按鈕顯示 spinner。
+
+deps: `html2canvas` ^1.4.1
+
+bump 4.15.10 → 4.16.0
+
 ## v4.15.10 — fix(newsletter/print): 圖片 max-height 160mm + 文字自由 flow（2026-05-03）
 
 v4.15.9 回滾後 PDF 變 20 頁（"上月回顧" 4 字單獨佔一整頁）— 因為 tr/td/story-div 的 page-break-inside avoid 把 story 整塊推下去留白。
