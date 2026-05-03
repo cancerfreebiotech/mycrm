@@ -164,20 +164,15 @@ export default function QuickSendPage() {
   }
 }
 </style>`.trim()
-    // Apply Supabase Storage image transformation to user-uploaded story
-    // photos so the exported PDF stays small. Static assets in the `shared/`
-    // folder (logo, social icons — small PNGs with transparency) are served
-    // as-is; running them through the render/image pipeline upscales them
-    // to 1200px and JPEG-compresses, killing transparency and adding
-    // artefacts. Story photos in `{period}/imported/` folders benefit
-    // strongly (1-4 MB → 200-400 KB each).
-    const compactHtml = contentHtml.replace(
-      /(<img[^>]+src=")(https:\/\/[^"]+\.supabase\.co)\/storage\/v1\/object\/public\/([^"]+\.(?:jpg|jpeg|png|webp))(?:\?[^"]*)?(")/gi,
-      (m, prefix, host, path, suffix) => {
-        if (path.includes('/shared/')) return m
-        return `${prefix}${host}/storage/v1/render/image/public/${path}?width=1200&quality=80${suffix}`
-      },
-    )
+    // NOTE: image URL transform via /storage/v1/render/image/public/?width=...
+    // was REMOVED because Supabase's render endpoint mishandles EXIF
+    // orientation — phone photos taken in landscape but flagged with
+    // orientation=6 (rotate 90°) come out as a 1200×{original_width}
+    // strip (e.g. 5712×4284 landscape → 1200×5712 broken portrait).
+    // Browsers respect EXIF on the original URL, so we serve it as-is.
+    // Result: PDF / preview images render correctly; PDF size stays at
+    // ~3-4 MB instead of ~1.5 MB (acceptable trade-off for accuracy).
+    const compactHtml = contentHtml
     // Inject before </head> when present; else prepend to <body>; else wrap.
     if (/<\/head>/i.test(compactHtml)) return compactHtml.replace(/<\/head>/i, `${PRINT_CSS}</head>`)
     if (/<body[^>]*>/i.test(compactHtml)) return compactHtml.replace(/<body[^>]*>/i, (m) => `${m}${PRINT_CSS}`)

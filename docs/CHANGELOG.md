@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v4.18.1 — fix(newsletter/print): 移除 Supabase image transform（EXIF 被破壞）（2026-05-03）
+
+User 回報「story 裡圖檔在 HTML 裡就被裁掉」— 查到原 zip 圖是 5712×4284 landscape (EXIF Orientation=6 旋轉 90° 顯示為 4284×5712 portrait)，但 Supabase `/storage/v1/render/image/public/?width=1200` 處理 EXIF 錯誤，輸出 1200×5712 極端 portrait（5712 變成高度而非寬度）。
+
+quick-send 頁的 iframe srcDoc 用 `previewHtml`（會跑 transform），所以連 HTML 預覽都看到變形圖。
+
+移除 image URL transform，圖片走原 storage URL。瀏覽器會自動套 EXIF rotation 顯示正確 portrait。PDF 檔大小回到 ~3-4 MB（比 transform 過後大 ~2 MB，可接受換正確性）。
+
+bump 4.18.0 → 4.18.1
+
 ## v4.18.0 — feat: 三件套（duplicates 批次合併 + promo 三語匯入 + PDF 130mm）（2026-05-03）
 
 1. **`/admin/duplicates` 真正的批次合併**：原本只能批次標記非重複，現在每對左右兩側 + 非重複 各有獨立 checkbox。勾「保留左」進合併佇列、保留右同理、X 進非重複佇列。Toolbar 顯示「N 對合併、M 對非重複」+ 「執行批次」一次跑完（合併走 sequential `/api/contacts/[id]/merge`，ignore batched 200/批）。Progress 計數顯示。
