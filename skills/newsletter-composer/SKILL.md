@@ -24,9 +24,10 @@ When the user drops content (text, voice transcript, image):
 
 1. Identify which **section** (last_month / next_month) and which **story**. If unclear, ask once.
 2. Identify which **photos** belong to which story. Never guess — if the user pastes a photo without context, ask "這張圖配哪個 story?"
-3. Append to the **running draft** held in this conversation. After each capture, give a 1-line confirmation: `📝 added story "X" to last_month, with 2 photos`.
-4. **Do NOT translate** during capture. Translation happens at packaging time, after zh-TW prose is finalized.
-5. Voice transcripts: extract events, don't echo verbatim. The user is dictating raw thoughts; turn them into structured outline points.
+3. **Note the event date** (YYYY-MM-DD). Extract from user content (e.g. "4 月 18 日" → `2026-04-18`). If unclear, ask once: "這件事的日期是？" The user may add stories out of chronological order — that's fine; we sort at packaging time. Track the date in your draft scratch alongside section + title.
+4. Append to the **running draft** held in this conversation. After each capture, give a 1-line confirmation: `📝 added story "X" to last_month (2026-04-18), with 2 photos`.
+5. **Do NOT translate** during capture. Translation happens at packaging time, after zh-TW prose is finalized.
+6. Voice transcripts: extract events, don't echo verbatim. The user is dictating raw thoughts; turn them into structured outline points.
 
 When the user says `show draft` / `目前有什麼` / `/draft`:
 - Output a markdown summary (NOT JSON) — section headers, numbered stories, photo count, link count. Easy to scan.
@@ -62,9 +63,11 @@ Trigger: user says `打包` / `package` / `export` / `/package` / `做 zip`.
    
    This text gets imported into `newsletter_campaigns.promo_text` so the user can copy-paste from the mycrm quick-send page directly to LINE.
 
-4. **Build the manifest** matching `manifest-schema.json` exactly. Each `image_files` entry must reference a filename that will be in the `images/` folder (use sequence-prefixed slugs like `01-bio-asia-2026.jpg`).
+4. **Sort chronologically** within each section by event date ascending — oldest first for `last_month`, earliest upcoming first for `next_month`. The user often captures stories out of order (e.g. they remember a late-month event first); the published newsletter must read in chronological order. If any story is missing an event date, ask the user before sorting — don't guess. After sorting, **renumber the image filename prefixes** to match the new order (story 1's images become `01-...`, story 2's become `02-...`, etc.) so file order in the zip matches story order.
 
-5. **Bundle the zip** using whatever file/code tool is available (analysis tool, code execution, file creation). Layout MUST be:
+5. **Build the manifest** matching `manifest-schema.json` exactly. Each `image_files` entry must reference a filename that will be in the `images/` folder (use sequence-prefixed slugs like `01-bio-asia-2026.jpg`). The `stories[]` array order IS the display order — emit it already sorted.
+
+6. **Bundle the zip** using whatever file/code tool is available (analysis tool, code execution, file creation). Layout MUST be:
    ```
    newsletter-{period}.zip
    ├── manifest.json              ← at zip root (NOT nested)
@@ -74,7 +77,7 @@ Trigger: user says `打包` / `package` / `export` / `/package` / `做 zip`.
    ```
    Manifest shape MUST be `{ period, intro, stories: [{section, ...}] }` — single flat `stories` array, each story tagged with `section: 'last_month' | 'next_month'`. Do NOT emit `{ last_month: [...], next_month: [...] }` at top level. Image filenames in `image_files` MUST be prefixed with `images/` (e.g. `"images/01-foo.jpg"`).
 
-6. **Hand off**: give the user a download link for the zip, plus the import URL: `https://crm.cancerfree.io/admin/newsletter/import`.
+7. **Hand off**: give the user a download link for the zip, plus the import URL: `https://crm.cancerfree.io/admin/newsletter/import`.
 
 ## HTML rules in `content_html`
 

@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v4.19.4 — fix(pending): super_admin 可審核任何人的待審名片（2026-05-04）
+
+### 變更項目
+- `contacts-pending/[id]/route.ts`：`getAuthUserId` 額外查詢 `role`，`fetchOwnedPending` 加入 `isSuperAdmin` 參數；super_admin 跳過 `created_by` ownership check，可直接新增/合併/刪除其他使用者掃描的名片
+
 ## v4.19.3 — fix(newsletter): RSS feed regex 太貪心、把內文也吃掉（2026-05-03）
 
 v4.19.2 的 `stripEmailSkeleton()` regex 從「外層 `<tr>` 開始 + 內層 `</tr>` 結束」匹配，結果整個外層 wrapper TR 連帶內層 header/intro/stories/footer 全被吃掉，RSS 出來只剩 `<table></table>` 空殼。

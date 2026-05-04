@@ -7,24 +7,24 @@ import { mergeIntoContact, type MergeMode } from '@/lib/merge-into-contact'
 // RLS on pending_contacts (created_by = current user) is the auth gate.
 // All writes use service client AFTER verifying the pending row belongs to the user.
 
-async function getAuthUserId(): Promise<{ userId: string; userEmail: string } | null> {
+async function getAuthUserId(): Promise<{ userId: string; userEmail: string; isSuperAdmin: boolean } | null> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user?.email) return null
   const service = createServiceClient()
-  const { data } = await service.from('users').select('id').eq('email', user.email).single()
+  const { data } = await service.from('users').select('id, role').eq('email', user.email).single()
   if (!data?.id) return null
-  return { userId: data.id, userEmail: user.email }
+  return { userId: data.id, userEmail: user.email, isSuperAdmin: data.role === 'super_admin' }
 }
 
-async function fetchOwnedPending(pendingId: string, userId: string) {
+async function fetchOwnedPending(pendingId: string, userId: string, isSuperAdmin: boolean) {
   const service = createServiceClient()
   const { data } = await service
     .from('pending_contacts')
     .select('id, data, storage_path, created_by, status')
     .eq('id', pendingId)
     .single()
-  if (!data || data.created_by !== userId) return null
+  if (!data || (!isSuperAdmin && data.created_by !== userId)) return null
   return data
 }
 
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const body = await req.json().catch(() => ({}))
   const action = body.action as 'save' | 'merge' | undefined
 
-  const pending = await fetchOwnedPending(id, auth.userId)
+  const pending = await fetchOwnedPending(id, auth.userId, auth.isSuperAdmin)
   if (!pending) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (pending.status !== 'done') {
     return NextResponse.json({ error: 'Pending row is not ready for review (status=' + pending.status + ')' }, { status: 400 })
@@ -155,7 +155,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const auth = await getAuthUserId()
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const pending = await fetchOwnedPending(id, auth.userId)
+  const pending = await fetchOwnedPending(id, auth.userId, auth.isSuperAdmin)
   if (!pending) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const service = createServiceClient()
