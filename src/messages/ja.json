@@ -1231,6 +1231,7 @@
     "fieldAddressEn": "住所（英）",
     "fieldWebsite": "ウェブサイト",
     "fieldCountry": "国",
+    "fieldMetAt": "出会った場所",
     "confirmAddTitle": "追加を確認",
     "hasDupWarn": "重複する連絡先があります。先に処理してください",
     "sameEmail": "同じメール：",

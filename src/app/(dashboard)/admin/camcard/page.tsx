@@ -545,6 +545,7 @@ export default function CamcardPage() {
               <OcrField label={t('fieldAddressEn')} value={ocr.address_en} />
               <OcrField label={t('fieldWebsite')} value={ocr.website} href={ocr.website ? ensureHttp(ocr.website) : undefined} />
               {ocr.country_code && <OcrField label={t('fieldCountry')} value={ocr.country_code} />}
+              {ocr.met_at && <OcrField label={t('fieldMetAt')} value={ocr.met_at} />}
             </div>
             {card.image_filename && (
               <p className="text-xs text-gray-300 dark:text-gray-600 mt-1.5">{card.image_filename}</p>

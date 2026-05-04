@@ -1231,6 +1231,7 @@
     "fieldAddressEn": "Address (EN)",
     "fieldWebsite": "Website",
     "fieldCountry": "Country",
+    "fieldMetAt": "Met at",
     "confirmAddTitle": "Confirm add",
     "hasDupWarn": "Duplicate contact detected — resolve first",
     "sameEmail": "Same email: ",

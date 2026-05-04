@@ -1231,6 +1231,7 @@
     "fieldAddressEn": "英文址",
     "fieldWebsite": "網站",
     "fieldCountry": "國家",
+    "fieldMetAt": "認識於",
     "confirmAddTitle": "確認新增",
     "hasDupWarn": "偵測到重複聯絡人，請先處理",
     "sameEmail": "相同 Email：",
