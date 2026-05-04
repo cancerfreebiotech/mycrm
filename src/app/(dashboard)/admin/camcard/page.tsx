@@ -488,6 +488,7 @@ export default function CamcardPage() {
     const ocr = card.ocr_data ?? {}
     const name = ocr.name || ocr.name_en || t('noName')
     const hasDup = !!card.duplicate_contact_id
+    const isBlocked = card.match_type === 'exact_email'
     const dup = card.duplicate_contact
     const isLoading = actionLoading === card.id
     const importance = cardImportance[card.id] ?? 'medium'
@@ -501,7 +502,7 @@ export default function CamcardPage() {
             <input
               type="checkbox"
               checked={selectedCards.has(card.id)}
-              disabled={hasDup}
+              disabled={isBlocked}
               onChange={() => {
                 setSelectedCards(prev => {
                   const next = new Set(prev)
@@ -554,8 +555,8 @@ export default function CamcardPage() {
           <div className="flex flex-col gap-2 shrink-0 items-end">
             <button
               onClick={() => handleConfirm(card.id)}
-              disabled={isLoading || hasDup}
-              title={hasDup ? t('hasDupWarn') : t('confirmAddTitle')}
+              disabled={isLoading || isBlocked}
+              title={isBlocked ? t('hasDupWarn') : t('confirmAddTitle')}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {isLoading ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}

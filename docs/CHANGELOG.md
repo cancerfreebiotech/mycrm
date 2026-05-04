@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v4.19.5 — fix(camcard): similar 重複只警告不鎖定，允許直接新增（2026-05-04）
+
+### 變更項目
+- `admin/camcard/page.tsx`：新增 `isBlocked` 變數（僅 `exact_email` 才鎖定），`similar` 名稱重複仍顯示黃色警告但「新增」按鈕與 checkbox 不再 disabled
+
 ## v4.19.4 — fix(pending): super_admin 可審核任何人的待審名片（2026-05-04）
 
 ### 變更項目
