@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v4.19.6 — feat(camcard): met_at/met_date 完整流通 confirm + update route（2026-05-04）
+
+### 變更項目
+- `camcard/[id]/confirm/route.ts`：`OCR_TO_CONTACT` 加入 `met_at`、`met_date`，確認時自動寫入 contacts 欄位
+- `camcard/[id]/update/route.ts`：改為 merge 模式，保留 `met_at`、`met_date`、`referred_by` 不被手動編輯覆蓋
+- `scripts/camcard-import/batch-import-kevin.js`：新 Kevin 匯入腳本，從子資料夾名稱自動提取日期、呼叫 Gemini OCR、assignee_label='Kevin'
+
 ## v4.19.5 — fix(camcard): similar 重複只警告不鎖定，允許直接新增（2026-05-04）
 
 ### 變更項目

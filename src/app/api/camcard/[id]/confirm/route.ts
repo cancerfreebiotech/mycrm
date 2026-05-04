@@ -22,6 +22,8 @@ const OCR_TO_CONTACT: Record<string, string> = {
   linkedin_url: 'linkedin_url',
   facebook_url: 'facebook_url',
   country_code: 'country_code',
+  met_at: 'met_at',
+  met_date: 'met_date',
 }
 
 const KNOWN_CONTACT_KEYS = new Set(Object.values(OCR_TO_CONTACT))

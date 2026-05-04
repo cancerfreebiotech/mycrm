@@ -11,9 +11,21 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   const supabase = createServiceClient()
+  // Preserve import-time metadata that the edit form doesn't include
+  const { data: existing } = await supabase
+    .from('camcard_pending')
+    .select('ocr_data')
+    .eq('id', id)
+    .single()
+  const existingOcr = (existing?.ocr_data ?? {}) as Record<string, unknown>
+  const PRESERVE = ['met_at', 'met_date', 'referred_by'] as const
+  const preserved: Record<string, unknown> = {}
+  for (const k of PRESERVE) {
+    if (existingOcr[k]) preserved[k] = existingOcr[k]
+  }
   const { error } = await supabase
     .from('camcard_pending')
-    .update({ ocr_data })
+    .update({ ocr_data: { ...ocr_data, ...preserved } })
     .eq('id', id)
     .eq('status', 'pending')
 
