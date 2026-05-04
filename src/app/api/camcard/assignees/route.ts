@@ -9,6 +9,7 @@ export async function GET() {
     .select('assignee_label')
     .eq('status', 'pending')
     .not('assignee_label', 'is', null)
+    .limit(10000)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
