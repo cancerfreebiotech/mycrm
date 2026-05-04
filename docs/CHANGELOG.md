@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## v4.19.7 — fix(db): 軟刪除 trigger 在去重情境下誤退訂同 email（2026-05-04）
+
+### 痛點
+v4.4.1 的 `trg_unsubscribe_on_contact_soft_delete` 在偵測 contact 軟刪除時自動把 email 加進退訂表，但沒檢查「同 email 是否還有活著的其他 contact」。
+去重合併時敗北方被軟刪除 → trigger 觸發 → email 整個進退訂表 → 勝出方（還活著、想繼續收信）也被誤殺。實際 case：Eva 注意到 yohei.uema@oist.jp 收不到信，查出來是 v4.4.1 部署當天的 backfill 把 77 個去重敗北的 contact 全寫進退訂表。
+
+### 改動
+- Trigger 函式 `unsubscribe_on_contact_soft_delete()` 加 guard：若同 email 還有 `id != NEW.id AND deleted_at IS NULL` 的 contact，跳過退訂。未來去重不會再誤殺。
+- 一次性回復 77 筆 v4.4.1 backfill 誤退訂的紀錄：
+  - `DELETE FROM newsletter_unsubscribes WHERE source = 'contact_soft_delete_backfill'`
+  - 對應的 66 個 `newsletter_subscribers.unsubscribed_at` 清空（時間戳跟 contact deleted_at 一致才清，避免誤動其他真退訂）
+
+bump 4.19.6 → 4.19.7
+
 ## v4.19.6 — feat(camcard): met_at/met_date 完整流通 confirm + update route（2026-05-04）
 
 ### 變更項目
