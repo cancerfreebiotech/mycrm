@@ -91,6 +91,11 @@ export async function POST(
   // Japanese/Korean cards often fill only name_local (kanji/hangul)
   if (!contactData.name && contactData.name_en) contactData.name = contactData.name_en
   if (!contactData.name && contactData.name_local) contactData.name = contactData.name_local
+  // For chinese-language cards: if name came from name_local (OCR misidentified as Japanese),
+  // clear name_local — the name is Chinese, not Japanese
+  if (language === 'chinese' && !ocr.name && !ocr.name_en && ocr.name_local) {
+    delete contactData.name_local
+  }
   if (!contactData.company && contactData.company_en) contactData.company = contactData.company_en
   if (!contactData.company && contactData.company_local) contactData.company = contactData.company_local
   if (pending.card_img_url) contactData.card_img_url = pending.card_img_url
