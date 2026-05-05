@@ -4,31 +4,18 @@ import { createServiceClient } from '@/lib/supabase'
 // GET — distinct assignee_label values in status='pending' rows (for filter dropdown)
 export async function GET() {
   const supabase = createServiceClient()
-  const { data, error } = await supabase
-    .from('camcard_pending')
-    .select('assignee_label')
-    .eq('status', 'pending')
-    .not('assignee_label', 'is', null)
-    .limit(10000)
+
+  const [{ data: rpcData, error }, { count: unassigned }] = await Promise.all([
+    supabase.rpc('get_camcard_assignee_counts'),
+    supabase.from('camcard_pending').select('id', { count: 'exact', head: true }).eq('status', 'pending').is('assignee_label', null),
+  ])
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const counts = new Map<string, number>()
-  for (const row of (data ?? []) as { assignee_label: string }[]) {
-    const k = row.assignee_label
-    counts.set(k, (counts.get(k) ?? 0) + 1)
-  }
-
-  // Include unassigned count
-  const { count: unassigned } = await supabase
-    .from('camcard_pending')
-    .select('id', { count: 'exact', head: true })
-    .eq('status', 'pending')
-    .is('assignee_label', null)
-
-  const assignees = [...counts.entries()]
-    .map(([label, count]) => ({ label, count }))
-    .sort((a, b) => b.count - a.count)
+  const assignees = (rpcData ?? []).map((r: { assignee_label: string; cnt: number }) => ({
+    label: r.assignee_label,
+    count: Number(r.cnt),
+  }))
 
   return NextResponse.json({ assignees, unassigned: unassigned ?? 0 })
 }
