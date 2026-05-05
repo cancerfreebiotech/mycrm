@@ -398,6 +398,7 @@ export async function POST(req: NextRequest) {
     const logRows = valid.slice(0, sentCount).map(c => ({
       contact_id: c.id,
       type: 'email' as const,
+      direction: 'outbound' as const,
       content: `群發郵件（${logLabel}）：${subject}`,
       email_subject: subject,
       email_body: bodyHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),

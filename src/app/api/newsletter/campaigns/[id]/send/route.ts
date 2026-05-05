@@ -175,6 +175,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const logRows = linkedContactIds.map((cid) => ({
         contact_id: cid,
         type: 'email' as const,
+        direction: 'outbound' as const,
         content: `電子報：${campaign.subject}`,
         email_subject: campaign.subject,
         email_body: campaign.content_html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000),
