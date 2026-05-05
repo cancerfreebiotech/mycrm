@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## v5.1.1 — fix(newsletter): 寄送 1000+ 訂閱者時 .in() URL 超 32KB 被截斷（2026-05-05）
+
+### 痛點
+寄五月中文 newsletter 給 1966 訂閱者，回 `no valid recipients after filters`。但 SQL 直查確認那 1966 全部 active、無人退訂、無 blacklist。
+
+### Root cause
+`/api/newsletter/campaigns/[id]/send/route.ts` 三處 `.in()` 用整個陣列當參數：
+- `.in('id', subIds)` — 1966 個 UUID
+- `.in('email', emails)` × 2（blacklist + unsubscribes）— 1966 個 email
+
+PostgREST URL 上限 ~32KB，1966 個 UUID 大概 70KB 直接被靜默截斷 → `rawSubs` 回 empty → recipients = 0 → 報錯。同類 bug 之前在其他 route 都修過，這一條漏網。
+
+### Fix
+把三處 `.in()` 都用 `chunkedIn()` helper 拆成 200 個一批，loop 起來合併結果。
+
+bump 5.1.0 → 5.1.1
+
 ## v5.1.0 — feat: email thread 保留前一封 + 認識地點改 datalist（2026-05-05）
 
 ### email_body 保留前一封信當 context

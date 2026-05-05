@@ -81,12 +81,34 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const subIds = [...new Set((membership ?? []).map((r: { subscriber_id: string }) => r.subscriber_id))]
     if (subIds.length === 0) return NextResponse.json({ error: 'no subscribers in selected lists' }, { status: 400 })
 
-    const { data: subs } = await service
-      .from('newsletter_subscribers')
-      .select('id, email, first_name, last_name, contact_id')
-      .in('id', subIds)
-      .is('unsubscribed_at', null)
-    const rawSubs = (subs ?? []) as Subscriber[]
+    // PostgREST URL length cap (~32KB). Large lists (1000+ UUIDs/emails) in
+    // a single .in() get silently truncated → empty result. Chunk every
+    // .in() lookup to BATCH (200) to stay under the URL limit.
+    const BATCH = 200
+    async function chunkedIn<T>(
+      table: string,
+      select: string,
+      column: string,
+      values: string[],
+      extraFilter?: (q: ReturnType<ReturnType<typeof service.from>['select']>) => unknown
+    ): Promise<T[]> {
+      const out: T[] = []
+      for (let i = 0; i < values.length; i += BATCH) {
+        let q = service.from(table).select(select).in(column, values.slice(i, i + BATCH))
+        if (extraFilter) q = extraFilter(q) as typeof q
+        const { data } = await q
+        if (data) out.push(...(data as T[]))
+      }
+      return out
+    }
+
+    const rawSubs = await chunkedIn<Subscriber>(
+      'newsletter_subscribers',
+      'id, email, first_name, last_name, contact_id',
+      'id',
+      subIds,
+      (q) => (q as unknown as { is: (col: string, v: null) => unknown }).is('unsubscribed_at', null)
+    )
 
     // Filter out suppressed emails.
     // Sources checked (in priority order):
@@ -95,18 +117,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     //   3. newsletter_unsubscribes — global unsubscribe tracking
     const emails = [...new Set(rawSubs.map((s) => s.email.toLowerCase().trim()))]
     const contactIds = [...new Set(rawSubs.map((s) => s.contact_id).filter((x): x is string => !!x))]
-    const [{ data: bl }, { data: unsubs }, { data: badContacts }] = await Promise.all([
-      service.from('newsletter_blacklist').select('email').in('email', emails),
-      service.from('newsletter_unsubscribes').select('email').in('email', emails),
+
+    const [bl, unsubs, badContacts] = await Promise.all([
+      chunkedIn<{ email: string }>('newsletter_blacklist', 'email', 'email', emails),
+      chunkedIn<{ email: string }>('newsletter_unsubscribes', 'email', 'email', emails),
       contactIds.length > 0
-        ? service.from('contacts').select('id').in('id', contactIds).not('email_status', 'is', null)
-        : Promise.resolve({ data: [] as { id: string }[] }),
+        ? chunkedIn<{ id: string }>('contacts', 'id', 'id', contactIds, (q) =>
+            (q as unknown as { not: (col: string, op: string, v: null) => unknown }).not(
+              'email_status',
+              'is',
+              null
+            )
+          )
+        : Promise.resolve([] as { id: string }[]),
     ])
+
     const suppressed = new Set<string>([
-      ...((bl ?? []) as { email: string }[]).map((r) => r.email.toLowerCase().trim()),
-      ...((unsubs ?? []) as { email: string }[]).map((r) => r.email.toLowerCase().trim()),
+      ...bl.map((r) => r.email.toLowerCase().trim()),
+      ...unsubs.map((r) => r.email.toLowerCase().trim()),
     ])
-    const suppressedContactIds = new Set<string>(((badContacts ?? []) as { id: string }[]).map((c) => c.id))
+    const suppressedContactIds = new Set<string>(badContacts.map((c) => c.id))
 
     recipients = rawSubs.filter((r) =>
       !suppressed.has(r.email.toLowerCase().trim()) &&
