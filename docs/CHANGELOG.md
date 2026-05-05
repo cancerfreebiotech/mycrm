@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## v5.1.5 — fix(newsletter): 建立清單時 backfill orphan subscriber 的 contact_id（2026-05-05）
+
+### 痛點
+v5.1.4 改 email-first 之後寄信沒卡，但 user 點 list 詳情看到「35 個沒對應聯絡人」——明明從 contacts 建的怎會有 orphan？
+
+### Root cause
+from-contacts 用 email 找到既存 subscriber 就用，**但沒檢查那個 sub 的 contact_id**。如果該 sub 是過去 CSV 匯入的 orphan（contact_id IS NULL），加進新 list 後仍然是 orphan，UI 顯示「無對應聯絡人」。
+
+例子：`ctyeh@s.tmu.edu.tw` subscriber 是 4/25 CSV 匯入的（無 contact_id），但 contacts 表裡有葉淇臺 contact 用同個 email。建 list 時撈到這個 orphan sub，沒幫它連回 contact。
+
+### 改動
+- `from-contacts/route.ts` Step 1 多撈 `contact_id`，加 Step 1b：對 email 找到的 sub 若 `contact_id IS NULL`，update 補上 contact 的 id
+- 資料修復：May 中文 list 35 個 orphan subscribers 全部 backfill contact_id
+
+bump 5.1.4 → 5.1.5
+
 ## v5.1.4 — fix(newsletter): 「建立清單」改 email-first 抓 contact + 清掉 19 筆髒 subscriber（2026-05-05）
 
 ### 痛點

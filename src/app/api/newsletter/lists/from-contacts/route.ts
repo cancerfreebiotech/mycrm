@@ -152,17 +152,43 @@ export async function POST(req: NextRequest) {
   const subscriberIdByContact = new Map<string, string>()
 
   // Step 1: bulk lookup existing subscribers BY EMAIL (canonical source)
+  // Also capture contact_id so we can detect orphans and link them below.
   const emailLookup = Array.from(new Set(valid.map((c) => c.email!.trim()).filter((e) => !!e)))
   const subscriberIdByEmail = new Map<string, string>()
+  const subscriberContactIdById = new Map<string, string | null>()
   for (let i = 0; i < emailLookup.length; i += QUERY_BATCH) {
     const batch = emailLookup.slice(i, i + QUERY_BATCH)
     const { data } = await service
       .from('newsletter_subscribers')
-      .select('id, email')
+      .select('id, email, contact_id')
       .in('email', batch)
     for (const s of data ?? []) {
-      if (s.email) subscriberIdByEmail.set((s.email as string).toLowerCase(), s.id as string)
+      if (s.email) {
+        const sid = s.id as string
+        subscriberIdByEmail.set((s.email as string).toLowerCase(), sid)
+        subscriberContactIdById.set(sid, (s.contact_id as string | null) ?? null)
+      }
     }
+  }
+
+  // Step 1b: backfill contact_id on orphan subscribers (CSV-imported subs
+  // that match a contact by email but were never linked). Without this,
+  // the list shows "no contact" for these subscribers even though a CRM
+  // contact exists with the exact same email.
+  const orphanLinks: { id: string; contact_id: string }[] = []
+  for (const c of valid) {
+    const sid = subscriberIdByEmail.get(c.email!.trim().toLowerCase())
+    if (!sid) continue
+    const existingContactId = subscriberContactIdById.get(sid)
+    if (!existingContactId) orphanLinks.push({ id: sid, contact_id: c.id })
+  }
+  // Per-row update (no bulk-update primitive in supabase-js); usually small (<100)
+  for (const link of orphanLinks) {
+    const { error } = await service
+      .from('newsletter_subscribers')
+      .update({ contact_id: link.contact_id })
+      .eq('id', link.id)
+    if (error) errors.push(`backfill contact_id ${link.id}: ${error.message}`)
   }
 
   // Step 2: build bulk-insert payload, deduped by email. Multiple CRM contacts
