@@ -33,40 +33,45 @@ export function isForwardedSubject(subject: string | null | undefined): boolean 
   return !!subject && FORWARD_SUBJECT_PREFIX.test(subject.trim())
 }
 
-// Strip the quoted-reply chain from an email body so the captured
-// interaction_log shows only the newest content (the user's actual reply),
-// not the entire conversation history.
+// Strip the quoted-reply chain from an email body, but keep ONE level of
+// quoted email so the user has context on what the reply was responding to.
 //
-// Cuts at the FIRST appearance of any quote marker, including Outlook's
-// "________________ From: ... Sent: ... To: ..." block (in zh-TW / en / ja),
-// Gmail-style "On <date>, X wrote:" lead-in, and explicit "Original message"
-// dividers. Inline ">" quoted lines are removed but don't trigger a cut
-// (they may appear interspersed in some clients).
+// Algorithm: walk lines and count "quote start" triggers (start of a quoted
+// email). Keep all lines through the first quoted email; cut at the second
+// quote start. Underscore-only divider lines and "--- Original Message ---"
+// labels are NOT counted as separate triggers because they typically precede
+// a From:/Sent: block which is the actual structural marker.
+//
+// Triggers counted:
+// - Outlook-style "From: ..." line followed by "Sent: ..." in next 3 lines
+//   (multilingual: 寄件者/差出人, 傳送日期/送信日時/Date/日期)
+// - Gmail-style "On <date>, X wrote:" line
 export function stripQuotedReply(text: string): string {
   if (!text) return ''
   const lines = text.split(/\r?\n/)
   const out: string[] = []
+  let quoteLevel = 0
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
 
-    // Outlook divider: long underscore line (often followed by From: header block)
-    if (/^_{5,}\s*$/.test(line)) break
-
-    // Gmail-style: "On Mon, May 5, 2026 at 10:00 AM, John <john@x.com> wrote:"
-    if (/^On\s.+wrote:\s*$/i.test(line)) break
-
-    // Explicit dividers (multi-language)
-    if (/^-{3,}\s*(Original Message|Forwarded message|原始郵件|転送メッセージ)\s*-{3,}/i.test(line)) break
-
-    // Outlook reply quote: "From: ..." at start of line, with "Sent:" / "Date:"
-    // appearing within the next 3 lines (header-style block, not a one-off mention)
-    if (/^(From|寄件者|差出人):\s/.test(line)) {
+    let isQuoteStart = false
+    if (/^On\s.+wrote:\s*$/i.test(line)) {
+      isQuoteStart = true
+    } else if (/^(From|寄件者|差出人):\s/.test(line)) {
       const next3 = lines.slice(i + 1, i + 4).join('\n')
-      if (/^(Sent|傳送日期|送信日時|Date|日期):\s/m.test(next3)) break
+      if (/^(Sent|傳送日期|送信日時|Date|日期):\s/m.test(next3)) {
+        isQuoteStart = true
+      }
     }
 
-    // Inline ">" quoted lines: drop, don't cut
+    if (isQuoteStart) {
+      quoteLevel++
+      if (quoteLevel >= 2) break
+    }
+
+    // Inline ">" quoted lines: drop (keep the surrounding context but skip
+    // the deeply-nested quoted text from older Gmail-style chains)
     if (/^>+\s?/.test(line)) continue
 
     out.push(line)

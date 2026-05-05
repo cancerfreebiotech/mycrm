@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
@@ -180,14 +180,29 @@ export default function ContactsPage() {
     setPage(1)
   }
 
+  // Unique met_at values for the datalist autocomplete dropdown.
+  // Sorted by frequency desc, then alpha — most-used events surface first.
+  const metAtOptions = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const c of contacts) {
+      const v = c.met_at?.trim()
+      if (!v) continue
+      counts.set(v, (counts.get(v) ?? 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([v]) => v)
+  }, [contacts])
+
   const filtered = contacts.filter((c) => {
     const matchQuery =
       !query ||
       c.name?.toLowerCase().includes(query.toLowerCase()) ||
       c.company?.toLowerCase().includes(query.toLowerCase()) ||
       c.email?.toLowerCase().includes(query.toLowerCase())
+    const metQ = metQuery.trim().toLowerCase()
     const matchMet =
-      !metQuery || c.met_at?.toLowerCase().includes(metQuery.toLowerCase())
+      !metQ || c.met_at?.toLowerCase().includes(metQ)
     const matchTags =
       selectedTags.length === 0 ||
       selectedTags.some((tid) => c.contact_tags.some((ct) => ct.tags?.id === tid))
@@ -773,14 +788,20 @@ export default function ContactsPage() {
           )}
         </div>
 
-        {/* Met-at filter */}
+        {/* Met-at filter — datalist 給 dropdown 建議 + free text */}
         <input
           type="text"
+          list="met-at-options"
           placeholder={t('metFilter')}
           value={metQuery}
           onChange={(e) => { setMetQuery(e.target.value); setPage(1) }}
           className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 w-36"
         />
+        <datalist id="met-at-options">
+          {metAtOptions.map((v) => (
+            <option key={v} value={v} />
+          ))}
+        </datalist>
       </div>
 
       {/* Mobile card list */}

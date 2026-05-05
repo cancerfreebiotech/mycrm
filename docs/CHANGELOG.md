@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## v5.1.0 — feat: email thread 保留前一封 + 認識地點改 datalist（2026-05-05）
+
+### email_body 保留前一封信當 context
+v5.0.3 把 quoted thread 整段砍掉，但 user 反映「沒有上下文不知道對方上一封寫什麼」。改成 **保留 1 層 quote**：
+
+`stripQuotedReply()` 改用 quote-level 計數：
+- Level 0：最新回覆內容（保留）
+- Level 1：前一封信內容（保留 — 這是新的）
+- Level 2+：cut
+
+只計 `From: + Sent:` block 跟 Gmail-style `On ... wrote:` 為 quote-start trigger（避免 underscore + From: 被當兩層）。
+
+### /contacts 認識地點 filter 改 datalist
+原本只是 free-text input，user 不知道既存值有哪些。改成 HTML5 `<datalist>`：
+- 點 input 出 dropdown，列出資料庫所有 met_at 值（按出現次數排序）
+- 仍可自由輸入新值（datalist 是建議不是限制）
+- 加 `trim()` 處理頭尾空白
+
+bump 5.0.3 → 5.1.0（兩個 user-facing feature 變更）
+
 ## v5.0.3 — fix(email): inbound parse 砍 quoted thread + 顯示 To/Cc（2026-05-05）
 
 第一封實際 BCC 進來的信（Eva 寄給 Kenji Miyoshi）暴露兩個問題：
