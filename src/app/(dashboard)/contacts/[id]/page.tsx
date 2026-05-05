@@ -640,6 +640,19 @@ export default function ContactDetailPage() {
     load()
   }
 
+  // Comprehensive unsuppress: clears contacts.email_status + global blocklist
+  // + per-list subscriber unsubscribed_at (3 places, audited).
+  async function clearUnsubscribe() {
+    if (!confirm('確認清除這個聯絡人的退訂/退信狀態？\n\n會清掉：\n- contact 的 email 狀態 badge\n- 全域退訂名單 (newsletter_unsubscribes)\n- 訂閱者 unsubscribed_at\n\n下次寄送會把這個 email 算進去。')) return
+    const res = await fetch(`/api/contacts/${id}/clear-unsubscribe`, { method: 'POST' })
+    const body = await res.json()
+    if (!res.ok) {
+      alert(body.error ?? '清除失敗')
+      return
+    }
+    load()
+  }
+
   // ── Contact Cards (multi-stage) ────────────────────────────────────────────
 
   function handleCardFilesAdd(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1711,14 +1724,13 @@ export default function ContactDetailPage() {
                 {displayedEmailStatus === 'recipient_blocked' && t('emailStatusRecipientBlockedDesc')}
               </span>
             </div>
-            {!isDerived && (
-              <button
-                onClick={() => patchEmailStatus(null)}
-                className="text-xs px-2 py-1 rounded border border-current opacity-60 hover:opacity-100 shrink-0"
-              >
-                {t('clearStatusBadge')}
-              </button>
-            )}
+            <button
+              onClick={clearUnsubscribe}
+              className="text-xs px-2 py-1 rounded border border-current opacity-60 hover:opacity-100 shrink-0"
+              title="清除 contact email 狀態 + 全域退訂表 + 訂閱者 unsubscribed_at"
+            >
+              {t('clearStatusBadge')}
+            </button>
           </div>
           )
         })()}

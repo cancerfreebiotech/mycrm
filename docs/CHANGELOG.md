@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## v5.3.2 — fix(contact): 「清除狀態」按鈕清三層 + 在 derived 情況也顯示（2026-05-05）
+
+### 痛點
+Sean Liu (`ir@acepodiabio.com`) 沒寄過、沒退訂，卻被標退訂。原因：他有兩個重複 contact，當其中一個被軟刪除時 trigger 觸發、寫了一筆到 `newsletter_unsubscribes`（懷疑當時兩個都暫時被刪、guard 沒擋住）。然後 contact 詳情頁的「清除狀態」按鈕**只在 contact.email_status 直接設定時才顯示**，derived 狀態（從 newsletter_unsubscribes 讀的）按鈕直接被隱藏，user 沒辦法手動清。
+
+### 改動
+- 新 endpoint `POST /api/contacts/[id]/clear-unsubscribe`：一次清三層
+  1. `contacts.email_status = NULL`
+  2. `DELETE FROM newsletter_unsubscribes WHERE email = ?`
+  3. `UPDATE newsletter_subscribers SET unsubscribed_at = NULL WHERE email = ?`
+  4. 寫 system interaction_log 記錄誰清的
+- 「清除狀態」按鈕**永遠顯示**（不論直接設定或 derived），呼叫新 endpoint，confirm dialog 說明會清三層
+
+### 順便修
+Sean Liu 的錯誤退訂手動清掉。
+
+bump 5.3.1 → 5.3.2
+
 ## v5.3.1 — fix(db): 補回 users 表 SELECT GRANT，11 個表 RLS 連動修好（2026-05-05）
 
 ### 痛點
