@@ -66,6 +66,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // ── Gather recipients ──
   let recipients: Subscriber[] = []
+  let invalidEmails: string[] = []
 
   if (body.testOnly) {
     if (!body.testEmail) return NextResponse.json({ error: 'testEmail required' }, { status: 400 })
@@ -149,10 +150,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     ])
     const suppressedContactIds = new Set<string>(badContacts.map((c) => c.id))
 
-    recipients = rawSubs.filter((r) =>
-      !suppressed.has(r.email.toLowerCase().trim()) &&
-      !(r.contact_id && suppressedContactIds.has(r.contact_id))
-    )
+    // Email syntax check — SendGrid rejects the WHOLE chunk if any single
+    // address in personalizations is malformed (e.g. has whitespace, missing
+    // domain). Filter these out client-side and report them so the user can
+    // clean up the source data.
+    const VALID_EMAIL = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
+
+    recipients = rawSubs.filter((r) => {
+      const norm = r.email.toLowerCase().trim()
+      if (suppressed.has(norm)) return false
+      if (r.contact_id && suppressedContactIds.has(r.contact_id)) return false
+      if (!VALID_EMAIL.test(r.email.trim())) {
+        invalidEmails.push(r.email)
+        return false
+      }
+      return true
+    })
+
+    if (invalidEmails.length > 0) {
+      console.warn('[newsletter send] dropped invalid emails', invalidEmails)
+    }
   }
 
   if (recipients.length === 0) return NextResponse.json({ error: 'no valid recipients after filters' }, { status: 400 })
@@ -248,6 +265,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     sent,
     total: recipients.length,
     errors,
+    invalidEmails,
     testOnly: !!body.testOnly,
   })
 }

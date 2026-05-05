@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## v5.1.3 — fix(newsletter): 過濾格式錯誤 email + UI 顯示（2026-05-05）
+
+### 痛點
+v5.1.2 後寄信進度走到 SendGrid，但 chunk 0 整個 1000 封被拒收：`personalizations.147.to.0.email "Does not contain a valid address"`。SendGrid 對 personalizations 是 all-or-nothing — 一個 email 格式錯誤整批 1000 都不寄。
+
+### Root cause
+有 3 筆 subscriber 資料髒：
+- `ir@acepodiabio@com`（多 @）
+- `mandylio u@cyff-charity.org.tw`（local part 有空白）
+- `jadecha`（沒 @ 沒 domain）
+
+### Fix
+- send route 在組 personalizations 前先用 regex 驗 email 格式，filter 出無效的，回傳 `invalidEmails` 陣列
+- UI banner 顯示「跳過 N 個格式錯誤 email：xxx, yyy, ...」
+- DB 上把這 3 筆 subscribers 標 `unsubscribed_at`，linked contacts 標 `email_status='invalid'`，下次寄信不會再卡
+
+bump 5.1.2 → 5.1.3
+
 ## v5.1.2 — fix(newsletter): membership 查詢 Supabase 1000-row 預設限制 + UI 露出實際錯誤（2026-05-05）
 
 ### 痛點

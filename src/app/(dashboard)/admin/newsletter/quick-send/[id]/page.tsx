@@ -288,15 +288,19 @@ export default function QuickSendPage() {
       const res = await fetch(`/api/newsletter/campaigns/${id}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? '寄送失敗')
+      const invalidNote = data.invalidEmails?.length
+        ? `；跳過 ${data.invalidEmails.length} 個格式錯誤 email：${data.invalidEmails.slice(0, 3).join(', ')}${data.invalidEmails.length > 3 ? '...' : ''}`
+        : ''
       if (data.errors?.length) {
         const firstErr = String(data.errors[0]).slice(0, 300)
         setBanner({
           kind: data.sent > 0 ? 'ok' : 'err',
-          msg: `已寄出：${data.sent}/${data.total}（${data.errors.length} 個 chunk 失敗）— 第一筆錯誤：${firstErr}`,
+          msg: `已寄出：${data.sent}/${data.total}（${data.errors.length} 個 chunk 失敗）— 第一筆錯誤：${firstErr}${invalidNote}`,
         })
         console.error('[newsletter send errors]', data.errors)
+        if (data.invalidEmails?.length) console.warn('[newsletter invalid emails]', data.invalidEmails)
       } else {
-        setBanner({ kind: 'ok', msg: `已寄出：${data.sent}/${data.total}` })
+        setBanner({ kind: 'ok', msg: `已寄出：${data.sent}/${data.total}${invalidNote}` })
       }
       // Reload campaign to reflect sent state
       const c = await fetch(`/api/newsletter/campaigns/${id}`).then((r) => r.json())
