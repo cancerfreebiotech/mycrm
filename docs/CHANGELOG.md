@@ -1,5 +1,34 @@
 # CHANGELOG
 
+## v5.3.0 — feat(email): Email 復活頁面 + bot 換工作偵測（2026-05-05）
+
+### 痛點
+寄電子報時 SendGrid 回 37 筆 hard bounce（聯絡人換工作後舊 email 失效）。手動到每個聯絡人頁面更新 email 太累。希望系統能：
+1. 集中看哪些聯絡人 email 壞了 + 找到「換工作後」的新名片
+2. Bot 拍新名片時，若同名既有聯絡人 email 已 bounce，主動建議用新 email 覆蓋
+
+### 改動
+**新頁面 `/admin/email-recovery`**：
+- 列所有 `email_status` 非 null 的 contacts (bounced/invalid/unsubscribed/...)
+- 對每筆撈最近的 system 退信事件（時間 + SendGrid 原因）
+- 找候選「同名 + 較新建立」的 live contacts (可能是換工作後的新名片)
+- 一鍵替換：`UPDATE contacts SET email = NEW, email_status = NULL`，舊 email + 換寄 reason 寫進 notes，可選擇順手 soft-delete 新建的重複聯絡人
+- API: `GET /api/admin/email-recovery` + `POST /api/admin/email-recovery/apply`
+
+**Bot 同名偵測強化** (`/api/bot/route.ts`)：
+- 偵測到既有同名聯絡人時，多撈 `email_status`
+- 若舊 email 是 bounced/invalid 且新名片有不同 email → 訊息加提示
+  「🔧 既有聯絡人 email (xxx) 狀態為 bounced，建議「換工作」用新 email 覆蓋」
+- 「🔧 更新 email」按鈕在這種情況下**排到第一順位**
+
+**`mergeIntoContact` replace mode** (`/lib/merge-into-contact.ts`)：
+- 當 mode='replace' 且 email 被覆寫，自動清掉 `email_status` (重置驗證狀態)
+
+### Sidebar nav
+加 `Email 復活` 連結（i18n: zh-TW / en / ja）。
+
+bump 5.2.0 → 5.3.0
+
 ## v5.2.0 — feat(newsletter): per-chunk interaction_logs + drop FK + 重寄分流（2026-05-05）
 
 ### 痛點

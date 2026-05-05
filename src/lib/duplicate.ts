@@ -5,6 +5,7 @@ export interface Contact {
   name: string | null
   company: string | null
   email: string | null
+  email_status?: string | null
 }
 
 export interface CheckDuplicatesInput {
@@ -72,11 +73,14 @@ export async function checkDuplicates(input: CheckDuplicatesInput): Promise<Dupl
     }
     const { data } = await supabase
       .from('contacts')
-      .select('id, name, company, email, second_email')
+      .select('id, name, company, email, second_email, email_status')
       .is('deleted_at', null)
       .or(orParts.join(','))
     for (const row of (data ?? []) as (Contact & { second_email: string | null })[]) {
-      exactMap.set(row.id, { id: row.id, name: row.name, company: row.company, email: row.email })
+      exactMap.set(row.id, {
+        id: row.id, name: row.name, company: row.company,
+        email: row.email, email_status: row.email_status ?? null,
+      })
     }
   }
 

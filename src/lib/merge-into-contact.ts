@@ -97,6 +97,12 @@ export async function mergeIntoContact(
     }
   }
 
+  // Replace-mode 換工作場景：若 email 被覆寫，順帶清掉 email_status
+  // (bounced/invalid/unsubscribed)。新 email 是新的、未驗證、應重置狀態。
+  if (input.mode === 'replace' && 'email' in updates) {
+    updates.email_status = null
+  }
+
   if (Object.keys(updates).length > 0) {
     await supabase.from('contacts').update(updates).eq('id', input.targetId)
   }

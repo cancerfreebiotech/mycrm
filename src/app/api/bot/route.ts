@@ -825,6 +825,7 @@ async function handlePhoto(
     let dupWarning = ''
     let mergeTargetId: string | null = null
     let mergeTargetName: string | null = null
+    let mergeTargetIsBounced = false
     if (exact.length > 0) {
       const e = exact[0]
       mergeTargetId = e.id
@@ -835,6 +836,24 @@ async function handlePhoto(
       mergeTargetId = s.id
       mergeTargetName = s.name
       dupWarning += `\n🔍 系統有相似聯絡人：${s.name}（${s.company}），請確認是否為同一人`
+    }
+
+    // 同名偵測：若既有 contact 的 email 已是 bounced/invalid，且新名片有不同 email，
+    // 標示出來鼓勵 user 點「換工作」按鈕（avoid 沿用壞 email）
+    if (mergeTargetId) {
+      const { data: targetRow } = await supabase
+        .from('contacts')
+        .select('email, email_status')
+        .eq('id', mergeTargetId)
+        .maybeSingle()
+      if (
+        targetRow?.email_status &&
+        cardData.email &&
+        cardData.email.trim().toLowerCase() !== (targetRow.email ?? '').trim().toLowerCase()
+      ) {
+        mergeTargetIsBounced = true
+        dupWarning += `\n🔧 既有聯絡人 email (${targetRow.email}) 狀態為 ${targetRow.email_status}，建議「換工作」用新 email 覆蓋`
+      }
     }
 
     const contactPayload = {
@@ -874,17 +893,27 @@ async function handlePhoto(
       dupWarning +
       m.cardConfirmPrompt
 
-    // Build buttons: when dup detected, offer 3rd option to merge into existing contact
-    const cardButtons: Array<Array<{ text: string; callback_data: string }>> = [[
+    // Build buttons: when dup detected, offer merge/replace options.
+    // 換工作 case (mergeTargetIsBounced): surface the replace button FIRST so
+    // user one-click updates the dead email instead of stacking another orphan.
+    const cardButtons: Array<Array<{ text: string; callback_data: string }>> = []
+    if (mergeTargetId && mergeTargetName && mergeTargetIsBounced) {
+      cardButtons.push([
+        { text: `🔧 更新「${mergeTargetName}」email（換工作）`, callback_data: `replace_${pending.id}` },
+      ])
+    }
+    cardButtons.push([
       { text: mergeTargetId ? '✅ 仍建立新聯絡人' : '✅ 確認存檔', callback_data: `save_${pending.id}` },
-    ]]
+    ])
     if (mergeTargetId && mergeTargetName) {
       cardButtons.push([
         { text: `📌 加到「${mergeTargetName}」`, callback_data: `merge_${pending.id}` },
       ])
-      cardButtons.push([
-        { text: `🔄 更新「${mergeTargetName}」（換工作）`, callback_data: `replace_${pending.id}` },
-      ])
+      if (!mergeTargetIsBounced) {
+        cardButtons.push([
+          { text: `🔄 更新「${mergeTargetName}」（換工作）`, callback_data: `replace_${pending.id}` },
+        ])
+      }
     }
     cardButtons.push([{ text: '❌ 不存檔', callback_data: `cancel_${pending.id}` }])
 

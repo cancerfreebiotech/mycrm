@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import React, { useEffect, useRef, useState } from 'react'
-import { Users, LayoutDashboard, ShieldCheck, Mail, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon, Globe, BarChart2, ClipboardList, MapPin, Menu, X, ChevronLeft, ChevronRight, Newspaper, ScanSearch, FolderInput, Activity, Images, Trash2, MessageSquarePlus } from 'lucide-react'
+import { Users, LayoutDashboard, ShieldCheck, Mail, MailX, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon, Globe, BarChart2, ClipboardList, MapPin, Menu, X, ChevronLeft, ChevronRight, Newspaper, ScanSearch, FolderInput, Activity, Images, Trash2, MessageSquarePlus } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
@@ -126,6 +126,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/admin/failed-scans', label: t('failedScans'), icon: ShieldCheck },
     { href: '/admin/duplicates', label: t('duplicates'), icon: ScanSearch },
     { href: '/admin/shared-emails', label: t('sharedEmailsNav'), icon: Mail },
+    { href: '/admin/email-recovery', label: t('emailRecoveryNav'), icon: MailX },
     { href: '/admin/camcard', label: t('camcard'), icon: FolderInput },
     { href: '/admin/trash', label: t('trash'), icon: Trash2 },
   ]
