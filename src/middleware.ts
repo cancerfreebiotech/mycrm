@@ -10,6 +10,9 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/teams-bot') ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/sendgrid') ||
+    // Inbound email capture from Cloudflare Worker (Outlook BCC/forward).
+    // Auth is via X-Inbound-Secret header inside the route, not user session.
+    pathname.startsWith('/api/inbound-email') ||
     pathname === '/api/set-locale' ||
     pathname.startsWith('/api/admin/') ||
     pathname.startsWith('/unsubscribe') ||

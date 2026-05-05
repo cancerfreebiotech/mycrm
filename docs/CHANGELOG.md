@@ -1,5 +1,55 @@
 # CHANGELOG
 
+## v5.0.0 — feat(email): Outlook BCC/forward → CRM 自動 capture（2026-05-05）
+
+### 痛點
+mycrm 只記錄自己寄出的信（broadcast、newsletter）。Eva 跟團隊每天用 Outlook 跟外部聯絡人對話，這些互動沒進 CRM，聯絡人 timeline 等於少了一大半。
+
+### 設計
+利用 Cloudflare Email Routing + Email Worker（免費）：
+
+- 在 Outlook 寄信時 BCC `inbox@bcc.cancerfree.io` → 該信進 CRM 變一筆 outbound interaction
+- 收到別人來信，從 Outlook 轉寄到 `inbox@bcc.cancerfree.io` → 該信進 CRM 變一筆 inbound interaction
+- 對方 email 不在 CRM 自動建新聯絡人（source=`inbound_email`、importance=medium）
+
+```
+Outlook → BCC → CF Email Routing → Email Worker
+                                       ↓
+                         POST raw MIME + X-Inbound-Secret
+                                       ↓
+                         /api/inbound-email/route.ts
+                                       ↓
+              mailparser → identify org user + counterparties
+                                       ↓
+              find-or-create contacts + insert interaction_logs
+```
+
+### 改動
+- **DB**：`interaction_logs.direction text CHECK ('inbound'|'outbound')`，既有 type='email' 全 backfill 為 outbound
+- **新檔案 (Vercel)**：
+  - `src/app/api/inbound-email/route.ts` — webhook
+  - `src/lib/findOrCreateContactByEmail.ts` — 找/建聯絡人
+  - `src/lib/parseEmailHeaders.ts` — `extractForwardedFrom` / `stripQuotedReply` / `isForwardedSubject`
+- **新檔案 (Worker)**：`workers/inbound-email/`（wrangler.toml + src/index.ts ~30 行 + README）
+- **修改**：`src/middleware.ts` skiplist 加 `/api/inbound-email`
+- **依賴**：新增 `mailparser` + `@types/mailparser`
+
+### Env vars 要設
+- `INBOUND_PARSE_SECRET`（Vercel + Worker secret 同值）
+- `ORG_EMAIL_DOMAIN`（default `cancerfree.io`）
+- `BCC_INBOX_DOMAIN`（default `bcc.cancerfree.io`）
+
+### 一次性設定（user 手動，看 `workers/inbound-email/README.md`）
+1. Cloudflare 加 sub-zone `bcc.cancerfree.io`，parent zone 加 NS records 委派
+2. 在 sub-zone 開 Email Routing，custom address `inbox@bcc.cancerfree.io` → Send to Worker
+3. `cd workers/inbound-email && wrangler deploy`
+
+### V1 範圍
+做：手動 BCC outbound、轉寄 inbound、自動建聯絡人、純 text body。
+不做：附件存 storage、thread 串聯、M365 transport rule 自動 BCC（V2 評估）。
+
+bump 4.19.7 → 5.0.0（MAJOR 因為 MINOR 早就過 9，按 CLAUDE.md 規則）
+
 ## v4.19.7 — fix(db): 軟刪除 trigger 在去重情境下誤退訂同 email（2026-05-04）
 
 ### 痛點
