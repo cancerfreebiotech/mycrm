@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## v5.1.4 — fix(newsletter): 「建立清單」改 email-first 抓 contact + 清掉 19 筆髒 subscriber（2026-05-05）
+
+### 痛點
+從 /contacts 篩語言「建立清單」時，後端先用 `contact_id` 查既存 subscriber，找到舊的就直接用——不管它的 email 是不是對的。結果 4 月 CSV/Ragic 匯入時帶進來的髒 email（jadecha、mandylio u@、ir@acepodiabio@com 之類）跟著被收進新的 list 寄信用，SendGrid 就拒收整批。
+
+### 改動
+1. **`/api/newsletter/lists/from-contacts/route.ts`**：拿掉 contact_id 預查，永遠走 email lookup。subscriber 身分以 contact 上的 email 為唯一準。任何「subscriber 表還留著的舊髒 email」永遠不會再被新 list 撈進去。
+2. **資料修復**：subscribers 全表掃，22 筆壞 email 全部處理：
+   - 12 筆有對應 contact + 對應正確 email：list memberships 換綁到乾淨的 subscriber、刪掉壞的（含 mandyliou、jadechng、Sean Liu 還有過去匯入殘留的 9 筆）
+   - 10 筆查無 contact 的亂碼：直接從 list 移除 + 刪 subscriber
+
+### 結果
+subscribers 表現有 0 筆 email 不合 regex `^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$`。
+
+bump 5.1.3 → 5.1.4
+
 ## v5.1.3 — fix(newsletter): 過濾格式錯誤 email + UI 顯示（2026-05-05）
 
 ### 痛點

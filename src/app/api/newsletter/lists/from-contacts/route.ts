@@ -141,25 +141,18 @@ export async function POST(req: NextRequest) {
 
   // Bulk find-or-create + link, in batches. Replaces 4000+ sequential queries
   // (which on 2000 contacts took >60s) with ~6-10 batched queries.
+  //
+  // KEY INVARIANT (v5.1.4+): subscriber identity is derived from CONTACT EMAIL
+  // (the canonical source), NOT from any pre-existing subscriber linked via
+  // contact_id. We previously did a contact_id pre-lookup that reused old
+  // subscribers even when their stored email had drifted from the contact's
+  // current email — leading to dirty CSV-imported emails (e.g. "jadecha")
+  // sneaking into freshly-built lists. Now we go email-first end-to-end.
   const errors: string[] = []
   const subscriberIdByContact = new Map<string, string>()
 
-  // Step 1: bulk lookup existing subscribers by contact_id
-  const validIds = valid.map((c) => c.id)
-  for (let i = 0; i < validIds.length; i += QUERY_BATCH) {
-    const batch = validIds.slice(i, i + QUERY_BATCH)
-    const { data } = await service
-      .from('newsletter_subscribers')
-      .select('id, contact_id')
-      .in('contact_id', batch)
-    for (const s of data ?? []) {
-      if (s.contact_id) subscriberIdByContact.set(s.contact_id as string, s.id as string)
-    }
-  }
-
-  // Step 2: for contacts not yet matched, fall back to email lookup
-  const needEmailLookup = valid.filter((c) => !subscriberIdByContact.has(c.id))
-  const emailLookup = needEmailLookup.map((c) => c.email!.trim()).filter((e) => !!e)
+  // Step 1: bulk lookup existing subscribers BY EMAIL (canonical source)
+  const emailLookup = Array.from(new Set(valid.map((c) => c.email!.trim()).filter((e) => !!e)))
   const subscriberIdByEmail = new Map<string, string>()
   for (let i = 0; i < emailLookup.length; i += QUERY_BATCH) {
     const batch = emailLookup.slice(i, i + QUERY_BATCH)
@@ -172,13 +165,13 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Step 3: build bulk-insert payload, deduped by email. Multiple CRM contacts
-  // can share an email (e.g., shared inboxes); we want one subscriber per email
-  // and link all those CRM contacts to the same subscriber.
+  // Step 2: build bulk-insert payload, deduped by email. Multiple CRM contacts
+  // can share an email (shared inboxes / spouse-of pattern); we want one
+  // subscriber per email and link all those CRM contacts to the same subscriber.
   type NewSub = { email: string; contact_id: string; first_name: string | null; last_name: string | null; company: string | null; source: string }
   const seenInsertEmails = new Set<string>()
   const toCreate: NewSub[] = []
-  for (const c of needEmailLookup) {
+  for (const c of valid) {
     const lc = c.email!.trim().toLowerCase()
     const existing = subscriberIdByEmail.get(lc)
     if (existing) {
