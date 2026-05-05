@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v5.0.2 — fix(email): inbound parse 強制 From 必須是 cancerfree.io（2026-05-05）
+
+5.0.1 的 fallback 邏輯允許「外部寄件人 → 直接寄到 inbox@bcc.cancerfree.io」也會被當 inbound 紀錄並建立聯絡人 —— 這代表外人可以塞假聯絡人到 CRM。
+
+改成嚴格模式：**只有 From 是 `@cancerfree.io` 的信才會被處理**，其他全部 400 拒絕。
+
+不影響的場景：
+- 員工在 Outlook BCC：From = 員工 cancerfree.io address ✓
+- 員工在 Outlook 轉寄外部來信：From = 員工 cancerfree.io address ✓（原始寄件人從轉寄 body 抓）
+
+bump 5.0.1 → 5.0.2
+
 ## v5.0.1 — fix(email): inbound 改用 SendGrid Inbound Parse（2026-05-05）
 
 v5.0.0 假設 Cloudflare Email Routing 可以掛 sub-zone，但 CF 免費版只支援 root domain（subdomain zone 是 Enterprise 才有）。改用 SendGrid Inbound Parse —— SendGrid 既有 plan 已涵蓋，subdomain MX 直接支援。

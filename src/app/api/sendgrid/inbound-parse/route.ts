@@ -112,16 +112,20 @@ export async function POST(req: NextRequest) {
   }
 
   const hasOrgFrom = isOrgAddress(fromAddr.email)
-  const hasOrgRecipient = allRecipients.some((a) => isOrgAddress(a.email))
-  if (!hasOrgFrom && !hasOrgRecipient) {
-    return NextResponse.json({ error: 'no org party' }, { status: 400 })
+  // Strict: only accept emails sent BY a cancerfree.io address (i.e., one of
+  // our team BCC'd or forwarded the email to the inbox). Reject everything
+  // else — random external mail to inbox@bcc.cancerfree.io should not be
+  // able to create contacts or interaction logs.
+  if (!hasOrgFrom) {
+    return NextResponse.json(
+      { error: 'sender not in org; reject', from: fromAddr.email },
+      { status: 400 }
+    )
   }
 
   const supabase = createServiceClient()
 
-  const orgEmail = hasOrgFrom
-    ? fromAddr.email
-    : allRecipients.find((a) => isOrgAddress(a.email))!.email
+  const orgEmail = fromAddr.email
 
   const { data: orgUser } = await supabase
     .from('users')
@@ -142,10 +146,14 @@ export async function POST(req: NextRequest) {
   const subject = parsed.subject ?? ''
   const isForward = isForwardedSubject(subject)
 
+  // Sender is org user (verified above). Two sub-cases:
+  // - Forwarded inbound: subject "Fwd:" + body has original "From:" header
+  //   → counterparty is the original sender from forwarded body
+  // - Pure BCC outbound: org user → external; counterparties are external recipients
   let direction: 'inbound' | 'outbound'
   let counterparties: AddressEntry[] = []
 
-  if (isForward && hasOrgFrom) {
+  if (isForward) {
     direction = 'inbound'
     const orig = extractForwardedFrom(parsed.text ?? '')
     if (orig) {
@@ -155,14 +163,11 @@ export async function POST(req: NextRequest) {
         (a) => !isOrgAddress(a.email) && !isBccInbox(a.email)
       )
     }
-  } else if (hasOrgFrom) {
+  } else {
     direction = 'outbound'
     counterparties = allRecipients.filter(
       (a) => !isOrgAddress(a.email) && !isBccInbox(a.email)
     )
-  } else {
-    direction = 'inbound'
-    counterparties = [fromAddr]
   }
 
   counterparties = dedupeByEmail(counterparties)
