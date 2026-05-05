@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## v5.0.1 — fix(email): inbound 改用 SendGrid Inbound Parse（2026-05-05）
+
+v5.0.0 假設 Cloudflare Email Routing 可以掛 sub-zone，但 CF 免費版只支援 root domain（subdomain zone 是 Enterprise 才有）。改用 SendGrid Inbound Parse —— SendGrid 既有 plan 已涵蓋，subdomain MX 直接支援。
+
+### 改動
+- 新檔：`src/app/api/sendgrid/inbound-parse/route.ts` — 接 SendGrid 多重 form-data，從 `email` 欄位讀 raw MIME（dashboard 要勾 "POST raw"）
+- 刪掉：`src/app/api/inbound-email/route.ts` + 整個 `workers/inbound-email/` 目錄
+- middleware skiplist 已含 `/api/sendgrid/*`，不用再額外加
+- Auth 從 `X-Inbound-Secret` header 改成 URL `?key=` query（SendGrid Inbound Parse 不簽 request，URL secret 是標準做法）
+
+### Setup（user 端）
+1. SendGrid Dashboard → Settings → Inbound Parse → Add Host
+   - Receiving domain: `bcc.cancerfree.io`
+   - Destination URL: `https://crm.cancerfree.io/api/sendgrid/inbound-parse?key=<INBOUND_PARSE_SECRET>`
+   - 勾 "POST the raw, full MIME message"
+2. Cloudflare DNS（cancerfree.io zone）加一筆：
+   - `bcc` MX `mx.sendgrid.net` priority 10
+3. Vercel env：`INBOUND_PARSE_SECRET`、`ORG_EMAIL_DOMAIN=cancerfree.io`、`BCC_INBOX_DOMAIN=bcc.cancerfree.io`
+
+bump 5.0.0 → 5.0.1
+
 ## v5.0.0 — feat(email): Outlook BCC/forward → CRM 自動 capture（2026-05-05）
 
 ### 痛點

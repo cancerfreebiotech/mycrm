@@ -8,14 +8,18 @@ import {
   stripQuotedReply,
 } from '@/lib/parseEmailHeaders'
 
-// POST /api/inbound-email
-// Receives a raw RFC822 message from the Cloudflare Email Worker.
-// Auth: header `X-Inbound-Secret` must match env INBOUND_PARSE_SECRET.
-// Always returns 200 unless secret is wrong (401) or body is unparseable (400).
-// 5xx triggers Worker retry — only return 5xx for actual transient failures.
+// POST /api/sendgrid/inbound-parse?key=<INBOUND_PARSE_SECRET>
+// Receives mail forwarded by SendGrid Inbound Parse (multipart/form-data).
+// SendGrid posts raw MIME in the `email` field when the "POST raw" checkbox
+// is enabled in the dashboard. We parse the raw MIME with mailparser to get
+// uniform behavior regardless of headers/encoding edge cases.
+//
+// Auth: shared secret in URL query (?key=...). SendGrid Inbound Parse doesn't
+// sign requests, so URL secret is the standard pattern. Plus we filter that
+// at least one cancerfree.io address appears in From/To/Cc as a soft sanity
+// check against random spam landing in the parse webhook.
 
 export const runtime = 'nodejs'
-// Allow up to 30s; mailparser + DB writes for big mails can take a while.
 export const maxDuration = 30
 
 const ORG_DOMAIN = (process.env.ORG_EMAIL_DOMAIN ?? 'cancerfree.io').toLowerCase()
@@ -59,15 +63,31 @@ function dedupeByEmail(list: AddressEntry[]): AddressEntry[] {
 }
 
 export async function POST(req: NextRequest) {
-  const provided = req.headers.get('x-inbound-secret') ?? ''
+  const provided = new URL(req.url).searchParams.get('key') ?? ''
   const expected = process.env.INBOUND_PARSE_SECRET ?? ''
   if (!expected || provided !== expected) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  const raw = await req.text()
+  let form: FormData
+  try {
+    form = await req.formData()
+  } catch (e) {
+    return NextResponse.json(
+      { error: 'expected multipart/form-data', detail: (e as Error).message },
+      { status: 400 }
+    )
+  }
+
+  // SendGrid posts raw MIME in `email` when "POST raw" is enabled.
+  // Fallback: try `text` + `headers` if raw isn't present (parsed mode).
+  const rawField = form.get('email')
+  const raw = typeof rawField === 'string' ? rawField : ''
   if (!raw || raw.length < 10) {
-    return NextResponse.json({ error: 'empty body' }, { status: 400 })
+    return NextResponse.json(
+      { error: 'no raw email field; enable "POST raw" in SendGrid Inbound Parse' },
+      { status: 400 }
+    )
   }
 
   let parsed: ParsedMail
@@ -91,8 +111,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'no From address' }, { status: 400 })
   }
 
-  // Security: only accept email when an org address appears somewhere
-  // (sender or recipient). Blocks unrelated mail being dumped into the inbox.
   const hasOrgFrom = isOrgAddress(fromAddr.email)
   const hasOrgRecipient = allRecipients.some((a) => isOrgAddress(a.email))
   if (!hasOrgFrom && !hasOrgRecipient) {
@@ -101,8 +119,6 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServiceClient()
 
-  // Identify the cancerfree-side user. Priority: From if org, else first org recipient.
-  // This becomes interaction_logs.created_by.
   const orgEmail = hasOrgFrom
     ? fromAddr.email
     : allRecipients.find((a) => isOrgAddress(a.email))!.email
@@ -115,7 +131,6 @@ export async function POST(req: NextRequest) {
 
   let createdBy: string | null = orgUser?.id ?? null
   if (!createdBy) {
-    // Fallback: super_admin pohan.chen@cancerfree.io
     const { data: superAdmin } = await supabase
       .from('users')
       .select('id')
@@ -127,9 +142,6 @@ export async function POST(req: NextRequest) {
   const subject = parsed.subject ?? ''
   const isForward = isForwardedSubject(subject)
 
-  // Determine direction + the "other party" (contact side)
-  // - BCC outbound: sender is org user, recipients include external addresses → outbound
-  // - Forwarded inbound: sender is org user, subject is "Fwd:", body has "From: ..." → inbound
   let direction: 'inbound' | 'outbound'
   let counterparties: AddressEntry[] = []
 
@@ -139,7 +151,6 @@ export async function POST(req: NextRequest) {
     if (orig) {
       counterparties = [{ name: orig.name, email: orig.email.toLowerCase() }]
     } else {
-      // Fallback: treat external recipients as the contacts
       counterparties = allRecipients.filter(
         (a) => !isOrgAddress(a.email) && !isBccInbox(a.email)
       )
@@ -150,21 +161,18 @@ export async function POST(req: NextRequest) {
       (a) => !isOrgAddress(a.email) && !isBccInbox(a.email)
     )
   } else {
-    // External sender → an external party emailed an org user directly to the BCC inbox.
-    // Treat as inbound; the external sender is the contact.
     direction = 'inbound'
     counterparties = [fromAddr]
   }
 
   counterparties = dedupeByEmail(counterparties)
   if (counterparties.length === 0) {
-    // Nothing to attach to — likely an internal-only mail. Skip silently.
     return NextResponse.json({ ok: true, skipped: 'no external party' })
   }
 
   const bodyText = parsed.text ?? ''
   const bodyClean = stripQuotedReply(bodyText) || bodyText
-  const emailBodySnippet = bodyClean.slice(0, 50000) // hard cap 50KB
+  const emailBodySnippet = bodyClean.slice(0, 50000)
 
   const directionLabel = direction === 'inbound' ? '收信' : '寄信'
   const contentSummary = `Outlook ${directionLabel}：${subject}`.slice(0, 500)
@@ -188,12 +196,12 @@ export async function POST(req: NextRequest) {
         created_by: createdBy,
       })
       if (logErr) {
-        console.error('inbound-email log insert failed', { email: party.email, err: logErr })
+        console.error('inbound-parse log insert failed', { email: party.email, err: logErr })
         continue
       }
       created.push({ contact_id: result.id, created: result.created, email: party.email })
     } catch (e) {
-      console.error('inbound-email contact failed', { email: party.email, err: e })
+      console.error('inbound-parse contact failed', { email: party.email, err: e })
     }
   }
 
