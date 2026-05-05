@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## v5.3.1 — fix(db): 補回 users 表 SELECT GRANT，11 個表 RLS 連動修好（2026-05-05）
+
+### 痛點
+`/admin/newsletter/campaigns` 突然顯示「目前沒有電子報」（其實 5 個都還在）。直接打 anon key 查回 `permission denied for table users`。
+
+### Root cause
+`users` 表 anon/authenticated 不知何時被 revoke 了 SELECT GRANT（其他 INSERT/UPDATE/DELETE 都還在）。但很多 RLS policy 用 inline `EXISTS (SELECT FROM users ...)` 子查詢檢查 super_admin 身分，子查詢以呼叫者身分執行，permission denied 整個母 query 跟著炸。
+
+連帶受影響的表（11 個）：camcard_pending, failed_scans, feedback, gmail_oauth, newsletter_blacklist, newsletter_campaigns, newsletter_recipients, newsletter_unsubscribes, pending_contacts, report_schedules, user_prompts
+
+### Fix
+Migration `restore_users_select_grant`：`GRANT SELECT ON public.users TO anon, authenticated`。
+
+`users_select` RLS policy 本來就是 `qual=true` 開放讀，恢復 GRANT 不增加實際暴露面。
+
+bump 5.3.0 → 5.3.1
+
 ## v5.3.0 — feat(email): Email 復活頁面 + bot 換工作偵測（2026-05-05）
 
 ### 痛點
