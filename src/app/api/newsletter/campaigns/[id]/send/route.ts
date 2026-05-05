@@ -74,11 +74,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const listIds = (campaign.list_ids as string[] | null) ?? []
     if (listIds.length === 0) return NextResponse.json({ error: 'campaign has no list_ids' }, { status: 400 })
 
-    const { data: membership } = await service
-      .from('newsletter_subscriber_lists')
-      .select('subscriber_id')
-      .in('list_id', listIds)
-    const subIds = [...new Set((membership ?? []).map((r: { subscriber_id: string }) => r.subscriber_id))]
+    // Supabase default LIMIT is 1000 — paginate to grab the full membership.
+    // For our scale (lists up to ~10k) this is fine; bigger lists would want
+    // a server-side aggregation but we're far from that.
+    const PAGE = 1000
+    const allMembership: { subscriber_id: string }[] = []
+    for (let from = 0; ; from += PAGE) {
+      const { data: page } = await service
+        .from('newsletter_subscriber_lists')
+        .select('subscriber_id')
+        .in('list_id', listIds)
+        .range(from, from + PAGE - 1)
+      if (!page || page.length === 0) break
+      allMembership.push(...(page as { subscriber_id: string }[]))
+      if (page.length < PAGE) break
+    }
+    const subIds = [...new Set(allMembership.map((r) => r.subscriber_id))]
     if (subIds.length === 0) return NextResponse.json({ error: 'no subscribers in selected lists' }, { status: 400 })
 
     // PostgREST URL length cap (~32KB). Large lists (1000+ UUIDs/emails) in

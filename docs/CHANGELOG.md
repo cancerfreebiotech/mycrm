@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## v5.1.2 — fix(newsletter): membership 查詢 Supabase 1000-row 預設限制 + UI 露出實際錯誤（2026-05-05）
+
+### 痛點
+v5.1.1 修了 `.in()` URL 截斷後，user 重試結果回 `已寄出：0/1000（1 個 chunk 錯誤）`。但 list 有 1966 訂閱者，total 應該是 1966 不是 1000。Status 設成 sent / sent_count=0，每封信都沒寄出去。
+
+### 兩個 root cause
+1. **Supabase 預設 select 上限 1000 row**：`newsletter_subscriber_lists` 那 list 有 1966 個會員，但 `.in('list_id', listIds)` 只回 1000，後續 chunked 處理也只看到 1000。改用 `.range()` 分頁抓滿。
+2. **UI 只 show「N 個 chunk 錯誤」**：實際 SendGrid 回什麼錯不知道。改成 show 第一筆錯誤訊息，並 console.error 全部錯誤。
+
+### 改動
+- `/api/newsletter/campaigns/[id]/send/route.ts` membership 查詢改 paginate（`.range()`，1000/page）
+- `quick-send/[id]/page.tsx` 寄信完 banner 顯示第一筆錯誤訊息
+
+bump 5.1.1 → 5.1.2
+
 ## v5.1.1 — fix(newsletter): 寄送 1000+ 訂閱者時 .in() URL 超 32KB 被截斷（2026-05-05）
 
 ### 痛點

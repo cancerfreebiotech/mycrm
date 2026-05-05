@@ -288,7 +288,16 @@ export default function QuickSendPage() {
       const res = await fetch(`/api/newsletter/campaigns/${id}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? '寄送失敗')
-      setBanner({ kind: 'ok', msg: `已寄出：${data.sent}/${data.total}${data.errors?.length ? `（${data.errors.length} 個 chunk 錯誤）` : ''}` })
+      if (data.errors?.length) {
+        const firstErr = String(data.errors[0]).slice(0, 300)
+        setBanner({
+          kind: data.sent > 0 ? 'ok' : 'err',
+          msg: `已寄出：${data.sent}/${data.total}（${data.errors.length} 個 chunk 失敗）— 第一筆錯誤：${firstErr}`,
+        })
+        console.error('[newsletter send errors]', data.errors)
+      } else {
+        setBanner({ kind: 'ok', msg: `已寄出：${data.sent}/${data.total}` })
+      }
       // Reload campaign to reflect sent state
       const c = await fetch(`/api/newsletter/campaigns/${id}`).then((r) => r.json())
       setCampaign(c)
