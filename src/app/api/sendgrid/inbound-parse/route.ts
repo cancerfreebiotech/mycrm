@@ -3,6 +3,7 @@ import { simpleParser, type AddressObject, type ParsedMail } from 'mailparser'
 import { createServiceClient } from '@/lib/supabase'
 import { findOrCreateContactByEmail } from '@/lib/findOrCreateContactByEmail'
 import {
+  buildHeaderBlock,
   extractForwardedFrom,
   isForwardedSubject,
   stripQuotedReply,
@@ -177,7 +178,16 @@ export async function POST(req: NextRequest) {
 
   const bodyText = parsed.text ?? ''
   const bodyClean = stripQuotedReply(bodyText) || bodyText
-  const emailBodySnippet = bodyClean.slice(0, 50000)
+
+  // Prepend From/To/Cc header block so users can see who else was on the
+  // email (especially Cc — otherwise invisible in the captured log).
+  const headerBlock = buildHeaderBlock({
+    from: fromAddr,
+    to: toList,
+    cc: ccList,
+  })
+  const emailBodyWithHeaders = `${headerBlock}\n\n---\n\n${bodyClean}`
+  const emailBodySnippet = emailBodyWithHeaders.slice(0, 50000)
 
   const directionLabel = direction === 'inbound' ? '收信' : '寄信'
   const contentSummary = `Outlook ${directionLabel}：${subject}`.slice(0, 500)

@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## v5.0.3 — fix(email): inbound parse 砍 quoted thread + 顯示 To/Cc（2026-05-05）
+
+第一封實際 BCC 進來的信（Eva 寄給 Kenji Miyoshi）暴露兩個問題：
+1. 整個 reply thread 都被當成 email_body 存進去，又長又雜
+2. interaction_log 看不到誰被 Cc
+
+### 改動
+- `stripQuotedReply()` 強化：
+  - 切 Outlook 那串 `____________` 分隔線
+  - 切 `From:` / `寄件者:` / `差出人:` 後接 `Sent:` / `傳送日期:` / `送信日時:` 的 reply quote header（多語）
+  - 切 `--- Original Message ---` / `--- Forwarded message ---` / `原始郵件` / `転送メッセージ`
+  - 保留原本 Gmail-style `On ... wrote:`
+- 新增 `buildHeaderBlock()`：產出 `From: ... / To: ... / Cc: ...` 區塊
+- inbound-parse route 把 header block prepend 到 `email_body` 開頭，user 看到一筆 log 就知道 To 跟 Cc 是誰
+
+### email_body 新格式
+```
+From: Eva Hung <eva.hung@cancerfree.io>
+To: Kenji Miyoshi <kenji@example.com>
+Cc: Bob <bob@example.com>, Alice <alice@example.com>
+
+---
+
+[user's actual reply content; thread chain stripped]
+```
+
+bump 5.0.2 → 5.0.3
+
 ## v5.0.2 — fix(email): inbound parse 強制 From 必須是 cancerfree.io（2026-05-05）
 
 5.0.1 的 fallback 邏輯允許「外部寄件人 → 直接寄到 inbox@bcc.cancerfree.io」也會被當 inbound 紀錄並建立聯絡人 —— 這代表外人可以塞假聯絡人到 CRM。

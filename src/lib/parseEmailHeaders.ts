@@ -33,18 +33,67 @@ export function isForwardedSubject(subject: string | null | undefined): boolean 
   return !!subject && FORWARD_SUBJECT_PREFIX.test(subject.trim())
 }
 
-// Cheap quoted-reply stripper. Removes obvious quote markers; not perfect
-// for all email clients but good enough to keep email_body readable.
+// Strip the quoted-reply chain from an email body so the captured
+// interaction_log shows only the newest content (the user's actual reply),
+// not the entire conversation history.
+//
+// Cuts at the FIRST appearance of any quote marker, including Outlook's
+// "________________ From: ... Sent: ... To: ..." block (in zh-TW / en / ja),
+// Gmail-style "On <date>, X wrote:" lead-in, and explicit "Original message"
+// dividers. Inline ">" quoted lines are removed but don't trigger a cut
+// (they may appear interspersed in some clients).
 export function stripQuotedReply(text: string): string {
   if (!text) return ''
   const lines = text.split(/\r?\n/)
   const out: string[] = []
-  for (const line of lines) {
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+
+    // Outlook divider: long underscore line (often followed by From: header block)
+    if (/^_{5,}\s*$/.test(line)) break
+
+    // Gmail-style: "On Mon, May 5, 2026 at 10:00 AM, John <john@x.com> wrote:"
     if (/^On\s.+wrote:\s*$/i.test(line)) break
-    if (/^-{3,}\s*Original Message\s*-{3,}/i.test(line)) break
-    if (/^-{3,}\s*Forwarded message\s*-{3,}/i.test(line)) break
-    if (/^>+\s/.test(line)) continue
+
+    // Explicit dividers (multi-language)
+    if (/^-{3,}\s*(Original Message|Forwarded message|原始郵件|転送メッセージ)\s*-{3,}/i.test(line)) break
+
+    // Outlook reply quote: "From: ..." at start of line, with "Sent:" / "Date:"
+    // appearing within the next 3 lines (header-style block, not a one-off mention)
+    if (/^(From|寄件者|差出人):\s/.test(line)) {
+      const next3 = lines.slice(i + 1, i + 4).join('\n')
+      if (/^(Sent|傳送日期|送信日時|Date|日期):\s/m.test(next3)) break
+    }
+
+    // Inline ">" quoted lines: drop, don't cut
+    if (/^>+\s?/.test(line)) continue
+
     out.push(line)
   }
+
   return out.join('\n').trim()
+}
+
+// Format an address as "Display Name <email>" if name present, else just email.
+function formatAddress(entry: { name?: string; email: string }): string {
+  return entry.name ? `${entry.name} <${entry.email}>` : entry.email
+}
+
+// Format a list of addresses comma-separated for header display.
+export function formatAddressList(list: Array<{ name?: string; email: string }>): string {
+  return list.map(formatAddress).join(', ')
+}
+
+// Build a human-readable header block showing From / To / Cc, to prepend
+// to email_body so the user can see who else was on the email at a glance.
+export function buildHeaderBlock(args: {
+  from: { name?: string; email: string }
+  to: Array<{ name?: string; email: string }>
+  cc: Array<{ name?: string; email: string }>
+}): string {
+  const lines = [`From: ${formatAddress(args.from)}`]
+  if (args.to.length > 0) lines.push(`To: ${formatAddressList(args.to)}`)
+  if (args.cc.length > 0) lines.push(`Cc: ${formatAddressList(args.cc)}`)
+  return lines.join('\n')
 }
