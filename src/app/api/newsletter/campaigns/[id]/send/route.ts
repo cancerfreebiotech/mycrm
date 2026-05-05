@@ -174,11 +174,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (recipients.length === 0) return NextResponse.json({ error: 'no valid recipients after filters' }, { status: 400 })
 
-  // ── Send via SendGrid ──
-  // SendGrid supports up to 1000 personalizations per API call
+  // ── Send via SendGrid + write interaction_logs PER CHUNK ──
+  // SendGrid supports up to 1000 personalizations per API call.
+  //
+  // We write interaction_logs immediately after each chunk succeeds (rather
+  // than batching all logs at the end). Reasoning: a Vercel function timeout
+  // mid-loop loses the post-loop log write entirely — that's exactly what
+  // happened on the 5/5 May ZH send (sent_count=966 but 0 logs in DB). Per-
+  // chunk persistence guarantees logs match SendGrid reality even on timeout.
   const CHUNK = 1000
   let sent = 0
   const errors: string[] = []
+  const cleanBody = campaign.content_html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000)
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.cancerfree.io'
   for (let i = 0; i < recipients.length; i += CHUNK) {
@@ -218,34 +225,37 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         continue
       }
       sent += slice.length
+
+      // Write interaction_logs ONLY for this successful chunk — guarantees
+      // logs match what SendGrid actually accepted, not what we attempted.
+      if (!body.testOnly) {
+        const chunkLinkedContactIds = slice
+          .filter((r) => r.contact_id)
+          .map((r) => r.contact_id as string)
+        if (chunkLinkedContactIds.length > 0) {
+          const chunkLogs = chunkLinkedContactIds.map((cid) => ({
+            contact_id: cid,
+            type: 'email' as const,
+            direction: 'outbound' as const,
+            content: `電子報：${campaign.subject}`,
+            email_subject: campaign.subject,
+            email_body: cleanBody,
+            created_by: userId,
+            campaign_id: campaignId,
+            send_method: 'sendgrid' as const,
+          }))
+          const { error: logErr } = await service.from('interaction_logs').insert(chunkLogs)
+          if (logErr) {
+            // Log but don't abort — emails were sent, the log gap is recoverable
+            errors.push(`chunk ${i} log write: ${logErr.message}`)
+          }
+        }
+      }
     } catch (e) {
       errors.push(`chunk ${i}: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
 
-  // ── Write interaction_logs for linked subscribers ──
-  // send_method='sendgrid' keeps these out of last_activity_at by existing filter.
-  if (!body.testOnly && sent > 0) {
-    const linkedContactIds = recipients
-      .filter((r) => r.contact_id)
-      .map((r) => r.contact_id as string)
-    if (linkedContactIds.length > 0) {
-      const logRows = linkedContactIds.map((cid) => ({
-        contact_id: cid,
-        type: 'email' as const,
-        direction: 'outbound' as const,
-        content: `電子報：${campaign.subject}`,
-        email_subject: campaign.subject,
-        email_body: campaign.content_html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000),
-        created_by: userId,
-        campaign_id: campaignId,
-        send_method: 'sendgrid' as const,
-      }))
-      for (let i = 0; i < logRows.length; i += 500) {
-        await service.from('interaction_logs').insert(logRows.slice(i, i + 500))
-      }
-    }
-  }
 
   // ── Update campaign state ──
   if (!body.testOnly) {

@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## v5.2.0 — feat(newsletter): per-chunk interaction_logs + drop FK + 重寄分流（2026-05-05）
+
+### 痛點
+5/5 寄五月中文 newsletter，sent_count=966 但 mycrm interaction_logs **0 筆**，完全沒紀錄誰收到了。為了不重寄，必須打 SendGrid Activity API 重新撈出 967 個收到的 email、人工分 list。
+
+### Root cause（兩個 bug 疊加）
+1. **FK 弄錯**：`interaction_logs.campaign_id` FK 指向 `email_campaigns`，但 newsletter 寫的是 `newsletter_campaigns.id` → INSERT FK 違反、route 沒檢查 error 直接 swallow
+2. **Post-loop 寫入 timeout**：interaction_logs 寫在 SendGrid loop 之後一次寫；如果 chunk 多 + Vercel function 接近 300s timeout，post-loop 整段沒跑、log 全失
+
+### 改動
+1. **DB migration `drop_interaction_logs_campaign_id_fk`**：drop FK，campaign_id 之後可指 email_campaigns 或 newsletter_campaigns
+2. **send route 改 per-chunk write**：每個 chunk SendGrid 成功就立刻寫 interaction_logs，不等所有 chunk 跑完。Function timeout 時，已成功 chunk 的 log 都已落盤
+3. **chunk 失敗的 log 寫入錯誤** push 到 errors 陣列，return 給前端可見
+4. **資料修復**：5/5 已寄 967 個 email backfill 進 interaction_logs（965 有 contact_id，2 個 test 沒 match）；切 1966 list 為 `202505-ch-sent` (965) + `202505-ch-pending` (1001) 兩個 list
+
+### 結果
+campaign reset 到 draft，list_ids 改成 ch-pending 那一條，user 重點正式寄送只會寄 1001 個還沒收到的。
+
+bump 5.1.5 → 5.2.0
+
 ## v5.1.5 — fix(newsletter): 建立清單時 backfill orphan subscriber 的 contact_id（2026-05-05）
 
 ### 痛點
