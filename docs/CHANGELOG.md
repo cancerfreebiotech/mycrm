@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v5.7.1 — fix(newsletter): inline 編輯「套用並儲存」直接存 DB（2026-05-06）
+
+### 變更項目
+- 「套用變更」改名為「套用並儲存」，點擊後同時更新 state 並呼叫 PATCH API
+- 離開頁面再回來，inline 編輯的內容會正確保留
+
+bump 5.7.0 → 5.7.1
+
 ## v5.7.0 — feat(newsletter): Inline 編輯器取代 TipTap，版型不再跑掉（2026-05-06）
 
 ### 變更項目
