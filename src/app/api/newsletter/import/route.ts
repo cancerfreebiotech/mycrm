@@ -75,7 +75,7 @@ const SUBJECT_FMT: Record<Lang, (label: string) => string> = {
 }
 
 const SECTION_LABEL: Record<Section, Record<Lang, string>> = {
-  last_month: { 'zh-TW': '上月回顧', 'en': 'Last Month', 'ja': '先月のまとめ' },
+  last_month: { 'zh-TW': '上月回顧', 'en': 'Last Month', 'ja': '先月の振り返り' },
   next_month: { 'zh-TW': '下月預告', 'en': 'Coming Up', 'ja': '来月の予定' },
 }
 
