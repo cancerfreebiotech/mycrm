@@ -114,11 +114,15 @@ export async function POST(req: NextRequest) {
   }
 
   const hasOrgFrom = isOrgAddress(fromAddr.email)
-  // Strict: only accept emails sent BY a cancerfree.io address (i.e., one of
-  // our team BCC'd or forwarded the email to the inbox). Reject everything
-  // else — random external mail to inbox@bcc.cancerfree.io / crm@bcc.cancerfree.io should not be
-  // able to create contacts or interaction logs.
-  if (!hasOrgFrom) {
+
+  // Accept external-sender emails only when our inbox address is explicitly
+  // in To/CC (i.e., a counterparty replied-all and the inbox was already on
+  // the thread). Must also have at least one @cancerfree.io recipient so we
+  // know whose interaction to attribute it to.
+  const hasBccInRecipients = allRecipients.some((a) => isBccInbox(a.email))
+  const orgRecipient = allRecipients.find((a) => isOrgAddress(a.email))
+
+  if (!hasOrgFrom && !(hasBccInRecipients && orgRecipient)) {
     return NextResponse.json(
       { error: 'sender not in org; reject', from: fromAddr.email },
       { status: 400 }
@@ -127,7 +131,10 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServiceClient()
 
-  const orgEmail = fromAddr.email
+  // Determine which org user to attribute the interaction to:
+  // - outbound / forward: the From address (org user who sent)
+  // - inbound reply from external: the org recipient found above
+  const orgEmail = hasOrgFrom ? fromAddr.email : orgRecipient!.email
 
   const { data: orgUser } = await supabase
     .from('users')
@@ -148,14 +155,14 @@ export async function POST(req: NextRequest) {
   const subject = parsed.subject ?? ''
   const isForward = isForwardedSubject(subject)
 
-  // Sender is org user (verified above). Two sub-cases:
-  // - Forwarded inbound: subject "Fwd:" + body has original "From:" header
-  //   → counterparty is the original sender from forwarded body
-  // - Pure BCC outbound: org user → external; counterparties are external recipients
   let direction: 'inbound' | 'outbound'
   let counterparties: AddressEntry[] = []
 
-  if (isForward) {
+  if (!hasOrgFrom) {
+    // External sender replied-all and CC'd our inbox → inbound
+    direction = 'inbound'
+    counterparties = [fromAddr]
+  } else if (isForward) {
     direction = 'inbound'
     const orig = extractForwardedFrom(parsed.text ?? '')
     if (orig && !isOrgAddress(orig.email) && !isBccInbox(orig.email)) {
