@@ -24,8 +24,8 @@ import { hunterEnrich } from '@/lib/hunterEnrich'
 export const runtime = 'nodejs'
 export const maxDuration = 30
 
-const ORG_DOMAIN = (process.env.ORG_EMAIL_DOMAIN ?? 'cancerfree.io').toLowerCase()
-const BCC_INBOX_DOMAIN = (process.env.BCC_INBOX_DOMAIN ?? 'bcc.cancerfree.io').toLowerCase()
+const ORG_DOMAIN = (process.env.ORG_EMAIL_DOMAIN ?? 'cancerfree.io').trim().toLowerCase()
+const BCC_INBOX_DOMAIN = (process.env.BCC_INBOX_DOMAIN ?? 'bcc.cancerfree.io').trim().toLowerCase()
 
 interface AddressEntry {
   name?: string
@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
   if (isForward) {
     direction = 'inbound'
     const orig = extractForwardedFrom(parsed.text ?? '')
-    if (orig) {
+    if (orig && !isOrgAddress(orig.email) && !isBccInbox(orig.email)) {
       counterparties = [{ name: orig.name, email: orig.email.toLowerCase() }]
     } else {
       counterparties = allRecipients.filter(
