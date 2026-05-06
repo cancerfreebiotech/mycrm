@@ -144,6 +144,7 @@
     "listNameRequired": "List name required",
     "listCreateFailed": "Failed to create — please retry",
     "batchEditTitle": "Batch Edit",
+    "batchEditHint": "Changes will apply to {count} contacts",
     "batchEditApply": "Apply",
     "noResults": "No contacts found",
     "name": "Name",

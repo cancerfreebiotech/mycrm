@@ -144,6 +144,7 @@
     "listNameRequired": "請輸入清單名稱",
     "listCreateFailed": "建立失敗，請稍後再試",
     "batchEditTitle": "批次編輯",
+    "batchEditHint": "將對 {count} 位聯絡人套用以下變更",
     "batchEditApply": "套用",
     "noResults": "找不到聯絡人",
     "name": "姓名",

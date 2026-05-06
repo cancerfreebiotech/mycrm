@@ -144,6 +144,7 @@
     "listNameRequired": "リスト名を入力してください",
     "listCreateFailed": "作成に失敗しました。後ほど再試行してください",
     "batchEditTitle": "一括編集",
+    "batchEditHint": "{count} 件の連絡先に変更を適用します",
     "batchEditApply": "適用",
     "noResults": "連絡先が見つかりません",
     "name": "氏名",
