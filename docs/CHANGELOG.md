@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## v5.7.0 — feat(newsletter): Inline 編輯器取代 TipTap，版型不再跑掉（2026-05-06）
+
+### 變更項目
+- 新增 `InlineEmailEditor` 元件：使用 iframe + `document.designMode`，直接在渲染後的 email 版型上點選文字編輯
+- 移除「視覺編輯」（TipTap）模式 — TipTap 會將 table-based email HTML 重新 parse，破壞版型
+- 新增「Inline 編輯」模式取代之：切換後即時可點選任意文字修改，table 結構與 inline styles 完全保留
+- 點擊「套用變更」或切換其他模式時自動同步 HTML 回主狀態
+- 圖片上傳在 inline 模式下仍可用（`execCommand('insertImage')` 插入游標位置）
+
+bump 5.6.1 → 5.7.0
+
 ## v5.6.1 — fix(newsletter): 匯入時語言非強制，只產生 manifest 有的語言版本（2026-05-06）
 
 ### 變更項目
