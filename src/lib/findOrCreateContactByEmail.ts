@@ -50,5 +50,16 @@ export async function findOrCreateContactByEmail(
     .single()
 
   if (insErr) throw insErr
+
+  // Auto-tag with "BCC" so contacts created via BCC inbox are filterable
+  const { data: bccTag } = await supabase
+    .from('tags')
+    .select('id')
+    .ilike('name', 'BCC')
+    .maybeSingle()
+  if (bccTag?.id) {
+    await supabase.from('contact_tags').insert({ contact_id: inserted.id, tag_id: bccTag.id })
+  }
+
   return { id: inserted.id, created: true }
 }

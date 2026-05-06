@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
   const hasOrgFrom = isOrgAddress(fromAddr.email)
   // Strict: only accept emails sent BY a cancerfree.io address (i.e., one of
   // our team BCC'd or forwarded the email to the inbox). Reject everything
-  // else — random external mail to inbox@bcc.cancerfree.io should not be
+  // else — random external mail to inbox@bcc.cancerfree.io / crm@bcc.cancerfree.io should not be
   // able to create contacts or interaction logs.
   if (!hasOrgFrom) {
     return NextResponse.json(
