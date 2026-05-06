@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Search, Download, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Copy, Check, Loader2, X, Linkedin, Mail, Users } from 'lucide-react'
+import { Search, Download, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Copy, Check, Loader2, X, Linkedin, Mail, Users, SlidersHorizontal } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 interface Tag {
@@ -84,6 +84,27 @@ export default function ContactsPage() {
   const [createdFrom, setCreatedFrom] = useState('')
   const [createdTo, setCreatedTo] = useState('')
   const [createdDateDropdownOpen, setCreatedDateDropdownOpen] = useState(false)
+  const [columnsDropdownOpen, setColumnsDropdownOpen] = useState(false)
+
+  type ColKey = 'company' | 'job_title' | 'email' | 'tags' | 'met_at' | 'creator' | 'created_at'
+  const DEFAULT_COLS: Record<ColKey, boolean> = {
+    company: true, job_title: true, email: true, tags: true,
+    met_at: true, creator: false, created_at: true,
+  }
+  const [visibleCols, setVisibleCols] = useState<Record<ColKey, boolean>>(() => {
+    if (typeof window === 'undefined') return DEFAULT_COLS
+    try {
+      const stored = localStorage.getItem('contacts_visible_columns')
+      return stored ? { ...DEFAULT_COLS, ...JSON.parse(stored) } : DEFAULT_COLS
+    } catch { return DEFAULT_COLS }
+  })
+  function toggleCol(key: ColKey) {
+    setVisibleCols((prev) => {
+      const next = { ...prev, [key]: !prev[key] }
+      localStorage.setItem('contacts_visible_columns', JSON.stringify(next))
+      return next
+    })
+  }
   const [loading, setLoading] = useState(true)
   const [addDropOpen, setAddDropOpen] = useState(false)
   const [liParsing, setLiParsing] = useState(false)
@@ -251,6 +272,7 @@ export default function ContactsPage() {
     : filtered
 
   const hasFilter = !!(query || metQuery || selectedTags.length > 0 || selectedCountries.length > 0 || selectedImportance || selectedLanguage || selectedEmailStatus || selectedCreators.length > 0 || createdFrom || createdTo)
+  const visibleColCount = 2 + Object.values(visibleCols).filter(Boolean).length // checkbox + name + visible cols
   const isBlacklisted = (c: Contact) => c.contact_tags.some((ct) => ct.tags?.is_email_blacklist === true)
   const isEmailable = (c: Contact) => !!c.email && !c.email_status && !c.email_opt_out && !isBlacklisted(c)
   const emailPool = selectedIds.size > 0 ? sorted.filter(c => selectedIds.has(c.id)) : sorted
@@ -854,6 +876,39 @@ export default function ContactsPage() {
             <option key={v} value={v} />
           ))}
         </datalist>
+
+        {/* Column visibility toggle */}
+        <div className="relative hidden sm:block">
+          <button
+            onClick={() => setColumnsDropdownOpen((v) => !v)}
+            className="flex items-center gap-2 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+            title="顯示/隱藏欄位"
+          >
+            <SlidersHorizontal size={14} />
+          </button>
+          {columnsDropdownOpen && (
+            <div className="absolute top-full mt-1 right-0 z-10 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-36">
+              {([
+                ['company', t('company')],
+                ['job_title', t('jobTitle')],
+                ['email', 'Email'],
+                ['tags', 'Tags'],
+                ['met_at', t('metAt')],
+                ['creator', t('creator')],
+                ['created_at', t('createdAt')],
+              ] as [ColKey, string][]).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => toggleCol(key)}
+                  className="w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  <span className={`w-3 h-3 border rounded shrink-0 ${visibleCols[key] ? 'bg-blue-500 border-blue-500' : 'border-gray-300 dark:border-gray-600'}`} />
+                  <span className="text-gray-700 dark:text-gray-300">{label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Mobile card list */}
@@ -957,57 +1012,80 @@ export default function ContactsPage() {
                   className="rounded"
                 />
               </th>
-              {([
-                [t('name'), 'name'],
-                [t('company'), 'company'],
-                [t('jobTitle'), 'job_title'],
-                ['Email', 'email'],
-              ] as [string, SortField][]).map(([label, field]) => (
-                <th key={field} className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">
-                  <button
-                    onClick={() => handleSort(field)}
-                    className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-                  >
-                    {label}
-                    {sortField !== field && <ChevronsUpDown size={12} className="text-gray-400" />}
-                    {sortField === field && sortDir === 'asc' && <ChevronUp size={12} className="text-blue-500" />}
-                    {sortField === field && sortDir === 'desc' && <ChevronDown size={12} className="text-blue-500" />}
+              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">
+                <button onClick={() => handleSort('name')} className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
+                  {t('name')}
+                  {sortField !== 'name' && <ChevronsUpDown size={12} className="text-gray-400" />}
+                  {sortField === 'name' && sortDir === 'asc' && <ChevronUp size={12} className="text-blue-500" />}
+                  {sortField === 'name' && sortDir === 'desc' && <ChevronDown size={12} className="text-blue-500" />}
+                </button>
+              </th>
+              {visibleCols.company && (
+                <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">
+                  <button onClick={() => handleSort('company')} className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
+                    {t('company')}
+                    {sortField !== 'company' && <ChevronsUpDown size={12} className="text-gray-400" />}
+                    {sortField === 'company' && sortDir === 'asc' && <ChevronUp size={12} className="text-blue-500" />}
+                    {sortField === 'company' && sortDir === 'desc' && <ChevronDown size={12} className="text-blue-500" />}
                   </button>
                 </th>
-              ))}
-              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">
-                <button
-                  onClick={() => handleSort('tag')}
-                  className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-                >
-                  Tags
-                  {sortField !== 'tag' && <ChevronsUpDown size={12} className="text-gray-400" />}
-                  {sortField === 'tag' && sortDir === 'asc' && <ChevronUp size={12} className="text-blue-500" />}
-                  {sortField === 'tag' && sortDir === 'desc' && <ChevronDown size={12} className="text-blue-500" />}
-                </button>
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">{t('creator')}</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">
-                <button
-                  onClick={() => handleSort('created_at')}
-                  className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-                >
-                  {t('createdAt')}
-                  {sortField !== 'created_at' && <ChevronsUpDown size={12} className="text-gray-400" />}
-                  {sortField === 'created_at' && sortDir === 'asc' && <ChevronUp size={12} className="text-blue-500" />}
-                  {sortField === 'created_at' && sortDir === 'desc' && <ChevronDown size={12} className="text-blue-500" />}
-                </button>
-              </th>
+              )}
+              {visibleCols.job_title && (
+                <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">
+                  <button onClick={() => handleSort('job_title')} className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
+                    {t('jobTitle')}
+                    {sortField !== 'job_title' && <ChevronsUpDown size={12} className="text-gray-400" />}
+                    {sortField === 'job_title' && sortDir === 'asc' && <ChevronUp size={12} className="text-blue-500" />}
+                    {sortField === 'job_title' && sortDir === 'desc' && <ChevronDown size={12} className="text-blue-500" />}
+                  </button>
+                </th>
+              )}
+              {visibleCols.email && (
+                <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">
+                  <button onClick={() => handleSort('email')} className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
+                    Email
+                    {sortField !== 'email' && <ChevronsUpDown size={12} className="text-gray-400" />}
+                    {sortField === 'email' && sortDir === 'asc' && <ChevronUp size={12} className="text-blue-500" />}
+                    {sortField === 'email' && sortDir === 'desc' && <ChevronDown size={12} className="text-blue-500" />}
+                  </button>
+                </th>
+              )}
+              {visibleCols.tags && (
+                <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">
+                  <button onClick={() => handleSort('tag')} className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
+                    Tags
+                    {sortField !== 'tag' && <ChevronsUpDown size={12} className="text-gray-400" />}
+                    {sortField === 'tag' && sortDir === 'asc' && <ChevronUp size={12} className="text-blue-500" />}
+                    {sortField === 'tag' && sortDir === 'desc' && <ChevronDown size={12} className="text-blue-500" />}
+                  </button>
+                </th>
+              )}
+              {visibleCols.met_at && (
+                <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">{t('metAt')}</th>
+              )}
+              {visibleCols.creator && (
+                <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">{t('creator')}</th>
+              )}
+              {visibleCols.created_at && (
+                <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">
+                  <button onClick={() => handleSort('created_at')} className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
+                    {t('createdAt')}
+                    {sortField !== 'created_at' && <ChevronsUpDown size={12} className="text-gray-400" />}
+                    {sortField === 'created_at' && sortDir === 'asc' && <ChevronUp size={12} className="text-blue-500" />}
+                    {sortField === 'created_at' && sortDir === 'desc' && <ChevronDown size={12} className="text-blue-500" />}
+                  </button>
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">{tc('loading')}</td>
+                <td colSpan={visibleColCount} className="px-4 py-8 text-center text-gray-400">{tc('loading')}</td>
               </tr>
             ) : sorted.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">{t('noResults')}</td>
+                <td colSpan={visibleColCount} className="px-4 py-8 text-center text-gray-400">{t('noResults')}</td>
               </tr>
             ) : (
               paginated.map((c) => (
@@ -1023,9 +1101,9 @@ export default function ContactsPage() {
                       </Link>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{c.company || '—'}</td>
-                  <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{c.job_title || '—'}</td>
-                  <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
+                  {visibleCols.company && <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{c.company || '—'}</td>}
+                  {visibleCols.job_title && <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{c.job_title || '—'}</td>}
+                  {visibleCols.email && <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
                     {c.email ? (
                       <div className="flex flex-col gap-0.5">
                         <span className="flex items-center gap-1.5">
@@ -1061,20 +1139,29 @@ export default function ContactsPage() {
                         )}
                       </div>
                     ) : '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {c.contact_tags.map((ct) => ct.tags && (
-                        <span key={ct.tags.id} className="text-xs bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
-                          {ct.tags.name}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{c.users?.display_name || '—'}</td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                    {new Date(c.created_at).toLocaleDateString()}
-                  </td>
+                  </td>}
+                  {visibleCols.tags && (
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {c.contact_tags.map((ct) => ct.tags && (
+                          <span key={ct.tags.id} className="text-xs bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                            {ct.tags.name}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                  )}
+                  {visibleCols.met_at && (
+                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{c.met_at || '—'}</td>
+                  )}
+                  {visibleCols.creator && (
+                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{c.users?.display_name || '—'}</td>
+                  )}
+                  {visibleCols.created_at && (
+                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
+                      {new Date(c.created_at).toLocaleDateString()}
+                    </td>
+                  )}
                 </tr>
               ))
             )}
