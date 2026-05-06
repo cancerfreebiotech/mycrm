@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## v5.6.0 — feat(contacts): 欄位顯示切換 + met_at + 建立時間 filter（2026-05-06）
+
+### 新功能
+- 聯絡人列表新增欄位顯示切換（filter bar 右側 ☰ 按鈕），設定存 localStorage
+  - 可顯示/隱藏：公司、職稱、Email、Tags、認識於、建立者、建立時間
+  - 預設隱藏「建立者」，預設顯示「認識於」
+- 新增「建立時間」日期區間 filter（from / to）
+- 修補 2 個缺失的 i18n key（`batchEditTitle`、`noResults`）補齊三語
+
+bump 5.5.3 → 5.6.0
+
 ## v5.5.1 — docs(email): 新增 crm@bcc.cancerfree.io BCC 地址（2026-05-06）
 
 `bcc.cancerfree.io` domain 下的所有地址均路由至同一 SendGrid Inbound Parse webhook，無需額外設定。
