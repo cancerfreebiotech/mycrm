@@ -118,6 +118,8 @@
     "metFilter": "出会った場所を検索...",
     "clearFilter": "フィルターをクリア",
     "createdAt": "作成日時",
+    "createdFrom": "から",
+    "createdTo": "まで",
     "emailButtonLabel": "{count} 人へメール",
     "emailExcludedBadge": "{count} 件除外",
     "emailExcludedTooltip": "除外：{breakdown}",

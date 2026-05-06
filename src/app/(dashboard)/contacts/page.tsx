@@ -81,6 +81,9 @@ export default function ContactsPage() {
   const [selectedCreators, setSelectedCreators] = useState<string[]>([])
   const [emailStatusDropdownOpen, setEmailStatusDropdownOpen] = useState(false)
   const [creatorDropdownOpen, setCreatorDropdownOpen] = useState(false)
+  const [createdFrom, setCreatedFrom] = useState('')
+  const [createdTo, setCreatedTo] = useState('')
+  const [createdDateDropdownOpen, setCreatedDateDropdownOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [addDropOpen, setAddDropOpen] = useState(false)
   const [liParsing, setLiParsing] = useState(false)
@@ -218,7 +221,10 @@ export default function ContactsPage() {
     const matchCreator =
       selectedCreators.length === 0 ||
       (c.created_by != null && selectedCreators.includes(c.created_by))
-    return matchQuery && matchMet && matchTags && matchCountry && matchImportance && matchLanguage && matchEmailStatus && matchCreator
+    const createdDate = c.created_at.slice(0, 10)
+    const matchCreatedFrom = !createdFrom || createdDate >= createdFrom
+    const matchCreatedTo = !createdTo || createdDate <= createdTo
+    return matchQuery && matchMet && matchTags && matchCountry && matchImportance && matchLanguage && matchEmailStatus && matchCreator && matchCreatedFrom && matchCreatedTo
   })
 
   const sorted = sortField
@@ -244,7 +250,7 @@ export default function ContactsPage() {
       })
     : filtered
 
-  const hasFilter = !!(query || metQuery || selectedTags.length > 0 || selectedCountries.length > 0 || selectedImportance || selectedLanguage || selectedEmailStatus || selectedCreators.length > 0)
+  const hasFilter = !!(query || metQuery || selectedTags.length > 0 || selectedCountries.length > 0 || selectedImportance || selectedLanguage || selectedEmailStatus || selectedCreators.length > 0 || createdFrom || createdTo)
   const isBlacklisted = (c: Contact) => c.contact_tags.some((ct) => ct.tags?.is_email_blacklist === true)
   const isEmailable = (c: Contact) => !!c.email && !c.email_status && !c.email_opt_out && !isBlacklisted(c)
   const emailPool = selectedIds.size > 0 ? sorted.filter(c => selectedIds.has(c.id)) : sorted
@@ -784,6 +790,52 @@ export default function ContactsPage() {
                   {tc('clear')}
                 </button>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* Created-at date range filter */}
+        <div className="relative">
+          <button
+            onClick={() => { setCreatedDateDropdownOpen((v) => !v); setTagDropdownOpen(false); setCountryDropdownOpen(false); setImportanceDropdownOpen(false); setLanguageDropdownOpen(false); setEmailStatusDropdownOpen(false); setCreatorDropdownOpen(false) }}
+            className="flex items-center gap-2 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            {t('createdAt')}
+            {(createdFrom || createdTo) && (
+              <span className="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs px-1.5 py-0.5 rounded-full">1</span>
+            )}
+            <ChevronDown size={14} />
+          </button>
+          {createdDateDropdownOpen && (
+            <div className="absolute top-full mt-1 left-0 z-10 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 min-w-56">
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                  <span className="w-6 shrink-0">{t('createdFrom')}</span>
+                  <input
+                    type="date"
+                    value={createdFrom}
+                    onChange={(e) => { setCreatedFrom(e.target.value); setPage(1) }}
+                    className="flex-1 px-2 py-1 text-sm border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                  <span className="w-6 shrink-0">{t('createdTo')}</span>
+                  <input
+                    type="date"
+                    value={createdTo}
+                    onChange={(e) => { setCreatedTo(e.target.value); setPage(1) }}
+                    className="flex-1 px-2 py-1 text-sm border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </label>
+                {(createdFrom || createdTo) && (
+                  <button
+                    onClick={() => { setCreatedFrom(''); setCreatedTo(''); setPage(1) }}
+                    className="text-left text-xs text-gray-400 hover:text-gray-600 border-t border-gray-100 dark:border-gray-700 pt-2 mt-1"
+                  >
+                    {t('clearFilter')}
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>

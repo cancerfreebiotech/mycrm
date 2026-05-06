@@ -118,6 +118,8 @@
     "metFilter": "Search where we met...",
     "clearFilter": "Clear Filter",
     "createdAt": "Created At",
+    "createdFrom": "From",
+    "createdTo": "To",
     "emailButtonLabel": "Email {count}",
     "emailExcludedBadge": "{count} excluded",
     "emailExcludedTooltip": "Excluded: {breakdown}",

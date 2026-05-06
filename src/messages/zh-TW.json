@@ -118,6 +118,8 @@
     "metFilter": "搜尋認識地點...",
     "clearFilter": "清除篩選",
     "createdAt": "建立時間",
+    "createdFrom": "從",
+    "createdTo": "至",
     "emailButtonLabel": "寄信給 {count} 人",
     "emailExcludedBadge": "排除 {count}",
     "emailExcludedTooltip": "已排除：{breakdown}",
