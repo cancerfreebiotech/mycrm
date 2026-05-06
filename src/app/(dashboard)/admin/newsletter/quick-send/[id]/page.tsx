@@ -5,7 +5,8 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { PermissionGate } from '@/components/PermissionGate'
-import { Loader2, Send, FileDown, Rss, Eye, Save, ArrowLeft, CheckCircle2, AlertTriangle, Code, Columns, ImageIcon } from 'lucide-react'
+import { Loader2, Send, FileDown, Rss, Eye, Save, ArrowLeft, CheckCircle2, AlertTriangle, Code, Columns, ImageIcon, PenLine } from 'lucide-react'
+import { NewsletterTipTapEditor } from '@/components/NewsletterTipTapEditor'
 
 interface Campaign {
   id: string
@@ -60,8 +61,9 @@ export default function QuickSendPage() {
   const [promoBatchSaving, setPromoBatchSaving] = useState(false)
   const [listIds, setListIds] = useState<string[]>([])
   const [contentHtml, setContentHtml] = useState('')
-  type ViewMode = 'preview' | 'edit' | 'split'
+  type ViewMode = 'preview' | 'wysiwyg' | 'edit' | 'split'
   const [viewMode, setViewMode] = useState<ViewMode>('preview')
+  const [pendingWysiwygImageUrl, setPendingWysiwygImageUrl] = useState<string | null>(null)
   const [uploadingImage, setUploadingImage] = useState(false)
   const editorRef = useRef<HTMLTextAreaElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -232,7 +234,14 @@ export default function QuickSendPage() {
       const { data: pub } = supabase.storage.from('newsletter-assets').getPublicUrl(path)
       const imgTag = `<img src="${pub.publicUrl}" alt="" style="outline:none;border:none;text-decoration:none;vertical-align:middle;display:inline-block;max-width:100%" />`
 
-      // Insert at cursor position in textarea if focused, else append at end
+      // In WYSIWYG mode: signal the TipTap editor to insert the image
+      if (viewMode === 'wysiwyg') {
+        setPendingWysiwygImageUrl(pub.publicUrl)
+        setBanner({ kind: 'ok', msg: `已上傳並插入：${safeName}` })
+        return
+      }
+
+      // In HTML/split mode: insert at textarea cursor position
       const ta = editorRef.current
       if (ta) {
         const start = ta.selectionStart ?? contentHtml.length
@@ -708,22 +717,35 @@ export default function QuickSendPage() {
                     <Eye size={12} /> 預覽
                   </button>
                   <button
+                    onClick={() => {
+                      if (/<table/i.test(contentHtml)) {
+                        const ok = window.confirm('目前內容包含 HTML 表格版型（通常來自 AI 撰寫或 Skill 匯入）。\n\n切換到視覺編輯後，表格版型結構會被簡化。\n\n若只是要微調文字，請繼續；若需要維持精確排版，請用 HTML 模式。\n\n繼續切換？')
+                        if (!ok) return
+                      }
+                      setViewMode('wysiwyg')
+                    }}
+                    className={`flex items-center gap-1 px-2.5 py-1 text-xs border-l border-gray-200 dark:border-gray-700 ${viewMode === 'wysiwyg' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                    title="視覺化富文字編輯（適合純文字排版）"
+                  >
+                    <PenLine size={12} /> 視覺編輯
+                  </button>
+                  <button
                     onClick={() => setViewMode('edit')}
                     className={`flex items-center gap-1 px-2.5 py-1 text-xs border-l border-gray-200 dark:border-gray-700 ${viewMode === 'edit' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
                     title="只看 HTML 原始碼"
                   >
-                    <Code size={12} /> 編輯
+                    <Code size={12} /> HTML
                   </button>
                   <button
                     onClick={() => setViewMode('split')}
                     className={`flex items-center gap-1 px-2.5 py-1 text-xs border-l border-gray-200 dark:border-gray-700 ${viewMode === 'split' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                    title="左編輯 + 右即時預覽"
+                    title="左 HTML + 右即時預覽"
                   >
                     <Columns size={12} /> 分割
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
-                  {(viewMode === 'edit' || viewMode === 'split') && (
+                  {(viewMode === 'wysiwyg' || viewMode === 'edit' || viewMode === 'split') && (
                     <button
                       onClick={() => imageInputRef.current?.click()}
                       disabled={uploadingImage}
@@ -751,6 +773,14 @@ export default function QuickSendPage() {
                   className="w-full h-[600px] bg-white"
                   srcDoc={previewHtml}
                   sandbox="allow-same-origin allow-popups allow-modals"
+                />
+              ) : viewMode === 'wysiwyg' ? (
+                <NewsletterTipTapEditor
+                  initialValue={contentHtml}
+                  onChange={setContentHtml}
+                  pendingImageUrl={pendingWysiwygImageUrl}
+                  onClearPendingImage={() => setPendingWysiwygImageUrl(null)}
+                  onImageInsertClick={() => imageInputRef.current?.click()}
                 />
               ) : viewMode === 'edit' ? (
                 <textarea

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { simpleParser, type AddressObject, type ParsedMail } from 'mailparser'
 import { createServiceClient } from '@/lib/supabase'
 import { findOrCreateContactByEmail } from '@/lib/findOrCreateContactByEmail'
@@ -8,6 +8,7 @@ import {
   isForwardedSubject,
   stripQuotedReply,
 } from '@/lib/parseEmailHeaders'
+import { hunterEnrich } from '@/lib/hunterEnrich'
 
 // POST /api/sendgrid/inbound-parse?key=<INBOUND_PARSE_SECRET>
 // Receives mail forwarded by SendGrid Inbound Parse (multipart/form-data).
@@ -220,10 +221,21 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Hunter enrichment runs after the response is sent so SendGrid never times out
+  // waiting for it. Only triggers for contacts that were just created (not existing).
+  const newContacts = created.filter((c) => c.created)
+  if (newContacts.length > 0) {
+    after(async () => {
+      for (const c of newContacts) {
+        await hunterEnrich(supabase, c.contact_id, c.email, createdBy)
+      }
+    })
+  }
+
   return NextResponse.json({
     ok: true,
     direction,
     contacts: created.length,
-    created_new: created.filter((c) => c.created).length,
+    created_new: newContacts.length,
   })
 }

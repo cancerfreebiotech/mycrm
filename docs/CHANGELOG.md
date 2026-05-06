@@ -1,5 +1,41 @@
 # CHANGELOG
 
+## v5.5.0 — feat(newsletter): TipTap 視覺編輯器（2026-05-06）
+
+### 新功能
+- 電子報編輯頁加入「視覺編輯」tab（TipTap WYSIWYG）
+  - Toolbar：粗體、斜體、底線、H1/H2/H3、項目符號、編號清單、靠左/置中/靠右、連結、分隔線、插入圖片
+  - 圖片上傳在視覺編輯模式下也可用，上傳後自動插入游標位置
+  - 切換到視覺編輯時若內容含 `<table>` 版型，彈出提示（AI 撰寫的 table 排版可能簡化）
+- 原「編輯」tab 改名為「HTML」，更明確
+
+### 新增檔案
+- `src/components/NewsletterTipTapEditor.tsx`
+
+### 修改檔案
+- `src/app/(dashboard)/admin/newsletter/quick-send/[id]/page.tsx`
+
+bump 5.4.0 → 5.5.0
+
+## v5.4.0 — feat(inbound-email): BCC 新聯絡人自動判國家 + Hunter.io 補全（2026-05-05）
+
+### 新功能
+- **國家自動判斷**：`findOrCreateContactByEmail` 建立聯絡人時，從 email domain TLD 推算 `country_code`（`.jp`→JP、`.tw`→TW、`.de`→DE 等 40+ 個國家；`.com`/`.io` 等通用 TLD 留空）
+- **Hunter.io 自動補全**：BCC/Forward 觸發建立**新**聯絡人後，背景呼叫 Hunter.io domain-search API，補填空白的姓名、職稱、公司、LinkedIn、電話；補完後寫一筆 system interaction_log；使用 Next.js `after()` 在回應後執行，不影響 SendGrid webhook 的回應速度
+  - 免費信箱（gmail、yahoo、outlook 等）跳過
+  - `HUNTER_API_KEY` 未設定時靜默跳過
+  - 只補空白欄位，不覆蓋已有資料
+
+### 新增檔案
+- `src/lib/emailDomainToCountry.ts` — TLD → ISO country code mapper
+- `src/lib/hunterEnrich.ts` — Hunter.io domain-search 補全函式
+
+### 修改檔案
+- `src/lib/findOrCreateContactByEmail.ts` — 建立時寫入 country_code
+- `src/app/api/sendgrid/inbound-parse/route.ts` — 新聯絡人建立後觸發 Hunter enrichment
+
+bump 5.3.2 → 5.4.0
+
 ## v5.3.2 — fix(contact): 「清除狀態」按鈕清三層 + 在 derived 情況也顯示（2026-05-05）
 
 ### 痛點

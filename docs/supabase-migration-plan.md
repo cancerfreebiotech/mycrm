@@ -1,103 +1,202 @@
 ---
-title: Supabase Migration Plan（延遲）
-status: deferred
-created: 2026-04-28
+title: Supabase Migration Plan — Free → Pro org
+status: ready
+updated: 2026-05-05
 ---
 
-# Supabase Migration Plan — Free → 既有 Pro org（暫緩）
+# Supabase Migration Plan — Free → 既有 Pro org
 
-> **狀態：暫緩，未來再做**
-> 2026-04-28 確認方向但暫不執行。重看時間：當 Free tier 又開始抽風 / 用戶量增加 / 預算允許時。
+> 把 myCRM 從個人 Free org 遷移到你另一個帳號的 Pro org 下當第二個 project。
+> 省 ~$10-15/月，並立刻獲得每日備份 + PITR。
 
-## 背景
+---
 
-myCRM 目前在 **個人 Supabase 帳號的 Free tier**。同一個人**另一個帳號已是 Pro org**（每月 $25 base）。考慮把 myCRM 遷過去當第二個 project，省 base fee。
+## 現況快照（2026-05-05）
 
-## 費用比較
+| 指標 | 數值 |
+|---|---|
+| DB 大小 | 29 MB |
+| contacts | 4,882 筆 |
+| interaction_logs | 10,570 筆 |
+| camcard_pending | 5,511 筆 |
+| newsletter_subscribers | 4,360 筆 |
+| Auth users | 20 人 |
+| 已設 TOTP 的 user | 16 人（需重新綁定） |
+| Storage objects | ~6,505 個（cards 6,147 + camcard 332 + newsletter-assets 26） |
+| 舊 project ID | `zaqzqcvsckripotuujep` |
 
-| 方案 | 月費 | 備註 |
+---
+
+## 費用
+
+| 方案 | 月費 |
+|---|---|
+| 現況（Free） | $0（但無備份、會 throttle） |
+| 升現在 org 到 Pro | +$25/月 |
+| **遷到既有 Pro org（本計畫）** | **+~$10/月（Micro compute）** |
+
+---
+
+## 需要你親自做的事（共 3 步）
+
+### Step 1 — 在 Pro org 建新 project
+
+1. 登入你的 Pro 帳號 Supabase Dashboard
+2. 選你的 Pro org → New Project
+3. 設定：
+   - Name: `myCRM`
+   - Region: **ap-northeast-1**（東京，跟現在一樣）
+   - Database Password: 記下來，之後要給我
+4. 等 project 建好（約 2 分鐘）
+5. 把以下資訊給我：
+   - 新 project ID（URL 裡的那串）
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - DB Password
+
+### Step 2 — 通知有 TOTP 的 16 人（Migration 當天）
+
+以下 16 人遷移完後需要重新設定 MFA（第一次登入會被要求）：
+
+```
+pohan.chen, eva.hung, luna.chang, amparo.pan, melody.shiau,
+bella.changchien, shihpei.wu, heather.tang, ian.chen,
+jessie.chen, lucia.lu, anastasia.chen, allen.ho,
+masato.yokoyama, juno.chen, kevin
+```
+
+以下 4 人沒有 TOTP，不受影響：
+`tiffany.jian, davie.dai, jim.yen, sid.mau`
+
+### Step 3 — 更新 Vercel env vars（我完成 Migration 後告訴你）
+
+到 Vercel Dashboard → myCRM project → Settings → Environment Variables，更新：
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+---
+
+## 我會做的事（你給我新 project 資訊後）
+
+### Phase 1 — Schema 搬移
+
+用 `supabase db dump` 把 schema（含 RLS、functions、triggers）dump 出來，apply 到新 project。
+
+### Phase 2 — Data 搬移
+
+用 pg_dump 的 COPY 格式，保留所有 row ID，依照 FK 依序匯入：
+
+```
+順序：users → tags → contacts → contact_cards → contact_photos
+     → contact_tags → camcard_pending → pending_contacts
+     → failed_scans → interaction_logs → bot_sessions
+     → telegram_dedup → duplicate_pairs
+     → newsletter_lists → newsletter_subscribers
+     → newsletter_subscriber_lists → newsletter_unsubscribes
+     → newsletter_blacklist → newsletter_campaigns
+     → newsletter_recipients → newsletter_tone_samples
+     → email_events → email_campaigns → email_templates
+     → ... (其他空表)
+```
+
+**auth users 搬移**：用 Supabase Admin API 逐一建立（保留 email，不保留 password hash → 每人需 reset-password 一次）。
+
+> ⚠️ Supabase 沒有官方 auth.users 跨 project 搬移 API。密碼 hash 格式不同，無法直接 copy。
+> 實作方式：在新 project 用 admin API create user with email，再寄 magic link 要求每人重設密碼。
+> **使用者只需要：收一封重設密碼信 + 重設 MFA TOTP，其他什麼都不變。**
+
+### Phase 3 — Storage 搬移
+
+寫 Node.js script，從舊 project 下載所有 object，上傳到新 project 的對應 bucket：
+- `cards` → `cards`（6,147 個）
+- `camcard` → `camcard`（332 個）
+- `newsletter-assets` → `newsletter-assets`（26 個）
+
+預估時間：~20-30 分鐘（網路頻寬決定）
+
+### Phase 4 — URL 替換
+
+DB 裡有 hardcode 的 storage URL，搬完後用 SQL 替換：
+
+```sql
+-- 替換舊 project URL（執行前會再確認）
+UPDATE contacts
+  SET card_img_url = REPLACE(card_img_url, 'zaqzqcvsckripotuujep', '<NEW_PROJECT_ID>')
+  WHERE card_img_url LIKE '%zaqzqcvsckripotuujep%';
+
+UPDATE contact_cards
+  SET card_img_url = REPLACE(card_img_url, 'zaqzqcvsckripotuujep', '<NEW_PROJECT_ID>'),
+      card_img_back_url = REPLACE(card_img_back_url, 'zaqzqcvsckripotuujep', '<NEW_PROJECT_ID>')
+  WHERE card_img_url LIKE '%zaqzqcvsckripotuujep%'
+     OR card_img_back_url LIKE '%zaqzqcvsckripotuujep%';
+
+UPDATE camcard_pending
+  SET card_img_url = REPLACE(card_img_url, 'zaqzqcvsckripotuujep', '<NEW_PROJECT_ID>')
+  WHERE card_img_url LIKE '%zaqzqcvsckripotuujep%';
+
+UPDATE failed_scans
+  SET card_img_url = REPLACE(card_img_url, 'zaqzqcvsckripotuujep', '<NEW_PROJECT_ID>')
+  WHERE card_img_url LIKE '%zaqzqcvsckripotuujep%';
+
+UPDATE pending_contacts
+  SET data = REPLACE(data::text, 'zaqzqcvsckripotuujep', '<NEW_PROJECT_ID>')::jsonb
+  WHERE data::text LIKE '%zaqzqcvsckripotuujep%';
+```
+
+### Phase 5 — Smoke test & Cutover
+
+1. 我在新 project 跑 smoke test SQL（counts 比對）
+2. 你更新 Vercel env vars → Redeploy
+3. 你開瀏覽器驗證：登入、看聯絡人、看圖片
+4. Telegram Bot 測試掃名片（不需動，Bot webhook 指向 Vercel，不是 Supabase）
+
+---
+
+## 停機時間
+
+約 **5-10 分鐘**（步驟 5 你更新 Vercel env 到 redeploy 完成這段）。
+
+可以排在 週末或下班後（20:00 後）執行。
+
+---
+
+## 使用者影響
+
+| 人員 | 需要做的事 |
+|---|---|
+| 全部 20 人 | 收一封「請重設密碼」信，設新密碼（1 分鐘） |
+| 16 人（有 TOTP） | 重設密碼後，第一次登入要重新綁定 MFA App（2 分鐘） |
+| 4 人（無 TOTP） | 只需重設密碼 |
+
+---
+
+## 回滾計畫
+
+- 舊 project 繼續存在（不要刪），最少保留 1 個月
+- 如果新 project 有問題，Vercel env 改回舊值 → Redeploy → 5 分鐘內還原
+- Free tier project 閒置 7 天後會被 Supabase pause，但不會自動刪除
+
+---
+
+## 風險清單
+
+| 風險 | 機率 | 緩解 |
 |---|---|---|
-| A. 留 Free | $0 | 現況、抽風、無 SLA |
-| B. 升現在 org 到 Pro | $25 base + usage | 快但多付 base |
-| **C. 遷到既有 Pro org（推薦）** | **+0 base，僅多付 ~$10 compute** | 省 ~$15/月 = $180/年 |
+| auth.users 密碼 hash 無法搬 | 確定 | 設計為「重設密碼」流程，非阻塞 |
+| TOTP secret 無法跨 project | 確定 | 通知用戶重設，非阻塞 |
+| Storage 搬移速度慢 | 中 | 6,505 個小圖，~20-30 分鐘，可接受 |
+| URL replace 漏掉某個欄位 | 低 | 搬完後跑 grep SQL 掃所有 TEXT 欄位 |
+| FK 衝突造成匯入失敗 | 低 | 依序匯入，搬前先 TRUNCATE 確保乾淨 |
 
-> Supabase 計費是 **org-level**，一個 Pro org $25 含多個 project。第 2 個 project 起只多付 compute size（Nano $0、Micro ~$10、Small ~$25）。myCRM 量級 Micro 應該夠。
+---
 
-## 遷移步驟
+## 開始條件
 
-### 我能做的（95%）
+你準備好後，給我：
+1. 新 project 的 URL / ID
+2. 新 project 的 service role key
+3. 確認好「通知時間」（何時通知用戶重設密碼）
 
-- 兩個 project 跑 SQL（schema migration + data sync + URL find/replace）
-- Storage bucket（cards / photos / 等）拷貝 script，用 service role key
-- Auth users export + import 腳本（保留密碼 hash）
-- Code 改動 + commit + push
-- Smoke test
-
-### 你必須親自做（5%）
-
-- Supabase dashboard 建新 project（選 region、設 DB password）
-- Vercel dashboard 改 env vars：
-  - `NEXT_PUBLIC_SUPABASE_URL`
-  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-  - `SUPABASE_SERVICE_ROLE_KEY`
-  - 其他 supabase 相關 secret
-- 通知使用者：MFA TOTP 要重新註冊（Supabase 沒辦法跨 project 搬 TOTP secret）
-
-### 我需要的權限
-
-- 新 project ID + service role key + DB password
-- 舊 project service role key
-- Supabase MCP 對新 project 的存取（建 project 那個 org 通常自動含）
-
-## 流程
-
-```
-1. [User]   建新 project（5 分鐘）→ 給 ID + service role key + DB password
-2. [Claude] DB schema migration（dump → load）+ diff 確認
-3. [Claude] DB data migration（保留 row IDs 避免 FK 斷）
-4. [Claude] Storage bucket 拷貝（Node script）
-5. [Claude] Auth users 匯入（admin API）
-6. [Claude] DB URL 替換（UPDATE contacts/contact_cards/failed_scans/pending_contacts）
-7. [Claude] Code prep：開 PR 但暫不 merge
-8. [User]   Vercel env vars 改值
-9. [Claude] Merge PR → Vercel 自動 deploy
-10. [雙方]  Smoke test
-11. [一週後] [User] 確認穩定後砍舊 project
-```
-
-## 預估時間
-
-- User 動手 ~15 分鐘
-- Claude 工 ~3-4 小時
-- 停機 ~10 分鐘（步驟 8-9 之間）
-
-## 踩雷清單
-
-- 🚨 `auth.identities` 沒官方一鍵搬，要寫腳本 + admin API
-- 🚨 MFA TOTP secrets 跟 user 綁，搬完每個人要重設一次
-- 🚨 DB 內**硬編 storage URL** 要 sed：
-  ```sql
-  UPDATE contacts SET card_img_url = REPLACE(card_img_url, OLD_DOMAIN, NEW_DOMAIN);
-  UPDATE contact_cards SET card_img_url = REPLACE(card_img_url, OLD_DOMAIN, NEW_DOMAIN);
-  UPDATE failed_scans SET card_img_url = REPLACE(card_img_url, OLD_DOMAIN, NEW_DOMAIN);
-  UPDATE pending_contacts SET data = REPLACE(data::text, OLD_DOMAIN, NEW_DOMAIN)::jsonb;
-  ```
-- 🚨 **第一週留舊 project 別砍**，當回滾保險
-- 🚨 SUPABASE_URL 變 → Telegram bot webhook 不用動（指向 Vercel 不是 Supabase）
-
-## 替代方案（次優）
-
-如果只是想避免 Free 抽風又懶得搬：**直接升現在這個 org 到 Pro**（$25/月、5 分鐘）。等真要省再做 migration。
-
-## 重看時機
-
-- Free 又開始 throttle / 504 timeout 變多
-- DB size 接近 500 MB 上限
-- 需要 daily backups 之類 Pro-only 功能
-- 預算可以接受 ~$10/月 額外 compute
-
-## 相關檔案
-
-- `vercel.json` — cron 設定（migration 後不需動）
-- `.env.local` — 本機 env，migration 後需更新
-- `src/lib/supabase.ts` — 讀 env，不需動
+我就可以開始跑 Phase 1-4，整個過程你只需等候 + 在 Phase 5 更新 Vercel env。
