@@ -270,18 +270,20 @@ export default function QuickSendPage() {
     setListIds((prev) => (prev.includes(lid) ? prev.filter((x) => x !== lid) : [...prev, lid]))
   }
 
-  async function save() {
+  async function save(contentHtmlOverride?: string) {
+    const htmlToSave = contentHtmlOverride ?? contentHtml
     setSaving(true)
     setBanner(null)
     try {
       const res = await fetch(`/api/newsletter/campaigns/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject, preview_text: previewText, list_ids: listIds, content_html: contentHtml }),
+        body: JSON.stringify({ subject, preview_text: previewText, list_ids: listIds, content_html: htmlToSave }),
       })
       if (!res.ok) throw new Error((await res.json()).error ?? 'save failed')
       setBanner({ kind: 'ok', msg: '已儲存' })
-      setCampaign((prev) => prev ? { ...prev, subject, preview_text: previewText, list_ids: listIds, content_html: contentHtml } : prev)
+      setCampaign((prev) => prev ? { ...prev, subject, preview_text: previewText, list_ids: listIds, content_html: htmlToSave } : prev)
+      if (contentHtmlOverride !== undefined) setContentHtml(contentHtmlOverride)
     } catch (e) {
       setBanner({ kind: 'err', msg: e instanceof Error ? e.message : '儲存失敗' })
     } finally { setSaving(false) }
@@ -773,6 +775,7 @@ export default function QuickSendPage() {
                   ref={inlineEditorRef}
                   html={contentHtml}
                   onApply={setContentHtml}
+                  onSave={(html) => save(html)}
                 />
               ) : viewMode === 'edit' ? (
                 <textarea

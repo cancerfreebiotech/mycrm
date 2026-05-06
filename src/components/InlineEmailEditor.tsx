@@ -12,8 +12,8 @@ export interface InlineEmailEditorHandle {
 // switch) and when the user clicks "套用變更".
 export const InlineEmailEditor = forwardRef<
   InlineEmailEditorHandle,
-  { html: string; onApply: (html: string) => void }
->(({ html, onApply }, ref) => {
+  { html: string; onApply: (html: string) => void; onSave: (html: string) => void }
+>(({ html, onApply, onSave }, ref) => {
   const frameRef = useRef<HTMLIFrameElement>(null)
   const onApplyRef = useRef(onApply)
   onApplyRef.current = onApply
@@ -46,11 +46,6 @@ export const InlineEmailEditor = forwardRef<
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function applyNow() {
-    const d = frameRef.current?.contentDocument
-    if (d) onApply(d.documentElement.outerHTML)
-  }
-
   return (
     <div className="flex flex-col">
       <div className="flex items-center justify-between px-3 py-1.5 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800">
@@ -58,10 +53,16 @@ export const InlineEmailEditor = forwardRef<
           直接點選文字進行編輯 — 版型不受影響
         </span>
         <button
-          onClick={applyNow}
+          onClick={() => {
+            const d = frameRef.current?.contentDocument
+            if (!d) return
+            const html = d.documentElement.outerHTML
+            onApply(html)
+            onSave(html)
+          }}
           className="text-xs px-2.5 py-1 bg-amber-600 text-white rounded hover:bg-amber-700"
         >
-          套用變更
+          套用並儲存
         </button>
       </div>
       <iframe
