@@ -19,21 +19,18 @@ import { hasFeature } from '@/lib/features'
 // 1. Auth + newsletter permission gate
 // 2. Validate manifest (same rules as before)
 // 3. Validate imageMap covers every referenced image_file
-// 4. For each lang in [zh-TW, en, ja]:
+// 4. Detect which languages are present in manifest.intro
+// 5. For each present lang:
 //    - Load skeleton from email_templates
 //    - Render stories into sections
 //    - Substitute {{subject}}, {{period_label}}, {{intro_html}}, {{stories_html}}
 //    - Insert newsletter_campaigns row, status=draft
-// 5. Return { campaigns, image_count, story_count }
+// 6. Return { campaigns, image_count, story_count }
 
 type Lang = 'zh-TW' | 'en' | 'ja'
 type Section = 'last_month' | 'next_month'
 
-interface TrilingualText {
-  'zh-TW': string
-  'en': string
-  'ja': string
-}
+type TrilingualText = Partial<Record<Lang, string>>
 
 interface ManifestLink {
   url: string
@@ -102,14 +99,14 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 
 function validateTrilingual(v: unknown, fieldPath: string, errors: string[]): v is TrilingualText {
   if (!isPlainObject(v)) { errors.push(`${fieldPath}: expected object`); return false }
-  let ok = true
-  for (const lang of ['zh-TW', 'en', 'ja'] as const) {
-    if (typeof v[lang] !== 'string' || (v[lang] as string).length === 0) {
-      errors.push(`${fieldPath}.${lang}: required non-empty string`)
-      ok = false
-    }
+  const present = (['zh-TW', 'en', 'ja'] as Lang[]).filter(
+    (lang) => typeof v[lang] === 'string' && (v[lang] as string).length > 0
+  )
+  if (present.length === 0) {
+    errors.push(`${fieldPath}: at least one language (zh-TW / en / ja) must have non-empty content`)
+    return false
   }
-  return ok
+  return true
 }
 
 function normalizeImageFile(f: unknown): string | null {
@@ -206,9 +203,15 @@ function sanitizeContentHtml(html: string): string {
 
 function renderLinksHtml(links: ManifestLink[] | undefined, lang: Lang): string {
   if (!links || links.length === 0) return ''
+  const items = links
+    .map((l) => {
+      const label = l.label[lang] ?? Object.values(l.label).find(Boolean) ?? ''
+      return `<a href="${escapeHtml(l.url)}" style="color:#0D9488;text-decoration:underline;">${escapeHtml(label)}</a>`
+    })
+    .join('<br>')
   return `<div style="padding-top:12px;font-size:14px;line-height:1.6;">
 <strong style="color:#555;">🔗 ${LINKS_LABEL[lang]}</strong><br>
-${links.map((l) => `<a href="${escapeHtml(l.url)}" style="color:#0D9488;text-decoration:underline;">${escapeHtml(l.label[lang])}</a>`).join('<br>')}
+${items}
 </div>`
 }
 
@@ -228,8 +231,8 @@ function renderStoryBlock(
   lang: Lang,
   imagePathToUrl: Map<string, string>,
 ): string {
-  const titleForLang = story.title[lang]
-  const contentSafe = sanitizeContentHtml(story.content_html[lang])
+  const titleForLang = story.title[lang] ?? Object.values(story.title).find(Boolean) ?? ''
+  const contentSafe = sanitizeContentHtml(story.content_html[lang] ?? Object.values(story.content_html).find(Boolean) ?? '')
   const imageUrls = story.image_files
     .map((p) => imagePathToUrl.get(p))
     .filter((u): u is string => !!u)
@@ -319,9 +322,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'imageMap missing entries for referenced images', details: missing }, { status: 400 })
   }
 
-  // Load skeletons
+  // Determine which languages are present in the manifest
+  const ALL_LANGS: Lang[] = ['zh-TW', 'en', 'ja']
+  const presentLangs = ALL_LANGS.filter(
+    (lang) => typeof manifest.intro[lang] === 'string' && manifest.intro[lang]!.length > 0
+  )
+
+  // Load skeletons only for present langs
   const skeletonsByLang: Partial<Record<Lang, string>> = {}
-  for (const lang of ['zh-TW', 'en', 'ja'] as Lang[]) {
+  for (const lang of presentLangs) {
     const { data } = await service
       .from('email_templates')
       .select('body_content')
@@ -333,9 +342,9 @@ export async function POST(req: NextRequest) {
     skeletonsByLang[lang] = data.body_content as string
   }
 
-  // Default lists per lang
+  // Default lists per present lang
   const listIdsByLang: Partial<Record<Lang, string[]>> = {}
-  for (const lang of ['zh-TW', 'en', 'ja'] as Lang[]) {
+  for (const lang of presentLangs) {
     const { data: listRow } = await service
       .from('newsletter_lists')
       .select('id')
@@ -346,11 +355,13 @@ export async function POST(req: NextRequest) {
 
   const results: { lang: Lang; id: string; slug: string; error?: string }[] = []
   const importStamp = Date.now().toString(36)
-  for (const lang of ['zh-TW', 'en', 'ja'] as Lang[]) {
+  // Fallback intro for preview_text: use first available lang's intro
+  const firstIntro = manifest.intro[presentLangs[0]]?.replace(/<[^>]+>/g, '').slice(0, 120) ?? null
+  for (const lang of presentLangs) {
     try {
       const periodLabel = PERIOD_LABEL_FMT[lang](manifest.period)
       const subject = SUBJECT_FMT[lang](periodLabel)
-      const introHtml = sanitizeContentHtml(manifest.intro[lang])
+      const introHtml = sanitizeContentHtml(manifest.intro[lang]!)
       const storiesHtml = renderStoriesHtml(manifest, lang, imagePathToUrl)
 
       const content = skeletonsByLang[lang]!
@@ -366,7 +377,7 @@ export async function POST(req: NextRequest) {
         .insert({
           title: TITLE_BY_LANG[lang](manifest.period),
           subject,
-          preview_text: manifest.intro['zh-TW']?.replace(/<[^>]+>/g, '').slice(0, 120) ?? null,
+          preview_text: firstIntro,
           content_html: content,
           list_ids: listIdsByLang[lang] ?? [],
           status: 'draft',

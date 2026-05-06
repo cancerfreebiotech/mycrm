@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v5.6.1 — fix(newsletter): 匯入時語言非強制，只產生 manifest 有的語言版本（2026-05-06）
+
+### 變更項目
+- Newsletter 匯入現在只需要提供至少一種語言的內容（原本強制三語）
+- `TrilingualText` 改為 `Partial<Record<Lang, string>>`，驗證只要求一種語言非空
+- 匯入流程自動偵測 manifest 中哪些語言有內容，只為那些語言建立草稿 campaign
+- `preview_text` 改為使用第一個可用語言的 intro（不再 hardcode `zh-TW`）
+
+bump 5.6.0 → 5.6.1
+
 ## v5.6.0 — feat(contacts): 欄位顯示切換 + met_at + 建立時間 filter（2026-05-06）
 
 ### 新功能
