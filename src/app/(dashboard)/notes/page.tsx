@@ -45,7 +45,7 @@ const TYPE_ICON: Record<string, React.ElementType> = {
 
 // Newsletter = email sent via SendGrid campaign; individual email = everything else
 function displayType(row: NoteRow): string {
-  if (row.type === 'email' && row.send_method === 'sendgrid') return 'newsletter'
+  if (row.type === 'email' && row.send_method === 'newsletter') return 'newsletter'
   return row.type
 }
 
@@ -84,9 +84,9 @@ export default function NotesPage() {
       .limit(FETCH_LIMIT)
 
     if (typeFilter === 'newsletter') {
-      query = query.eq('type', 'email').eq('send_method', 'sendgrid')
+      query = query.eq('type', 'email').eq('send_method', 'newsletter')
     } else if (typeFilter === 'email') {
-      query = query.eq('type', 'email').or('send_method.is.null,send_method.eq.outlook')
+      query = query.eq('type', 'email').or('send_method.is.null,send_method.eq.outlook,send_method.eq.sendgrid')
     } else if (typeFilter !== 'all') {
       query = query.eq('type', typeFilter)
     }

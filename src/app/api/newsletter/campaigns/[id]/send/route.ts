@@ -242,7 +242,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             email_body: cleanBody,
             created_by: userId,
             campaign_id: campaignId,
-            send_method: 'sendgrid' as const,
+            send_method: 'newsletter' as const,
           }))
           const { error: logErr } = await service.from('interaction_logs').insert(chunkLogs)
           if (logErr) {

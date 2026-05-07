@@ -91,7 +91,7 @@ const TYPE_COLOR: Record<string, string> = {
 }
 
 function logDisplayType(log: { type: string; send_method?: string | null }) {
-  if (log.type === 'email' && log.send_method === 'sendgrid') return 'newsletter'
+  if (log.type === 'email' && log.send_method === 'newsletter') return 'newsletter'
   return log.type
 }
 
