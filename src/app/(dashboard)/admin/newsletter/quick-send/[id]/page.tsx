@@ -271,7 +271,7 @@ export default function QuickSendPage() {
   }
 
   async function save(contentHtmlOverride?: string) {
-    const htmlToSave = contentHtmlOverride ?? contentHtml
+    const htmlToSave = typeof contentHtmlOverride === 'string' ? contentHtmlOverride : contentHtml
     setSaving(true)
     setBanner(null)
     try {
@@ -613,7 +613,7 @@ export default function QuickSendPage() {
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={save}
+                  onClick={() => save()}
                   disabled={saving}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
                 >
