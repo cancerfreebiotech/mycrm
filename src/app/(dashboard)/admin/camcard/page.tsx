@@ -7,7 +7,7 @@ import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import {
   FolderInput, Loader2, Check, X, Merge, ExternalLink,
   ChevronDown, ChevronRight, AlertTriangle, CheckSquare, ZoomIn,
-  ChevronLeft, Pencil, Search, RotateCcw,
+  ChevronLeft, Pencil, Search, RotateCcw, CalendarCheck,
 } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
 
@@ -89,6 +89,11 @@ export default function CamcardPage() {
   const [editCard, setEditCard] = useState<PendingCard | null>(null)
   const [editData, setEditData] = useState<Record<string, string>>({})
   const [editSaving, setEditSaving] = useState(false)
+
+  // Batch met_at editor
+  const [batchMetAt, setBatchMetAt] = useState('')
+  const [batchMetDate, setBatchMetDate] = useState('')
+  const [applyingBatch, setApplyingBatch] = useState(false)
 
   // Multi-select bulk confirm
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set())
@@ -187,6 +192,33 @@ export default function CamcardPage() {
   }, [])
 
   useEffect(() => { reloadAssignees() }, [reloadAssignees, searchFilter, assigneeFilter])
+
+  async function applyBatchMetAt() {
+    if (!batchMetAt.trim() && !batchMetDate) return
+    const allCards = groups.flatMap((g) => g.cards)
+    if (allCards.length === 0) return
+    setApplyingBatch(true)
+    for (const card of allCards) {
+      const newOcr: Record<string, string | null> = { ...(card.ocr_data ?? {}) }
+      if (batchMetAt.trim()) newOcr.met_at = batchMetAt.trim()
+      if (batchMetDate) newOcr.met_date = batchMetDate
+      await fetch(`/api/camcard/${card.id}/update`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ocr_data: newOcr }),
+      })
+    }
+    setGroups((prev) => prev.map((g) => ({
+      ...g,
+      cards: g.cards.map((c) => {
+        const newOcr: Record<string, string | null> = { ...(c.ocr_data ?? {}) }
+        if (batchMetAt.trim()) newOcr.met_at = batchMetAt.trim()
+        if (batchMetDate) newOcr.met_date = batchMetDate
+        return { ...c, ocr_data: newOcr }
+      }),
+    })))
+    setApplyingBatch(false)
+  }
 
   async function bulkAssign(label: string | null) {
     if (selectedCards.size === 0) { alert('請先勾選要更改的名片'); return }
@@ -355,6 +387,7 @@ export default function CamcardPage() {
       'address', 'address_en',
       'website', 'linkedin_url', 'facebook_url',
       'country_code',
+      'met_at', 'met_date',
     ]) {
       fields[key] = (ocr[key] as string) ?? ''
     }
@@ -851,6 +884,35 @@ export default function CamcardPage() {
         )}
       </div>
 
+      {/* Batch met_at toolbar — shown when there are visible cards */}
+      {!loading && groups.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-4 px-3 py-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40">
+          <CalendarCheck size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
+          <span className="text-xs text-amber-700 dark:text-amber-400 font-medium shrink-0">批次設定 Met at</span>
+          <input
+            type="text"
+            value={batchMetAt}
+            onChange={(e) => setBatchMetAt(e.target.value)}
+            placeholder="活動 / 地點名稱"
+            className="text-sm px-2 py-1 border border-amber-200 dark:border-amber-700 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-400 min-w-40"
+          />
+          <input
+            type="date"
+            value={batchMetDate}
+            onChange={(e) => setBatchMetDate(e.target.value)}
+            className="text-sm px-2 py-1 border border-amber-200 dark:border-amber-700 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          />
+          <button
+            onClick={applyBatchMetAt}
+            disabled={applyingBatch || (!batchMetAt.trim() && !batchMetDate)}
+            className="flex items-center gap-1.5 px-3 py-1 text-xs bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded font-medium"
+          >
+            {applyingBatch ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+            套用到全部 {groups.reduce((n, g) => n + g.cards.length, 0)} 筆
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="text-center py-16">
           <Loader2 size={24} className="animate-spin mx-auto mb-3 text-gray-400" />
@@ -966,6 +1028,8 @@ export default function CamcardPage() {
                   ['website', t('fieldWebsite')],
                   ['linkedin_url', 'LinkedIn'],
                   ['facebook_url', 'Facebook'],
+                  ['met_at', '活動 / 地點'],
+                  ['met_date', '認識日期'],
                 ] as [string, string][]).map(([key, label]) => (
                   <div key={key}>
                     <label className="block text-xs text-gray-400 mb-1">{label}</label>

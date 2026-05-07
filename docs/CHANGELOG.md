@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v5.9.5 — feat(camcard): 批次設定 Met at + 編輯 modal 加 met_at/met_date（2026-05-07）
+
+### 變更項目
+- 名片王審查頁（`/admin/camcard`）篩選列下方新增琥珀色批次工具列
+- 輸入活動/地點名稱 + 日期，點「套用到全部 N 筆」一次更新當頁所有名片的 `met_at` / `met_date`
+- 編輯名片 modal 新增「活動 / 地點」與「認識日期」欄位，可逐張編輯
+- `update` API 移除對 `met_at`/`met_date` 的強制保留（現在可透過編輯覆寫）
+
 ## v5.9.4 — feat(pending): 批次設定 Met at（2026-05-07）
 
 ### 變更項目

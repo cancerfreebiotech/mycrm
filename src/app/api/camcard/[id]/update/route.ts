@@ -18,7 +18,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     .eq('id', id)
     .single()
   const existingOcr = (existing?.ocr_data ?? {}) as Record<string, unknown>
-  const PRESERVE = ['met_at', 'met_date', 'referred_by'] as const
+  const PRESERVE = ['referred_by'] as const
   const preserved: Record<string, unknown> = {}
   for (const k of PRESERVE) {
     if (existingOcr[k]) preserved[k] = existingOcr[k]
