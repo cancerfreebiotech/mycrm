@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
   const provided = new URL(req.url).searchParams.get('key') ?? ''
   const expected = process.env.INBOUND_PARSE_SECRET ?? ''
   if (!expected || provided !== expected) {
+    console.error('[inbound-parse] unauthorized: key mismatch')
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
@@ -75,6 +76,7 @@ export async function POST(req: NextRequest) {
   try {
     form = await req.formData()
   } catch (e) {
+    console.error('[inbound-parse] formData parse error:', (e as Error).message)
     return NextResponse.json(
       { error: 'expected multipart/form-data', detail: (e as Error).message },
       { status: 400 }
@@ -86,6 +88,7 @@ export async function POST(req: NextRequest) {
   const rawField = form.get('email')
   const raw = typeof rawField === 'string' ? rawField : ''
   if (!raw || raw.length < 10) {
+    console.error('[inbound-parse] no raw email field')
     return NextResponse.json(
       { error: 'no raw email field; enable "POST raw" in SendGrid Inbound Parse' },
       { status: 400 }
@@ -96,6 +99,7 @@ export async function POST(req: NextRequest) {
   try {
     parsed = await simpleParser(raw)
   } catch (e) {
+    console.error('[inbound-parse] simpleParser error:', (e as Error).message)
     return NextResponse.json(
       { error: 'parse failed', detail: (e as Error).message },
       { status: 400 }
@@ -110,6 +114,7 @@ export async function POST(req: NextRequest) {
 
   const fromAddr = fromList[0]
   if (!fromAddr) {
+    console.error('[inbound-parse] no From address in parsed email')
     return NextResponse.json({ error: 'no From address' }, { status: 400 })
   }
 
@@ -122,7 +127,18 @@ export async function POST(req: NextRequest) {
   const hasBccInRecipients = allRecipients.some((a) => isBccInbox(a.email))
   const orgRecipient = allRecipients.find((a) => isOrgAddress(a.email))
 
+  console.log('[inbound-parse] received', {
+    from: fromAddr.email,
+    to: toList.map(a => a.email),
+    cc: ccList.map(a => a.email),
+    subject: parsed.subject,
+    hasOrgFrom,
+    hasBccInRecipients,
+    orgRecipient: orgRecipient?.email ?? null,
+  })
+
   if (!hasOrgFrom && !(hasBccInRecipients && orgRecipient)) {
+    console.error('[inbound-parse] rejected: sender not in org', fromAddr.email)
     return NextResponse.json(
       { error: 'sender not in org; reject', from: fromAddr.email },
       { status: 400 }
@@ -181,8 +197,10 @@ export async function POST(req: NextRequest) {
 
   counterparties = dedupeByEmail(counterparties)
   if (counterparties.length === 0) {
+    console.warn('[inbound-parse] skipped: no external counterparties found', { from: fromAddr.email, subject: parsed.subject })
     return NextResponse.json({ ok: true, skipped: 'no external party' })
   }
+  console.log('[inbound-parse] counterparties:', counterparties.map(a => a.email))
 
   const bodyText = parsed.text ?? ''
   const bodyClean = stripQuotedReply(bodyText) || bodyText
@@ -239,6 +257,7 @@ export async function POST(req: NextRequest) {
     })
   }
 
+  console.log('[inbound-parse] done', { direction, contacts: created.length, created_new: newContacts.length })
   return NextResponse.json({
     ok: true,
     direction,
