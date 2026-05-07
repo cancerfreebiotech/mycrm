@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import Image from 'next/image'
-import { Loader2, Check, RefreshCw, Trash2, GitMerge, ExternalLink, AlertCircle, Search, X } from 'lucide-react'
+import { Loader2, Check, RefreshCw, Trash2, GitMerge, ExternalLink, AlertCircle, Search, X, CalendarCheck } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 
@@ -167,6 +167,29 @@ export default function PendingReviewPage() {
     setRows((prev) => prev.map((r) => r.id === id ? { ...r, data: newData } : r))
   }
 
+  // Batch met_at editor
+  const [batchMetAt, setBatchMetAt] = useState('')
+  const [batchMetDate, setBatchMetDate] = useState('')
+  const [applyingBatch, setApplyingBatch] = useState(false)
+
+  async function applyBatchMetAt() {
+    if (!batchMetAt.trim() && !batchMetDate) return
+    const targets = filteredRows.filter((r) => r.status === 'done')
+    if (targets.length === 0) return
+    setApplyingBatch(true)
+    const patch: Record<string, unknown> = {}
+    if (batchMetAt.trim()) patch.met_at = batchMetAt.trim()
+    if (batchMetDate) patch.met_date = batchMetDate
+    for (const r of targets) {
+      const newData = { ...r.data, ...patch }
+      await supabase.from('pending_contacts').update({ data: newData }).eq('id', r.id)
+    }
+    setRows((prev) => prev.map((r) =>
+      targets.some((t) => t.id === r.id) ? { ...r, data: { ...r.data, ...patch } } : r
+    ))
+    setApplyingBatch(false)
+  }
+
   const showUploaderFilter = uploaders.length > 1
   const stuckCount = rows.filter((r) =>
     (r.status === 'pending' || r.status === 'processing') &&
@@ -237,6 +260,35 @@ export default function PendingReviewPage() {
           <span className="text-sm text-gray-500 dark:text-gray-400 ml-auto">
             {t('shownCount', { shown: filteredRows.length, total: rows.length })}
           </span>
+        </div>
+      )}
+
+      {/* Batch met_at editor — shown when there are done rows */}
+      {!loading && filteredRows.some((r) => r.status === 'done') && (
+        <div className="flex flex-wrap items-center gap-2 mb-4 px-3 py-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40">
+          <CalendarCheck size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
+          <span className="text-xs text-amber-700 dark:text-amber-400 font-medium shrink-0">批次設定 Met at</span>
+          <input
+            type="text"
+            value={batchMetAt}
+            onChange={(e) => setBatchMetAt(e.target.value)}
+            placeholder="活動 / 地點名稱"
+            className="text-sm px-2 py-1 border border-amber-200 dark:border-amber-700 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-400 min-w-40"
+          />
+          <input
+            type="date"
+            value={batchMetDate}
+            onChange={(e) => setBatchMetDate(e.target.value)}
+            className="text-sm px-2 py-1 border border-amber-200 dark:border-amber-700 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          />
+          <button
+            onClick={applyBatchMetAt}
+            disabled={applyingBatch || (!batchMetAt.trim() && !batchMetDate)}
+            className="flex items-center gap-1.5 px-3 py-1 text-xs bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded font-medium"
+          >
+            {applyingBatch ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+            套用到全部 {filteredRows.filter((r) => r.status === 'done').length} 筆
+          </button>
         </div>
       )}
 
@@ -402,12 +454,28 @@ function PendingCard({
             )}
           </div>
 
-          {(metAt || metDate) && (
+          {row.status === 'done' ? (
+            <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
+              <input
+                type="text"
+                value={metAt ?? ''}
+                onChange={(e) => onPatch({ met_at: e.target.value || null })}
+                placeholder="📍 活動 / 地點"
+                className="px-2 py-0.5 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-400 min-w-36 text-xs"
+              />
+              <input
+                type="date"
+                value={metDate ?? ''}
+                onChange={(e) => onPatch({ met_date: e.target.value || null })}
+                className="px-2 py-0.5 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-400 text-xs"
+              />
+            </div>
+          ) : (metAt || metDate) ? (
             <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
               {metAt && <span className="mr-2">📍 {metAt}</span>}
               {metDate && <span>📅 {fmtDate(metDate)}</span>}
             </div>
-          )}
+          ) : null}
 
           {row.status === 'done' && (
             <>

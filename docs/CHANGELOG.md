@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v5.9.4 — feat(pending): 批次設定 Met at（2026-05-07）
+
+### 變更項目
+- 名片王待審頁（`/contacts/pending`）新增批次 Met at 編輯列
+- 有已辨識（done）資料時，頂部顯示琥珀色工具列：輸入「活動 / 地點名稱」及日期，點「套用到全部 N 筆」一次更新所有 done 的 pending 聯絡人
+- 每張已辨識名片卡片也改為可直接行內編輯個別 `met_at` / `met_date`
+
 ## v5.9.0 — feat(newsletter): 直接輸入 Email 加入名單 + 聯絡人互動紀錄電子報獨立顯示 + Notes 預設30天（2026-05-07）
 
 ### 變更項目
