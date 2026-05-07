@@ -47,3 +47,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
+
+// DELETE — remove campaign (draft only; sent campaigns are protected)
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const service = createServiceClient()
+  const { data: campaign } = await service
+    .from('newsletter_campaigns')
+    .select('id, status')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (!campaign) return NextResponse.json({ error: 'not found' }, { status: 404 })
+  if (campaign.status === 'sent') return NextResponse.json({ error: '已寄送的電子報不可刪除' }, { status: 400 })
+
+  const { error } = await service.from('newsletter_campaigns').delete().eq('id', id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}

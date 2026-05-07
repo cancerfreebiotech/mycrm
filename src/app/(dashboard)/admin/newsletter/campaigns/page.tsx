@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { PermissionGate } from '@/components/PermissionGate'
-import { Loader2, Send, Rss, Mail, Plus, Copy, Wand2, Package } from 'lucide-react'
+import { Loader2, Send, Rss, Mail, Plus, Copy, Wand2, Package, Pencil, Trash2 } from 'lucide-react'
 
 interface CampaignRow {
   id: string
@@ -27,6 +27,10 @@ export default function CampaignsIndexPage() {
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingTitle, setEditingTitle] = useState('')
+  const [savingTitleId, setSavingTitleId] = useState<string | null>(null)
+  const titleInputRef = useRef<HTMLInputElement>(null)
 
   async function createBlank() {
     setCreating(true)
@@ -42,6 +46,30 @@ export default function CampaignsIndexPage() {
     } catch (e) {
       alert(e instanceof Error ? e.message : '建立失敗')
     } finally { setCreating(false) }
+  }
+
+  async function saveTitle(id: string) {
+    const title = editingTitle.trim()
+    if (!title) { setEditingId(null); return }
+    setSavingTitleId(id)
+    try {
+      const res = await fetch(`/api/newsletter/campaigns/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      })
+      if (res.ok) setRows((prev) => prev.map((r) => r.id === id ? { ...r, title } : r))
+    } finally {
+      setSavingTitleId(null)
+      setEditingId(null)
+    }
+  }
+
+  async function deleteCampaign(id: string, title: string | null) {
+    if (!confirm(`確定要刪除「${title ?? '未命名'}」？此操作無法復原。`)) return
+    const res = await fetch(`/api/newsletter/campaigns/${id}`, { method: 'DELETE' })
+    if (res.ok) setRows((prev) => prev.filter((r) => r.id !== id))
+    else alert((await res.json()).error ?? '刪除失敗')
   }
 
   async function duplicate(id: string) {
@@ -130,9 +158,33 @@ export default function CampaignsIndexPage() {
                 {rows.map((r) => (
                   <tr key={r.id} className="border-b border-gray-100 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/30">
                     <td className="px-4 py-3">
-                      <Link href={`/admin/newsletter/quick-send/${r.id}`} className="font-medium text-blue-600 dark:text-blue-400 hover:underline">
-                        {r.title ?? '(未命名)'}
-                      </Link>
+                      {editingId === r.id ? (
+                        <input
+                          ref={titleInputRef}
+                          value={editingTitle}
+                          onChange={(e) => setEditingTitle(e.target.value)}
+                          onBlur={() => saveTitle(r.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') { e.preventDefault(); saveTitle(r.id) }
+                            if (e.key === 'Escape') setEditingId(null)
+                          }}
+                          className="w-full text-sm px-2 py-1 border border-blue-400 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      ) : (
+                        <div className="flex items-center gap-1.5 group">
+                          <Link href={`/admin/newsletter/quick-send/${r.id}`} className="font-medium text-blue-600 dark:text-blue-400 hover:underline">
+                            {r.title ?? '(未命名)'}
+                          </Link>
+                          <button
+                            onClick={() => { setEditingId(r.id); setEditingTitle(r.title ?? ''); setTimeout(() => titleInputRef.current?.select(), 0) }}
+                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-opacity"
+                            title="編輯標題"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          {savingTitleId === r.id && <Loader2 size={12} className="animate-spin text-gray-400" />}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-600 dark:text-gray-400 hidden sm:table-cell truncate max-w-[260px]">{r.subject ?? '—'}</td>
                     <td className="px-4 py-3">
@@ -173,6 +225,13 @@ export default function CampaignsIndexPage() {
                         >
                           開啟
                         </Link>
+                        <button
+                          onClick={() => deleteCampaign(r.id, r.title)}
+                          title="刪除"
+                          className="text-xs px-2 py-1 border border-red-200 dark:border-red-800 rounded hover:bg-red-50 dark:hover:bg-red-950/30 text-red-500 dark:text-red-400"
+                        >
+                          <Trash2 size={12} />
+                        </button>
                       </div>
                     </td>
                   </tr>
