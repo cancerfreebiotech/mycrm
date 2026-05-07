@@ -116,7 +116,10 @@ export default function ContactsPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [batchModalOpen, setBatchModalOpen] = useState(false)
-  const [batchForm, setBatchForm] = useState({ met_at: '', met_date: new Date().toISOString().slice(0, 10), referred_by: '' })
+  const [batchForm, setBatchForm] = useState({
+    met_at: '', met_date: new Date().toISOString().slice(0, 10), referred_by: '',
+    company: '', country_code: '', language: '', _tag_ids: [] as string[],
+  })
   const [batchSaving, setBatchSaving] = useState(false)
   const [canExport, setCanExport] = useState(false)
   const [canNewsletter, setCanNewsletter] = useState(false)
@@ -361,25 +364,55 @@ export default function ContactsPage() {
     const { data: { user } } = await supabase.auth.getUser()
     const { data: profile } = await supabase.from('users').select('id').eq('email', user!.email!).single()
     const ids = Array.from(selectedIds)
-    await supabase.from('contacts').update({
-      met_at: batchForm.met_at || null,
-      met_date: batchForm.met_date || null,
-      referred_by: batchForm.referred_by || null,
-    }).in('id', ids)
+
+    const updateFields: Record<string, unknown> = {}
+    if (batchForm.met_at) updateFields.met_at = batchForm.met_at
+    if (batchForm.met_date) updateFields.met_date = batchForm.met_date
+    if (batchForm.referred_by) updateFields.referred_by = batchForm.referred_by
+    if (batchForm.company) updateFields.company = batchForm.company
+    if (batchForm.country_code) updateFields.country_code = batchForm.country_code
+    if (batchForm.language) updateFields.language = batchForm.language
+
+    if (Object.keys(updateFields).length > 0) {
+      await supabase.from('contacts').update(updateFields).in('id', ids)
+    }
+
+    if (batchForm._tag_ids.length > 0) {
+      const tagInserts = ids.flatMap((contact_id) =>
+        batchForm._tag_ids.map((tag_id) => ({ contact_id, tag_id }))
+      )
+      await supabase.from('contact_tags').upsert(tagInserts, { onConflict: 'contact_id,tag_id', ignoreDuplicates: true })
+    }
+
     const logContent =
       t('batchLogMet', { at: batchForm.met_at || '—', date: batchForm.met_date }) +
       (batchForm.referred_by ? t('batchLogReferredBy', { name: batchForm.referred_by }) : '')
     await supabase.from('interaction_logs').insert(
       ids.map((contact_id) => ({ contact_id, type: 'meeting', content: logContent, created_by: profile!.id }))
     )
-    setContacts((prev) => prev.map((c) =>
-      ids.includes(c.id)
-        ? { ...c, met_at: batchForm.met_at || null }
-        : c
-    ))
+
+    setContacts((prev) => prev.map((c) => {
+      if (!ids.includes(c.id)) return c
+      const updated = { ...c }
+      if (batchForm.met_at) updated.met_at = batchForm.met_at
+      if (batchForm.company) updated.company = batchForm.company
+      if (batchForm.country_code) updated.country_code = batchForm.country_code
+      if (batchForm.language) updated.language = batchForm.language
+      if (batchForm._tag_ids.length > 0) {
+        const existingTagIds = c.contact_tags.map((ct) => ct.tags?.id)
+        const newTags = batchForm._tag_ids
+          .filter((tid) => !existingTagIds.includes(tid))
+          .map((tid) => ({ tags: allTags.find((t) => t.id === tid)! }))
+          .filter((t) => t.tags)
+        updated.contact_tags = [...c.contact_tags, ...newTags]
+      }
+      return updated
+    }))
+
     setBatchSaving(false)
     setBatchModalOpen(false)
     setSelectedIds(new Set())
+    setBatchForm({ met_at: '', met_date: new Date().toISOString().slice(0, 10), referred_by: '', company: '', country_code: '', language: '', _tag_ids: [] })
   }
 
   async function handleLinkedInUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1236,22 +1269,77 @@ export default function ContactsPage() {
             </div>
             <p className="text-xs text-amber-600 dark:text-amber-400 mb-4">{t('batchEditHint', { count: selectedIds.size })}</p>
             <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('metAt')}</label>
-                <input type="text" value={batchForm.met_at} onChange={(e) => setBatchForm((p) => ({ ...p, met_at: e.target.value }))}
-                  placeholder={t('metAtPlaceholder')}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('metDate')}</label>
-                <input type="date" value={batchForm.met_date} onChange={(e) => setBatchForm((p) => ({ ...p, met_date: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('metAt')}</label>
+                  <input type="text" value={batchForm.met_at} onChange={(e) => setBatchForm((p) => ({ ...p, met_at: e.target.value }))}
+                    placeholder={t('metAtPlaceholder')}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('metDate')}</label>
+                  <input type="date" value={batchForm.met_date} onChange={(e) => setBatchForm((p) => ({ ...p, met_date: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('referredBy')}</label>
                 <input type="text" value={batchForm.referred_by} onChange={(e) => setBatchForm((p) => ({ ...p, referred_by: e.target.value }))}
                   placeholder={t('referredByPlaceholder')}
                   className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('company')}</label>
+                <input type="text" value={batchForm.company} onChange={(e) => setBatchForm((p) => ({ ...p, company: e.target.value }))}
+                  placeholder="公司名（空白 = 不修改）"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('countryFilter')}</label>
+                  <select value={batchForm.country_code} onChange={(e) => setBatchForm((p) => ({ ...p, country_code: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">— 不修改 —</option>
+                    {allCountries.map((c) => (
+                      <option key={c.code} value={c.code}>{c.emoji} {c.name_zh}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('languageFilter')}</label>
+                  <select value={batchForm.language} onChange={(e) => setBatchForm((p) => ({ ...p, language: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">— 不修改 —</option>
+                    <option value="chinese">{t('languageChinese')}</option>
+                    <option value="english">English</option>
+                    <option value="japanese">{t('languageJapanese')}</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Tags（加入，不移除現有）</label>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {allTags.map((tag) => {
+                    const selected = batchForm._tag_ids.includes(tag.id)
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={() => setBatchForm((p) => ({
+                          ...p,
+                          _tag_ids: selected ? p._tag_ids.filter((id) => id !== tag.id) : [...p._tag_ids, tag.id],
+                        }))}
+                        className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                          selected
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-blue-400'
+                        }`}
+                      >
+                        {tag.name}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-5">

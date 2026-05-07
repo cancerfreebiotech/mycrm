@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v5.9.6 — feat(contacts): 批次編輯加入公司名、國家、語言、Tags（2026-05-07）
+
+### 變更項目
+- `/contacts` 批次編輯 modal 新增欄位：公司名、國家、語言、Tags
+- 空白欄位不覆寫（只更新有填寫的欄位）
+- Tags 為「加入」操作，不移除現有 tags；支援多選
+- `handleBatchSave` 只 update 有值的欄位，local state 同步更新
+
 ## v5.9.5 — feat(camcard): 批次設定 Met at + 編輯 modal 加 met_at/met_date（2026-05-07）
 
 ### 變更項目
