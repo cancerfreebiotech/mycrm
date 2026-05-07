@@ -451,7 +451,8 @@
     "types": {
       "note": "メモ",
       "meeting": "ミーティング",
-      "email": "メール"
+      "email": "メール",
+      "newsletter": "ニュースレター"
     },
     "jumpPlaceholder": "移動"
   },

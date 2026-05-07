@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v5.8.1 — feat(notes): Newsletter 獨立為一個 filter 類型（2026-05-07）
+
+### 變更項目
+- `/notes` 頁面 filter 新增「電子報」選項，`send_method='sendgrid'` 的 email 歸為 Newsletter
+- 全部類型顯示時，badge 自動區分「郵件」（紫）與「電子報」（青綠）
+- 「郵件」filter 只顯示個人/Outlook 寄出的信，不包含 newsletter
+- 新增 i18n key `notes.types.newsletter`（三語）
+
+bump 5.8.0 → 5.8.1
+
 ## v5.8.0 — feat(newsletter): 電子報列表可編輯標題、刪除（2026-05-07）
 
 ### 新功能

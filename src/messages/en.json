@@ -451,7 +451,8 @@
     "types": {
       "note": "Note",
       "meeting": "Meeting",
-      "email": "Email"
+      "email": "Email",
+      "newsletter": "Newsletter"
     },
     "jumpPlaceholder": "Jump to"
   },

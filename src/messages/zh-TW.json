@@ -451,7 +451,8 @@
     "types": {
       "note": "筆記",
       "meeting": "拜訪",
-      "email": "郵件"
+      "email": "郵件",
+      "newsletter": "電子報"
     },
     "jumpPlaceholder": "跳至"
   },

@@ -4,13 +4,14 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Search, FileText, Users, Mail, Calendar, Trash2, ChevronRight, ArrowDownUp } from 'lucide-react'
+import { Search, FileText, Users, Mail, Calendar, Trash2, ChevronRight, ArrowDownUp, Newspaper } from 'lucide-react'
 
-type LogType = 'all' | 'note' | 'meeting' | 'email'
+type LogType = 'all' | 'note' | 'meeting' | 'email' | 'newsletter'
 
 interface NoteRow {
   id: string
   type: string
+  send_method: string | null
   content: string | null
   email_subject: string | null
   meeting_date: string | null
@@ -29,15 +30,23 @@ interface ContactGroup {
 }
 
 const TYPE_COLOR: Record<string, string> = {
-  note:    'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
-  meeting: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300',
-  email:   'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300',
+  note:       'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+  meeting:    'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300',
+  email:      'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300',
+  newsletter: 'bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300',
 }
 
 const TYPE_ICON: Record<string, React.ElementType> = {
   note: FileText,
   meeting: Users,
   email: Mail,
+  newsletter: Newspaper,
+}
+
+// Newsletter = email sent via SendGrid campaign; individual email = everything else
+function displayType(row: NoteRow): string {
+  if (row.type === 'email' && row.send_method === 'sendgrid') return 'newsletter'
+  return row.type
 }
 
 const CONTACTS_PER_PAGE = 20
@@ -66,13 +75,19 @@ export default function NotesPage() {
 
     let query = supabase
       .from('interaction_logs')
-      .select('id, type, content, email_subject, meeting_date, created_at, contact_id, contacts(name), users(display_name, email)')
+      .select('id, type, send_method, content, email_subject, meeting_date, created_at, contact_id, contacts(name), users(display_name, email)')
       .not('contact_id', 'is', null)
       .neq('type', 'system')
       .order('created_at', { ascending: sortDir === 'asc' })
       .limit(FETCH_LIMIT)
 
-    if (typeFilter !== 'all') query = query.eq('type', typeFilter)
+    if (typeFilter === 'newsletter') {
+      query = query.eq('type', 'email').eq('send_method', 'sendgrid')
+    } else if (typeFilter === 'email') {
+      query = query.eq('type', 'email').or('send_method.is.null,send_method.eq.outlook')
+    } else if (typeFilter !== 'all') {
+      query = query.eq('type', typeFilter)
+    }
     if (dateFrom) query = query.gte('created_at', dateFrom)
     if (dateTo) query = query.lte('created_at', dateTo + 'T23:59:59')
     if (keyword) {
@@ -166,6 +181,7 @@ export default function NotesPage() {
             <option value="note">{t('types.note')}</option>
             <option value="meeting">{t('types.meeting')}</option>
             <option value="email">{t('types.email')}</option>
+            <option value="newsletter">{t('types.newsletter')}</option>
           </select>
         </div>
 
@@ -260,18 +276,19 @@ export default function NotesPage() {
               {/* Notes list */}
               <div className="divide-y divide-gray-100 dark:divide-gray-800">
                 {group.notes.map((log) => {
-                  const color = TYPE_COLOR[log.type] ?? TYPE_COLOR.note
-                  const TypeIcon = TYPE_ICON[log.type] ?? FileText
                   const creatorName =
                     (log.users as { display_name: string | null; email: string } | null)?.display_name ||
                     (log.users as { display_name: string | null; email: string } | null)?.email ||
                     '—'
 
+                  const dType = displayType(log)
+                  const color = TYPE_COLOR[dType] ?? TYPE_COLOR.note
+                  const TypeIcon = TYPE_ICON[dType] ?? FileText
                   return (
                     <div key={log.id} className="flex items-start gap-3 px-4 py-3 group">
                       <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium shrink-0 mt-0.5 ${color}`}>
                         <TypeIcon size={11} />
-                        {t(`types.${log.type as 'note' | 'meeting' | 'email'}`)}
+                        {t(`types.${dType as 'note' | 'meeting' | 'email' | 'newsletter'}`)}
                       </span>
                       <div className="flex-1 min-w-0">
                         {log.type === 'email' && log.email_subject && (
