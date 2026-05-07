@@ -17,8 +17,15 @@ interface NoteRow {
   meeting_date: string | null
   created_at: string
   contact_id: string | null
+  created_by: string | null
   contacts: { name: string } | null
   users: { display_name: string | null; email: string } | null
+}
+
+interface UserOption {
+  id: string
+  display_name: string | null
+  email: string
 }
 
 interface ContactGroup {
@@ -65,19 +72,28 @@ export default function NotesPage() {
   })
   const [dateTo, setDateTo] = useState('')
   const [typeFilter, setTypeFilter] = useState<LogType>('all')
+  const [userFilter, setUserFilter] = useState('')
+  const [users, setUsers] = useState<UserOption[]>([])
   const [page, setPage] = useState(1)
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
   const [jumpInput, setJumpInput] = useState('')
   const [deleting, setDeleting] = useState<string | null>(null)
 
-  useEffect(() => { setPage(1) }, [keyword, dateFrom, dateTo, typeFilter, sortDir])
+  useEffect(() => {
+    supabase.from('users').select('id, display_name, email').order('display_name').then(({ data }) => {
+      setUsers((data ?? []) as UserOption[])
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => { setPage(1) }, [keyword, dateFrom, dateTo, typeFilter, userFilter, sortDir])
 
   const fetchGroups = useCallback(async () => {
     setLoading(true)
 
     let query = supabase
       .from('interaction_logs')
-      .select('id, type, send_method, content, email_subject, meeting_date, created_at, contact_id, contacts(name), users(display_name, email)')
+      .select('id, type, send_method, content, email_subject, meeting_date, created_at, contact_id, created_by, contacts(name), users(display_name, email)')
       .not('contact_id', 'is', null)
       .neq('type', 'system')
       .order('created_at', { ascending: sortDir === 'asc' })
@@ -90,6 +106,7 @@ export default function NotesPage() {
     } else if (typeFilter !== 'all') {
       query = query.eq('type', typeFilter)
     }
+    if (userFilter) query = query.eq('created_by', userFilter)
     if (dateFrom) query = query.gte('created_at', dateFrom)
     if (dateTo) query = query.lte('created_at', dateTo + 'T23:59:59')
     if (keyword) {
@@ -124,7 +141,7 @@ export default function NotesPage() {
 
     setGroups(built)
     setLoading(false)
-  }, [keyword, dateFrom, dateTo, typeFilter, sortDir])
+  }, [keyword, dateFrom, dateTo, typeFilter, userFilter, sortDir])
 
   useEffect(() => { fetchGroups() }, [fetchGroups])
 
@@ -184,6 +201,18 @@ export default function NotesPage() {
             <option value="meeting">{t('types.meeting')}</option>
             <option value="email">{t('types.email')}</option>
             <option value="newsletter">{t('types.newsletter')}</option>
+          </select>
+          <select
+            value={userFilter}
+            onChange={(e) => setUserFilter(e.target.value)}
+            className="text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">所有寄件人</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.display_name || u.email}
+              </option>
+            ))}
           </select>
         </div>
 
