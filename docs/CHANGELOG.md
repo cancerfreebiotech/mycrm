@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v5.8.0 — feat(newsletter): 電子報列表可編輯標題、刪除（2026-05-07）
+
+### 新功能
+- 電子報列表：滑鼠移到標題出現鉛筆圖示，點擊進入 inline 編輯，Enter 或失焦儲存
+- 電子報列表：每筆右側新增刪除按鈕（🗑），已寄送的電子報不可刪除
+- 新增 `DELETE /api/newsletter/campaigns/[id]`，draft/scheduled 可刪，sent 回 400
+
+bump 5.7.3 → 5.8.0
+
 ## v5.7.3 — fix(sendgrid): bounce webhook 改用 ilike，補 9 筆 contact.email_status（2026-05-07）
 
 ### 變更項目
