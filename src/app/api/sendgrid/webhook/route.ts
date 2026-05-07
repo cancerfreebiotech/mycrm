@@ -47,7 +47,7 @@ async function markSuppressed(
   const { data: contact } = await supabase
     .from('contacts')
     .select('id')
-    .eq('email', normalized)
+    .ilike('email', normalized)
     .is('deleted_at', null)
     .maybeSingle()
 

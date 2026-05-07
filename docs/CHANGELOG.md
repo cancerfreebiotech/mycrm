@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v5.7.3 — fix(sendgrid): bounce webhook 改用 ilike，補 9 筆 contact.email_status（2026-05-07）
+
+### 變更項目
+- `markSuppressed()` 改用 `.ilike()` 查 contact email，修正大小寫不符導致退信寫入 blacklist 而非 contact 欄位的 bug
+- DB migration：backfill 9 筆 contacts，將 `newsletter_blacklist` 中有對應 contact 但 `email_status` 為 NULL 的全部補上 `bounced`
+
+bump 5.7.2 → 5.7.3
+
 ## v5.7.2 — fix(newsletter): 儲存草稿 circular JSON 修正（2026-05-07）
 
 ### 變更項目
