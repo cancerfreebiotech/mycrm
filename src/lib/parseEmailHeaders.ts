@@ -27,6 +27,78 @@ export function extractForwardedFrom(text: string): { name?: string; email: stri
   return null
 }
 
+// Parse a semicolon-separated address list from a forwarded header line.
+// Handles "Display Name <email>", "email", and mixed formats.
+function parseForwardedAddressField(value: string): Array<{ name?: string; email: string }> {
+  const result: Array<{ name?: string; email: string }> = []
+  // Split on "; " or ";" between addresses (not inside angle brackets)
+  const parts = value.split(/;\s*/)
+  for (const part of parts) {
+    const trimmed = part.trim()
+    if (!trimmed) continue
+    const withBrackets = trimmed.match(/^(.+?)\s*<([^>]+)>$/)
+    if (withBrackets) {
+      const name = withBrackets[1].trim().replace(/^"|"$/g, '') || undefined
+      const email = withBrackets[2].trim().toLowerCase()
+      if (email.includes('@')) result.push({ name, email })
+    } else if (trimmed.includes('@')) {
+      result.push({ email: trimmed.toLowerCase() })
+    }
+  }
+  return result
+}
+
+// Extract ALL participants (From + To + Cc) from a forwarded email body block.
+// Outlook format: "From: ... \n Sent: ... \n To: ... \n Cc: ... \n Subject: ..."
+// Also handles 寄件者/差出人 (Chinese/Japanese From variants).
+export function extractForwardedParticipants(text: string): Array<{ name?: string; email: string }> {
+  if (!text) return []
+  const lines = text.split(/\r?\n/)
+
+  // Find the start of the forwarded block by locating "From/寄件者/差出人:" followed
+  // by "Sent/Date/送信日時/傳送日期" within 4 lines.
+  let blockStart = -1
+  for (let i = 0; i < lines.length; i++) {
+    if (/^(From|寄件者|差出人):\s/i.test(lines[i])) {
+      const next4 = lines.slice(i + 1, i + 5).join('\n')
+      if (/^(Sent|Date|傳送日期|送信日時|日期):\s/im.test(next4)) {
+        blockStart = i
+        break
+      }
+    }
+  }
+  if (blockStart === -1) return []
+
+  // Collect header lines from blockStart until blank line or Subject line consumed
+  // Continuation lines (starting with whitespace) are appended to the previous header.
+  const headers: string[] = []
+  for (let i = blockStart; i < lines.length; i++) {
+    const line = lines[i]
+    if (line.trim() === '') break
+    if (/^\s+/.test(line) && headers.length > 0) {
+      headers[headers.length - 1] += ' ' + line.trim()
+    } else {
+      headers.push(line)
+    }
+    if (/^Subject:\s/i.test(line)) break
+  }
+
+  const result: Array<{ name?: string; email: string }> = []
+  for (const header of headers) {
+    if (/^(From|寄件者|差出人):\s/i.test(header)) {
+      const val = header.replace(/^(From|寄件者|差出人):\s*/i, '')
+      result.push(...parseForwardedAddressField(val))
+    } else if (/^To:\s/i.test(header)) {
+      const val = header.replace(/^To:\s*/i, '')
+      result.push(...parseForwardedAddressField(val))
+    } else if (/^Cc:\s/i.test(header)) {
+      const val = header.replace(/^Cc:\s*/i, '')
+      result.push(...parseForwardedAddressField(val))
+    }
+  }
+  return result
+}
+
 const FORWARD_SUBJECT_PREFIX = /^(fwd?:|轉寄:|轉送:|fw:|転送:)\s*/i
 
 export function isForwardedSubject(subject: string | null | undefined): boolean {

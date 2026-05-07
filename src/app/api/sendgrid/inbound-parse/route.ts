@@ -5,6 +5,7 @@ import { findOrCreateContactByEmail } from '@/lib/findOrCreateContactByEmail'
 import {
   buildHeaderBlock,
   extractForwardedFrom,
+  extractForwardedParticipants,
   isForwardedSubject,
   stripQuotedReply,
 } from '@/lib/parseEmailHeaders'
@@ -180,13 +181,23 @@ export async function POST(req: NextRequest) {
     counterparties = [fromAddr]
   } else if (isForward) {
     direction = 'inbound'
-    const orig = extractForwardedFrom(parsed.text ?? '')
-    if (orig && !isOrgAddress(orig.email) && !isBccInbox(orig.email)) {
-      counterparties = [{ name: orig.name, email: orig.email.toLowerCase() }]
+    // Extract all participants (From + To + Cc) from the forwarded body block
+    const fwdParticipants = extractForwardedParticipants(parsed.text ?? '')
+    const externalFwd = fwdParticipants.filter(
+      (a) => !isOrgAddress(a.email) && !isBccInbox(a.email)
+    )
+    if (externalFwd.length > 0) {
+      counterparties = externalFwd
     } else {
-      counterparties = allRecipients.filter(
-        (a) => !isOrgAddress(a.email) && !isBccInbox(a.email)
-      )
+      // Fallback: try single-From extraction, then outer envelope recipients
+      const orig = extractForwardedFrom(parsed.text ?? '')
+      if (orig && !isOrgAddress(orig.email) && !isBccInbox(orig.email)) {
+        counterparties = [{ name: orig.name, email: orig.email.toLowerCase() }]
+      } else {
+        counterparties = allRecipients.filter(
+          (a) => !isOrgAddress(a.email) && !isBccInbox(a.email)
+        )
+      }
     }
   } else {
     direction = 'outbound'
