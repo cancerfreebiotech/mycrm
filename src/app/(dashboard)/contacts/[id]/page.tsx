@@ -54,6 +54,7 @@ interface Log {
   id: string
   content: string | null
   type: string
+  send_method: string | null
   meeting_date: string | null
   meeting_time: string | null
   meeting_location: string | null
@@ -85,7 +86,13 @@ const TYPE_COLOR: Record<string, string> = {
   note: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
   meeting: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400',
   email: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400',
+  newsletter: 'bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-400',
   system: 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-400',
+}
+
+function logDisplayType(log: { type: string; send_method?: string | null }) {
+  if (log.type === 'email' && log.send_method === 'sendgrid') return 'newsletter'
+  return log.type
 }
 
 const EMPTY_EDIT = {
@@ -408,7 +415,7 @@ export default function ContactDetailPage() {
     }
     const [{ data: c }, { data: l }, { data: tags }, { data: cards }, { data: countries }, { data: photos }] = await Promise.all([
       supabase.from('contacts').select('*, users!created_by(display_name), contact_tags(tags(id, name))').eq('id', id).is('deleted_at', null).single(),
-      supabase.from('interaction_logs').select('id, content, type, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, campaign_id, users(display_name)').eq('contact_id', id).order('created_at', { ascending: false }).range(0, LOG_PAGE - 1),
+      supabase.from('interaction_logs').select('id, content, type, send_method, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, campaign_id, users(display_name)').eq('contact_id', id).order('created_at', { ascending: false }).range(0, LOG_PAGE - 1),
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('contact_cards').select('id, card_img_url, card_img_back_url, label, created_at').eq('contact_id', id).order('created_at', { ascending: true }),
       supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),
@@ -476,7 +483,7 @@ export default function ContactDetailPage() {
     const from = logsOffsetRef.current
     const { data } = await supabase
       .from('interaction_logs')
-      .select('id, content, type, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, campaign_id, users(display_name)')
+      .select('id, content, type, send_method, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, campaign_id, users(display_name)')
       .eq('contact_id', id)
       .order('created_at', { ascending: false })
       .range(from, from + LOG_PAGE - 1)
@@ -1789,8 +1796,8 @@ export default function ContactDetailPage() {
                 <li key={log.id} className="relative">
                   <div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-white dark:border-gray-900" />
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className={`text-xs px-2 py-0.5 rounded ${TYPE_COLOR[log.type] ?? TYPE_COLOR.note}`}>
-                      {t(`logTypes.${log.type as 'note' | 'meeting' | 'email' | 'system'}`)}
+                    <span className={`text-xs px-2 py-0.5 rounded ${TYPE_COLOR[logDisplayType(log)] ?? TYPE_COLOR.note}`}>
+                      {logDisplayType(log) === 'newsletter' ? '電子報' : t(`logTypes.${log.type as 'note' | 'meeting' | 'email' | 'system'}`)}
                     </span>
                     {log.meeting_date && <span className="text-xs text-gray-500 dark:text-gray-400">📅 {log.meeting_date}{log.meeting_time ? ` ${log.meeting_time.slice(0, 5)}` : ''}</span>}
                     {log.meeting_location && <span className="text-xs text-gray-500 dark:text-gray-400">📍 {log.meeting_location}</span>}

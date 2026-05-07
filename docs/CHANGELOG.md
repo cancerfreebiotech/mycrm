@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v5.9.0 — feat(newsletter): 直接輸入 Email 加入名單 + 聯絡人互動紀錄電子報獨立顯示 + Notes 預設30天（2026-05-07）
+
+### 變更項目
+- 電子報名單頁「新增」modal 加 Tab：「搜尋聯絡人」/ 「直接輸入 Email」，不需有 CRM 聯絡人即可加入名單
+- `list-members` API POST 支援 `email` 欄位（無 `contact_id` 時自動 find-or-create subscriber）
+- 聯絡人互動紀錄：SendGrid 電子報（`send_method='sendgrid'`）顯示青綠「電子報」badge，與「郵件」區分
+- `/notes` 頁面預設 `dateFrom` 為今日往前 30 天，不再顯示全部 500 筆
+
 ## v5.8.1 — feat(notes): Newsletter 獨立為一個 filter 類型（2026-05-07）
 
 ### 變更項目

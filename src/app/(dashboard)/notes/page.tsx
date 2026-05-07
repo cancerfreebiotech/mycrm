@@ -60,7 +60,9 @@ export default function NotesPage() {
   const [groups, setGroups] = useState<ContactGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [keyword, setKeyword] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
+  const [dateFrom, setDateFrom] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10)
+  })
   const [dateTo, setDateTo] = useState('')
   const [typeFilter, setTypeFilter] = useState<LogType>('all')
   const [page, setPage] = useState(1)
