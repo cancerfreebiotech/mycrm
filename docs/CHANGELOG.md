@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v5.7.2 — fix(newsletter): 儲存草稿 circular JSON 修正（2026-05-07）
+
+### 變更項目
+- `save()` 加上 `typeof` 防禦檢查，避免 SyntheticEvent 被當作 html override
+- 儲存草稿按鈕改為 `onClick={() => save()}`，不再把 click event 傳入 save
+
+bump 5.7.1 → 5.7.2
+
 ## v5.7.1 — fix(newsletter): inline 編輯「套用並儲存」直接存 DB（2026-05-06）
 
 ### 變更項目
