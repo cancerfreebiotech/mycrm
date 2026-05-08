@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v6.0.2 — fix(contacts): 批次編輯只改語文/公司等欄位時不寫 interaction log（2026-05-08）
+
+### 變更項目
+- `handleBatchSave`：只有 `met_at` 有填時才插入 interaction_logs，修正僅改語文/國家/公司時產生假「認識於：—」紀錄的問題
+- 同步清除今日已寫入的 122 筆假紀錄（DB DELETE）
+
 ## v6.0.1 — fix(newsletter): 清單「加入時間」改顯示聯絡人建立時間（2026-05-08）
 
 ### 變更項目

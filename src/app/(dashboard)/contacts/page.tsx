@@ -384,12 +384,14 @@ export default function ContactsPage() {
       await supabase.from('contact_tags').upsert(tagInserts, { onConflict: 'contact_id,tag_id', ignoreDuplicates: true })
     }
 
-    const logContent =
-      t('batchLogMet', { at: batchForm.met_at || '—', date: batchForm.met_date }) +
-      (batchForm.referred_by ? t('batchLogReferredBy', { name: batchForm.referred_by }) : '')
-    await supabase.from('interaction_logs').insert(
-      ids.map((contact_id) => ({ contact_id, type: 'meeting', content: logContent, created_by: profile!.id }))
-    )
+    if (batchForm.met_at) {
+      const logContent =
+        t('batchLogMet', { at: batchForm.met_at, date: batchForm.met_date }) +
+        (batchForm.referred_by ? t('batchLogReferredBy', { name: batchForm.referred_by }) : '')
+      await supabase.from('interaction_logs').insert(
+        ids.map((contact_id) => ({ contact_id, type: 'meeting', content: logContent, created_by: profile!.id }))
+      )
+    }
 
     setContacts((prev) => prev.map((c) => {
       if (!ids.includes(c.id)) return c
