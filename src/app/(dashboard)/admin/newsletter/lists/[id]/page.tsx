@@ -60,6 +60,9 @@ export default function ListDetailPage() {
   const [subs, setSubs] = useState<SubscriberRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [filterCountry, setFilterCountry] = useState<string>('all')
+  const [filterLinked, setFilterLinked] = useState<string>('all')
   const [sortCol, setSortCol] = useState<SortCol>('added_at')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
@@ -195,6 +198,11 @@ export default function ListDetailPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contactSearch, showAdd])
 
+  const countryOptions = useMemo(() => {
+    const codes = [...new Set(subs.map((s) => s.country_code).filter(Boolean) as string[])]
+    return codes.sort()
+  }, [subs])
+
   function toggleSort(col: SortCol) {
     if (sortCol === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
     else { setSortCol(col); setSortDir('asc') }
@@ -202,15 +210,26 @@ export default function ListDetailPage() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim()
-    return q
-      ? subs.filter((s) =>
-          s.email.toLowerCase().includes(q) ||
-          s.first_name?.toLowerCase().includes(q) ||
-          s.last_name?.toLowerCase().includes(q) ||
-          s.contact_name?.toLowerCase().includes(q)
-        )
-      : subs
-  }, [subs, search])
+    return subs.filter((s) => {
+      if (q && !(
+        s.email.toLowerCase().includes(q) ||
+        s.first_name?.toLowerCase().includes(q) ||
+        s.last_name?.toLowerCase().includes(q) ||
+        s.contact_name?.toLowerCase().includes(q)
+      )) return false
+      if (filterLinked === 'linked' && !s.contact_id) return false
+      if (filterLinked === 'unlinked' && s.contact_id) return false
+      if (filterCountry !== 'all') {
+        if (filterCountry === '' && s.country_code) return false
+        if (filterCountry !== '' && s.country_code !== filterCountry) return false
+      }
+      if (filterStatus !== 'all') {
+        if (filterStatus === 'active' && s.email_status !== null) return false
+        if (filterStatus !== 'active' && s.email_status !== filterStatus) return false
+      }
+      return true
+    })
+  }, [subs, search, filterStatus, filterCountry, filterLinked])
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -396,7 +415,7 @@ export default function ListDetailPage() {
           </div>
         </div>
 
-        <div className="relative mb-3">
+        <div className="relative mb-2">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
@@ -405,6 +424,55 @@ export default function ListDetailPage() {
             placeholder="搜尋 email、姓名、聯絡人名..."
             className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+        </div>
+
+        <div className="flex flex-wrap gap-2 mb-3">
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="text-sm px-2 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">全部狀態</option>
+            <option value="active">訂閱中</option>
+            <option value="unsubscribed">已退訂</option>
+            <option value="bounced">退信</option>
+            <option value="invalid">無效</option>
+            <option value="deferred">暫時失敗</option>
+            <option value="mailbox_full">信箱滿</option>
+            <option value="sender_blocked">寄件擋</option>
+            <option value="recipient_blocked">收件擋</option>
+          </select>
+
+          <select
+            value={filterCountry}
+            onChange={(e) => setFilterCountry(e.target.value)}
+            className="text-sm px-2 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">全部國家</option>
+            {countryOptions.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+            <option value="">（未填）</option>
+          </select>
+
+          <select
+            value={filterLinked}
+            onChange={(e) => setFilterLinked(e.target.value)}
+            className="text-sm px-2 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">全部連結</option>
+            <option value="linked">已連結聯絡人</option>
+            <option value="unlinked">未連結</option>
+          </select>
+
+          {(filterStatus !== 'all' || filterCountry !== 'all' || filterLinked !== 'all' || search) && (
+            <button
+              onClick={() => { setFilterStatus('all'); setFilterCountry('all'); setFilterLinked('all'); setSearch('') }}
+              className="flex items-center gap-1 text-sm px-2 py-1.5 rounded-lg text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+            >
+              <X size={13} /> 清除篩選
+            </button>
+          )}
         </div>
 
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden overflow-x-auto">
