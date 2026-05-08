@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v6.0.3 — fix(inbound-email): 自動建立聯絡人的語言依國家推斷（2026-05-08）
+
+### 變更項目
+- `findOrCreateContactByEmail`：語言不再寫死 english，改依推斷的 country_code 決定（TW/CN/HK/SG/MO → chinese、JP → japanese、KR → korean、其他 → english）
+- 新增 `countryCodeToLanguage()` util 到 `emailDomainToCountry.ts`
+
 ## v6.0.2 — fix(contacts): 批次編輯只改語文/公司等欄位時不寫 interaction log（2026-05-08）
 
 ### 變更項目

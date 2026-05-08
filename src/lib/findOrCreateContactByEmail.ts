@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { tldToCountryCode } from './emailDomainToCountry'
+import { tldToCountryCode, countryCodeToLanguage } from './emailDomainToCountry'
 
 export interface FindOrCreateContactInput {
   email: string
@@ -34,6 +34,7 @@ export async function findOrCreateContactByEmail(
   if (existing?.id) return { id: existing.id, created: false }
 
   const countryCode = tldToCountryCode(norm)
+  const language = countryCodeToLanguage(countryCode)
 
   const { data: inserted, error: insErr } = await supabase
     .from('contacts')
@@ -42,7 +43,7 @@ export async function findOrCreateContactByEmail(
       email: norm,
       source: 'inbound_email',
       importance: 'medium',
-      language: 'english',
+      language,
       created_by: createdBy,
       ...(countryCode ? { country_code: countryCode } : {}),
     })
