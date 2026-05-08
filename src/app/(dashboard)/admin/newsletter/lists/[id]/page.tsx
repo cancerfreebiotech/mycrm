@@ -29,6 +29,7 @@ interface SubscriberRow {
   added_at: string
   contact_name: string | null
   email_status: EmailStatus
+  country_code: string | null
 }
 
 interface ContactResult {
@@ -40,7 +41,7 @@ interface ContactResult {
   company: string | null
 }
 
-type SortCol = 'email' | 'contact' | 'added_at' | 'status'
+type SortCol = 'email' | 'contact' | 'added_at' | 'status' | 'country'
 type SortDir = 'asc' | 'desc'
 
 function SortIcon({ col, active, dir }: { col: SortCol; active: SortCol; dir: SortDir }) {
@@ -110,7 +111,7 @@ export default function ListDetailPage() {
     for (const m of memberData ?? []) {
       const s = (m as unknown as { added_at: string; newsletter_subscribers: { id: string; email: string; first_name: string | null; last_name: string | null; contact_id: string | null; unsubscribed_at: string | null } }).newsletter_subscribers
       if (!s) continue
-      rows.push({ id: s.id, email: s.email, first_name: s.first_name, last_name: s.last_name, contact_id: s.contact_id, unsubscribed_at: s.unsubscribed_at, added_at: (m as { added_at: string }).added_at, contact_name: null, email_status: null })
+      rows.push({ id: s.id, email: s.email, first_name: s.first_name, last_name: s.last_name, contact_id: s.contact_id, unsubscribed_at: s.unsubscribed_at, added_at: (m as { added_at: string }).added_at, contact_name: null, email_status: null, country_code: null })
       if (s.contact_id) contactIds.push(s.contact_id)
       if (s.email) emails.push(s.email.toLowerCase().trim())
     }
@@ -119,10 +120,10 @@ export default function ListDetailPage() {
     const uniqueContactIds = [...new Set(contactIds)]
     const uniqueEmails = [...new Set(emails)]
     const CHUNK = 500
-    const contactRows: { id: string; name: string | null; name_en: string | null; name_local: string | null; email_status: EmailStatus }[] = []
+    const contactRows: { id: string; name: string | null; name_en: string | null; name_local: string | null; email_status: EmailStatus; country_code: string | null }[] = []
     for (let i = 0; i < uniqueContactIds.length; i += CHUNK) {
       const slice = uniqueContactIds.slice(i, i + CHUNK)
-      const { data } = await supabase.from('contacts').select('id, name, name_en, name_local, email_status').in('id', slice)
+      const { data } = await supabase.from('contacts').select('id, name, name_en, name_local, email_status, country_code').in('id', slice)
       if (data) contactRows.push(...(data as typeof contactRows))
     }
     const blRows: { email: string; status: EmailStatus }[] = []
@@ -140,9 +141,11 @@ export default function ListDetailPage() {
 
     const nameMap = new Map<string, string>()
     const statusByContact = new Map<string, EmailStatus>()
+    const countryMap = new Map<string, string | null>()
     for (const c of contactRows) {
       nameMap.set(c.id, c.name || c.name_en || c.name_local || '')
       statusByContact.set(c.id, c.email_status)
+      countryMap.set(c.id, c.country_code)
     }
     const blStatusMap = new Map<string, EmailStatus>()
     for (const r of blRows) {
@@ -151,7 +154,10 @@ export default function ListDetailPage() {
     const unsubSet = new Set(unsubRows.map((r) => r.email.toLowerCase().trim()))
 
     for (const r of rows) {
-      if (r.contact_id) r.contact_name = nameMap.get(r.contact_id) ?? null
+      if (r.contact_id) {
+        r.contact_name = nameMap.get(r.contact_id) ?? null
+        r.country_code = countryMap.get(r.contact_id) ?? null
+      }
       const em = r.email.toLowerCase().trim()
       const contactStatus = r.contact_id ? statusByContact.get(r.contact_id) : null
       const blStatus = blStatusMap.get(em)
@@ -217,6 +223,12 @@ export default function ListDetailPage() {
         if (!an && bn) cmp = 1
         else if (an && !bn) cmp = -1
         else cmp = an.localeCompare(bn)
+      } else if (sortCol === 'country') {
+        const ac = a.country_code ?? ''
+        const bc = b.country_code ?? ''
+        if (!ac && bc) cmp = 1
+        else if (ac && !bc) cmp = -1
+        else cmp = ac.localeCompare(bc)
       } else if (sortCol === 'added_at') cmp = a.added_at.localeCompare(b.added_at)
       else if (sortCol === 'status') {
         const order = (s: EmailStatus) =>
@@ -405,6 +417,9 @@ export default function ListDetailPage() {
                 <th className={thClass} onClick={() => toggleSort('contact')}>
                   CRM 聯絡人 <SortIcon col="contact" active={sortCol} dir={sortDir} />
                 </th>
+                <th className={`${thClass} hidden md:table-cell`} onClick={() => toggleSort('country')}>
+                  國家 <SortIcon col="country" active={sortCol} dir={sortDir} />
+                </th>
                 <th className={`${thClass} hidden md:table-cell`} onClick={() => toggleSort('added_at')}>
                   加入時間 <SortIcon col="added_at" active={sortCol} dir={sortDir} />
                 </th>
@@ -416,7 +431,7 @@ export default function ListDetailPage() {
             </thead>
             <tbody>
               {sorted.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">{search ? '無符合搜尋結果' : '名單目前沒有訂閱者'}</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">{search ? '無符合搜尋結果' : '名單目前沒有訂閱者'}</td></tr>
               ) : sorted.map((s) => {
                 return (
                   <tr key={s.id} className="border-b border-gray-100 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/30">
@@ -429,6 +444,9 @@ export default function ListDetailPage() {
                       ) : (
                         <span className="text-gray-400">—</span>
                       )}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400 hidden md:table-cell text-xs">
+                      {s.country_code ?? <span className="text-gray-300 dark:text-gray-600">—</span>}
                     </td>
                     <td className="px-4 py-3 text-gray-500 dark:text-gray-400 hidden md:table-cell text-xs">
                       {new Date(s.added_at).toLocaleDateString('zh-TW')}

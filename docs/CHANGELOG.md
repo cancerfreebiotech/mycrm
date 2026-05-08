@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v5.9.9 — feat(newsletter): 清單頁新增「國家」欄位（2026-05-08）
+
+### 變更項目
+- `/admin/newsletter/lists/[id]` 訂閱者表格新增「國家」欄位，從 contact.country_code 取得
+- 支援依國家排序（點欄位標題）
+- 無連結聯絡人或 country_code 為空者顯示 —
+
 ## v5.9.8 — fix(duplicates): find_name_duplicates 還原 LIMIT 2000 避免 timeout（2026-05-08）
 
 ### 變更項目
