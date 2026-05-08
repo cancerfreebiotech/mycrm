@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v5.9.7 — fix(duplicates): 修正重複偵測漏掉舊聯絡人 + 加完全相同名字偵測（2026-05-08）
+
+### 變更項目
+- 新增 DB function `find_exact_name_duplicates()`：全表掃描，用 GROUP BY 找完全相同 canonical name，不受任何 LIMIT 限制
+- 修改 `find_name_duplicates()`：移除 `LIMIT 1000`，改為全表 trigram 相似度掃描（threshold 0.65），排除已被 exact match 找到的對
+- `scan-duplicates` API 加入第三步驟呼叫 `find_exact_name_duplicates`
+- **根本原因**：舊版只掃最近 1000 筆，從名片王早期匯入的 MD 聯絡人完全不在掃描範圍內
+
 ## v5.9.6 — feat(contacts): 批次編輯加入公司名、國家、語言、Tags（2026-05-07）
 
 ### 變更項目

@@ -22,13 +22,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Email 掃描失敗：${emailErr.message}` }, { status: 500 })
   }
 
-  // 2. Similar name duplicates (pg_trgm, limited to 1000 most recent)
+  // 2. Exact name duplicates (full table, no limit — finds same canonical name across all contacts)
+  const { data: exactNameDups, error: exactNameErr } = await supabase.rpc('find_exact_name_duplicates') as {
+    data: Array<{ id_a: string; id_b: string }> | null
+    error: { message: string } | null
+  }
+  if (exactNameErr) {
+    return NextResponse.json({ error: `完全相同名稱掃描失敗：${exactNameErr.message}` }, { status: 500 })
+  }
+
+  // 3. Similar name duplicates (pg_trgm, full table, excludes exact matches)
   const { data: nameDups, error: nameErr } = await supabase.rpc('find_name_duplicates') as {
     data: Array<{ id_a: string; id_b: string; score: number }> | null
     error: { message: string } | null
   }
   if (nameErr) {
-    return NextResponse.json({ error: `名稱掃描失敗：${nameErr.message}` }, { status: 500 })
+    return NextResponse.json({ error: `相似名稱掃描失敗：${nameErr.message}` }, { status: 500 })
   }
 
   const seen = new Set<string>()
@@ -44,6 +53,13 @@ export async function POST(req: NextRequest) {
     if (!seen.has(key)) {
       seen.add(key)
       inserts.push({ contact_id_a: r.id_a, contact_id_b: r.id_b, match_type: 'exact_email', similarity_score: null })
+    }
+  }
+  for (const r of exactNameDups ?? []) {
+    const key = [r.id_a, r.id_b].sort().join('|')
+    if (!seen.has(key)) {
+      seen.add(key)
+      inserts.push({ contact_id_a: r.id_a, contact_id_b: r.id_b, match_type: 'similar_name', similarity_score: 1.0 })
     }
   }
   for (const r of nameDups ?? []) {
