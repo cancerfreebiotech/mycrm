@@ -14,9 +14,8 @@ const TLD_TO_COUNTRY: Record<string, string> = {
   il: 'IL', ae: 'AE', sa: 'SA', tr: 'TR', eg: 'EG', za: 'ZA',
 }
 
-const CHINESE_COUNTRIES = new Set(['TW', 'CN', 'HK', 'SG', 'MO'])
+const CHINESE_COUNTRIES = new Set(['TW', 'CN'])
 const JAPANESE_COUNTRIES = new Set(['JP'])
-const KOREAN_COUNTRIES = new Set(['KR'])
 
 // Infer ISO 3166-1 alpha-2 country code from email domain TLD.
 // Returns null for generic TLDs (.com, .org, .io, etc.) where country
@@ -33,6 +32,5 @@ export function countryCodeToLanguage(countryCode: string | null): string {
   if (!countryCode) return 'english'
   if (CHINESE_COUNTRIES.has(countryCode)) return 'chinese'
   if (JAPANESE_COUNTRIES.has(countryCode)) return 'japanese'
-  if (KOREAN_COUNTRIES.has(countryCode)) return 'korean'
   return 'english'
 }
