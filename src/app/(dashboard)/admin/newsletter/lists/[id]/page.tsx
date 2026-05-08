@@ -30,6 +30,7 @@ interface SubscriberRow {
   contact_name: string | null
   email_status: EmailStatus
   country_code: string | null
+  contact_created_at: string | null
 }
 
 interface ContactResult {
@@ -114,7 +115,7 @@ export default function ListDetailPage() {
     for (const m of memberData ?? []) {
       const s = (m as unknown as { added_at: string; newsletter_subscribers: { id: string; email: string; first_name: string | null; last_name: string | null; contact_id: string | null; unsubscribed_at: string | null } }).newsletter_subscribers
       if (!s) continue
-      rows.push({ id: s.id, email: s.email, first_name: s.first_name, last_name: s.last_name, contact_id: s.contact_id, unsubscribed_at: s.unsubscribed_at, added_at: (m as { added_at: string }).added_at, contact_name: null, email_status: null, country_code: null })
+      rows.push({ id: s.id, email: s.email, first_name: s.first_name, last_name: s.last_name, contact_id: s.contact_id, unsubscribed_at: s.unsubscribed_at, added_at: (m as { added_at: string }).added_at, contact_name: null, email_status: null, country_code: null, contact_created_at: null })
       if (s.contact_id) contactIds.push(s.contact_id)
       if (s.email) emails.push(s.email.toLowerCase().trim())
     }
@@ -123,10 +124,10 @@ export default function ListDetailPage() {
     const uniqueContactIds = [...new Set(contactIds)]
     const uniqueEmails = [...new Set(emails)]
     const CHUNK = 500
-    const contactRows: { id: string; name: string | null; name_en: string | null; name_local: string | null; email_status: EmailStatus; country_code: string | null }[] = []
+    const contactRows: { id: string; name: string | null; name_en: string | null; name_local: string | null; email_status: EmailStatus; country_code: string | null; created_at: string }[] = []
     for (let i = 0; i < uniqueContactIds.length; i += CHUNK) {
       const slice = uniqueContactIds.slice(i, i + CHUNK)
-      const { data } = await supabase.from('contacts').select('id, name, name_en, name_local, email_status, country_code').in('id', slice)
+      const { data } = await supabase.from('contacts').select('id, name, name_en, name_local, email_status, country_code, created_at').in('id', slice)
       if (data) contactRows.push(...(data as typeof contactRows))
     }
     const blRows: { email: string; status: EmailStatus }[] = []
@@ -145,10 +146,12 @@ export default function ListDetailPage() {
     const nameMap = new Map<string, string>()
     const statusByContact = new Map<string, EmailStatus>()
     const countryMap = new Map<string, string | null>()
+    const createdAtMap = new Map<string, string>()
     for (const c of contactRows) {
       nameMap.set(c.id, c.name || c.name_en || c.name_local || '')
       statusByContact.set(c.id, c.email_status)
       countryMap.set(c.id, c.country_code)
+      createdAtMap.set(c.id, c.created_at)
     }
     const blStatusMap = new Map<string, EmailStatus>()
     for (const r of blRows) {
@@ -160,6 +163,7 @@ export default function ListDetailPage() {
       if (r.contact_id) {
         r.contact_name = nameMap.get(r.contact_id) ?? null
         r.country_code = countryMap.get(r.contact_id) ?? null
+        r.contact_created_at = createdAtMap.get(r.contact_id) ?? null
       }
       const em = r.email.toLowerCase().trim()
       const contactStatus = r.contact_id ? statusByContact.get(r.contact_id) : null
@@ -248,7 +252,10 @@ export default function ListDetailPage() {
         if (!ac && bc) cmp = 1
         else if (ac && !bc) cmp = -1
         else cmp = ac.localeCompare(bc)
-      } else if (sortCol === 'added_at') cmp = a.added_at.localeCompare(b.added_at)
+      } else if (sortCol === 'added_at') {
+        const at = (r: SubscriberRow) => r.contact_created_at ?? r.added_at
+        cmp = at(a).localeCompare(at(b))
+      }
       else if (sortCol === 'status') {
         const order = (s: EmailStatus) =>
           s === null ? 0 :
@@ -517,7 +524,9 @@ export default function ListDetailPage() {
                       {s.country_code ?? <span className="text-gray-300 dark:text-gray-600">—</span>}
                     </td>
                     <td className="px-4 py-3 text-gray-500 dark:text-gray-400 hidden md:table-cell text-xs">
-                      {new Date(s.added_at).toLocaleDateString('zh-TW')}
+                      {s.contact_created_at
+                        ? new Date(s.contact_created_at).toLocaleDateString('zh-TW')
+                        : <span className="text-gray-300 dark:text-gray-600">—</span>}
                     </td>
                     <td className="px-4 py-3">
                       {s.email_status === 'bounced' ? (

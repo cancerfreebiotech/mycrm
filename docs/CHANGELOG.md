@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v6.0.1 — fix(newsletter): 清單「加入時間」改顯示聯絡人建立時間（2026-05-08）
+
+### 變更項目
+- 「加入時間」欄位改為顯示 contact.created_at（聯絡人在 CRM 的建立時間）
+- 無連結聯絡人的訂閱者顯示 —
+- 排序也依 contact.created_at 為主
+
 ## v6.0.0 — feat(newsletter): 清單頁新增欄位篩選功能（2026-05-08）
 
 ### 變更項目
