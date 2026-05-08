@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v5.9.8 — fix(duplicates): find_name_duplicates 還原 LIMIT 2000 避免 timeout（2026-05-08）
+
+### 變更項目
+- `find_name_duplicates()` 加回 LIMIT（2000），避免全表 O(n²) trigram 比對 statement timeout
+- 完全相同名字的重複已由 `find_exact_name_duplicates()` 全表負責，fuzzy 掃描只需覆蓋近 2000 筆
+
 ## v5.9.7 — fix(duplicates): 修正重複偵測漏掉舊聯絡人 + 加完全相同名字偵測（2026-05-08）
 
 ### 變更項目
