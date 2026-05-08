@@ -87,7 +87,7 @@ myCRM 是給 cancerfree.io 全公司使用的 CRM 系統。透過 Telegram Bot �
 
 ## 技術棧
 
-- **框架**：Next.js 14 (App Router)
+- **框架**：Next.js 16 (App Router)
 - **語言**：TypeScript
 - **樣式**：Tailwind CSS
 - **資料庫 / Auth / Storage**：Supabase (PostgreSQL)
