@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 
-const SELECT_FIELDS = 'id, name, company, job_title, email, phone, country_code, met_at, created_at, last_activity_at, importance, language, email_status, email_opt_out, created_by, users!created_by(display_name), contact_tags(tags(id, name, is_email_blacklist))'
+const SELECT_FIELDS = 'id, name, company, job_title, email, phone, country_code, met_at, met_date, created_at, last_activity_at, importance, language, email_status, email_opt_out, created_by, users!created_by(display_name), contact_tags(tags(id, name, is_email_blacklist))'
 const BATCH_SIZE = 1000
 const QUERY_BATCH = 200
 

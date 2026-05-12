@@ -18,6 +18,7 @@ interface Schedule {
 }
 
 interface Tag { id: string; name: string }
+interface User { id: string; display_name: string | null }
 
 interface LogRow {
   contact: string
@@ -57,6 +58,9 @@ export default function ReportsPage() {
   const [selectedCountries, setSelectedCountries] = useState<string[]>([])
   const [allCountries, setAllCountries] = useState<string[]>([])
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
+  const [allUsers, setAllUsers] = useState<User[]>([])
+  const [selectedCreatorIds, setSelectedCreatorIds] = useState<string[]>([])
+  const [excludeNewsletter, setExcludeNewsletter] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [logs, setLogs] = useState<LogRow[] | null>(null)
   const [sortCol, setSortCol] = useState<SortCol>('date')
@@ -99,6 +103,7 @@ export default function ReportsPage() {
       const codes = [...new Set((data ?? []).map(c => c.country_code).filter(Boolean))].sort()
       setAllCountries(codes as string[])
     })
+    supabase.from('users').select('id, display_name').order('display_name').then(({ data }) => setAllUsers((data ?? []) as User[]))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -125,7 +130,7 @@ export default function ReportsPage() {
       const res = await fetch('/api/reports/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dateFrom, dateTo, format, tagIds: selectedTagIds, countryCodes: selectedCountries, types: selectedTypes }),
+        body: JSON.stringify({ dateFrom, dateTo, format, tagIds: selectedTagIds, countryCodes: selectedCountries, types: selectedTypes, creatorIds: selectedCreatorIds, excludeNewsletter }),
       })
 
       if (format === 'excel') {
@@ -278,7 +283,7 @@ export default function ReportsPage() {
           {/* Type filter */}
           <div>
             <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('interactionType')}</label>
-            <div className="flex gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
               {LOG_TYPES.map(({ value, label }) => {
                 const selected = selectedTypes.includes(value)
                 return (
@@ -297,8 +302,53 @@ export default function ReportsPage() {
                   </button>
                 )
               })}
+              <button
+                onClick={() => setExcludeNewsletter(v => !v)}
+                className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                  excludeNewsletter
+                    ? 'bg-orange-500 border-orange-500 text-white'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-orange-400'
+                }`}
+              >
+                {excludeNewsletter ? '✕ Newsletter' : '排除 Newsletter'}
+              </button>
             </div>
           </div>
+          {/* Creator filter */}
+          {allUsers.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('colCreator')}</label>
+              <div className="flex flex-wrap gap-1.5 max-w-sm">
+                {allUsers.map(u => {
+                  const selected = selectedCreatorIds.includes(u.id)
+                  return (
+                    <button
+                      key={u.id}
+                      onClick={() => setSelectedCreatorIds(prev =>
+                        selected ? prev.filter(id => id !== u.id) : [...prev, u.id]
+                      )}
+                      className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                        selected
+                          ? 'bg-purple-600 border-purple-600 text-white'
+                          : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-purple-400'
+                      }`}
+                    >
+                      {u.display_name ?? u.id}
+                      {selected && <X size={10} />}
+                    </button>
+                  )
+                })}
+              </div>
+              {selectedCreatorIds.length > 0 && (
+                <button
+                  onClick={() => setSelectedCreatorIds([])}
+                  className="mt-1.5 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  清除
+                </button>
+              )}
+            </div>
+          )}
           {/* Country filter */}
           {allCountries.length > 0 && (
             <div>

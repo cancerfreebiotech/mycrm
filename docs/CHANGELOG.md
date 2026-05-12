@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v6.1.0 — feat: 聯絡人認識日期篩選 + 報表填寫人篩選與排除 Newsletter（2026-05-12）
+
+### 變更項目
+- `contacts/page.tsx`：新增「認識日期」date range filter（met_date 欄位），與建立日期同樣操作方式
+- `api/contacts/all`：SELECT_FIELDS 加入 `met_date`
+- `admin/reports/page.tsx`：新增「填寫人」多選篩選（可選 Po、Luna 等特定成員）；新增「排除 Newsletter」toggle
+- `api/reports/generate`：接收並傳遞 `creatorIds`、`excludeNewsletter` 到 RPC
+- DB：`get_interaction_logs_by_tags` RPC 新增 `p_created_by_ids uuid[]` 與 `p_exclude_newsletter boolean` 參數
+
 ## v6.0.3 — fix(inbound-email): 自動建立聯絡人的語言依國家推斷（2026-05-08）
 
 ### 變更項目
