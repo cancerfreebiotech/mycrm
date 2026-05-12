@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v6.1.3 — fix(camcard): 確認名片時同步 last_activity_at（2026-05-12）
+
+### 變更項目
+- `confirm/route.ts`：建立聯絡人時設 `last_activity_at = pending.created_at`，防止名片確認後誤排到聯絡人列表最前面
+
 ## v6.1.1 — fix(reports): 填寫人改 dropdown、Newsletter 預設排除、欄位重設計（2026-05-12）
 
 ### 變更項目

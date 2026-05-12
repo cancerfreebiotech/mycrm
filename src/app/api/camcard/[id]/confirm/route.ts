@@ -73,7 +73,8 @@ export async function POST(
   const contactData: Record<string, unknown> = {
     source: 'camcard',
     imported_at: new Date().toISOString(),
-    created_at: pending.created_at,  // use scan time so camcard contacts sort earlier
+    created_at: pending.created_at,
+    last_activity_at: pending.created_at,
   }
   if (confirmedByUserId) contactData.created_by = confirmedByUserId
   contactData.importance = importance
