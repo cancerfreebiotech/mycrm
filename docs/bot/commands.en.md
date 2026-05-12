@@ -12,7 +12,7 @@ nav_order: 2
 | `/search [keyword]` | `/s` | Search contacts (fuzzy match on name/Email) |
 | `/note [name]` | `/n` | Add an interaction note for a contact |
 | `/visit [name]` | `/v` | Add a visit record for a contact |
-| `/a [name]` | — | Add a business card photo (OCR) for a contact |
+| `/a [name]` | — | Add a business card photo (OCR) for a contact; creates new contact if not found |
 | `/p [name]` | — | Add a group photo for a contact |
 | `/b` | `/batch` | Enter batch mode: shoot many cards in a row, OCR runs in background |
 | `/done` | — | End batch mode and queue OCR |
@@ -86,12 +86,12 @@ Each search result shows a business card photo with quick buttons:
 
 ### `/a` — Add Business Card for Contact
 
-Used when a contact already exists and you want to add or replace a business card photo. After sending, AI OCR recognizes it and shows the differences from existing data, letting the user confirm whether to update.
+Used to add or replace a business card photo for a contact. After sending, AI OCR recognizes it and shows the differences from existing data, letting the user confirm whether to update. If the contact doesn't exist, a new one can be created.
 
 **Method 1: Use last contact**
 ```
 /a
-→ Bot: Last contact: John Smith, please send a business card photo
+→ Bot: Last contact: John Smith, please send a business card photo  [⏭ Skip, no card needed]
 → Send photo
 → AI OCR → Show diff → Confirm/Cancel
 ```
@@ -99,8 +99,18 @@ Used when a contact already exists and you want to add or replace a business car
 **Method 2: Specify by name**
 ```
 /a John Smith
-→ Bot: Found, please send business card photo
+→ Bot: Found, please send business card photo  [⏭ Skip, no card needed]
 ```
+
+**Method 3: Name + company (create if not found)**
+```
+/a John Smith | ABC Corp
+→ Bot: Contact "John Smith" not found. Create new contact?
+   [✅ Create "John Smith · ABC Corp"]  [❌ Cancel]
+→ After creation: please send business card photo  [⏭ Skip, no card needed]
+```
+
+Press "⏭ Skip, no card needed" to skip the card photo and complete contact creation.
 
 ---
 

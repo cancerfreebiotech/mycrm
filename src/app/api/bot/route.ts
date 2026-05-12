@@ -1705,7 +1705,9 @@ async function handleText(
       const { data: lastContact } = await supabase.from('contacts').select('id, name, company').eq('id', lastContactId).single()
       if (lastContact) {
         await setSession(fromId, 'waiting_for_add_card', { contact_id: lastContactId, contact_name: lastContact.name })
-        await sendMessage(chatId, `上一位聯絡人：<b>${lastContact.name}</b>（${lastContact.company ?? ''}）\n\n請傳送名片照片`)
+        await sendMessage(chatId, `上一位聯絡人：<b>${lastContact.name}</b>（${lastContact.company ?? ''}）\n\n請傳送名片照片`, {
+          reply_markup: { inline_keyboard: [[{ text: '⏭ 跳過，不需要名片', callback_data: 'skip_add_card' }]] },
+        })
         return
       }
     }
@@ -1713,16 +1715,33 @@ async function handleText(
     return
   }
 
-  // ── /a name — add card to specified contact ──────────────────────────────
+  // ── /a name [| company] — add card to specified contact, create if not found
+  // Syntax:
+  //   /a 王大華             → search; on miss offer to create
+  //   /a 王大華 | ABC公司   → search; on miss offer to create w/ company
   const addCardMatch = cmd.match(/^\/a\s+(.+)/)
   if (addCardMatch) {
-    const query = addCardMatch[1].trim()
-    const contacts = await searchContacts(query)
+    const raw = addCardMatch[1].trim()
+    const sepMatch = raw.match(/^(.+?)\s*[|,]\s*(.+)$/)
+    const queryName = (sepMatch ? sepMatch[1] : raw).trim()
+    const queryCompany = sepMatch ? sepMatch[2].trim() : ''
+    const contacts = await searchContacts(queryName)
     if (contacts.length === 0) {
-      await sendMessage(chatId, `找不到聯絡人「${query}」`)
+      await setSession(fromId, 'confirm_create_a', { name: queryName, company: queryCompany })
+      const createLabel = queryCompany ? `✅ 建立「${queryName} · ${queryCompany}」` : `✅ 建立「${queryName}」`
+      await sendMessage(chatId, `找不到聯絡人「${queryName}」，要建立新聯絡人嗎？`, {
+        reply_markup: {
+          inline_keyboard: [[
+            { text: createLabel, callback_data: 'confirm_create_a' },
+            { text: '❌ 取消', callback_data: 'cancel_a' },
+          ]],
+        },
+      })
     } else if (contacts.length === 1) {
       await setSession(fromId, 'waiting_for_add_card', { contact_id: contacts[0].id, contact_name: contacts[0].name })
-      await sendMessage(chatId, `找到：${contacts[0].name}\n\n請傳送名片照片`)
+      await sendMessage(chatId, `找到：${contacts[0].name}\n\n請傳送名片照片`, {
+        reply_markup: { inline_keyboard: [[{ text: '⏭ 跳過，不需要名片', callback_data: 'skip_add_card' }]] },
+      })
     } else {
       const buttons = contacts.map((c) => [{ text: `${c.name}（${c.company ?? ''}）`, callback_data: `select_add_card_${c.id}` }])
       await sendMessage(chatId, '找到多筆聯絡人，請選擇要新增名片的對象：', { reply_markup: { inline_keyboard: buttons } })
@@ -2221,7 +2240,9 @@ export async function POST(req: NextRequest) {
           await setSession(from.id, 'waiting_for_add_card', { contact_id: contactId, contact_name: contact?.name })
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, `找到：${contact?.name}\n\n請傳送名片照片`)
+          await sendMessage(from.id, `找到：${contact?.name}\n\n請傳送名片照片`, {
+            reply_markup: { inline_keyboard: [[{ text: '⏭ 跳過，不需要名片', callback_data: 'skip_add_card' }]] },
+          })
         }
 
         // ── Confirm /a card photo → run OCR + show diff ───────────────────────
@@ -2246,6 +2267,72 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await sendMessage(from.id, '已取消。')
+        }
+
+        // ── /a name not found → create minimal contact ────────────────────────
+        else if (data === 'confirm_create_a') {
+          const pendingSession = await getSession(from.id)
+          let nameQuery = ''
+          let companyQuery: string | null = null
+          if (pendingSession?.state === 'confirm_create_a') {
+            nameQuery = (pendingSession.context?.name as string | undefined ?? '').trim()
+            companyQuery = ((pendingSession.context?.company as string | undefined ?? '').trim()) || null
+          }
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          if (!nameQuery) {
+            await sendMessage(from.id, '❌ 建立失敗，請重新輸入 /a 姓名')
+          } else {
+            const insertPayload: Record<string, unknown> = { name: nameQuery, created_by: user.id }
+            if (companyQuery) insertPayload.company = companyQuery
+            const { data: inserted, error } = await supabase
+              .from('contacts')
+              .insert(insertPayload)
+              .select('id')
+              .single()
+            if (error || !inserted) {
+              await sendMessage(from.id, `❌ 建立失敗：${error?.message ?? '未知錯誤'}`)
+            } else {
+              await supabase.from('interaction_logs').insert({
+                contact_id: inserted.id,
+                type: 'system',
+                content: companyQuery
+                  ? '透過 Telegram Bot /a 手動建立（姓名 + 公司）'
+                  : '透過 Telegram Bot /a 手動建立（僅姓名）',
+                created_by: user.id,
+              })
+              await updateLastContact(from.id, inserted.id)
+              await setSession(from.id, 'waiting_for_add_card', { contact_id: inserted.id, contact_name: nameQuery })
+              const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+              const link = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">查看聯絡人頁面</a>` : ''
+              const displayLine = companyQuery ? `<b>${nameQuery}</b>（${companyQuery}）` : `<b>${nameQuery}</b>`
+              await sendMessage(from.id, `✅ 已建立聯絡人：${displayLine}${link}\n\n請傳送名片照片`, {
+                reply_markup: { inline_keyboard: [[{ text: '⏭ 跳過，不需要名片', callback_data: 'skip_add_card' }]] },
+              })
+            }
+          }
+        }
+
+        // ── /a name not found, cancel create ──────────────────────────────────
+        else if (data === 'cancel_a') {
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await clearSession(from.id)
+          await sendMessage(from.id, '已取消')
+        }
+
+        // ── Skip adding card photo ────────────────────────────────────────────
+        else if (data === 'skip_add_card') {
+          const skipSession = await getSession(from.id)
+          const skipContactId = skipSession?.context?.contact_id as string | undefined
+          const skipContactName = skipSession?.context?.contact_name as string | undefined
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await clearSession(from.id)
+          const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+          const link = (appUrl && skipContactId) ? `\n\n👤 <a href="${appUrl}/contacts/${skipContactId}">查看聯絡人頁面</a>` : ''
+          const displayLine = skipContactName ? `<b>${skipContactName}</b>` : '聯絡人'
+          await sendMessage(from.id, `✅ 已跳過名片，${displayLine} 已建立${link}`)
         }
 
         // ── Apply OCR diff to contact ─────────────────────────────────────────

@@ -169,7 +169,7 @@ const zh: BotMessages = {
     '/search [關鍵字]　/s — 搜尋聯絡人\n' +
     '/n [姓名]　　　　　　 — 新增筆記\n' +
     '/v [姓名]　　　　　　 — 記錄拜訪\n' +
-    '/a [姓名]　　　　　　 — 為聯絡人新增名片\n' +
+    '/a [姓名] 或 /a 姓名 | 公司 — 為聯絡人新增名片（找不到可建立新聯絡人）\n' +
     '/p [姓名] 或 /p 姓名 | 公司 — 為聯絡人新增合照（找不到可建立新聯絡人）\n' +
     '/li　　　　　　　　　 — 傳送 LinkedIn 截圖解析\n' +
     '/ai　　　　　　　　　 — AI 生成拜訪信/感謝函\n' +
@@ -276,7 +276,7 @@ const en: BotMessages = {
     '/search [keyword]　/s — Search contacts\n' +
     '/n [name]　　　　　　　 — Add note\n' +
     '/v [name]　　　　　　　 — Log a visit\n' +
-    '/a [name]　　　　　　　 — Add business card to contact\n' +
+    '/a [name] or /a name | company — Add business card (create contact on miss)\n' +
     '/p [name] or /p name | company — Add personal photo (create contact on miss)\n' +
     '/li　　　　　　　　　　　 — Send LinkedIn screenshot to parse\n' +
     '/ai　　　　　　　　　　　 — AI generate follow-up / thank-you email\n' +
@@ -383,7 +383,7 @@ const ja: BotMessages = {
     '/search [キーワード]　/s — 連絡先を検索\n' +
     '/n [名前]　　　　　　　　 — メモを追加\n' +
     '/v [名前]　　　　　　　　 — 訪問を記録\n' +
-    '/a [名前]　　　　　　　　 — 連絡先に名刺を追加\n' +
+    '/a [名前] または /a 名前 | 会社 — 連絡先に名刺を追加（未登録なら新規作成）\n' +
     '/p [名前] または /p 名前 | 会社 — 連絡先に写真を追加（未登録なら新規作成）\n' +
     '/li　　　　　　　　　　　　 — LinkedInスクショを解析\n' +
     '/ai　　　　　　　　　　　　 — AI でフォローアップメールを生成\n' +

@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v6.2.0 — feat(bot): /a 指令支援新增聯絡人 + 跳過名片選項（2026-05-12）
+
+### 變更項目
+- `bot/route.ts`：`/a 姓名 | 公司` 找不到聯絡人時提供建立新聯絡人的選項（`confirm_create_a` 流程，仿 `/p` 設計）
+- `bot/route.ts`：找到聯絡人或建立後，顯示「⏭ 跳過，不需要名片」按鈕，可略過名片直接完成
+- `bot/route.ts`：新增 callback handlers：`confirm_create_a`、`cancel_a`、`skip_add_card`
+- `bot-messages.ts`：三語 `/help` 文字更新，說明 `/a` 支援 `名字 | 公司` 語法與找不到時建立
+- `docs/bot/commands.md`（zh/en/ja）：更新 `/a` 指令說明，加入方式三與跳過說明
+
 ## v6.1.3 — fix(camcard): 確認名片時同步 last_activity_at（2026-05-12）
 
 ### 變更項目
