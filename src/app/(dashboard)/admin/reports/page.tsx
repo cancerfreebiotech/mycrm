@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { Plus, Pencil, Trash2, Check, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, Check, X, ChevronDown } from 'lucide-react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 
 interface Schedule {
@@ -21,12 +21,12 @@ interface Tag { id: string; name: string }
 interface User { id: string; display_name: string | null }
 
 interface LogRow {
+  logDate: string
   contact: string
   company: string
   type: string
-  content: string
-  date: string
-  time: string
+  summary: string
+  visitDate: string
   location: string
   creator: string
 }
@@ -60,10 +60,10 @@ export default function ReportsPage() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [allUsers, setAllUsers] = useState<User[]>([])
   const [selectedCreatorIds, setSelectedCreatorIds] = useState<string[]>([])
-  const [excludeNewsletter, setExcludeNewsletter] = useState(false)
+  const [creatorDropdownOpen, setCreatorDropdownOpen] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [logs, setLogs] = useState<LogRow[] | null>(null)
-  const [sortCol, setSortCol] = useState<SortCol>('date')
+  const [sortCol, setSortCol] = useState<SortCol>('logDate')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
   const LOG_TYPES = [
@@ -130,7 +130,7 @@ export default function ReportsPage() {
       const res = await fetch('/api/reports/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dateFrom, dateTo, format, tagIds: selectedTagIds, countryCodes: selectedCountries, types: selectedTypes, creatorIds: selectedCreatorIds, excludeNewsletter }),
+        body: JSON.stringify({ dateFrom, dateTo, format, tagIds: selectedTagIds, countryCodes: selectedCountries, types: selectedTypes, creatorIds: selectedCreatorIds }),
       })
 
       if (format === 'excel') {
@@ -302,51 +302,54 @@ export default function ReportsPage() {
                   </button>
                 )
               })}
-              <button
-                onClick={() => setExcludeNewsletter(v => !v)}
-                className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
-                  excludeNewsletter
-                    ? 'bg-orange-500 border-orange-500 text-white'
-                    : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-orange-400'
-                }`}
-              >
-                {excludeNewsletter ? '✕ Newsletter' : '排除 Newsletter'}
-              </button>
             </div>
           </div>
-          {/* Creator filter */}
+          {/* Creator filter — dropdown */}
           {allUsers.length > 0 && (
             <div>
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('colCreator')}</label>
-              <div className="flex flex-wrap gap-1.5 max-w-sm">
-                {allUsers.map(u => {
-                  const selected = selectedCreatorIds.includes(u.id)
-                  return (
-                    <button
-                      key={u.id}
-                      onClick={() => setSelectedCreatorIds(prev =>
-                        selected ? prev.filter(id => id !== u.id) : [...prev, u.id]
-                      )}
-                      className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border transition-colors ${
-                        selected
-                          ? 'bg-purple-600 border-purple-600 text-white'
-                          : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-purple-400'
-                      }`}
-                    >
-                      {u.display_name ?? u.id}
-                      {selected && <X size={10} />}
-                    </button>
-                  )
-                })}
-              </div>
-              {selectedCreatorIds.length > 0 && (
+              <div className="relative">
                 <button
-                  onClick={() => setSelectedCreatorIds([])}
-                  className="mt-1.5 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  onClick={() => setCreatorDropdownOpen(v => !v)}
+                  className="flex items-center gap-2 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
-                  清除
+                  {t('colCreator')}
+                  {selectedCreatorIds.length > 0 && (
+                    <span className="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs px-1.5 py-0.5 rounded-full">
+                      {selectedCreatorIds.length}
+                    </span>
+                  )}
+                  <ChevronDown size={14} />
                 </button>
-              )}
+                {creatorDropdownOpen && (
+                  <div className="absolute top-full mt-1 left-0 z-10 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-44 max-h-64 overflow-y-auto">
+                    {allUsers.map(u => (
+                      <button
+                        key={u.id}
+                        onClick={() => setSelectedCreatorIds(prev =>
+                          prev.includes(u.id) ? prev.filter(x => x !== u.id) : [...prev, u.id]
+                        )}
+                        className="w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800"
+                      >
+                        <span className={`w-3 h-3 border rounded shrink-0 ${
+                          selectedCreatorIds.includes(u.id)
+                            ? 'bg-blue-500 border-blue-500'
+                            : 'border-gray-300 dark:border-gray-600'
+                        }`} />
+                        <span className="text-gray-700 dark:text-gray-300 truncate">{u.display_name ?? '—'}</span>
+                      </button>
+                    ))}
+                    {selectedCreatorIds.length > 0 && (
+                      <button
+                        onClick={() => setSelectedCreatorIds([])}
+                        className="w-full text-left px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600 border-t border-gray-100 dark:border-gray-700 mt-1 pt-1"
+                      >
+                        清除
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
           {/* Country filter */}
@@ -437,12 +440,12 @@ export default function ReportsPage() {
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 dark:bg-gray-800">
                       <tr>
+                        <SortTh col="logDate" label={t('colLogDate')} />
                         <SortTh col="contact" label={t('colLogContact')} />
                         <SortTh col="company" label={t('colCompany')} />
                         <SortTh col="type" label={t('colLogType')} />
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{t('colLogContent')}</th>
-                        <SortTh col="date" label={t('colLogDate')} />
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{tt('meetingTime')}</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{t('colLogSummary')}</th>
+                        <SortTh col="visitDate" label={t('colVisitDate')} />
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{tt('meetingLocation')}</th>
                         <SortTh col="creator" label={t('colCreator')} />
                       </tr>
@@ -450,12 +453,12 @@ export default function ReportsPage() {
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                       {sorted.map((l, i) => (
                         <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                          <td className="px-3 py-2 text-gray-500 dark:text-gray-500 whitespace-nowrap">{l.logDate}</td>
                           <td className="px-3 py-2 text-gray-900 dark:text-gray-100 whitespace-nowrap">{l.contact}</td>
                           <td className="px-3 py-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">{l.company}</td>
                           <td className="px-3 py-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">{l.type}</td>
-                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400 max-w-sm whitespace-pre-wrap break-words">{l.content}</td>
-                          <td className="px-3 py-2 text-gray-500 dark:text-gray-500 whitespace-nowrap">{l.date}</td>
-                          <td className="px-3 py-2 text-gray-500 dark:text-gray-500 whitespace-nowrap">{l.time}</td>
+                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400 max-w-sm whitespace-pre-wrap break-words">{l.summary}</td>
+                          <td className="px-3 py-2 text-gray-500 dark:text-gray-500 whitespace-nowrap">{l.visitDate}</td>
                           <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{l.location}</td>
                           <td className="px-3 py-2 text-gray-500 dark:text-gray-500 whitespace-nowrap">{l.creator}</td>
                         </tr>

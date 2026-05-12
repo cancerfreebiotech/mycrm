@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { dateFrom, dateTo, format, tagIds, countryCodes, types, creatorIds, excludeNewsletter } = await req.json() as {
+  const { dateFrom, dateTo, format, tagIds, countryCodes, types, creatorIds } = await req.json() as {
     dateFrom: string
     dateTo: string
     format: 'json' | 'excel'
@@ -24,7 +24,6 @@ export async function POST(req: NextRequest) {
     countryCodes?: string[]
     types?: string[]
     creatorIds?: string[]
-    excludeNewsletter?: boolean
   }
 
   if (!dateFrom || !dateTo) {
@@ -32,9 +31,6 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const isSuperAdmin = profile.role === 'super_admin'
-
-    // Use RPC to avoid URL length limits when filtering by many contact IDs
     const { data: logs, error: rpcError } = await service.rpc('get_interaction_logs_by_tags', {
       p_tag_ids: (tagIds && tagIds.length > 0) ? tagIds : null,
       p_date_from: `${dateFrom}T00:00:00.000Z`,
@@ -43,7 +39,7 @@ export async function POST(req: NextRequest) {
       p_country_codes: (countryCodes && countryCodes.length > 0) ? countryCodes : null,
       p_types: (types && types.length > 0) ? types : null,
       p_created_by_ids: (creatorIds && creatorIds.length > 0) ? creatorIds : null,
-      p_exclude_newsletter: excludeNewsletter ?? false,
+      p_exclude_newsletter: true,
     })
 
     if (rpcError) {
@@ -63,16 +59,18 @@ export async function POST(req: NextRequest) {
       content: string | null
       email_subject: string | null
       meeting_date: string | null
-      meeting_time: string | null
       meeting_location: string | null
       creator_name: string | null
+      log_date: string | null
     }) => ({
+      logDate: l.log_date ?? '',
       contact: l.contact_name ?? '',
       company: l.contact_company ?? '',
       type: TYPE_LABEL[l.type ?? ''] ?? l.type ?? '',
-      content: l.email_subject ?? l.content ?? '',
-      date: l.meeting_date ?? '',
-      time: l.meeting_time ? String(l.meeting_time).slice(0, 5) : '',
+      summary: l.type === 'email'
+        ? (l.email_subject ?? '')
+        : (l.content ?? '').slice(0, 80),
+      visitDate: l.meeting_date ?? '',
       location: l.meeting_location ?? '',
       creator: l.creator_name ?? '',
     }))
@@ -81,9 +79,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ logs: logRows })
     }
 
-    // Build Excel
+    // Build Excel with Chinese headers
     const wb = XLSX.utils.book_new()
-    const ws = XLSX.utils.json_to_sheet(logRows)
+    const headers = ['填寫日期', '聯絡人', '公司', '類型', '主題/摘要', '拜訪日期', '地點', '填寫人']
+    const rows = logRows.map((r: { logDate: string; contact: string; company: string; type: string; summary: string; visitDate: string; location: string; creator: string }) => [r.logDate, r.contact, r.company, r.type, r.summary, r.visitDate, r.location, r.creator])
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
     XLSX.utils.book_append_sheet(wb, ws, '互動紀錄')
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
 

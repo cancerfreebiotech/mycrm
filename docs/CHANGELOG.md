@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v6.1.1 — fix(reports): 填寫人改 dropdown、Newsletter 預設排除、欄位重設計（2026-05-12）
+
+### 變更項目
+- 報表「填寫人」篩選改為 dropdown + checkbox 多選（更緊湊）
+- Newsletter email 永遠排除（hardcode），移除 toggle 按鈕
+- 欄位重設計：新增「填寫日期」（il.created_at，永遠有值）；「內容」→「主題/摘要」；移除「時間」欄；「日期」→「拜訪日期」
+- Excel 匯出改用中文欄位 header
+- DB RPC 新增 log_date 回傳欄位
+
 ## v6.1.0 — feat: 聯絡人認識日期篩選 + 報表填寫人篩選與排除 Newsletter（2026-05-12）
 
 ### 變更項目
