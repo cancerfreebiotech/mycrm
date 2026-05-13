@@ -24,11 +24,20 @@ async function main() {
   for (const s of secrets) {
     log.info(`secret: ${s.name} = ${s.value.slice(0, 20)}...`)
     if (dry) continue
-    // vault.create_secret signature: (secret text, name text default null, description text default '')
+    // Use vault.create_secret() which handles pgsodium encryption permissions correctly.
+    // It returns the id. We update via vault.update_secret if it already exists.
+    const escVal = s.value.replace(/'/g, "''")
     const sql = `
-      INSERT INTO vault.secrets (name, secret)
-      VALUES ('${s.name}', '${s.value.replace(/'/g, "''")}')
-      ON CONFLICT (name) DO UPDATE SET secret = EXCLUDED.secret
+      DO $$
+      DECLARE existing_id uuid;
+      BEGIN
+        SELECT id INTO existing_id FROM vault.secrets WHERE name = '${s.name}';
+        IF existing_id IS NULL THEN
+          PERFORM vault.create_secret('${escVal}', '${s.name}');
+        ELSE
+          PERFORM vault.update_secret(existing_id, '${escVal}', '${s.name}');
+        END IF;
+      END $$;
     `
     await mgmtSql(target.projectRef, sql)
     log.ok(`${s.name} written`)

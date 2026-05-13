@@ -34,6 +34,14 @@ function loadMigrations() {
 
 async function apply(migrations, targetRef) {
   log.step(`Applying ${migrations.length} migrations to target ${targetRef}`)
+
+  // Skip migrations already recorded as applied (resume support)
+  const alreadyApplied = new Set(
+    (await mgmtSql(targetRef, `SELECT version FROM supabase_migrations.schema_migrations`))
+      .map((r) => r.version)
+  )
+  log.info(`${alreadyApplied.size} migrations already recorded — will skip them`)
+
   const results = []
   let appliedSql = 0
   let skipped = 0
@@ -43,6 +51,11 @@ async function apply(migrations, targetRef) {
     const m = migrations[i]
     const idx = `[${i + 1}/${migrations.length}]`
     const stmts = m.statements || []
+    if (alreadyApplied.has(m.version)) {
+      skipped++
+      logLines.push(`\n=== ${m.version} ${m.name} ===\n⏭ already applied`)
+      continue
+    }
     log.info(`${idx} ${m.version} ${m.name} (${stmts.length} stmts)`)
     logLines.push(`\n=== ${m.version} ${m.name} ===`)
 
@@ -53,11 +66,14 @@ async function apply(migrations, targetRef) {
     try {
       await mgmtSql(targetRef, blob)
       // Record migration as applied in target.supabase_migrations.schema_migrations
-      // so future `supabase db push` operations align.
+      // using ARRAY[...] constructor (the previous '[...]'::text[] cast is invalid).
+      // Each statement is escaped via $stmt_N$ ... $stmt_N$ dollar quoting so we don't
+      // need to escape single quotes within statements.
+      const arrayParts = stmts.map((s, i) => `$stmt_${i}$${s}$stmt_${i}$`).join(', ')
+      const nameLit = m.name ? `'${m.name.replace(/'/g, "''")}'` : 'NULL'
       await mgmtSql(targetRef, `
         INSERT INTO supabase_migrations.schema_migrations (version, name, statements)
-        VALUES ('${m.version}', ${m.name ? `'${m.name.replace(/'/g, "''")}'` : 'NULL'},
-                ${JSON.stringify(stmts).replace(/'/g, "''").replace(/^/, "'").replace(/$/, "'")}::text[])
+        VALUES ('${m.version}', ${nameLit}, ARRAY[${arrayParts}]::text[])
         ON CONFLICT (version) DO NOTHING;
       `)
       appliedSql += stmts.length

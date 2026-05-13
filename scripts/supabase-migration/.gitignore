@@ -3,8 +3,12 @@ artifacts/migration-state.json
 artifacts/snapshot.json
 artifacts/schema-apply.log
 artifacts/storage-progress.json
+artifacts/storage-run.log
 artifacts/target-db-password.txt
 artifacts/vercel-env-backup.json
+artifacts/source-cols-full.json
+artifacts/target-cols.json
+artifacts/target-cols-by-table.json
 
 # Keep pre-dumped source data committed (artifacts/source-*.json)
 !artifacts/source-migrations.json
