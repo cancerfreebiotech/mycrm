@@ -1,0 +1,688 @@
+[
+  {
+    "version": "20260313142841",
+    "name": "create_initial_tables",
+    "statements": [
+      "\n-- authorized_users\nCREATE TABLE authorized_users (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  telegram_id bigint UNIQUE NOT NULL,\n  name text,\n  is_admin boolean DEFAULT false,\n  created_at timestamptz DEFAULT now()\n);\n\n-- contacts\nCREATE TABLE contacts (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  name text,\n  company text,\n  job_title text,\n  email text,\n  phone text,\n  card_img_url text,\n  created_by bigint,\n  created_at timestamptz DEFAULT now()\n);\n\n-- interaction_logs\nCREATE TABLE interaction_logs (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  contact_id uuid REFERENCES contacts(id) ON DELETE CASCADE,\n  content text,\n  created_by bigint,\n  created_at timestamptz DEFAULT now()\n);\n\n-- email_templates\nCREATE TABLE email_templates (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  title text,\n  subject text,\n  body_content text,\n  attachment_urls text[],\n  created_at timestamptz DEFAULT now()\n);\n"
+    ]
+  },
+  {
+    "version": "20260313142854",
+    "name": "create_storage_and_rls",
+    "statements": [
+      "\n-- 建立 cards storage bucket\nINSERT INTO storage.buckets (id, name, public)\nVALUES ('cards', 'cards', true)\nON CONFLICT (id) DO NOTHING;\n\n-- RLS: public 可讀取\nCREATE POLICY \"Public read cards\" ON storage.objects\n  FOR SELECT USING (bucket_id = 'cards');\n\n-- RLS: service role 可上傳\nCREATE POLICY \"Service role upload cards\" ON storage.objects\n  FOR INSERT WITH CHECK (bucket_id = 'cards');\n"
+    ]
+  },
+  {
+    "version": "20260314080425",
+    "name": "init_crm_schema",
+    "statements": [
+      "\n-- 廢除舊的 authorized_users 表（若存在）\ndrop table if exists authorized_users;\n\n-- 使用者表\ncreate table if not exists users (\n  id uuid primary key default gen_random_uuid(),\n  email text unique not null,\n  display_name text,\n  telegram_id bigint unique,\n  role text not null default 'member',\n  last_login_at timestamptz,\n  created_at timestamptz default now()\n);\n\n-- 聯絡人表\ncreate table if not exists contacts (\n  id uuid primary key default gen_random_uuid(),\n  name text,\n  company text,\n  job_title text,\n  email text,\n  phone text,\n  card_img_url text,\n  created_by uuid references users(id),\n  created_at timestamptz default now()\n);\n\n-- 互動紀錄表\ncreate table if not exists interaction_logs (\n  id uuid primary key default gen_random_uuid(),\n  contact_id uuid references contacts(id) on delete cascade,\n  content text,\n  created_by uuid references users(id),\n  created_at timestamptz default now()\n);\n\n-- 郵件範本表\ncreate table if not exists email_templates (\n  id uuid primary key default gen_random_uuid(),\n  title text not null,\n  subject text,\n  body_content text,\n  attachment_urls text[],\n  created_at timestamptz default now()\n);\n"
+    ]
+  },
+  {
+    "version": "20260314080524",
+    "name": "fix_created_by_fk",
+    "statements": [
+      "\n-- Fix contacts.created_by: bigint → uuid with FK to users.id\nalter table contacts\n  alter column created_by type uuid using null,\n  add constraint contacts_created_by_fkey foreign key (created_by) references users(id);\n\n-- Fix interaction_logs.created_by: bigint → uuid with FK to users.id\nalter table interaction_logs\n  alter column created_by type uuid using null,\n  add constraint interaction_logs_created_by_fkey foreign key (created_by) references users(id);\n"
+    ]
+  },
+  {
+    "version": "20260314080529",
+    "name": "fix_email_templates_title_notnull",
+    "statements": [
+      "\nalter table email_templates alter column title set not null;\n"
+    ]
+  },
+  {
+    "version": "20260314095234",
+    "name": "create_pending_contacts",
+    "statements": [
+      "\nCREATE TABLE pending_contacts (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  data jsonb NOT NULL,\n  created_by uuid REFERENCES users(id),\n  created_at timestamptz DEFAULT now()\n);\n"
+    ]
+  },
+  {
+    "version": "20260314103022",
+    "name": "task1_full_schema",
+    "statements": [
+      "\n-- Drop old table if exists\ndrop table if exists authorized_users;\n\n-- Add missing columns to users\nalter table users\n  add column if not exists gemini_model text not null default 'gemini-1.5-flash',\n  add column if not exists theme text not null default 'light';\n\n-- Add missing column to contacts\nalter table contacts\n  add column if not exists card_img_back_url text;\n\n-- Add missing columns to interaction_logs\nalter table interaction_logs\n  add column if not exists type text not null default 'note',\n  add column if not exists meeting_date date;\n\n-- Tags\ncreate table if not exists tags (\n  id uuid primary key default gen_random_uuid(),\n  name text unique not null,\n  created_at timestamptz default now()\n);\n\n-- Contact Tags junction\ncreate table if not exists contact_tags (\n  contact_id uuid references contacts(id) on delete cascade,\n  tag_id uuid references tags(id) on delete cascade,\n  primary key (contact_id, tag_id)\n);\n\n-- Template attachments\ncreate table if not exists template_attachments (\n  id uuid primary key default gen_random_uuid(),\n  template_id uuid references email_templates(id) on delete cascade,\n  file_name text not null,\n  file_url text not null,\n  file_size int not null,\n  created_at timestamptz default now()\n);\n\n-- Bot sessions\ncreate table if not exists bot_sessions (\n  id uuid primary key default gen_random_uuid(),\n  telegram_id bigint unique not null,\n  state text,\n  context jsonb,\n  updated_at timestamptz default now()\n);\n\n-- Enable pg_trgm for duplicate detection\ncreate extension if not exists pg_trgm;\n"
+    ]
+  },
+  {
+    "version": "20260314103521",
+    "name": "create_find_similar_contacts_fn",
+    "statements": [
+      "\ncreate or replace function find_similar_contacts(input_name text, threshold float default 0.6)\nreturns table (id uuid, name text, company text, email text)\nlanguage sql\nas $$\n  select id, name, company, email\n  from contacts\n  where name is not null\n    and similarity(name, input_name) >= threshold\n  order by similarity(name, input_name) desc\n  limit 5;\n$$;\n"
+    ]
+  },
+  {
+    "version": "20260314121543",
+    "name": "add_provider_token_to_users",
+    "statements": [
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS provider_token text;"
+    ]
+  },
+  {
+    "version": "20260314122832",
+    "name": "create_gemini_models",
+    "statements": [
+      "\nCREATE TABLE IF NOT EXISTS gemini_models (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  model_id text UNIQUE NOT NULL,\n  display_name text NOT NULL,\n  is_active boolean NOT NULL DEFAULT true,\n  created_at timestamptz DEFAULT now()\n);\n\nINSERT INTO gemini_models (model_id, display_name) VALUES\n  ('gemini-1.5-flash', 'Gemini 1.5 Flash'),\n  ('gemini-1.5-pro', 'Gemini 1.5 Pro'),\n  ('gemini-2.0-flash', 'Gemini 2.0 Flash'),\n  ('gemini-2.5-flash', 'Gemini 2.5 Flash'),\n  ('gemini-2.5-pro', 'Gemini 2.5 Pro')\nON CONFLICT (model_id) DO NOTHING;\n"
+    ]
+  },
+  {
+    "version": "20260314130923",
+    "name": "create_ai_endpoints_and_models",
+    "statements": [
+      "\n-- AI Endpoint 表\nCREATE TABLE IF NOT EXISTS ai_endpoints (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  name text NOT NULL,\n  base_url text NOT NULL,\n  api_key text NOT NULL,\n  is_active boolean NOT NULL DEFAULT true,\n  created_at timestamptz DEFAULT now()\n);\n\n-- AI Model 表（取代 gemini_models）\nCREATE TABLE IF NOT EXISTS ai_models (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  endpoint_id uuid REFERENCES ai_endpoints(id) ON DELETE CASCADE,\n  model_id text NOT NULL,\n  display_name text NOT NULL,\n  is_active boolean NOT NULL DEFAULT true,\n  created_at timestamptz DEFAULT now()\n);\n\n-- 初始資料：Google Gemini endpoint\nINSERT INTO ai_endpoints (name, base_url, api_key) VALUES\n  ('Google Gemini', 'https://generativelanguage.googleapis.com', 'placeholder')\nON CONFLICT DO NOTHING;\n\n-- users 表新增 ai_model_id 欄位\nALTER TABLE users ADD COLUMN IF NOT EXISTS ai_model_id uuid REFERENCES ai_models(id);\n"
+    ]
+  },
+  {
+    "version": "20260315000451",
+    "name": "add_storage_path_to_pending_contacts",
+    "statements": [
+      "ALTER TABLE pending_contacts ADD COLUMN storage_path TEXT;"
+    ]
+  },
+  {
+    "version": "20260315000457",
+    "name": "enable_pg_cron_and_cleanup_job",
+    "statements": [
+      "\nCREATE EXTENSION IF NOT EXISTS pg_cron;\n\nSELECT cron.schedule(\n  'cleanup-orphan-cards',\n  '0 3 * * *',\n  $$\n  DELETE FROM storage.objects\n  WHERE bucket_id = 'cards'\n    AND created_at < NOW() - INTERVAL '24 hours'\n    AND name NOT IN (\n      SELECT substring(card_img_url from '.*/public/cards/(.+)$')\n      FROM contacts WHERE card_img_url IS NOT NULL\n      UNION\n      SELECT substring(card_img_back_url from '.*/public/cards/(.+)$')\n      FROM contacts WHERE card_img_back_url IS NOT NULL\n      UNION\n      SELECT storage_path FROM pending_contacts WHERE storage_path IS NOT NULL\n    );\n  $$\n);\n"
+    ]
+  },
+  {
+    "version": "20260315053629",
+    "name": "v0_7_contacts_expansion_and_contact_cards",
+    "statements": [
+      "\n-- contacts 新增欄位\nALTER TABLE contacts ADD COLUMN IF NOT EXISTS name_en text;\nALTER TABLE contacts ADD COLUMN IF NOT EXISTS name_local text;\nALTER TABLE contacts ADD COLUMN IF NOT EXISTS company_en text;\nALTER TABLE contacts ADD COLUMN IF NOT EXISTS company_local text;\nALTER TABLE contacts ADD COLUMN IF NOT EXISTS address text;\nALTER TABLE contacts ADD COLUMN IF NOT EXISTS website text;\nALTER TABLE contacts ADD COLUMN IF NOT EXISTS notes text;\nALTER TABLE contacts ADD COLUMN IF NOT EXISTS second_email text;\nALTER TABLE contacts ADD COLUMN IF NOT EXISTS second_phone text;\nALTER TABLE contacts ADD COLUMN IF NOT EXISTS linkedin_url text;\nALTER TABLE contacts ADD COLUMN IF NOT EXISTS facebook_url text;\n\n-- contact_cards 子表\nCREATE TABLE IF NOT EXISTS contact_cards (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  contact_id uuid REFERENCES contacts(id) ON DELETE CASCADE,\n  card_img_url text,\n  card_img_back_url text,\n  label text,\n  created_at timestamptz DEFAULT now()\n);\n\n-- 遷移現有名片資料到 contact_cards\nINSERT INTO contact_cards (contact_id, card_img_url, card_img_back_url, label)\nSELECT id, card_img_url, card_img_back_url, '名片'\nFROM contacts\nWHERE card_img_url IS NOT NULL\nON CONFLICT DO NOTHING;\n\n-- bot_sessions 新增 last_contact_id\nALTER TABLE bot_sessions ADD COLUMN IF NOT EXISTS last_contact_id uuid REFERENCES contacts(id);\n"
+    ]
+  },
+  {
+    "version": "20260315072913",
+    "name": "add_locale_to_users",
+    "statements": [
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS locale TEXT NOT NULL DEFAULT 'zh-TW';"
+    ]
+  },
+  {
+    "version": "20260315115013",
+    "name": "v09_report_schedules_gmail_oauth",
+    "statements": [
+      "\n-- report_schedules: scheduled report configurations\nCREATE TABLE report_schedules (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  name TEXT NOT NULL,\n  frequency TEXT NOT NULL CHECK (frequency IN ('weekly', 'monthly', 'custom')),\n  cron_expr TEXT NOT NULL,\n  date_range_days INTEGER NOT NULL DEFAULT 7,\n  recipients TEXT[] NOT NULL DEFAULT '{}',\n  is_active BOOLEAN NOT NULL DEFAULT true,\n  created_by TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,\n  created_at TIMESTAMPTZ NOT NULL DEFAULT now()\n);\n\nALTER TABLE report_schedules ENABLE ROW LEVEL SECURITY;\n\nCREATE POLICY \"super_admin only\" ON report_schedules\n  USING (\n    EXISTS (\n      SELECT 1 FROM users\n      WHERE users.email = auth.email()\n        AND users.role = 'super_admin'\n    )\n  );\n\n-- gmail_oauth: stores OAuth tokens for sending scheduled reports\nCREATE TABLE gmail_oauth (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  email TEXT NOT NULL,\n  access_token TEXT NOT NULL,\n  refresh_token TEXT NOT NULL,\n  expiry TIMESTAMPTZ NOT NULL,\n  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),\n  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()\n);\n\nALTER TABLE gmail_oauth ENABLE ROW LEVEL SECURITY;\n\nCREATE POLICY \"super_admin only\" ON gmail_oauth\n  USING (\n    EXISTS (\n      SELECT 1 FROM users\n      WHERE users.email = auth.email()\n        AND users.role = 'super_admin'\n    )\n  );\n\n-- auto-update updated_at\nCREATE OR REPLACE FUNCTION update_gmail_oauth_updated_at()\nRETURNS TRIGGER AS $$\nBEGIN\n  NEW.updated_at = now();\n  RETURN NEW;\nEND;\n$$ LANGUAGE plpgsql;\n\nCREATE TRIGGER gmail_oauth_updated_at\n  BEFORE UPDATE ON gmail_oauth\n  FOR EACH ROW EXECUTE FUNCTION update_gmail_oauth_updated_at();\n"
+    ]
+  },
+  {
+    "version": "20260315115756",
+    "name": "v10_tasks_assistants",
+    "statements": [
+      "\n-- tasks\nCREATE TABLE tasks (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  title TEXT NOT NULL,\n  description TEXT,\n  due_at TIMESTAMPTZ,\n  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'done', 'postponed', 'cancelled')),\n  created_by TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,\n  completed_by TEXT REFERENCES users(email) ON DELETE SET NULL,\n  completed_at TIMESTAMPTZ,\n  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),\n  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()\n);\n\nCREATE INDEX idx_tasks_created_by ON tasks(created_by);\nCREATE INDEX idx_tasks_status ON tasks(status);\nCREATE INDEX idx_tasks_due_at ON tasks(due_at);\n\nALTER TABLE tasks ENABLE ROW LEVEL SECURITY;\n\n-- task_assignees\nCREATE TABLE task_assignees (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,\n  assignee_email TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,\n  notified_telegram BOOLEAN NOT NULL DEFAULT false,\n  notified_teams BOOLEAN NOT NULL DEFAULT false,\n  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),\n  UNIQUE(task_id, assignee_email)\n);\n\nCREATE INDEX idx_task_assignees_task_id ON task_assignees(task_id);\nCREATE INDEX idx_task_assignees_assignee ON task_assignees(assignee_email);\n\nALTER TABLE task_assignees ENABLE ROW LEVEL SECURITY;\n\n-- user_assistants\nCREATE TABLE user_assistants (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  manager_email TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,\n  assistant_email TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,\n  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),\n  UNIQUE(manager_email, assistant_email)\n);\n\nCREATE INDEX idx_user_assistants_manager ON user_assistants(manager_email);\nCREATE INDEX idx_user_assistants_assistant ON user_assistants(assistant_email);\n\nALTER TABLE user_assistants ENABLE ROW LEVEL SECURITY;\n\n-- RLS: tasks — can see tasks you created, are assigned to, or manage as assistant\nCREATE POLICY \"tasks_access\" ON tasks\n  USING (\n    created_by = auth.email()\n    OR EXISTS (\n      SELECT 1 FROM task_assignees\n      WHERE task_assignees.task_id = tasks.id\n        AND task_assignees.assignee_email = auth.email()\n    )\n    OR EXISTS (\n      SELECT 1 FROM user_assistants\n      WHERE user_assistants.assistant_email = auth.email()\n        AND (\n          tasks.created_by = user_assistants.manager_email\n          OR EXISTS (\n            SELECT 1 FROM task_assignees ta2\n            WHERE ta2.task_id = tasks.id\n              AND ta2.assignee_email = user_assistants.manager_email\n          )\n        )\n    )\n  );\n\n-- RLS: task_assignees\nCREATE POLICY \"task_assignees_access\" ON task_assignees\n  USING (\n    assignee_email = auth.email()\n    OR EXISTS (\n      SELECT 1 FROM tasks\n      WHERE tasks.id = task_assignees.task_id\n        AND tasks.created_by = auth.email()\n    )\n    OR EXISTS (\n      SELECT 1 FROM user_assistants\n      WHERE user_assistants.assistant_email = auth.email()\n        AND (\n          task_assignees.assignee_email = user_assistants.manager_email\n          OR EXISTS (\n            SELECT 1 FROM tasks t2\n            WHERE t2.id = task_assignees.task_id\n              AND t2.created_by = user_assistants.manager_email\n          )\n        )\n    )\n  );\n\n-- RLS: user_assistants\nCREATE POLICY \"user_assistants_access\" ON user_assistants\n  USING (\n    manager_email = auth.email()\n    OR assistant_email = auth.email()\n  );\n\n-- auto-update updated_at on tasks\nCREATE OR REPLACE FUNCTION update_tasks_updated_at()\nRETURNS TRIGGER AS $$\nBEGIN\n  NEW.updated_at = now();\n  RETURN NEW;\nEND;\n$$ LANGUAGE plpgsql;\n\nCREATE TRIGGER tasks_updated_at\n  BEFORE UPDATE ON tasks\n  FOR EACH ROW EXECUTE FUNCTION update_tasks_updated_at();\n"
+    ]
+  },
+  {
+    "version": "20260316112324",
+    "name": "v1_2_countries_and_contact_country_code",
+    "statements": [
+      "\n-- 國家資料表\ncreate table if not exists countries (\n  id uuid primary key default gen_random_uuid(),\n  name_zh text not null,\n  name_en text not null,\n  name_ja text not null,\n  emoji text,\n  code text unique not null,\n  is_active boolean not null default true,\n  created_at timestamptz default now()\n);\n\n-- 初始國家資料\ninsert into countries (name_zh, name_en, name_ja, emoji, code) values\n  ('台灣', 'Taiwan', '台湾', '🇹🇼', 'TW'),\n  ('日本', 'Japan', '日本', '🇯🇵', 'JP'),\n  ('美國', 'United States', 'アメリカ', '🇺🇸', 'US'),\n  ('韓國', 'South Korea', '韓国', '🇰🇷', 'KR'),\n  ('新加坡', 'Singapore', 'シンガポール', '🇸🇬', 'SG'),\n  ('印度', 'India', 'インド', '🇮🇳', 'IN')\non conflict (code) do nothing;\n\n-- contacts 新增 country_code\nalter table contacts add column if not exists country_code text references countries(code);\n"
+    ]
+  },
+  {
+    "version": "20260316131753",
+    "name": "add_country_code_to_contacts",
+    "statements": [
+      "ALTER TABLE contacts ADD COLUMN IF NOT EXISTS country_code text REFERENCES countries(code) ON UPDATE CASCADE ON DELETE SET NULL;"
+    ]
+  },
+  {
+    "version": "20260316135327",
+    "name": "add_teams_fields_to_users",
+    "statements": [
+      "ALTER TABLE users\n  ADD COLUMN IF NOT EXISTS teams_user_id text,\n  ADD COLUMN IF NOT EXISTS teams_conversation_id text,\n  ADD COLUMN IF NOT EXISTS teams_service_url text;"
+    ]
+  },
+  {
+    "version": "20260317114706",
+    "name": "v1_3_docs_prompts_report_owner",
+    "statements": [
+      "\n-- 說明書內容\ncreate table if not exists docs_content (\n  id uuid primary key default gen_random_uuid(),\n  locale text not null,\n  section text not null,\n  content text,\n  generated_at timestamptz default now(),\n  unique (locale, section)\n);\n\n-- 組織預設 prompt\ncreate table if not exists prompts (\n  id uuid primary key default gen_random_uuid(),\n  key text unique not null,\n  content text not null,\n  updated_by uuid references users(id),\n  updated_at timestamptz default now()\n);\n\n-- 個人 prompt 覆蓋\ncreate table if not exists user_prompts (\n  id uuid primary key default gen_random_uuid(),\n  user_id uuid references users(id) on delete cascade,\n  key text not null,\n  content text not null,\n  updated_at timestamptz default now(),\n  unique (user_id, key)\n);\n\n-- report_schedules 新增 owner_id\nalter table report_schedules add column if not exists owner_id uuid references users(id);\nupdate report_schedules set owner_id = created_by::uuid where owner_id is null and created_by is not null;\n"
+    ]
+  },
+  {
+    "version": "20260317130250",
+    "name": "add_telegram_dedup_and_task_contact",
+    "statements": [
+      "\n-- Telegram webhook deduplication table\nCREATE TABLE IF NOT EXISTS telegram_dedup (\n  update_id BIGINT PRIMARY KEY,\n  processed_at TIMESTAMPTZ DEFAULT now() NOT NULL\n);\n-- Auto-cleanup records older than 48 hours to keep table small\nCREATE INDEX IF NOT EXISTS telegram_dedup_processed_at_idx ON telegram_dedup (processed_at);\n\n-- Add contact reference to tasks\nALTER TABLE tasks ADD COLUMN IF NOT EXISTS contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL;\nCREATE INDEX IF NOT EXISTS tasks_contact_id_idx ON tasks (contact_id);\n"
+    ]
+  },
+  {
+    "version": "20260318005804",
+    "name": "add_task_number",
+    "statements": [
+      "\nALTER TABLE tasks ADD COLUMN IF NOT EXISTS task_number serial;\n"
+    ]
+  },
+  {
+    "version": "20260318122502",
+    "name": "create_failed_scans",
+    "statements": [
+      "\nCREATE TABLE IF NOT EXISTS failed_scans (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  user_id UUID NOT NULL REFERENCES users(id),\n  storage_path TEXT NOT NULL,\n  card_img_url TEXT NOT NULL,\n  created_at TIMESTAMPTZ DEFAULT now(),\n  reviewed BOOLEAN DEFAULT false,\n  reviewed_by TEXT,\n  reviewed_at TIMESTAMPTZ,\n  note TEXT\n);\n\nALTER TABLE failed_scans ENABLE ROW LEVEL SECURITY;\n\nCREATE POLICY \"super_admin_all\" ON failed_scans\n  FOR ALL USING (\n    EXISTS (SELECT 1 FROM users WHERE email = auth.jwt()->>'email' AND role = 'super_admin')\n  );\n"
+    ]
+  },
+  {
+    "version": "20260319072253",
+    "name": "create_meeting_drafts",
+    "statements": [
+      "\nCREATE TABLE meeting_drafts (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  created_by uuid REFERENCES users(id) ON DELETE CASCADE,\n  title text NOT NULL,\n  start_at timestamptz NOT NULL,\n  duration_minutes integer NOT NULL DEFAULT 60,\n  attendee_ids uuid[] DEFAULT '{}',\n  location text,\n  raw_text text,\n  created_at timestamptz DEFAULT now()\n);\nALTER TABLE meeting_drafts ENABLE ROW LEVEL SECURITY;\nCREATE POLICY \"service_role_full_access\" ON meeting_drafts TO service_role USING (true) WITH CHECK (true);\n"
+    ]
+  },
+  {
+    "version": "20260319073223",
+    "name": "add_provider_refresh_token",
+    "statements": [
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS provider_refresh_token text;"
+    ]
+  },
+  {
+    "version": "20260319081151",
+    "name": "add_storage_path_to_contact_cards",
+    "statements": [
+      "ALTER TABLE contact_cards ADD COLUMN IF NOT EXISTS storage_path text;"
+    ]
+  },
+  {
+    "version": "20260319090207",
+    "name": "add_email_fields_to_interaction_logs",
+    "statements": [
+      "ALTER TABLE interaction_logs\n  ADD COLUMN IF NOT EXISTS email_subject text,\n  ADD COLUMN IF NOT EXISTS email_body text,\n  ADD COLUMN IF NOT EXISTS email_attachments text[];"
+    ]
+  },
+  {
+    "version": "20260319115059",
+    "name": "newsletter_tables",
+    "statements": [
+      "\n-- Newsletter campaign\ncreate table if not exists newsletter_campaigns (\n  id uuid primary key default gen_random_uuid(),\n  title text not null,\n  subject text not null,\n  preview_text text,\n  content_html text,\n  content_json jsonb,\n  tag_ids uuid[] default '{}',\n  extra_contact_ids uuid[] default '{}',\n  status text not null default 'draft',\n  scheduled_at timestamptz,\n  daily_limit int not null default 500,\n  send_hour int not null default 9,\n  total_recipients int default 0,\n  sent_count int default 0,\n  created_by uuid references users(id),\n  created_at timestamptz default now(),\n  sent_at timestamptz\n);\n\n-- Newsletter recipients（快照）\ncreate table if not exists newsletter_recipients (\n  id uuid primary key default gen_random_uuid(),\n  campaign_id uuid references newsletter_campaigns(id) on delete cascade,\n  contact_id uuid references contacts(id),\n  email text not null,\n  status text not null default 'pending',\n  sent_at timestamptz,\n  opened_at timestamptz,\n  clicked_at timestamptz,\n  sendgrid_message_id text\n);\n\n-- 退訂名單\ncreate table if not exists newsletter_unsubscribes (\n  id uuid primary key default gen_random_uuid(),\n  email text unique not null,\n  contact_id uuid references contacts(id),\n  reason text,\n  unsubscribed_at timestamptz default now(),\n  source text not null default 'webhook'\n);\n\n-- 黑名單\ncreate table if not exists newsletter_blacklist (\n  id uuid primary key default gen_random_uuid(),\n  email text unique not null,\n  contact_id uuid references contacts(id),\n  reason text,\n  created_by uuid references users(id),\n  created_at timestamptz default now()\n);\n\n-- RLS\nalter table newsletter_campaigns enable row level security;\nalter table newsletter_recipients enable row level security;\nalter table newsletter_unsubscribes enable row level security;\nalter table newsletter_blacklist enable row level security;\n\n-- newsletter_campaigns: super_admin 全權操作\ncreate policy \"super_admin full access on newsletter_campaigns\"\n  on newsletter_campaigns for all\n  using (exists (select 1 from users where id = auth.uid() and role = 'super_admin'))\n  with check (exists (select 1 from users where id = auth.uid() and role = 'super_admin'));\n\n-- newsletter_recipients: super_admin 全權操作\ncreate policy \"super_admin full access on newsletter_recipients\"\n  on newsletter_recipients for all\n  using (exists (select 1 from users where id = auth.uid() and role = 'super_admin'))\n  with check (exists (select 1 from users where id = auth.uid() and role = 'super_admin'));\n\n-- newsletter_unsubscribes: super_admin 全權操作\ncreate policy \"super_admin full access on newsletter_unsubscribes\"\n  on newsletter_unsubscribes for all\n  using (exists (select 1 from users where id = auth.uid() and role = 'super_admin'))\n  with check (exists (select 1 from users where id = auth.uid() and role = 'super_admin'));\n\n-- newsletter_blacklist: super_admin 全權操作\ncreate policy \"super_admin full access on newsletter_blacklist\"\n  on newsletter_blacklist for all\n  using (exists (select 1 from users where id = auth.uid() and role = 'super_admin'))\n  with check (exists (select 1 from users where id = auth.uid() and role = 'super_admin'));\n"
+    ]
+  },
+  {
+    "version": "20260319143547",
+    "name": "contacts_add_met_fields",
+    "statements": [
+      "\nalter table contacts add column if not exists met_at text;\nalter table contacts add column if not exists met_date date;\nalter table contacts add column if not exists referred_by text;\n"
+    ]
+  },
+  {
+    "version": "20260321062839",
+    "name": "v1_7_duplicate_pairs_camcard_pending_contacts_source",
+    "statements": [
+      "-- Enable pg_trgm for similarity search\ncreate extension if not exists pg_trgm;\n\n-- 重複配對記錄表\ncreate table if not exists duplicate_pairs (\n  id uuid primary key default gen_random_uuid(),\n  contact_id_a uuid references contacts(id) on delete cascade,\n  contact_id_b uuid references contacts(id) on delete cascade,\n  match_type text not null,\n  similarity_score float,\n  is_ignored boolean not null default false,\n  scanned_at timestamptz default now()\n);\n\n-- RLS for duplicate_pairs\nalter table duplicate_pairs enable row level security;\ncreate policy \"super_admin full access to duplicate_pairs\"\n  on duplicate_pairs for all\n  using (\n    exists (select 1 from users where id = auth.uid() and role = 'super_admin')\n  );\n\n-- contacts 新增 source 欄位\nalter table contacts add column if not exists source text not null default 'web';\n\n-- contacts 新增 imported_at 欄位（名片王匯入用）\nalter table contacts add column if not exists imported_at timestamptz;\n\n-- 名片王暫存表\ncreate table if not exists camcard_pending (\n  id uuid primary key default gen_random_uuid(),\n  image_filename text,\n  card_img_url text,\n  storage_path text,\n  ocr_data jsonb,\n  status text not null default 'pending',\n  duplicate_contact_id uuid references contacts(id),\n  match_type text,\n  confirmed_by uuid references users(id),\n  confirmed_at timestamptz,\n  imported_at timestamptz default now(),\n  created_at timestamptz default now()\n);\n\n-- RLS for camcard_pending\nalter table camcard_pending enable row level security;\ncreate policy \"super_admin full access to camcard_pending\"\n  on camcard_pending for all\n  using (\n    exists (select 1 from users where id = auth.uid() and role = 'super_admin')\n  );"
+    ]
+  },
+  {
+    "version": "20260321065842",
+    "name": "v1_7_duplicate_scan_functions",
+    "statements": [
+      "-- Find contacts with identical non-null email\ncreate or replace function find_email_duplicates()\nreturns table(id_a uuid, id_b uuid)\nlanguage sql security definer as $$\n  select a.id as id_a, b.id as id_b\n  from contacts a\n  join contacts b on a.email = b.email and a.id < b.id\n  where a.email is not null and a.email <> '';\n$$;\n\n-- Find contacts with similar name (pg_trgm >= 0.6), excluding exact-email pairs\ncreate or replace function find_name_duplicates()\nreturns table(id_a uuid, id_b uuid, score float)\nlanguage sql security definer as $$\n  select a.id as id_a, b.id as id_b,\n         greatest(\n           similarity(coalesce(a.name,''), coalesce(b.name,'')),\n           similarity(coalesce(a.name_en,''), coalesce(b.name_en,''))\n         ) as score\n  from contacts a\n  join contacts b on a.id < b.id\n  where\n    greatest(\n      similarity(coalesce(a.name,''), coalesce(b.name,'')),\n      similarity(coalesce(a.name_en,''), coalesce(b.name_en,''))\n    ) >= 0.6\n    -- exclude exact email pairs (already handled)\n    and not (a.email is not null and a.email <> '' and a.email = b.email)\n    -- exclude pairs where both names are empty\n    and (a.name is not null or a.name_en is not null)\n    and (b.name is not null or b.name_en is not null);\n$$;"
+    ]
+  },
+  {
+    "version": "20260321071822",
+    "name": "v1_7_find_similar_contact_by_name",
+    "statements": [
+      "-- Used by camcard import script to detect similar-name duplicates\ncreate or replace function find_similar_contact_by_name(search_name text)\nreturns table(id uuid)\nlanguage sql security definer as $$\n  select id from contacts\n  where greatest(\n    similarity(coalesce(name,''), search_name),\n    similarity(coalesce(name_en,''), search_name)\n  ) >= 0.6\n  order by greatest(\n    similarity(coalesce(name,''), search_name),\n    similarity(coalesce(name_en,''), search_name)\n  ) desc\n  limit 1;\n$$;"
+    ]
+  },
+  {
+    "version": "20260321083818",
+    "name": "contacts_extra_fields_camcard_back",
+    "statements": [
+      "\n-- Add extra fields to contacts\nALTER TABLE contacts\n  ADD COLUMN IF NOT EXISTS address_en TEXT,\n  ADD COLUMN IF NOT EXISTS fax TEXT,\n  ADD COLUMN IF NOT EXISTS department TEXT,\n  ADD COLUMN IF NOT EXISTS extra_data JSONB;\n\n-- Add back image fields to camcard_pending\nALTER TABLE camcard_pending\n  ADD COLUMN IF NOT EXISTS back_img_url TEXT,\n  ADD COLUMN IF NOT EXISTS back_storage_path TEXT;\n"
+    ]
+  },
+  {
+    "version": "20260323144700",
+    "name": "fix_contact_fk_delete_rules",
+    "statements": [
+      "\n-- bot_sessions.last_contact_id: SET NULL (保留 session，清空 last_contact)\nALTER TABLE bot_sessions DROP CONSTRAINT IF EXISTS bot_sessions_last_contact_id_fkey;\nALTER TABLE bot_sessions\n  ADD CONSTRAINT bot_sessions_last_contact_id_fkey\n  FOREIGN KEY (last_contact_id) REFERENCES contacts(id) ON DELETE SET NULL;\n\n-- camcard_pending.duplicate_contact_id: SET NULL (保留 pending 卡，清空重複標記)\nALTER TABLE camcard_pending DROP CONSTRAINT IF EXISTS camcard_pending_duplicate_contact_id_fkey;\nALTER TABLE camcard_pending\n  ADD CONSTRAINT camcard_pending_duplicate_contact_id_fkey\n  FOREIGN KEY (duplicate_contact_id) REFERENCES contacts(id) ON DELETE SET NULL;\n\n-- newsletter_blacklist.contact_id: CASCADE (聯絡人刪除，黑名單一併清除)\nALTER TABLE newsletter_blacklist DROP CONSTRAINT IF EXISTS newsletter_blacklist_contact_id_fkey;\nALTER TABLE newsletter_blacklist\n  ADD CONSTRAINT newsletter_blacklist_contact_id_fkey\n  FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE;\n\n-- newsletter_recipients.contact_id: CASCADE (聯絡人刪除，寄件紀錄一併清除)\nALTER TABLE newsletter_recipients DROP CONSTRAINT IF EXISTS newsletter_recipients_contact_id_fkey;\nALTER TABLE newsletter_recipients\n  ADD CONSTRAINT newsletter_recipients_contact_id_fkey\n  FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE;\n\n-- newsletter_unsubscribes.contact_id: CASCADE (聯絡人刪除，退訂紀錄一併清除)\nALTER TABLE newsletter_unsubscribes DROP CONSTRAINT IF EXISTS newsletter_unsubscribes_contact_id_fkey;\nALTER TABLE newsletter_unsubscribes\n  ADD CONSTRAINT newsletter_unsubscribes_contact_id_fkey\n  FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE;\n"
+    ]
+  },
+  {
+    "version": "20260325144500",
+    "name": "add_note_to_contact_photos",
+    "statements": [
+      "ALTER TABLE contact_photos ADD COLUMN IF NOT EXISTS note text;"
+    ]
+  },
+  {
+    "version": "20260329053832",
+    "name": "add_language_to_contacts",
+    "statements": [
+      "ALTER TABLE contacts ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'english' CHECK (language IN ('chinese', 'english', 'japanese'));"
+    ]
+  },
+  {
+    "version": "20260329054302",
+    "name": "add_hospital_department_medical_departments",
+    "statements": [
+      "ALTER TABLE contacts\n  ADD COLUMN IF NOT EXISTS hospital TEXT,\n  ADD COLUMN IF NOT EXISTS department TEXT;\n\nCREATE TABLE IF NOT EXISTS medical_departments (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  name TEXT NOT NULL UNIQUE,\n  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()\n);"
+    ]
+  },
+  {
+    "version": "20260329055448",
+    "name": "add_meeting_time_location_to_interaction_logs",
+    "statements": [
+      "ALTER TABLE interaction_logs\n  ADD COLUMN IF NOT EXISTS meeting_time TIME,\n  ADD COLUMN IF NOT EXISTS meeting_location TEXT;"
+    ]
+  },
+  {
+    "version": "20260329062137",
+    "name": "add_soft_delete_to_contacts",
+    "statements": [
+      "ALTER TABLE contacts\n  ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ,\n  ADD COLUMN IF NOT EXISTS deleted_by UUID REFERENCES users(id);"
+    ]
+  },
+  {
+    "version": "20260329110047",
+    "name": "add_system_settings",
+    "statements": [
+      "\nCREATE TABLE IF NOT EXISTS system_settings (\n  key        TEXT PRIMARY KEY,\n  value      TEXT NOT NULL,\n  updated_at TIMESTAMPTZ DEFAULT NOW(),\n  updated_by UUID REFERENCES users(id)\n);\n\nINSERT INTO system_settings (key, value) VALUES ('maintenance_mode', 'false')\nON CONFLICT (key) DO NOTHING;\n\nINSERT INTO system_settings (key, value) VALUES ('apollo_api_key', '')\nON CONFLICT (key) DO NOTHING;\n"
+    ]
+  },
+  {
+    "version": "20260330104201",
+    "name": "v2_2_hunter_fields",
+    "statements": [
+      "\nALTER TABLE contacts\n  ADD COLUMN IF NOT EXISTS hunter_searched_at timestamptz DEFAULT NULL;\n\nINSERT INTO system_settings (key, value)\nVALUES ('hunter_api_key', '')\nON CONFLICT (key) DO NOTHING;\n"
+    ]
+  },
+  {
+    "version": "20260409094059",
+    "name": "feedback_storage_upload_policy",
+    "statements": [
+      "\nCREATE POLICY \"auth users can upload own feedback screenshots\"\nON storage.objects FOR INSERT TO authenticated\nWITH CHECK (\n  bucket_id = 'feedback' AND\n  (storage.foldername(name))[1] = auth.uid()::text\n);\n"
+    ]
+  },
+  {
+    "version": "20260409103533",
+    "name": "get_interaction_logs_by_tags",
+    "statements": [
+      "\nCREATE OR REPLACE FUNCTION get_interaction_logs_by_tags(\n  p_tag_ids UUID[],\n  p_date_from TIMESTAMPTZ,\n  p_date_to TIMESTAMPTZ,\n  p_created_by UUID DEFAULT NULL\n)\nRETURNS TABLE (\n  contact_name TEXT,\n  contact_company TEXT,\n  type TEXT,\n  content TEXT,\n  email_subject TEXT,\n  meeting_date DATE,\n  meeting_time TIME,\n  meeting_location TEXT\n) AS $$\nBEGIN\n  RETURN QUERY\n  SELECT\n    c.name AS contact_name,\n    c.company AS contact_company,\n    il.type,\n    il.content,\n    il.email_subject,\n    il.meeting_date,\n    il.meeting_time::TIME,\n    il.meeting_location\n  FROM interaction_logs il\n  JOIN contacts c ON c.id = il.contact_id\n  WHERE il.type != 'system'\n    AND (il.content IS NULL OR il.content NOT ILIKE '%透過 Telegram Bot 新增名片%')\n    AND il.created_at >= p_date_from\n    AND il.created_at <= p_date_to\n    AND (\n      p_tag_ids IS NULL\n      OR cardinality(p_tag_ids) = 0\n      OR il.contact_id IN (\n        SELECT DISTINCT ct.contact_id FROM contact_tags ct WHERE ct.tag_id = ANY(p_tag_ids)\n      )\n    )\n    AND (p_created_by IS NULL OR il.created_by = p_created_by)\n  ORDER BY il.created_at DESC;\nEND;\n$$ LANGUAGE plpgsql SECURITY DEFINER;\n"
+    ]
+  },
+  {
+    "version": "20260409104558",
+    "name": "get_users_mfa_status",
+    "statements": [
+      "\nCREATE OR REPLACE FUNCTION get_users_mfa_status()\nRETURNS TABLE (email TEXT, has_mfa BOOLEAN)\nLANGUAGE sql\nSECURITY DEFINER\nAS $$\n  SELECT\n    u.email,\n    EXISTS (\n      SELECT 1 FROM auth.mfa_factors f\n      WHERE f.user_id = u.id AND f.status = 'verified'\n    ) AS has_mfa\n  FROM auth.users u\n  WHERE u.email IS NOT NULL;\n$$;\n"
+    ]
+  },
+  {
+    "version": "20260409104612",
+    "name": "get_auth_user_id_by_public_id",
+    "statements": [
+      "\nCREATE OR REPLACE FUNCTION get_auth_user_id_by_email(p_email TEXT)\nRETURNS UUID\nLANGUAGE sql\nSECURITY DEFINER\nAS $$\n  SELECT id FROM auth.users WHERE email = p_email LIMIT 1;\n$$;\n"
+    ]
+  },
+  {
+    "version": "20260409105258",
+    "name": "get_interaction_logs_by_tags_v2",
+    "statements": [
+      "\nCREATE OR REPLACE FUNCTION get_interaction_logs_by_tags(\n  p_tag_ids UUID[],\n  p_date_from TIMESTAMPTZ,\n  p_date_to TIMESTAMPTZ,\n  p_created_by UUID DEFAULT NULL,\n  p_country_codes TEXT[] DEFAULT NULL,\n  p_types TEXT[] DEFAULT NULL\n)\nRETURNS TABLE (\n  contact_name TEXT,\n  contact_company TEXT,\n  type TEXT,\n  content TEXT,\n  email_subject TEXT,\n  meeting_date DATE,\n  meeting_time TIME,\n  meeting_location TEXT\n) AS $$\nBEGIN\n  RETURN QUERY\n  SELECT\n    c.name AS contact_name,\n    c.company AS contact_company,\n    il.type,\n    il.content,\n    il.email_subject,\n    il.meeting_date,\n    il.meeting_time::TIME,\n    il.meeting_location\n  FROM interaction_logs il\n  JOIN contacts c ON c.id = il.contact_id\n  WHERE il.type != 'system'\n    AND (il.content IS NULL OR il.content NOT ILIKE '%透過 Telegram Bot 新增名片%')\n    AND il.created_at >= p_date_from\n    AND il.created_at <= p_date_to\n    AND (p_created_by IS NULL OR il.created_by = p_created_by)\n    AND (\n      p_tag_ids IS NULL OR cardinality(p_tag_ids) = 0\n      OR il.contact_id IN (\n        SELECT DISTINCT ct.contact_id FROM contact_tags ct WHERE ct.tag_id = ANY(p_tag_ids)\n      )\n    )\n    AND (\n      p_country_codes IS NULL OR cardinality(p_country_codes) = 0\n      OR c.country_code = ANY(p_country_codes)\n    )\n    AND (\n      p_types IS NULL OR cardinality(p_types) = 0\n      OR il.type = ANY(p_types)\n    )\n  ORDER BY il.created_at DESC;\nEND;\n$$ LANGUAGE plpgsql SECURITY DEFINER;\n"
+    ]
+  },
+  {
+    "version": "20260409110539",
+    "name": "get_interaction_logs_by_tags_v3_creator_drop_recreate",
+    "statements": [
+      "\nDROP FUNCTION IF EXISTS get_interaction_logs_by_tags(uuid[], timestamptz, timestamptz, uuid, text[], text[]);\n\nCREATE FUNCTION get_interaction_logs_by_tags(\n  p_tag_ids UUID[],\n  p_date_from TIMESTAMPTZ,\n  p_date_to TIMESTAMPTZ,\n  p_created_by UUID DEFAULT NULL,\n  p_country_codes TEXT[] DEFAULT NULL,\n  p_types TEXT[] DEFAULT NULL\n)\nRETURNS TABLE (\n  contact_name TEXT,\n  contact_company TEXT,\n  type TEXT,\n  content TEXT,\n  email_subject TEXT,\n  meeting_date DATE,\n  meeting_time TIME,\n  meeting_location TEXT,\n  creator_name TEXT\n) AS $$\nBEGIN\n  RETURN QUERY\n  SELECT\n    c.name AS contact_name,\n    c.company AS contact_company,\n    il.type,\n    il.content,\n    il.email_subject,\n    il.meeting_date,\n    il.meeting_time::TIME,\n    il.meeting_location,\n    u.display_name AS creator_name\n  FROM interaction_logs il\n  JOIN contacts c ON c.id = il.contact_id\n  LEFT JOIN users u ON u.id = il.created_by\n  WHERE il.type != 'system'\n    AND (il.content IS NULL OR il.content NOT ILIKE '%透過 Telegram Bot 新增名片%')\n    AND il.created_at >= p_date_from\n    AND il.created_at <= p_date_to\n    AND (p_created_by IS NULL OR il.created_by = p_created_by)\n    AND (\n      p_tag_ids IS NULL OR cardinality(p_tag_ids) = 0\n      OR il.contact_id IN (\n        SELECT DISTINCT ct.contact_id FROM contact_tags ct WHERE ct.tag_id = ANY(p_tag_ids)\n      )\n    )\n    AND (\n      p_country_codes IS NULL OR cardinality(p_country_codes) = 0\n      OR c.country_code = ANY(p_country_codes)\n    )\n    AND (\n      p_types IS NULL OR cardinality(p_types) = 0\n      OR il.type = ANY(p_types)\n    )\n  ORDER BY il.created_at DESC;\nEND;\n$$ LANGUAGE plpgsql SECURITY DEFINER;\n"
+    ]
+  },
+  {
+    "version": "20260416125752",
+    "name": "email_tracking_v1",
+    "statements": [
+      "-- 1. email_campaigns\nCREATE TABLE IF NOT EXISTS email_campaigns (\n  id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),\n  subject          TEXT        NOT NULL,\n  method           TEXT        NOT NULL,\n  sg_mode          TEXT,\n  total_recipients INTEGER     NOT NULL DEFAULT 0,\n  created_by       UUID        REFERENCES users(id) ON DELETE SET NULL,\n  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()\n);\n\n-- 2. email_events\nCREATE TABLE IF NOT EXISTS email_events (\n  id             BIGSERIAL   PRIMARY KEY,\n  campaign_id    UUID        REFERENCES email_campaigns(id) ON DELETE CASCADE,\n  contact_id     UUID        REFERENCES contacts(id) ON DELETE SET NULL,\n  email          TEXT        NOT NULL,\n  event          TEXT        NOT NULL,\n  occurred_at    TIMESTAMPTZ NOT NULL,\n  sg_message_id  TEXT,\n  ip             TEXT,\n  user_agent     TEXT,\n  url            TEXT,\n  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()\n);\n\nCREATE INDEX IF NOT EXISTS email_events_campaign_id_idx ON email_events(campaign_id);\nCREATE INDEX IF NOT EXISTS email_events_contact_id_idx  ON email_events(contact_id);\nCREATE INDEX IF NOT EXISTS email_events_event_idx       ON email_events(event);\n\n-- 3. Add campaign_id to interaction_logs\nALTER TABLE interaction_logs\n  ADD COLUMN IF NOT EXISTS campaign_id UUID REFERENCES email_campaigns(id) ON DELETE SET NULL;\n\nCREATE INDEX IF NOT EXISTS interaction_logs_campaign_id_idx ON interaction_logs(campaign_id);\n\n-- 4. RLS\nALTER TABLE email_campaigns ENABLE ROW LEVEL SECURITY;\nALTER TABLE email_events    ENABLE ROW LEVEL SECURITY;\n\nDROP POLICY IF EXISTS \"auth_read_campaigns\"   ON email_campaigns;\nDROP POLICY IF EXISTS \"service_all_campaigns\" ON email_campaigns;\nDROP POLICY IF EXISTS \"auth_read_events\"      ON email_events;\nDROP POLICY IF EXISTS \"service_all_events\"    ON email_events;\n\nCREATE POLICY \"auth_read_campaigns\"   ON email_campaigns FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"service_all_campaigns\" ON email_campaigns FOR ALL    TO service_role  USING (true) WITH CHECK (true);\nCREATE POLICY \"auth_read_events\"      ON email_events    FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"service_all_events\"    ON email_events    FOR ALL    TO service_role  USING (true) WITH CHECK (true);\n\n-- 5. RPC: aggregate stats\nCREATE OR REPLACE FUNCTION get_campaign_stats()\nRETURNS TABLE (campaign_id UUID, delivered_count BIGINT, open_count BIGINT, click_count BIGINT, bounce_count BIGINT)\nLANGUAGE SQL SECURITY DEFINER AS $$\n  SELECT\n    campaign_id,\n    COUNT(DISTINCT CASE WHEN event = 'delivered' THEN email END),\n    COUNT(DISTINCT CASE WHEN event = 'open'      THEN email END),\n    COUNT(DISTINCT CASE WHEN event = 'click'     THEN email END),\n    COUNT(DISTINCT CASE WHEN event = 'bounce'    THEN email END)\n  FROM email_events\n  WHERE campaign_id IS NOT NULL\n  GROUP BY campaign_id;\n$$;\n\n-- 6. RPC: per-recipient status\nCREATE OR REPLACE FUNCTION get_campaign_recipients(p_campaign_id UUID)\nRETURNS TABLE (\n  contact_id UUID, contact_name TEXT, contact_email TEXT, company TEXT,\n  delivered_at TIMESTAMPTZ, first_opened_at TIMESTAMPTZ, open_count BIGINT,\n  last_clicked_at TIMESTAMPTZ, bounced_at TIMESTAMPTZ\n)\nLANGUAGE SQL SECURITY DEFINER AS $$\n  SELECT\n    c.id, c.name, c.email, c.company,\n    MAX(CASE WHEN ee.event = 'delivered' THEN ee.occurred_at END),\n    MIN(CASE WHEN ee.event = 'open'      THEN ee.occurred_at END),\n    COUNT(CASE WHEN ee.event = 'open'    THEN 1 END),\n    MAX(CASE WHEN ee.event = 'click'     THEN ee.occurred_at END),\n    MAX(CASE WHEN ee.event = 'bounce'    THEN ee.occurred_at END)\n  FROM interaction_logs il\n  JOIN contacts c ON c.id = il.contact_id\n  LEFT JOIN email_events ee\n    ON ee.campaign_id = il.campaign_id AND ee.email = c.email\n  WHERE il.campaign_id = p_campaign_id AND il.type = 'email'\n  GROUP BY c.id, c.name, c.email, c.company\n  ORDER BY MIN(CASE WHEN ee.event = 'open' THEN ee.occurred_at END) ASC NULLS LAST, c.name;\n$$;"
+    ]
+  },
+  {
+    "version": "20260416141159",
+    "name": "add_email_opt_out_to_contacts",
+    "statements": [
+      "\nALTER TABLE contacts ADD COLUMN IF NOT EXISTS email_opt_out BOOLEAN NOT NULL DEFAULT FALSE;\nCREATE INDEX IF NOT EXISTS contacts_email_opt_out_idx ON contacts (email_opt_out) WHERE email_opt_out = TRUE;\n"
+    ]
+  },
+  {
+    "version": "20260418091254",
+    "name": "fix_campaign_recipients_join_by_contact_id",
+    "statements": [
+      "\nCREATE OR REPLACE FUNCTION public.get_campaign_recipients(p_campaign_id uuid)\nRETURNS TABLE(\n  contact_id uuid,\n  contact_name text,\n  contact_email text,\n  company text,\n  delivered_at timestamp with time zone,\n  first_opened_at timestamp with time zone,\n  open_count bigint,\n  last_clicked_at timestamp with time zone,\n  bounced_at timestamp with time zone\n)\nLANGUAGE sql\nSECURITY DEFINER\nAS $function$\n  SELECT\n    c.id,\n    c.name,\n    c.email,\n    c.company,\n    MAX(CASE WHEN ee.event = 'delivered' THEN ee.occurred_at END),\n    MIN(CASE WHEN ee.event = 'open'      THEN ee.occurred_at END),\n    COUNT(CASE WHEN ee.event = 'open'    THEN 1 END),\n    MAX(CASE WHEN ee.event = 'click'     THEN ee.occurred_at END),\n    MAX(CASE WHEN ee.event = 'bounce'    THEN ee.occurred_at END)\n  FROM interaction_logs il\n  JOIN contacts c ON c.id = il.contact_id\n  LEFT JOIN email_events ee\n    ON ee.campaign_id = il.campaign_id\n    AND (\n      -- Prefer joining by contact_id (set by SendGrid custom_args)\n      (ee.contact_id IS NOT NULL AND ee.contact_id = il.contact_id)\n      OR\n      -- Fallback: case-insensitive email match (for events without contact_id)\n      (ee.contact_id IS NULL AND lower(ee.email) = lower(c.email))\n    )\n  WHERE il.campaign_id = p_campaign_id\n    AND il.type = 'email'\n  GROUP BY c.id, c.name, c.email, c.company\n  ORDER BY\n    MIN(CASE WHEN ee.event = 'open' THEN ee.occurred_at END) ASC NULLS LAST,\n    c.name;\n$function$;\n"
+    ]
+  },
+  {
+    "version": "20260418092015",
+    "name": "fix_duplicate_functions_filter_deleted",
+    "statements": [
+      "\n-- Fix find_email_duplicates: exclude deleted contacts\nCREATE OR REPLACE FUNCTION public.find_email_duplicates()\nRETURNS TABLE(id_a uuid, id_b uuid)\nLANGUAGE sql\nSECURITY DEFINER\nAS $function$\n  SELECT a.id AS id_a, b.id AS id_b\n  FROM contacts a\n  JOIN contacts b ON lower(a.email) = lower(b.email) AND a.id < b.id\n  WHERE a.email IS NOT NULL AND a.email <> ''\n    AND a.deleted_at IS NULL\n    AND b.deleted_at IS NULL;\n$function$;\n\n-- Fix find_name_duplicates: exclude deleted contacts + limit to 500 most recent to avoid timeout\nCREATE OR REPLACE FUNCTION public.find_name_duplicates()\nRETURNS TABLE(id_a uuid, id_b uuid, score double precision)\nLANGUAGE sql\nSECURITY DEFINER\nAS $function$\n  WITH recent AS (\n    SELECT id, name, name_en, email\n    FROM contacts\n    WHERE deleted_at IS NULL\n    ORDER BY created_at DESC\n    LIMIT 1000\n  )\n  SELECT a.id AS id_a, b.id AS id_b,\n    greatest(\n      similarity(coalesce(a.name,''), coalesce(b.name,'')),\n      similarity(coalesce(a.name_en,''), coalesce(b.name_en,''))\n    ) AS score\n  FROM recent a\n  JOIN recent b ON a.id < b.id\n  WHERE\n    greatest(\n      similarity(coalesce(a.name,''), coalesce(b.name,'')),\n      similarity(coalesce(a.name_en,''), coalesce(b.name_en,''))\n    ) >= 0.6\n    AND NOT (a.email IS NOT NULL AND a.email <> '' AND lower(a.email) = lower(b.email))\n    AND (a.name IS NOT NULL OR a.name_en IS NOT NULL)\n    AND (b.name IS NOT NULL OR b.name_en IS NOT NULL);\n$function$;\n"
+    ]
+  },
+  {
+    "version": "20260418093935",
+    "name": "fix_duplicate_pairs_rls_allow_granted_feature",
+    "statements": [
+      "\nDROP POLICY IF EXISTS \"super_admin full access to duplicate_pairs\" ON duplicate_pairs;\n\nCREATE POLICY \"access duplicate_pairs\" ON duplicate_pairs\nFOR ALL USING (\n  EXISTS (\n    SELECT 1 FROM users\n    WHERE users.id = auth.uid()\n    AND (\n      users.role = 'super_admin'\n      OR 'duplicates' = ANY(users.granted_features)\n    )\n  )\n);\n"
+    ]
+  },
+  {
+    "version": "20260418112133",
+    "name": "fix_duplicate_pairs_rls_join_by_email",
+    "statements": [
+      "\nDROP POLICY IF EXISTS \"access duplicate_pairs\" ON duplicate_pairs;\n\nCREATE POLICY \"access duplicate_pairs\" ON duplicate_pairs\nFOR ALL USING (\n  EXISTS (\n    SELECT 1\n    FROM public.users pu\n    JOIN auth.users au ON lower(au.email) = lower(pu.email)\n    WHERE au.id = auth.uid()\n    AND (\n      pu.role = 'super_admin'\n      OR 'duplicates' = ANY(pu.granted_features)\n    )\n  )\n);\n"
+    ]
+  },
+  {
+    "version": "20260418120817",
+    "name": "fix_duplicate_pairs_rls_security_definer",
+    "statements": [
+      "\n-- Helper function that runs as postgres (bypasses table-level permissions)\nCREATE OR REPLACE FUNCTION public.can_access_duplicate_pairs()\nRETURNS boolean\nLANGUAGE sql\nSECURITY DEFINER\nSET search_path = public\nSTABLE\nAS $$\n  SELECT EXISTS (\n    SELECT 1\n    FROM public.users pu\n    JOIN auth.users au ON lower(au.email) = lower(pu.email)\n    WHERE au.id = auth.uid()\n    AND (\n      pu.role = 'super_admin'\n      OR 'duplicates' = ANY(pu.granted_features)\n    )\n  );\n$$;\n\n-- Grant execute to authenticated users\nGRANT EXECUTE ON FUNCTION public.can_access_duplicate_pairs() TO authenticated;\n\n-- Rebuild policy using the helper function\nDROP POLICY IF EXISTS \"access duplicate_pairs\" ON duplicate_pairs;\n\nCREATE POLICY \"access duplicate_pairs\" ON duplicate_pairs\nFOR ALL USING (public.can_access_duplicate_pairs());\n"
+    ]
+  },
+  {
+    "version": "20260419225536",
+    "name": "newsletter_subscribers_schema",
+    "statements": [
+      "\n-- citext for case-insensitive email columns\nCREATE EXTENSION IF NOT EXISTS citext;\n\n-- 1. newsletter_subscribers\nCREATE TABLE IF NOT EXISTS newsletter_subscribers (\n  id                UUID         PRIMARY KEY DEFAULT gen_random_uuid(),\n  email             CITEXT       NOT NULL UNIQUE,\n  contact_id        UUID         REFERENCES contacts(id) ON DELETE SET NULL,\n  first_name        TEXT,\n  last_name         TEXT,\n  metadata          JSONB        NOT NULL DEFAULT '{}'::jsonb,\n  source            TEXT,\n  created_at        TIMESTAMPTZ  NOT NULL DEFAULT now(),\n  unsubscribed_at   TIMESTAMPTZ\n);\n\nCREATE INDEX IF NOT EXISTS newsletter_subscribers_contact_id_idx  ON newsletter_subscribers(contact_id);\nCREATE INDEX IF NOT EXISTS newsletter_subscribers_unsubscribed_idx ON newsletter_subscribers(unsubscribed_at) WHERE unsubscribed_at IS NOT NULL;\n\n-- 2. newsletter_lists\nCREATE TABLE IF NOT EXISTS newsletter_lists (\n  id           UUID         PRIMARY KEY DEFAULT gen_random_uuid(),\n  key          TEXT         NOT NULL UNIQUE,\n  name         TEXT         NOT NULL,\n  description  TEXT,\n  created_at   TIMESTAMPTZ  NOT NULL DEFAULT now()\n);\n\nINSERT INTO newsletter_lists (key, name, description) VALUES\n  ('zh-TW',            '中文月報',             '繁體中文電子報訂閱者'),\n  ('en',               'English Newsletter',   'English newsletter subscribers'),\n  ('ja',               '日本語ニュースレター', '日文電子報訂閱者'),\n  ('zh-TW-marketing',  '中文行銷',             '行銷活動（中文）訂閱者')\nON CONFLICT (key) DO NOTHING;\n\n-- 3. newsletter_subscriber_lists (M:N)\nCREATE TABLE IF NOT EXISTS newsletter_subscriber_lists (\n  subscriber_id  UUID         NOT NULL REFERENCES newsletter_subscribers(id) ON DELETE CASCADE,\n  list_id        UUID         NOT NULL REFERENCES newsletter_lists(id)       ON DELETE CASCADE,\n  added_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),\n  PRIMARY KEY (subscriber_id, list_id)\n);\n\nCREATE INDEX IF NOT EXISTS newsletter_subscriber_lists_list_id_idx ON newsletter_subscriber_lists(list_id);\n\n-- Auto-link trigger\nCREATE OR REPLACE FUNCTION link_subscriber_to_contact()\nRETURNS TRIGGER AS $$\nBEGIN\n  IF NEW.email IS NULL OR NEW.deleted_at IS NOT NULL THEN\n    RETURN NEW;\n  END IF;\n\n  UPDATE newsletter_subscribers\n  SET contact_id = NEW.id\n  WHERE contact_id IS NULL\n    AND lower(trim(email::text)) = lower(trim(NEW.email));\n\n  RETURN NEW;\nEND;\n$$ LANGUAGE plpgsql;\n\nDROP TRIGGER IF EXISTS link_subscribers_on_contact_email ON contacts;\nCREATE TRIGGER link_subscribers_on_contact_email\nAFTER INSERT OR UPDATE OF email ON contacts\nFOR EACH ROW\nEXECUTE FUNCTION link_subscriber_to_contact();\n\n-- Backfill (no-op until subscribers exist)\nUPDATE newsletter_subscribers s\nSET contact_id = c.id\nFROM contacts c\nWHERE s.contact_id IS NULL\n  AND c.deleted_at IS NULL\n  AND c.email IS NOT NULL\n  AND lower(trim(s.email::text)) = lower(trim(c.email));\n\n-- RLS\nALTER TABLE newsletter_subscribers      ENABLE ROW LEVEL SECURITY;\nALTER TABLE newsletter_lists            ENABLE ROW LEVEL SECURITY;\nALTER TABLE newsletter_subscriber_lists ENABLE ROW LEVEL SECURITY;\n\nDROP POLICY IF EXISTS newsletter_subscribers_read ON newsletter_subscribers;\nCREATE POLICY newsletter_subscribers_read ON newsletter_subscribers\n  FOR SELECT TO authenticated USING (true);\n\nDROP POLICY IF EXISTS newsletter_lists_read ON newsletter_lists;\nCREATE POLICY newsletter_lists_read ON newsletter_lists\n  FOR SELECT TO authenticated USING (true);\n\nDROP POLICY IF EXISTS newsletter_subscriber_lists_read ON newsletter_subscriber_lists;\nCREATE POLICY newsletter_subscriber_lists_read ON newsletter_subscriber_lists\n  FOR SELECT TO authenticated USING (true);\n"
+    ]
+  },
+  {
+    "version": "20260419230139",
+    "name": "newsletter_link_trigger_search_path",
+    "statements": [
+      "\n-- Harden link_subscriber_to_contact against search_path hijacking\n-- (advisor: function_search_path_mutable)\n\nCREATE OR REPLACE FUNCTION link_subscriber_to_contact()\nRETURNS TRIGGER\nLANGUAGE plpgsql\nSECURITY INVOKER\nSET search_path = public, pg_temp\nAS $$\nBEGIN\n  IF NEW.email IS NULL OR NEW.deleted_at IS NOT NULL THEN\n    RETURN NEW;\n  END IF;\n\n  UPDATE newsletter_subscribers\n  SET contact_id = NEW.id\n  WHERE contact_id IS NULL\n    AND lower(trim(email::text)) = lower(trim(NEW.email));\n\n  RETURN NEW;\nEND;\n$$;\n"
+    ]
+  },
+  {
+    "version": "20260420015001",
+    "name": "security_helpers_and_ai_endpoints_columns",
+    "statements": [
+      "\n-- ============================================================\n-- 1. Helper functions for RLS policies\n-- ============================================================\n\nCREATE OR REPLACE FUNCTION public.has_feature(feature_key text)\nRETURNS boolean\nLANGUAGE sql\nSTABLE\nSECURITY DEFINER\nSET search_path = public, pg_temp\nAS $$\n  SELECT COALESCE(\n    (SELECT CASE\n      WHEN u.role = 'super_admin' THEN true\n      ELSE u.granted_features @> ARRAY[feature_key]\n    END\n    FROM public.users u\n    WHERE u.email = (auth.jwt() ->> 'email')),\n    false\n  )\n$$;\n\nCREATE OR REPLACE FUNCTION public.is_super_admin()\nRETURNS boolean\nLANGUAGE sql\nSTABLE\nSECURITY DEFINER\nSET search_path = public, pg_temp\nAS $$\n  SELECT EXISTS (\n    SELECT 1 FROM public.users u\n    WHERE u.email = (auth.jwt() ->> 'email')\n      AND u.role = 'super_admin'\n  )\n$$;\n\n-- ============================================================\n-- 2. ai_endpoints column privilege: hide api_key from all roles\n--    except service_role (which is used by all API routes).\n--    Enable RLS and allow authenticated to SELECT non-sensitive cols.\n-- ============================================================\n\nALTER TABLE public.ai_endpoints ENABLE ROW LEVEL SECURITY;\n\nDROP POLICY IF EXISTS \"ai_endpoints_read\" ON public.ai_endpoints;\nCREATE POLICY \"ai_endpoints_read\" ON public.ai_endpoints\n  FOR SELECT TO authenticated USING (true);\n\nDROP POLICY IF EXISTS \"ai_endpoints_write\" ON public.ai_endpoints;\nCREATE POLICY \"ai_endpoints_write\" ON public.ai_endpoints\n  FOR ALL TO authenticated\n  USING (is_super_admin())\n  WITH CHECK (is_super_admin());\n\n-- Revoke column-level SELECT on api_key for anon/authenticated.\n-- service_role keeps full access (it's a superuser-like role).\nREVOKE SELECT ON public.ai_endpoints FROM anon, authenticated;\nGRANT SELECT (id, name, base_url, is_active, created_at) ON public.ai_endpoints TO authenticated;\n-- Writes go through service_role or fall under the RLS super_admin policy; authenticated\n-- cannot INSERT/UPDATE api_key directly because the column is not granted. But the\n-- super_admin UI does write it via /admin/models. That UI currently uses browser client;\n-- if the admin is super_admin they hit the RLS policy, but without INSERT column grant\n-- the write still fails. So we GRANT INSERT/UPDATE on all columns; RLS policy still gates\n-- on is_super_admin().\nGRANT INSERT, UPDATE, DELETE ON public.ai_endpoints TO authenticated;\n"
+    ]
+  },
+  {
+    "version": "20260420015027",
+    "name": "rls_tier0_core_shared",
+    "statements": [
+      "\n-- ============================================================\n-- Tier 0 — Core shared tables\n-- All authenticated users can SELECT/INSERT/UPDATE/DELETE\n-- (contacts DELETE is gated separately by has_feature('trash'))\n-- ============================================================\n\n-- contacts: full access except permanent DELETE gated by 'trash'\nALTER TABLE public.contacts ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"contacts_read\"   ON public.contacts;\nDROP POLICY IF EXISTS \"contacts_insert\" ON public.contacts;\nDROP POLICY IF EXISTS \"contacts_update\" ON public.contacts;\nDROP POLICY IF EXISTS \"contacts_delete\" ON public.contacts;\nCREATE POLICY \"contacts_read\"   ON public.contacts FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"contacts_insert\" ON public.contacts FOR INSERT TO authenticated WITH CHECK (true);\nCREATE POLICY \"contacts_update\" ON public.contacts FOR UPDATE TO authenticated USING (true) WITH CHECK (true);\nCREATE POLICY \"contacts_delete\" ON public.contacts FOR DELETE TO authenticated USING (has_feature('trash'));\n\n-- contact_tags\nALTER TABLE public.contact_tags ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"contact_tags_all\" ON public.contact_tags;\nCREATE POLICY \"contact_tags_all\" ON public.contact_tags FOR ALL TO authenticated USING (true) WITH CHECK (true);\n\n-- contact_cards\nALTER TABLE public.contact_cards ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"contact_cards_all\" ON public.contact_cards;\nCREATE POLICY \"contact_cards_all\" ON public.contact_cards FOR ALL TO authenticated USING (true) WITH CHECK (true);\n\n-- contact_photos: replace existing overly-permissive policy with explicit per-op\nDROP POLICY IF EXISTS \"Authenticated users can manage contact_photos\" ON public.contact_photos;\nDROP POLICY IF EXISTS \"contact_photos_read\"   ON public.contact_photos;\nDROP POLICY IF EXISTS \"contact_photos_insert\" ON public.contact_photos;\nDROP POLICY IF EXISTS \"contact_photos_update\" ON public.contact_photos;\nDROP POLICY IF EXISTS \"contact_photos_delete\" ON public.contact_photos;\nCREATE POLICY \"contact_photos_read\"   ON public.contact_photos FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"contact_photos_insert\" ON public.contact_photos FOR INSERT TO authenticated WITH CHECK (true);\nCREATE POLICY \"contact_photos_update\" ON public.contact_photos FOR UPDATE TO authenticated USING (true) WITH CHECK (true);\nCREATE POLICY \"contact_photos_delete\" ON public.contact_photos FOR DELETE TO authenticated USING (true);\n\n-- interaction_logs\nALTER TABLE public.interaction_logs ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"interaction_logs_all\" ON public.interaction_logs;\nCREATE POLICY \"interaction_logs_all\" ON public.interaction_logs FOR ALL TO authenticated USING (true) WITH CHECK (true);\n\n-- pending_contacts (Telegram bot staging)\nALTER TABLE public.pending_contacts ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"pending_contacts_all\" ON public.pending_contacts;\nCREATE POLICY \"pending_contacts_all\" ON public.pending_contacts FOR ALL TO authenticated USING (true) WITH CHECK (true);\n\n-- gemini_models: read all, write super_admin\nALTER TABLE public.gemini_models ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"gemini_models_read\"  ON public.gemini_models;\nDROP POLICY IF EXISTS \"gemini_models_write\" ON public.gemini_models;\nCREATE POLICY \"gemini_models_read\"  ON public.gemini_models FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"gemini_models_write\" ON public.gemini_models FOR ALL TO authenticated USING (is_super_admin()) WITH CHECK (is_super_admin());\n\n-- ai_models: read all, write super_admin\nALTER TABLE public.ai_models ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"ai_models_read\"  ON public.ai_models;\nDROP POLICY IF EXISTS \"ai_models_write\" ON public.ai_models;\nCREATE POLICY \"ai_models_read\"  ON public.ai_models FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"ai_models_write\" ON public.ai_models FOR ALL TO authenticated USING (is_super_admin()) WITH CHECK (is_super_admin());\n"
+    ]
+  },
+  {
+    "version": "20260420015119",
+    "name": "rls_tier1_feature_gated",
+    "statements": [
+      "\n-- ============================================================\n-- Tier 1 — Feature-gated writes\n-- SELECT open to authenticated, writes require has_feature(...)\n-- ============================================================\n\n-- tags: read all, write requires 'tags' feature\nALTER TABLE public.tags ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"tags_read\"   ON public.tags;\nDROP POLICY IF EXISTS \"tags_write\"  ON public.tags;\nCREATE POLICY \"tags_read\"  ON public.tags FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"tags_write\" ON public.tags FOR ALL TO authenticated USING (has_feature('tags')) WITH CHECK (has_feature('tags'));\n\n-- countries: read all, write requires 'countries' feature\nALTER TABLE public.countries ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"countries_read\"  ON public.countries;\nDROP POLICY IF EXISTS \"countries_write\" ON public.countries;\nCREATE POLICY \"countries_read\"  ON public.countries FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"countries_write\" ON public.countries FOR ALL TO authenticated USING (has_feature('countries')) WITH CHECK (has_feature('countries'));\n\n-- email_templates: read all, write requires 'email_templates' feature\nALTER TABLE public.email_templates ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"email_templates_read\"  ON public.email_templates;\nDROP POLICY IF EXISTS \"email_templates_write\" ON public.email_templates;\nCREATE POLICY \"email_templates_read\"  ON public.email_templates FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"email_templates_write\" ON public.email_templates FOR ALL TO authenticated USING (has_feature('email_templates')) WITH CHECK (has_feature('email_templates'));\n\n-- template_attachments\nALTER TABLE public.template_attachments ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"template_attachments_read\"  ON public.template_attachments;\nDROP POLICY IF EXISTS \"template_attachments_write\" ON public.template_attachments;\nCREATE POLICY \"template_attachments_read\"  ON public.template_attachments FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"template_attachments_write\" ON public.template_attachments FOR ALL TO authenticated USING (has_feature('email_templates')) WITH CHECK (has_feature('email_templates'));\n\n-- prompts\nALTER TABLE public.prompts ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"prompts_read\"  ON public.prompts;\nDROP POLICY IF EXISTS \"prompts_write\" ON public.prompts;\nCREATE POLICY \"prompts_read\"  ON public.prompts FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"prompts_write\" ON public.prompts FOR ALL TO authenticated USING (has_feature('prompts')) WITH CHECK (has_feature('prompts'));\n\n-- camcard_pending\nALTER TABLE public.camcard_pending ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"camcard_pending_read\"  ON public.camcard_pending;\nDROP POLICY IF EXISTS \"camcard_pending_write\" ON public.camcard_pending;\nCREATE POLICY \"camcard_pending_read\"  ON public.camcard_pending FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"camcard_pending_write\" ON public.camcard_pending FOR ALL TO authenticated USING (has_feature('camcard')) WITH CHECK (has_feature('camcard'));\n\n-- duplicate_pairs\nALTER TABLE public.duplicate_pairs ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"duplicate_pairs_read\"  ON public.duplicate_pairs;\nDROP POLICY IF EXISTS \"duplicate_pairs_write\" ON public.duplicate_pairs;\nCREATE POLICY \"duplicate_pairs_read\"  ON public.duplicate_pairs FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"duplicate_pairs_write\" ON public.duplicate_pairs FOR ALL TO authenticated USING (has_feature('duplicates')) WITH CHECK (has_feature('duplicates'));\n\n-- failed_scans\nALTER TABLE public.failed_scans ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"failed_scans_read\"  ON public.failed_scans;\nDROP POLICY IF EXISTS \"failed_scans_write\" ON public.failed_scans;\nCREATE POLICY \"failed_scans_read\"  ON public.failed_scans FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"failed_scans_write\" ON public.failed_scans FOR ALL TO authenticated USING (has_feature('failed_scans')) WITH CHECK (has_feature('failed_scans'));\n\n-- newsletter_campaigns\nALTER TABLE public.newsletter_campaigns ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"newsletter_campaigns_read\"  ON public.newsletter_campaigns;\nDROP POLICY IF EXISTS \"newsletter_campaigns_write\" ON public.newsletter_campaigns;\nCREATE POLICY \"newsletter_campaigns_read\"  ON public.newsletter_campaigns FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"newsletter_campaigns_write\" ON public.newsletter_campaigns FOR ALL TO authenticated USING (has_feature('newsletter')) WITH CHECK (has_feature('newsletter'));\n\n-- newsletter_recipients\nALTER TABLE public.newsletter_recipients ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"newsletter_recipients_read\"  ON public.newsletter_recipients;\nDROP POLICY IF EXISTS \"newsletter_recipients_write\" ON public.newsletter_recipients;\nCREATE POLICY \"newsletter_recipients_read\"  ON public.newsletter_recipients FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"newsletter_recipients_write\" ON public.newsletter_recipients FOR ALL TO authenticated USING (has_feature('newsletter')) WITH CHECK (has_feature('newsletter'));\n\n-- newsletter_unsubscribes\nALTER TABLE public.newsletter_unsubscribes ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"newsletter_unsubscribes_read\"  ON public.newsletter_unsubscribes;\nDROP POLICY IF EXISTS \"newsletter_unsubscribes_write\" ON public.newsletter_unsubscribes;\nCREATE POLICY \"newsletter_unsubscribes_read\"  ON public.newsletter_unsubscribes FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"newsletter_unsubscribes_write\" ON public.newsletter_unsubscribes FOR ALL TO authenticated USING (has_feature('newsletter')) WITH CHECK (has_feature('newsletter'));\n\n-- newsletter_blacklist\nALTER TABLE public.newsletter_blacklist ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"newsletter_blacklist_read\"  ON public.newsletter_blacklist;\nDROP POLICY IF EXISTS \"newsletter_blacklist_write\" ON public.newsletter_blacklist;\nCREATE POLICY \"newsletter_blacklist_read\"  ON public.newsletter_blacklist FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"newsletter_blacklist_write\" ON public.newsletter_blacklist FOR ALL TO authenticated USING (has_feature('newsletter')) WITH CHECK (has_feature('newsletter'));\n\n-- newsletter_subscribers (previously created with read-only policy — add write)\nDROP POLICY IF EXISTS \"newsletter_subscribers_write\" ON public.newsletter_subscribers;\nCREATE POLICY \"newsletter_subscribers_write\" ON public.newsletter_subscribers FOR ALL TO authenticated USING (has_feature('newsletter')) WITH CHECK (has_feature('newsletter'));\n\n-- newsletter_lists (add write)\nDROP POLICY IF EXISTS \"newsletter_lists_write\" ON public.newsletter_lists;\nCREATE POLICY \"newsletter_lists_write\" ON public.newsletter_lists FOR ALL TO authenticated USING (has_feature('newsletter')) WITH CHECK (has_feature('newsletter'));\n\n-- newsletter_subscriber_lists (add write)\nDROP POLICY IF EXISTS \"newsletter_subscriber_lists_write\" ON public.newsletter_subscriber_lists;\nCREATE POLICY \"newsletter_subscriber_lists_write\" ON public.newsletter_subscriber_lists FOR ALL TO authenticated USING (has_feature('newsletter')) WITH CHECK (has_feature('newsletter'));\n"
+    ]
+  },
+  {
+    "version": "20260420015140",
+    "name": "rls_tier2_super_admin_only",
+    "statements": [
+      "\n-- ============================================================\n-- Tier 2 — Super-admin only\n-- users table: all ops require super_admin (per user's explicit request)\n-- Other system tables: read all, write super_admin only\n-- ============================================================\n\n-- users: all ops super_admin only\nALTER TABLE public.users ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"users_all\" ON public.users;\nCREATE POLICY \"users_all\" ON public.users FOR ALL TO authenticated USING (is_super_admin()) WITH CHECK (is_super_admin());\n\n-- system_settings: read all, write super_admin\nALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"system_settings_read\"  ON public.system_settings;\nDROP POLICY IF EXISTS \"system_settings_write\" ON public.system_settings;\nCREATE POLICY \"system_settings_read\"  ON public.system_settings FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"system_settings_write\" ON public.system_settings FOR ALL TO authenticated USING (is_super_admin()) WITH CHECK (is_super_admin());\n\n-- docs_content: read all, write super_admin\nALTER TABLE public.docs_content ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"docs_content_read\"  ON public.docs_content;\nDROP POLICY IF EXISTS \"docs_content_write\" ON public.docs_content;\nCREATE POLICY \"docs_content_read\"  ON public.docs_content FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"docs_content_write\" ON public.docs_content FOR ALL TO authenticated USING (is_super_admin()) WITH CHECK (is_super_admin());\n\n-- medical_departments: read all, write super_admin\nALTER TABLE public.medical_departments ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"medical_departments_read\"  ON public.medical_departments;\nDROP POLICY IF EXISTS \"medical_departments_write\" ON public.medical_departments;\nCREATE POLICY \"medical_departments_read\"  ON public.medical_departments FOR SELECT TO authenticated USING (true);\nCREATE POLICY \"medical_departments_write\" ON public.medical_departments FOR ALL TO authenticated USING (is_super_admin()) WITH CHECK (is_super_admin());\n"
+    ]
+  },
+  {
+    "version": "20260420015150",
+    "name": "rls_tier3_user_scoped_and_isolated",
+    "statements": [
+      "\n-- ============================================================\n-- Tier 3 — user-scoped tables, + isolated tables (service role only)\n-- ============================================================\n\n-- user_prompts: each user sees only their own\nALTER TABLE public.user_prompts ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"user_prompts_all\" ON public.user_prompts;\nCREATE POLICY \"user_prompts_all\" ON public.user_prompts FOR ALL TO authenticated\n  USING (\n    user_id = (SELECT u.id FROM public.users u WHERE u.email = (auth.jwt() ->> 'email'))\n  )\n  WITH CHECK (\n    user_id = (SELECT u.id FROM public.users u WHERE u.email = (auth.jwt() ->> 'email'))\n  );\n\n-- feedback: drop existing permissive INSERT policy, add explicit per-op\nDROP POLICY IF EXISTS \"Users can insert feedback\" ON public.feedback;\nDROP POLICY IF EXISTS \"feedback_read\"   ON public.feedback;\nDROP POLICY IF EXISTS \"feedback_insert\" ON public.feedback;\nDROP POLICY IF EXISTS \"feedback_update\" ON public.feedback;\nDROP POLICY IF EXISTS \"feedback_delete\" ON public.feedback;\n\n-- Read: owner sees their own, super_admin sees all\nCREATE POLICY \"feedback_read\" ON public.feedback FOR SELECT TO authenticated USING (\n  created_by = (SELECT u.id FROM public.users u WHERE u.email = (auth.jwt() ->> 'email'))\n  OR is_super_admin()\n);\n-- Insert: must be authenticated; created_by must be self (no impersonation)\nCREATE POLICY \"feedback_insert\" ON public.feedback FOR INSERT TO authenticated WITH CHECK (\n  created_by = (SELECT u.id FROM public.users u WHERE u.email = (auth.jwt() ->> 'email'))\n);\n-- Update: super_admin only (to change status)\nCREATE POLICY \"feedback_update\" ON public.feedback FOR UPDATE TO authenticated\n  USING (is_super_admin()) WITH CHECK (is_super_admin());\n-- Delete: super_admin only\nCREATE POLICY \"feedback_delete\" ON public.feedback FOR DELETE TO authenticated USING (is_super_admin());\n\n-- bot_sessions: isolated, only service role accesses (no policies)\nALTER TABLE public.bot_sessions ENABLE ROW LEVEL SECURITY;\n\n-- telegram_dedup: isolated, only service role (no policies)\nALTER TABLE public.telegram_dedup ENABLE ROW LEVEL SECURITY;\n"
+    ]
+  },
+  {
+    "version": "20260420015320",
+    "name": "function_search_path_hardening_v2",
+    "statements": [
+      "\nALTER FUNCTION public.dashboard_country_stats()                                       SET search_path = public, pg_temp;\nALTER FUNCTION public.dashboard_tag_stats()                                           SET search_path = public, pg_temp;\nALTER FUNCTION public.find_email_duplicates()                                         SET search_path = public, pg_temp;\nALTER FUNCTION public.find_name_duplicates()                                          SET search_path = public, pg_temp;\nALTER FUNCTION public.find_similar_contact_by_name(search_name text)                  SET search_path = public, pg_temp;\nALTER FUNCTION public.find_similar_contacts(input_name text, threshold double precision) SET search_path = public, pg_temp;\nALTER FUNCTION public.get_auth_user_id_by_email(p_email text)                         SET search_path = public, pg_temp;\nALTER FUNCTION public.get_campaign_recipients(p_campaign_id uuid)                     SET search_path = public, pg_temp;\nALTER FUNCTION public.get_campaign_stats()                                            SET search_path = public, pg_temp;\nALTER FUNCTION public.get_users_mfa_status()                                          SET search_path = public, pg_temp;\nALTER FUNCTION public.update_gmail_oauth_updated_at()                                 SET search_path = public, pg_temp;\nALTER FUNCTION public.update_tasks_updated_at()                                       SET search_path = public, pg_temp;\nALTER FUNCTION public.get_interaction_logs_by_tags(p_tag_ids uuid[], p_date_from timestamp with time zone, p_date_to timestamp with time zone, p_created_by uuid) SET search_path = public, pg_temp;\nALTER FUNCTION public.get_interaction_logs_by_tags(p_tag_ids uuid[], p_date_from timestamp with time zone, p_date_to timestamp with time zone, p_created_by uuid, p_country_codes text[], p_types text[]) SET search_path = public, pg_temp;\n"
+    ]
+  },
+  {
+    "version": "20260420015502",
+    "name": "storage_bucket_policies_tighten",
+    "statements": [
+      "\n-- ============================================================\n-- Storage bucket policies hardening\n--\n-- Buckets stay public=true so direct object URLs keep working\n-- (e.g. https://.../storage/v1/object/public/cards/file.jpg).\n-- We tighten the SELECT/INSERT/UPDATE/DELETE policies on\n-- storage.objects so anonymous users can't LIST or upload.\n-- ============================================================\n\n-- Remove broad \"anyone can list cards\" policy\nDROP POLICY IF EXISTS \"Public read cards\" ON storage.objects;\n\n-- Remove previous broad \"anyone can upload to cards\" policy\n-- (it was labelled \"Service role upload cards\" but had role=public)\nDROP POLICY IF EXISTS \"Service role upload cards\" ON storage.objects;\n\n-- Cards bucket: authenticated users can read/upload/update/delete their org's card images\n-- (bot uses service_role and bypasses RLS anyway)\nCREATE POLICY \"cards_authenticated_select\"\n  ON storage.objects FOR SELECT TO authenticated\n  USING (bucket_id = 'cards');\n\nCREATE POLICY \"cards_authenticated_insert\"\n  ON storage.objects FOR INSERT TO authenticated\n  WITH CHECK (bucket_id = 'cards');\n\nCREATE POLICY \"cards_authenticated_update\"\n  ON storage.objects FOR UPDATE TO authenticated\n  USING (bucket_id = 'cards')\n  WITH CHECK (bucket_id = 'cards');\n\nCREATE POLICY \"cards_authenticated_delete\"\n  ON storage.objects FOR DELETE TO authenticated\n  USING (bucket_id = 'cards');\n\n-- camcard bucket: same pattern for consistency\nCREATE POLICY \"camcard_authenticated_select\"\n  ON storage.objects FOR SELECT TO authenticated\n  USING (bucket_id = 'camcard');\n\nCREATE POLICY \"camcard_authenticated_insert\"\n  ON storage.objects FOR INSERT TO authenticated\n  WITH CHECK (bucket_id = 'camcard');\n\nCREATE POLICY \"camcard_authenticated_update\"\n  ON storage.objects FOR UPDATE TO authenticated\n  USING (bucket_id = 'camcard')\n  WITH CHECK (bucket_id = 'camcard');\n\nCREATE POLICY \"camcard_authenticated_delete\"\n  ON storage.objects FOR DELETE TO authenticated\n  USING (bucket_id = 'camcard');\n\n-- template-attachments: authenticated for read+write\nCREATE POLICY \"template_attachments_authenticated_select\"\n  ON storage.objects FOR SELECT TO authenticated\n  USING (bucket_id = 'template-attachments');\n\nCREATE POLICY \"template_attachments_authenticated_insert\"\n  ON storage.objects FOR INSERT TO authenticated\n  WITH CHECK (bucket_id = 'template-attachments');\n\nCREATE POLICY \"template_attachments_authenticated_update\"\n  ON storage.objects FOR UPDATE TO authenticated\n  USING (bucket_id = 'template-attachments')\n  WITH CHECK (bucket_id = 'template-attachments');\n\nCREATE POLICY \"template_attachments_authenticated_delete\"\n  ON storage.objects FOR DELETE TO authenticated\n  USING (bucket_id = 'template-attachments');\n\n-- feedback bucket: the existing \"auth users can upload own feedback screenshots\"\n-- policy covers INSERT. Add SELECT/DELETE for completeness (authenticated)\nCREATE POLICY \"feedback_authenticated_select\"\n  ON storage.objects FOR SELECT TO authenticated\n  USING (bucket_id = 'feedback');\n\nCREATE POLICY \"feedback_authenticated_delete\"\n  ON storage.objects FOR DELETE TO authenticated\n  USING (bucket_id = 'feedback');\n"
+    ]
+  },
+  {
+    "version": "20260420015643",
+    "name": "storage_drop_redundant_select_policies",
+    "statements": [
+      "\n-- ============================================================\n-- Drop SELECT policies on public buckets — they're redundant\n-- because bucket.public=true lets clients GET objects directly\n-- via /storage/v1/object/public/<bucket>/<file> without hitting\n-- storage.objects RLS. Dropping these SELECT policies closes\n-- the LIST capability (advisor 0025) while keeping GET working.\n--\n-- Confirmed no code uses .storage.from(...).list() — verified\n-- via grep across src/.\n-- ============================================================\n\nDROP POLICY IF EXISTS \"cards_authenticated_select\"                 ON storage.objects;\nDROP POLICY IF EXISTS \"camcard_authenticated_select\"               ON storage.objects;\nDROP POLICY IF EXISTS \"feedback_authenticated_select\"              ON storage.objects;\nDROP POLICY IF EXISTS \"template_attachments_authenticated_select\"  ON storage.objects;\n"
+    ]
+  },
+  {
+    "version": "20260420113202",
+    "name": "users_relax_select_keep_token_protected",
+    "statements": [
+      "\n-- ============================================================\n-- Loosen users RLS: authenticated can SELECT (fix UX of creator joins).\n-- Keep provider_token / provider_refresh_token inaccessible to authenticated\n-- (column privilege). Writes still require super_admin.\n-- ============================================================\n\n-- Replace single ALL policy with per-op policies\nDROP POLICY IF EXISTS \"users_all\"    ON public.users;\nDROP POLICY IF EXISTS \"users_select\" ON public.users;\nDROP POLICY IF EXISTS \"users_insert\" ON public.users;\nDROP POLICY IF EXISTS \"users_update\" ON public.users;\nDROP POLICY IF EXISTS \"users_delete\" ON public.users;\n\nCREATE POLICY \"users_select\" ON public.users\n  FOR SELECT TO authenticated USING (true);\n\nCREATE POLICY \"users_insert\" ON public.users\n  FOR INSERT TO authenticated WITH CHECK (is_super_admin());\n\nCREATE POLICY \"users_update\" ON public.users\n  FOR UPDATE TO authenticated USING (is_super_admin()) WITH CHECK (is_super_admin());\n\nCREATE POLICY \"users_delete\" ON public.users\n  FOR DELETE TO authenticated USING (is_super_admin());\n\n-- Column-level privilege: authenticated sees everything except OAuth tokens\nREVOKE SELECT ON public.users FROM anon, authenticated;\nGRANT SELECT (\n  id, email, display_name, role, granted_features, last_login_at, created_at,\n  telegram_id, teams_user_id, teams_conversation_id, teams_service_url,\n  locale, theme, ai_model_id, gemini_model\n) ON public.users TO authenticated;\n-- provider_token and provider_refresh_token intentionally NOT granted.\n-- service_role keeps full access (API routes fetch the tokens there).\n\nGRANT INSERT, UPDATE, DELETE ON public.users TO authenticated;\n"
+    ]
+  },
+  {
+    "version": "20260420151824",
+    "name": "migrate_auto_notes_to_system_type",
+    "statements": [
+      "UPDATE interaction_logs SET type='system'\nWHERE type='note' AND (\n  content LIKE '【名片新資料】%' OR\n  content LIKE '[New Card Data]%' OR\n  content LIKE '【名刺の新情報】%' OR\n  content LIKE '【合照附註】%' OR\n  content LIKE '[Group Photo Note]%' OR\n  content LIKE '【集合写真メモ】%' OR\n  content LIKE '透過網頁手動新增聯絡人%' OR\n  content LIKE 'Added manually via web%' OR\n  content LIKE 'Webから手動で連絡先を追加%' OR\n  content LIKE '透過 Telegram Bot 新增名片%' OR\n  content LIKE '透過批次上傳新增名片%'\n);"
+    ]
+  },
+  {
+    "version": "20260421132205",
+    "name": "contacts_last_activity_at",
+    "statements": [
+      "-- 1. Add column (nullable first for backfill)\nALTER TABLE contacts ADD COLUMN last_activity_at timestamptz;\n\n-- 2. Backfill: max interaction_logs.created_at where type in allowed set, fallback to contacts.created_at\nUPDATE contacts c\nSET last_activity_at = COALESCE(\n  (SELECT MAX(il.created_at) FROM interaction_logs il\n   WHERE il.contact_id = c.id\n     AND il.type IN ('note','meeting','email')),\n  c.created_at\n);\n\n-- 3. Enforce NOT NULL + default for new rows\nALTER TABLE contacts ALTER COLUMN last_activity_at SET NOT NULL;\nALTER TABLE contacts ALTER COLUMN last_activity_at SET DEFAULT now();\n\n-- 4. Index for fast sort (only on live contacts)\nCREATE INDEX idx_contacts_last_activity_at\n  ON contacts (last_activity_at DESC)\n  WHERE deleted_at IS NULL;\n\n-- 5. Trigger function: keep last_activity_at in sync with interaction_logs\nCREATE OR REPLACE FUNCTION update_contact_last_activity()\nRETURNS TRIGGER\nLANGUAGE plpgsql\nSECURITY DEFINER\nAS $$\nDECLARE\n  target_contact_id uuid;\nBEGIN\n  -- Which contact needs recalc? On DELETE use OLD, otherwise NEW\n  target_contact_id := COALESCE(NEW.contact_id, OLD.contact_id);\n  IF target_contact_id IS NULL THEN\n    RETURN NULL;\n  END IF;\n\n  UPDATE contacts\n  SET last_activity_at = COALESCE(\n    (SELECT MAX(il.created_at) FROM interaction_logs il\n     WHERE il.contact_id = target_contact_id\n       AND il.type IN ('note','meeting','email')),\n    created_at\n  )\n  WHERE id = target_contact_id;\n\n  -- If UPDATE moved log between contacts (rare), also recalc old one\n  IF TG_OP = 'UPDATE' AND OLD.contact_id IS NOT NULL AND OLD.contact_id <> NEW.contact_id THEN\n    UPDATE contacts\n    SET last_activity_at = COALESCE(\n      (SELECT MAX(il.created_at) FROM interaction_logs il\n       WHERE il.contact_id = OLD.contact_id\n         AND il.type IN ('note','meeting','email')),\n      created_at\n    )\n    WHERE id = OLD.contact_id;\n  END IF;\n\n  RETURN NULL;\nEND;\n$$;\n\n-- 6. Trigger: fire on any row change in interaction_logs\nDROP TRIGGER IF EXISTS trg_update_contact_last_activity ON interaction_logs;\nCREATE TRIGGER trg_update_contact_last_activity\n  AFTER INSERT OR UPDATE OR DELETE ON interaction_logs\n  FOR EACH ROW EXECUTE FUNCTION update_contact_last_activity();"
+    ]
+  },
+  {
+    "version": "20260421133618",
+    "name": "newsletter_tone_samples",
+    "statements": [
+      "CREATE TABLE newsletter_tone_samples (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  language text NOT NULL CHECK (language IN ('zh-TW', 'en', 'ja')),\n  period text NOT NULL,\n  title text,\n  html_content text NOT NULL,\n  plain_text text NOT NULL,\n  source_file text,\n  created_at timestamptz NOT NULL DEFAULT now()\n);\n\nCREATE INDEX idx_newsletter_tone_samples_lang ON newsletter_tone_samples (language, period DESC);\n\nALTER TABLE newsletter_tone_samples ENABLE ROW LEVEL SECURITY;\n\n-- Read: any authenticated; Write: super_admin via service role (enforced in API layer)\nCREATE POLICY nts_select_auth ON newsletter_tone_samples\n  FOR SELECT TO authenticated USING (true);\n\nCOMMENT ON TABLE newsletter_tone_samples IS 'Past newsletters used as few-shot reference for AI newsletter composition. Stores HTML (archival) + plain_text (for LLM prompt, strips inline styles).';"
+    ]
+  },
+  {
+    "version": "20260421140449",
+    "name": "contact_photos_bump_last_activity",
+    "statements": [
+      "-- Photos are also a signal of \"recent interaction\" with a contact — a 合照 upload\n-- today should bump that contact to the top of the list even without an explicit\n-- interaction_log entry. The existing trigger on interaction_logs only counts\n-- note/meeting/email; photos go to a separate table (contact_photos) and are\n-- currently invisible to last_activity_at.\n--\n-- Strategy: separate trigger on contact_photos that, on INSERT or DELETE, takes\n-- GREATEST(current last_activity_at, MAX(photo.created_at)) and writes it back.\n-- Uses the SAME column, so default sort keeps working transparently.\n\nCREATE OR REPLACE FUNCTION update_contact_last_activity_from_photo()\nRETURNS TRIGGER\nLANGUAGE plpgsql\nSECURITY DEFINER\nAS $$\nDECLARE\n  target_contact_id uuid;\nBEGIN\n  target_contact_id := COALESCE(NEW.contact_id, OLD.contact_id);\n  IF target_contact_id IS NULL THEN\n    RETURN NULL;\n  END IF;\n\n  -- Recalc: max(interaction_logs in {note,meeting,email}) vs max(contact_photos.created_at) vs created_at\n  UPDATE contacts\n  SET last_activity_at = GREATEST(\n    COALESCE(\n      (SELECT MAX(il.created_at) FROM interaction_logs il\n       WHERE il.contact_id = target_contact_id\n         AND il.type IN ('note','meeting','email')),\n      created_at\n    ),\n    COALESCE(\n      (SELECT MAX(cp.created_at) FROM contact_photos cp\n       WHERE cp.contact_id = target_contact_id),\n      created_at\n    )\n  )\n  WHERE id = target_contact_id;\n\n  RETURN NULL;\nEND;\n$$;\n\nDROP TRIGGER IF EXISTS trg_contact_photos_last_activity ON contact_photos;\nCREATE TRIGGER trg_contact_photos_last_activity\n  AFTER INSERT OR DELETE ON contact_photos\n  FOR EACH ROW EXECUTE FUNCTION update_contact_last_activity_from_photo();\n\n-- Also widen the existing interaction_logs trigger function so it takes photos\n-- into account (otherwise adding a note could REGRESS a contact whose real\n-- latest activity was a photo upload)\nCREATE OR REPLACE FUNCTION update_contact_last_activity()\nRETURNS TRIGGER\nLANGUAGE plpgsql\nSECURITY DEFINER\nAS $$\nDECLARE\n  target_contact_id uuid;\nBEGIN\n  target_contact_id := COALESCE(NEW.contact_id, OLD.contact_id);\n  IF target_contact_id IS NULL THEN\n    RETURN NULL;\n  END IF;\n\n  UPDATE contacts\n  SET last_activity_at = GREATEST(\n    COALESCE(\n      (SELECT MAX(il.created_at) FROM interaction_logs il\n       WHERE il.contact_id = target_contact_id\n         AND il.type IN ('note','meeting','email')),\n      created_at\n    ),\n    COALESCE(\n      (SELECT MAX(cp.created_at) FROM contact_photos cp\n       WHERE cp.contact_id = target_contact_id),\n      created_at\n    )\n  )\n  WHERE id = target_contact_id;\n\n  IF TG_OP = 'UPDATE' AND OLD.contact_id IS NOT NULL AND OLD.contact_id <> NEW.contact_id THEN\n    UPDATE contacts\n    SET last_activity_at = GREATEST(\n      COALESCE(\n        (SELECT MAX(il.created_at) FROM interaction_logs il\n         WHERE il.contact_id = OLD.contact_id\n           AND il.type IN ('note','meeting','email')),\n        created_at\n      ),\n      COALESCE(\n        (SELECT MAX(cp.created_at) FROM contact_photos cp\n         WHERE cp.contact_id = OLD.contact_id),\n        created_at\n      )\n    )\n    WHERE id = OLD.contact_id;\n  END IF;\n\n  RETURN NULL;\nEND;\n$$;\n\n-- Backfill to incorporate existing photos\nUPDATE contacts c\nSET last_activity_at = GREATEST(\n  COALESCE(\n    (SELECT MAX(il.created_at) FROM interaction_logs il\n     WHERE il.contact_id = c.id AND il.type IN ('note','meeting','email')),\n    c.created_at\n  ),\n  COALESCE(\n    (SELECT MAX(cp.created_at) FROM contact_photos cp WHERE cp.contact_id = c.id),\n    c.created_at\n  )\n);"
+    ]
+  },
+  {
+    "version": "20260421142320",
+    "name": "last_activity_exclude_newsletter_campaigns",
+    "statements": [
+      "-- Exclude newsletter campaign sends from last_activity_at calculation.\n-- Rationale: Po noticed that bulk sending a newsletter to 4000+ subscribers\n-- would stamp every contact's last_activity_at to \"now\", wiping out the\n-- \"who did I recently talk to\" signal.\n--\n-- Heuristic: interaction_logs.campaign_id IS NOT NULL → newsletter send → skip.\n-- Individual 1-to-1 email (contact detail page, bot, etc.) has campaign_id = NULL.\n-- Ad-hoc bulk compose without campaign_id still counts — that's intentional,\n-- user bulk emailing 10 people DOES want to follow up with them.\n\nCREATE OR REPLACE FUNCTION update_contact_last_activity()\nRETURNS TRIGGER\nLANGUAGE plpgsql\nSECURITY DEFINER\nAS $$\nDECLARE\n  target_contact_id uuid;\nBEGIN\n  target_contact_id := COALESCE(NEW.contact_id, OLD.contact_id);\n  IF target_contact_id IS NULL THEN\n    RETURN NULL;\n  END IF;\n\n  UPDATE contacts\n  SET last_activity_at = GREATEST(\n    COALESCE(\n      (SELECT MAX(il.created_at) FROM interaction_logs il\n       WHERE il.contact_id = target_contact_id\n         AND il.type IN ('note','meeting','email')\n         AND il.campaign_id IS NULL),\n      created_at\n    ),\n    COALESCE(\n      (SELECT MAX(cp.created_at) FROM contact_photos cp\n       WHERE cp.contact_id = target_contact_id),\n      created_at\n    )\n  )\n  WHERE id = target_contact_id;\n\n  IF TG_OP = 'UPDATE' AND OLD.contact_id IS NOT NULL AND OLD.contact_id <> NEW.contact_id THEN\n    UPDATE contacts\n    SET last_activity_at = GREATEST(\n      COALESCE(\n        (SELECT MAX(il.created_at) FROM interaction_logs il\n         WHERE il.contact_id = OLD.contact_id\n           AND il.type IN ('note','meeting','email')\n           AND il.campaign_id IS NULL),\n        created_at\n      ),\n      COALESCE(\n        (SELECT MAX(cp.created_at) FROM contact_photos cp\n         WHERE cp.contact_id = OLD.contact_id),\n        created_at\n      )\n    )\n    WHERE id = OLD.contact_id;\n  END IF;\n\n  RETURN NULL;\nEND;\n$$;\n\nCREATE OR REPLACE FUNCTION update_contact_last_activity_from_photo()\nRETURNS TRIGGER\nLANGUAGE plpgsql\nSECURITY DEFINER\nAS $$\nDECLARE\n  target_contact_id uuid;\nBEGIN\n  target_contact_id := COALESCE(NEW.contact_id, OLD.contact_id);\n  IF target_contact_id IS NULL THEN\n    RETURN NULL;\n  END IF;\n\n  UPDATE contacts\n  SET last_activity_at = GREATEST(\n    COALESCE(\n      (SELECT MAX(il.created_at) FROM interaction_logs il\n       WHERE il.contact_id = target_contact_id\n         AND il.type IN ('note','meeting','email')\n         AND il.campaign_id IS NULL),\n      created_at\n    ),\n    COALESCE(\n      (SELECT MAX(cp.created_at) FROM contact_photos cp\n       WHERE cp.contact_id = target_contact_id),\n      created_at\n    )\n  )\n  WHERE id = target_contact_id;\n\n  RETURN NULL;\nEND;\n$$;\n\n-- Backfill: recompute everyone with the new filter (newsletter logs now excluded)\nUPDATE contacts c\nSET last_activity_at = GREATEST(\n  COALESCE(\n    (SELECT MAX(il.created_at) FROM interaction_logs il\n     WHERE il.contact_id = c.id\n       AND il.type IN ('note','meeting','email')\n       AND il.campaign_id IS NULL),\n    c.created_at\n  ),\n  COALESCE(\n    (SELECT MAX(cp.created_at) FROM contact_photos cp WHERE cp.contact_id = c.id),\n    c.created_at\n  )\n);"
+    ]
+  },
+  {
+    "version": "20260421142739",
+    "name": "interaction_logs_send_method",
+    "statements": [
+      "-- Add send_method to interaction_logs so last_activity can exclude ALL SendGrid\n-- sends (not just campaign-tagged ones). SendGrid is used both for newsletter\n-- campaigns AND ad-hoc bulk compose — both should not count as \"I recently\n-- talked to this person\" because it's automated mass comms.\n\nALTER TABLE interaction_logs\n  ADD COLUMN send_method text\n  CHECK (send_method IS NULL OR send_method IN ('outlook', 'sendgrid'));\n\n-- Backfill: every existing campaign-tagged log was sent via SendGrid (only\n-- SendGrid path uses campaign_id; Outlook path doesn't)\nUPDATE interaction_logs\nSET send_method = 'sendgrid'\nWHERE campaign_id IS NOT NULL AND send_method IS NULL;\n\n-- For the other 3827 individual logs with campaign_id IS NULL, we can't tell\n-- retroactively whether they were Outlook or SendGrid without parsing content.\n-- Leave them NULL (trigger treats NULL as \"count it\" = safe default, matches\n-- pre-migration behavior).\n\n-- Index to keep the filtered query fast\nCREATE INDEX IF NOT EXISTS idx_interaction_logs_contact_activity\n  ON interaction_logs (contact_id, created_at DESC)\n  WHERE type IN ('note','meeting','email') AND send_method IS DISTINCT FROM 'sendgrid';\n\nCREATE OR REPLACE FUNCTION update_contact_last_activity()\nRETURNS TRIGGER\nLANGUAGE plpgsql\nSECURITY DEFINER\nAS $$\nDECLARE\n  target_contact_id uuid;\nBEGIN\n  target_contact_id := COALESCE(NEW.contact_id, OLD.contact_id);\n  IF target_contact_id IS NULL THEN\n    RETURN NULL;\n  END IF;\n\n  UPDATE contacts\n  SET last_activity_at = GREATEST(\n    COALESCE(\n      (SELECT MAX(il.created_at) FROM interaction_logs il\n       WHERE il.contact_id = target_contact_id\n         AND il.type IN ('note','meeting','email')\n         AND il.send_method IS DISTINCT FROM 'sendgrid'),\n      created_at\n    ),\n    COALESCE(\n      (SELECT MAX(cp.created_at) FROM contact_photos cp\n       WHERE cp.contact_id = target_contact_id),\n      created_at\n    )\n  )\n  WHERE id = target_contact_id;\n\n  IF TG_OP = 'UPDATE' AND OLD.contact_id IS NOT NULL AND OLD.contact_id <> NEW.contact_id THEN\n    UPDATE contacts\n    SET last_activity_at = GREATEST(\n      COALESCE(\n        (SELECT MAX(il.created_at) FROM interaction_logs il\n         WHERE il.contact_id = OLD.contact_id\n           AND il.type IN ('note','meeting','email')\n           AND il.send_method IS DISTINCT FROM 'sendgrid'),\n        created_at\n      ),\n      COALESCE(\n        (SELECT MAX(cp.created_at) FROM contact_photos cp\n         WHERE cp.contact_id = OLD.contact_id),\n        created_at\n      )\n    )\n    WHERE id = OLD.contact_id;\n  END IF;\n\n  RETURN NULL;\nEND;\n$$;\n\nCREATE OR REPLACE FUNCTION update_contact_last_activity_from_photo()\nRETURNS TRIGGER\nLANGUAGE plpgsql\nSECURITY DEFINER\nAS $$\nDECLARE\n  target_contact_id uuid;\nBEGIN\n  target_contact_id := COALESCE(NEW.contact_id, OLD.contact_id);\n  IF target_contact_id IS NULL THEN\n    RETURN NULL;\n  END IF;\n\n  UPDATE contacts\n  SET last_activity_at = GREATEST(\n    COALESCE(\n      (SELECT MAX(il.created_at) FROM interaction_logs il\n       WHERE il.contact_id = target_contact_id\n         AND il.type IN ('note','meeting','email')\n         AND il.send_method IS DISTINCT FROM 'sendgrid'),\n      created_at\n    ),\n    COALESCE(\n      (SELECT MAX(cp.created_at) FROM contact_photos cp\n       WHERE cp.contact_id = target_contact_id),\n      created_at\n    )\n  )\n  WHERE id = target_contact_id;\n\n  RETURN NULL;\nEND;\n$$;\n\n-- Full backfill of contacts.last_activity_at with the new filter\nUPDATE contacts c\nSET last_activity_at = GREATEST(\n  COALESCE(\n    (SELECT MAX(il.created_at) FROM interaction_logs il\n     WHERE il.contact_id = c.id\n       AND il.type IN ('note','meeting','email')\n       AND il.send_method IS DISTINCT FROM 'sendgrid'),\n    c.created_at\n  ),\n  COALESCE(\n    (SELECT MAX(cp.created_at) FROM contact_photos cp WHERE cp.contact_id = c.id),\n    c.created_at\n  )\n);"
+    ]
+  },
+  {
+    "version": "20260422142822",
+    "name": "reverse_link_subscriber_to_contact",
+    "statements": [
+      "-- Add reverse-direction trigger: when a subscriber is inserted or email\n-- updated, auto-link to a matching contact if one exists. Complements the\n-- existing forward trigger link_subscribers_on_contact_email (fires on\n-- contacts INSERT/UPDATE of email).\n\nCREATE OR REPLACE FUNCTION link_subscriber_from_contact_on_subscriber()\nRETURNS TRIGGER\nLANGUAGE plpgsql\nSECURITY DEFINER\nSET search_path = public\nAS $$\nBEGIN\n  IF NEW.email IS NULL OR NEW.contact_id IS NOT NULL THEN\n    RETURN NEW;\n  END IF;\n\n  UPDATE newsletter_subscribers s\n  SET contact_id = c.id\n  FROM contacts c\n  WHERE s.id = NEW.id\n    AND c.deleted_at IS NULL\n    AND c.email IS NOT NULL\n    AND lower(c.email) = lower(NEW.email);\n\n  RETURN NEW;\nEND;\n$$;\n\nDROP TRIGGER IF EXISTS trg_link_subscriber_on_insert ON newsletter_subscribers;\nCREATE TRIGGER trg_link_subscriber_on_insert\n  AFTER INSERT OR UPDATE OF email ON newsletter_subscribers\n  FOR EACH ROW EXECUTE FUNCTION link_subscriber_from_contact_on_subscriber();"
+    ]
+  },
+  {
+    "version": "20260422142930",
+    "name": "newsletter_campaigns_list_ids_published_slug",
+    "statements": [
+      "-- Transition fields for the new newsletter flow:\n-- - list_ids: new list-based recipient source (newsletter_lists FK).\n--   Supersedes tag_ids (kept for backward-compat until we migrate the wizard).\n-- - published_at: when the campaign was \"published\" to RSS (for Substack pull).\n-- - slug: URL-safe slug for /api/newsletter/feed.xml link + preview URL.\n\nALTER TABLE newsletter_campaigns\n  ADD COLUMN IF NOT EXISTS list_ids uuid[] DEFAULT '{}';\n\nALTER TABLE newsletter_campaigns\n  ADD COLUMN IF NOT EXISTS published_at timestamptz;\n\nALTER TABLE newsletter_campaigns\n  ADD COLUMN IF NOT EXISTS slug text;\n\nCREATE UNIQUE INDEX IF NOT EXISTS idx_newsletter_campaigns_slug\n  ON newsletter_campaigns (slug) WHERE slug IS NOT NULL;\n\nCREATE INDEX IF NOT EXISTS idx_newsletter_campaigns_published\n  ON newsletter_campaigns (published_at DESC) WHERE published_at IS NOT NULL;"
+    ]
+  },
+  {
+    "version": "20260423031827",
+    "name": "camcard_pending_assignee_label",
+    "statements": [
+      "-- Short text label for who should review a pending camcard row.\n-- Free-form (e.g. 'PO', 'Eva', 'AD-June'); not FK to users so non-staff labels are OK.\n-- Filter + bulk-assign UI on /admin/camcard uses this.\nALTER TABLE camcard_pending\n  ADD COLUMN IF NOT EXISTS assignee_label text;\n\n-- Backfill: existing 1187 pending rows default to 'PO' (Po confirmed current\n-- behaviour is all hers to review). confirmed/skipped rows stay NULL.\nUPDATE camcard_pending\nSET assignee_label = 'PO'\nWHERE status = 'pending' AND assignee_label IS NULL;\n\n-- Quick filter index\nCREATE INDEX IF NOT EXISTS idx_camcard_pending_assignee\n  ON camcard_pending (assignee_label)\n  WHERE status = 'pending';"
+    ]
+  },
+  {
+    "version": "20260425002449",
+    "name": "extend_contacts_email_status_check",
+    "statements": [
+      "\nALTER TABLE contacts DROP CONSTRAINT contacts_email_status_check;\nALTER TABLE contacts ADD CONSTRAINT contacts_email_status_check\n  CHECK (email_status = ANY (ARRAY[\n    'bounced'::text,\n    'unsubscribed'::text,\n    'invalid'::text,\n    'deferred'::text,\n    'mailbox_full'::text,\n    'sender_blocked'::text,\n    'recipient_blocked'::text\n  ]));\n"
+    ]
+  },
+  {
+    "version": "20260425002527",
+    "name": "add_status_to_newsletter_blacklist",
+    "statements": [
+      "\nALTER TABLE newsletter_blacklist\n  ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'bounced'\n  CHECK (status = ANY (ARRAY[\n    'bounced'::text,\n    'invalid'::text,\n    'deferred'::text,\n    'mailbox_full'::text,\n    'sender_blocked'::text,\n    'recipient_blocked'::text\n  ]));\n"
+    ]
+  },
+  {
+    "version": "20260425005747",
+    "name": "dashboard_email_status_stats",
+    "statements": [
+      "\nCREATE OR REPLACE FUNCTION dashboard_email_status_stats()\nRETURNS TABLE(category text, count bigint) AS $$\n  SELECT\n    COALESCE(email_status, 'ok')::text AS category,\n    COUNT(*)::bigint AS count\n  FROM contacts\n  WHERE email IS NOT NULL AND deleted_at IS NULL\n  GROUP BY 1\n\n  UNION ALL\n\n  SELECT 'external'::text AS category, COUNT(DISTINCT all_emails.email)::bigint\n  FROM (\n    SELECT LOWER(TRIM(email))::text AS email FROM newsletter_subscribers WHERE email IS NOT NULL\n    UNION\n    SELECT email::text FROM newsletter_blacklist\n    UNION\n    SELECT email::text FROM newsletter_unsubscribes\n  ) all_emails\n  WHERE NOT EXISTS (\n    SELECT 1 FROM contacts c\n    WHERE LOWER(TRIM(c.email)) = all_emails.email AND c.deleted_at IS NULL\n  );\n$$ LANGUAGE sql STABLE;\n\nGRANT EXECUTE ON FUNCTION dashboard_email_status_stats() TO authenticated;\n"
+    ]
+  },
+  {
+    "version": "20260425150542",
+    "name": "unsubscribe_on_contact_soft_delete",
+    "statements": [
+      "\n-- When a contact is soft-deleted, auto-unsubscribe matching newsletter subscribers\n-- and add a global unsubscribe record so they won't be sent newsletters again.\n-- Restoring a contact does NOT auto re-subscribe — that has to be manual.\nCREATE OR REPLACE FUNCTION unsubscribe_on_contact_soft_delete()\nRETURNS trigger\nLANGUAGE plpgsql\nSECURITY DEFINER\nSET search_path TO 'public'\nAS $$\nDECLARE\n  norm_email text;\nBEGIN\n  -- Only fire when transitioning to deleted (was NULL, now NOT NULL)\n  IF OLD.deleted_at IS NOT NULL OR NEW.deleted_at IS NULL OR NEW.email IS NULL THEN\n    RETURN NEW;\n  END IF;\n\n  norm_email := LOWER(TRIM(NEW.email));\n\n  -- 1. Mark related subscribers as unsubscribed\n  UPDATE newsletter_subscribers\n  SET unsubscribed_at = NEW.deleted_at\n  WHERE LOWER(TRIM(email::text)) = norm_email\n    AND unsubscribed_at IS NULL;\n\n  -- 2. Add to global unsubscribe list (idempotent)\n  INSERT INTO newsletter_unsubscribes (email, contact_id, source, reason, unsubscribed_at)\n  VALUES (\n    norm_email,\n    NEW.id,\n    'contact_soft_delete',\n    '聯絡人軟刪除自動退訂（' || COALESCE(NEW.name, NEW.name_en, NEW.name_local, '無姓名') || '）',\n    NEW.deleted_at\n  )\n  ON CONFLICT (email) DO UPDATE\n  SET unsubscribed_at = EXCLUDED.unsubscribed_at,\n      source = EXCLUDED.source,\n      reason = EXCLUDED.reason;\n\n  RETURN NEW;\nEND;\n$$;\n\nDROP TRIGGER IF EXISTS trg_unsubscribe_on_contact_soft_delete ON contacts;\nCREATE TRIGGER trg_unsubscribe_on_contact_soft_delete\n  AFTER UPDATE OF deleted_at ON contacts\n  FOR EACH ROW\n  EXECUTE FUNCTION unsubscribe_on_contact_soft_delete();\n"
+    ]
+  },
+  {
+    "version": "20260425152416",
+    "name": "dashboard_external_excludes_unsubs",
+    "statements": [
+      "\nCREATE OR REPLACE FUNCTION dashboard_email_status_stats()\nRETURNS TABLE(category text, count bigint) AS $$\n  -- CRM contacts (with email)\n  SELECT\n    COALESCE(email_status, 'ok')::text AS category,\n    COUNT(*)::bigint AS count\n  FROM contacts\n  WHERE email IS NOT NULL AND deleted_at IS NULL\n  GROUP BY 1\n\n  UNION ALL\n\n  -- External emails: in subscribers but NOT in active CRM\n  -- AND not unsubscribed (subscribers.unsubscribed_at + newsletter_unsubscribes)\n  -- AND not blacklisted\n  SELECT 'external'::text, COUNT(DISTINCT s_email.email)::bigint\n  FROM (\n    SELECT LOWER(TRIM(email::text)) AS email\n    FROM newsletter_subscribers\n    WHERE email IS NOT NULL\n      AND unsubscribed_at IS NULL\n  ) s_email\n  WHERE NOT EXISTS (\n    SELECT 1 FROM contacts c\n    WHERE LOWER(TRIM(c.email)) = s_email.email AND c.deleted_at IS NULL\n  )\n  AND NOT EXISTS (\n    SELECT 1 FROM newsletter_unsubscribes u WHERE u.email = s_email.email\n  )\n  AND NOT EXISTS (\n    SELECT 1 FROM newsletter_blacklist b WHERE b.email = s_email.email\n  );\n$$ LANGUAGE sql STABLE;\n"
+    ]
+  },
+  {
+    "version": "20260427151729",
+    "name": "v450_pending_async_worker_and_per_user_rls",
+    "statements": [
+      "-- 1. pending_contacts: add async worker fields\nALTER TABLE pending_contacts\n  ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'done',\n  ADD COLUMN IF NOT EXISTS retry_count INT NOT NULL DEFAULT 0,\n  ADD COLUMN IF NOT EXISTS processed_at TIMESTAMPTZ,\n  ADD COLUMN IF NOT EXISTS error_message TEXT;\n\nALTER TABLE pending_contacts ALTER COLUMN data SET DEFAULT '{}'::jsonb;\n\nALTER TABLE pending_contacts\n  ADD CONSTRAINT pending_contacts_status_check\n  CHECK (status IN ('pending', 'processing', 'done', 'failed'));\n\n-- Cron worker query index\nCREATE INDEX IF NOT EXISTS pending_contacts_status_created_idx\n  ON pending_contacts (status, created_at)\n  WHERE status IN ('pending', 'processing');\n\n-- User pending list query index\nCREATE INDEX IF NOT EXISTS pending_contacts_user_status_idx\n  ON pending_contacts (created_by, status, created_at DESC);\n\n-- 2. pending_contacts RLS: replace wide-open with per-user + super_admin\nDROP POLICY IF EXISTS pending_contacts_all ON pending_contacts;\n\nCREATE POLICY pending_contacts_own_all ON pending_contacts FOR ALL\n  TO authenticated\n  USING (created_by = (SELECT id FROM users WHERE email = (auth.jwt() ->> 'email')))\n  WITH CHECK (created_by = (SELECT id FROM users WHERE email = (auth.jwt() ->> 'email')));\n\nCREATE POLICY pending_contacts_super_admin_all ON pending_contacts FOR ALL\n  TO public\n  USING (EXISTS (SELECT 1 FROM users WHERE email = (auth.jwt() ->> 'email') AND role = 'super_admin'))\n  WITH CHECK (EXISTS (SELECT 1 FROM users WHERE email = (auth.jwt() ->> 'email') AND role = 'super_admin'));\n\n-- 3. failed_scans RLS: tighten read from wide-open to per-user, add per-user write\nDROP POLICY IF EXISTS failed_scans_read ON failed_scans;\n\nCREATE POLICY failed_scans_own_all ON failed_scans FOR ALL\n  TO authenticated\n  USING (user_id = (SELECT id FROM users WHERE email = (auth.jwt() ->> 'email')))\n  WITH CHECK (user_id = (SELECT id FROM users WHERE email = (auth.jwt() ->> 'email')));\n-- existing: failed_scans_write (has_feature 'failed_scans') and super_admin_all stay"
+    ]
+  },
+  {
+    "version": "20260502014944",
+    "name": "docs_content_anon_quick_start_read",
+    "statements": [
+      "CREATE POLICY docs_content_read_quick_start_anon\nON public.docs_content\nFOR SELECT\nTO anon\nUSING (section = 'quick_start');"
+    ]
+  },
+  {
+    "version": "20260502082211",
+    "name": "newsletter_assets_storage_policies",
+    "statements": [
+      "CREATE POLICY newsletter_assets_authenticated_insert\nON storage.objects\nFOR INSERT\nTO authenticated\nWITH CHECK (bucket_id = 'newsletter-assets');\n\nCREATE POLICY newsletter_assets_authenticated_update\nON storage.objects\nFOR UPDATE\nTO authenticated\nUSING (bucket_id = 'newsletter-assets')\nWITH CHECK (bucket_id = 'newsletter-assets');\n\nCREATE POLICY newsletter_assets_authenticated_delete\nON storage.objects\nFOR DELETE\nTO authenticated\nUSING (bucket_id = 'newsletter-assets');"
+    ]
+  },
+  {
+    "version": "20260502091631",
+    "name": "tags_is_email_blacklist",
+    "statements": [
+      "ALTER TABLE public.tags ADD COLUMN IF NOT EXISTS is_email_blacklist boolean NOT NULL DEFAULT false;\nCOMMENT ON COLUMN public.tags.is_email_blacklist IS 'When true, contacts tagged with this tag are excluded from bulk email send and newsletter list creation.';\n\nUPDATE public.tags SET is_email_blacklist = true WHERE name = 'XX';"
+    ]
+  },
+  {
+    "version": "20260503010504",
+    "name": "newsletter_campaigns_promo_text",
+    "statements": [
+      "ALTER TABLE public.newsletter_campaigns ADD COLUMN IF NOT EXISTS promo_text text;\nCOMMENT ON COLUMN public.newsletter_campaigns.promo_text IS 'Short promo paragraph for sharing on chat platforms (LINE / Slack / etc). Populated by Claude.ai newsletter-composer skill at package time. Per-language (each lang campaign row has its own).';"
+    ]
+  },
+  {
+    "version": "20260504145029",
+    "name": "fix_unsubscribe_trigger_skip_when_other_active_contact_exists",
+    "statements": [
+      "-- 修 trigger：軟刪除聯絡人時，若同 email 還有「活著的」聯絡人，不要退訂。\n-- 原因：去重合併聯絡人時，敗北方被軟刪除，但同 email 的勝出方還活著且想繼續收信。\n-- 之前的 trigger 沒檢查這個，結果整個 email 一起退訂，連勝出方也收不到信。\n\nCREATE OR REPLACE FUNCTION public.unsubscribe_on_contact_soft_delete()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  norm_email text;\n  has_other_active boolean;\nBEGIN\n  -- Only fire when transitioning to deleted (was NULL, now NOT NULL)\n  IF OLD.deleted_at IS NOT NULL OR NEW.deleted_at IS NULL OR NEW.email IS NULL THEN\n    RETURN NEW;\n  END IF;\n\n  norm_email := LOWER(TRIM(NEW.email));\n\n  -- Guard: skip when another non-deleted contact still owns this email.\n  -- This is the dedup-merge case — the surviving contact still wants the newsletter.\n  SELECT EXISTS (\n    SELECT 1 FROM contacts\n    WHERE LOWER(TRIM(email)) = norm_email\n      AND id != NEW.id\n      AND deleted_at IS NULL\n  ) INTO has_other_active;\n\n  IF has_other_active THEN\n    RETURN NEW;\n  END IF;\n\n  -- 1. Mark related subscribers as unsubscribed\n  UPDATE newsletter_subscribers\n  SET unsubscribed_at = NEW.deleted_at\n  WHERE LOWER(TRIM(email::text)) = norm_email\n    AND unsubscribed_at IS NULL;\n\n  -- 2. Add to global unsubscribe list (idempotent)\n  INSERT INTO newsletter_unsubscribes (email, contact_id, source, reason, unsubscribed_at)\n  VALUES (\n    norm_email,\n    NEW.id,\n    'contact_soft_delete',\n    '聯絡人軟刪除自動退訂（' || COALESCE(NEW.name, NEW.name_en, NEW.name_local, '無姓名') || '）',\n    NEW.deleted_at\n  )\n  ON CONFLICT (email) DO UPDATE\n  SET unsubscribed_at = EXCLUDED.unsubscribed_at,\n      source = EXCLUDED.source,\n      reason = EXCLUDED.reason;\n\n  RETURN NEW;\nEND;\n$function$;\n\n-- 回復這 77 筆誤判：清掉 backfill 那批的退訂紀錄 + 對應的 subscribers\nWITH backfill_targets AS (\n  SELECT u.email, c.deleted_at\n  FROM newsletter_unsubscribes u\n  LEFT JOIN contacts c ON c.id = u.contact_id\n  WHERE u.source = 'contact_soft_delete_backfill'\n),\nsub_restore AS (\n  UPDATE newsletter_subscribers s\n  SET unsubscribed_at = NULL\n  FROM backfill_targets b\n  WHERE LOWER(TRIM(s.email::text)) = b.email\n    AND s.unsubscribed_at = b.deleted_at\n  RETURNING s.id\n)\nDELETE FROM newsletter_unsubscribes\nWHERE source = 'contact_soft_delete_backfill';"
+    ]
+  },
+  {
+    "version": "20260505000656",
+    "name": "add_get_camcard_assignee_counts_rpc",
+    "statements": [
+      "CREATE OR REPLACE FUNCTION get_camcard_assignee_counts()\nRETURNS TABLE(assignee_label text, cnt bigint) AS $$\n  SELECT assignee_label, COUNT(*) AS cnt\n  FROM camcard_pending\n  WHERE status = 'pending'\n    AND assignee_label IS NOT NULL\n  GROUP BY assignee_label\n  ORDER BY cnt DESC;\n$$ LANGUAGE sql STABLE SECURITY DEFINER;"
+    ]
+  },
+  {
+    "version": "20260505051445",
+    "name": "add_direction_to_interaction_logs",
+    "statements": [
+      "-- v5.0.0: Outlook email capture\n-- Add direction column to interaction_logs to distinguish inbound vs outbound emails.\n-- Existing type='email' rows are all from mycrm-side sends, so backfill as 'outbound'.\n\nALTER TABLE interaction_logs\nADD COLUMN IF NOT EXISTS direction text CHECK (direction IN ('inbound', 'outbound'));\n\nUPDATE interaction_logs\nSET direction = 'outbound'\nWHERE type = 'email' AND direction IS NULL;"
+    ]
+  },
+  {
+    "version": "20260505133354",
+    "name": "drop_interaction_logs_campaign_id_fk",
+    "statements": [
+      "-- interaction_logs.campaign_id 原本 FK 只指 email_campaigns，但實際上\n-- newsletter_campaigns 的 send route 也在寫這個欄位，造成 FK 違反、\n-- INSERT 靜默失敗（route 沒檢查 error）。這就是為什麼 5 月中文 newsletter\n-- 寄出 967 封但 interaction_logs 0 筆。\n--\n-- 解決：drop FK。campaign_id 之後就是 plain UUID 欄位，可以指 email_campaigns\n-- 或 newsletter_campaigns，由 send_method + content 前綴判斷。\n\nALTER TABLE interaction_logs DROP CONSTRAINT IF EXISTS interaction_logs_campaign_id_fkey;"
+    ]
+  },
+  {
+    "version": "20260505142528",
+    "name": "restore_users_select_grant",
+    "statements": [
+      "-- users 表 anon/authenticated 莫名其妙沒有 SELECT GRANT，導致任何 RLS policy\n-- 內 EXISTS (SELECT FROM users ...) 子查詢都 permission denied、整個母 query\n-- 失敗。今天 /admin/newsletter/campaigns 顯示 empty 就是這樣壞的：browser\n-- 用 anon key 查 newsletter_campaigns，policy super_admin full access 內部\n-- 要查 users，permission 被拒、整個 query 回 error。\n--\n-- RLS users_select policy 是 qual=true 開放讀，所以恢復 GRANT 不增加實際\n-- 暴露面：原本就應該允許 read。\n\nGRANT SELECT ON public.users TO anon, authenticated;"
+    ]
+  },
+  {
+    "version": "20260507041626",
+    "name": "backfill_contact_email_status_from_blacklist",
+    "statements": [
+      "\nUPDATE contacts c\nSET email_status = 'bounced'\nFROM newsletter_blacklist bl\nWHERE c.email ILIKE bl.email\n  AND c.deleted_at IS NULL\n  AND c.email_status IS NULL\n  AND bl.status = 'bounced';\n"
+    ]
+  },
+  {
+    "version": "20260507062018",
+    "name": "add_newsletter_send_method_and_backfill",
+    "statements": [
+      "\n-- 1. 擴展 CHECK constraint：加入 'newsletter'\nALTER TABLE interaction_logs\n  DROP CONSTRAINT interaction_logs_send_method_check;\n\nALTER TABLE interaction_logs\n  ADD CONSTRAINT interaction_logs_send_method_check\n  CHECK (send_method IS NULL OR send_method = ANY (ARRAY['outlook','sendgrid','newsletter']));\n\n-- 2. Backfill：content 以 '電子報：' 開頭的舊紀錄從 sendgrid → newsletter\nUPDATE interaction_logs\nSET send_method = 'newsletter'\nWHERE send_method = 'sendgrid'\n  AND content LIKE '電子報：%';\n"
+    ]
+  },
+  {
+    "version": "20260507065034",
+    "name": "exclude_newsletter_from_last_activity",
+    "statements": [
+      "\n-- Update trigger functions to exclude both 'sendgrid' and 'newsletter' send_method\n-- from last_activity_at calculation.\n\nCREATE OR REPLACE FUNCTION public.update_contact_last_activity()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\nAS $function$\nDECLARE\n  target_contact_id uuid;\nBEGIN\n  target_contact_id := COALESCE(NEW.contact_id, OLD.contact_id);\n  IF target_contact_id IS NULL THEN\n    RETURN NULL;\n  END IF;\n\n  UPDATE contacts\n  SET last_activity_at = GREATEST(\n    COALESCE(\n      (SELECT MAX(il.created_at) FROM interaction_logs il\n       WHERE il.contact_id = target_contact_id\n         AND il.type IN ('note','meeting','email')\n         AND (il.send_method IS NULL OR il.send_method NOT IN ('sendgrid','newsletter'))),\n      created_at\n    ),\n    COALESCE(\n      (SELECT MAX(cp.created_at) FROM contact_photos cp\n       WHERE cp.contact_id = target_contact_id),\n      created_at\n    )\n  )\n  WHERE id = target_contact_id;\n\n  IF TG_OP = 'UPDATE' AND OLD.contact_id IS NOT NULL AND OLD.contact_id <> NEW.contact_id THEN\n    UPDATE contacts\n    SET last_activity_at = GREATEST(\n      COALESCE(\n        (SELECT MAX(il.created_at) FROM interaction_logs il\n         WHERE il.contact_id = OLD.contact_id\n           AND il.type IN ('note','meeting','email')\n           AND (il.send_method IS NULL OR il.send_method NOT IN ('sendgrid','newsletter'))),\n        created_at\n      ),\n      COALESCE(\n        (SELECT MAX(cp.created_at) FROM contact_photos cp\n         WHERE cp.contact_id = OLD.contact_id),\n        created_at\n      )\n    )\n    WHERE id = OLD.contact_id;\n  END IF;\n\n  RETURN NULL;\nEND;\n$function$;\n\nCREATE OR REPLACE FUNCTION public.update_contact_last_activity_from_photo()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\nAS $function$\nDECLARE\n  target_contact_id uuid;\nBEGIN\n  target_contact_id := COALESCE(NEW.contact_id, OLD.contact_id);\n  IF target_contact_id IS NULL THEN\n    RETURN NULL;\n  END IF;\n\n  UPDATE contacts\n  SET last_activity_at = GREATEST(\n    COALESCE(\n      (SELECT MAX(il.created_at) FROM interaction_logs il\n       WHERE il.contact_id = target_contact_id\n         AND il.type IN ('note','meeting','email')\n         AND (il.send_method IS NULL OR il.send_method NOT IN ('sendgrid','newsletter'))),\n      created_at\n    ),\n    COALESCE(\n      (SELECT MAX(cp.created_at) FROM contact_photos cp\n       WHERE cp.contact_id = target_contact_id),\n      created_at\n    )\n  )\n  WHERE id = target_contact_id;\n\n  RETURN NULL;\nEND;\n$function$;\n\n-- Backfill: recalculate last_activity_at for all contacts that may have been\n-- incorrectly set by newsletter logs with the old 'sendgrid' value.\nUPDATE contacts c\nSET last_activity_at = GREATEST(\n  COALESCE(\n    (SELECT MAX(il.created_at) FROM interaction_logs il\n     WHERE il.contact_id = c.id\n       AND il.type IN ('note','meeting','email')\n       AND (il.send_method IS NULL OR il.send_method NOT IN ('sendgrid','newsletter'))),\n    c.created_at\n  ),\n  COALESCE(\n    (SELECT MAX(cp.created_at) FROM contact_photos cp\n     WHERE cp.contact_id = c.id),\n    c.created_at\n  )\n)\nWHERE c.deleted_at IS NULL;\n"
+    ]
+  },
+  {
+    "version": "20260508042544",
+    "name": "fix_duplicate_scan_exact_name_and_remove_limit",
+    "statements": [
+      "\n-- 1. New function: exact canonical name match, full table, O(n log n)\n-- Canonical = COALESCE(name, name_en), trimmed. No LIMIT, no trigram needed.\nCREATE OR REPLACE FUNCTION public.find_exact_name_duplicates()\nRETURNS TABLE(id_a uuid, id_b uuid)\nLANGUAGE sql\nSECURITY DEFINER\nSET search_path TO 'public', 'pg_temp'\nAS $$\n  WITH named AS (\n    SELECT\n      id,\n      COALESCE(NULLIF(TRIM(name), ''), NULLIF(TRIM(name_en), '')) AS canonical\n    FROM contacts\n    WHERE deleted_at IS NULL\n      AND COALESCE(NULLIF(TRIM(name), ''), NULLIF(TRIM(name_en), '')) IS NOT NULL\n  )\n  SELECT a.id AS id_a, b.id AS id_b\n  FROM named a\n  JOIN named b ON a.canonical = b.canonical AND a.id < b.id;\n$$;\n\n-- 2. Replace find_name_duplicates: remove LIMIT 1000, scan full table\n--    Raise threshold slightly to 0.65 to reduce noise at larger scale.\nCREATE OR REPLACE FUNCTION public.find_name_duplicates()\nRETURNS TABLE(id_a uuid, id_b uuid, score double precision)\nLANGUAGE sql\nSECURITY DEFINER\nSET search_path TO 'public', 'pg_temp'\nAS $$\n  SELECT a.id AS id_a, b.id AS id_b,\n    greatest(\n      similarity(coalesce(a.name,''), coalesce(b.name,'')),\n      similarity(coalesce(a.name_en,''), coalesce(b.name_en,''))\n    ) AS score\n  FROM contacts a\n  JOIN contacts b ON a.id < b.id\n  WHERE a.deleted_at IS NULL\n    AND b.deleted_at IS NULL\n    AND greatest(\n      similarity(coalesce(a.name,''), coalesce(b.name,'')),\n      similarity(coalesce(a.name_en,''), coalesce(b.name_en,''))\n    ) >= 0.65\n    AND NOT (a.email IS NOT NULL AND a.email <> '' AND lower(a.email) = lower(b.email))\n    AND (a.name IS NOT NULL OR a.name_en IS NOT NULL)\n    AND (b.name IS NOT NULL OR b.name_en IS NOT NULL)\n    -- Exclude exact name matches (already handled by find_exact_name_duplicates)\n    AND NOT (\n      COALESCE(NULLIF(TRIM(a.name),''), NULLIF(TRIM(a.name_en),''))\n      = COALESCE(NULLIF(TRIM(b.name),''), NULLIF(TRIM(b.name_en),''))\n    );\n$$;\n"
+    ]
+  },
+  {
+    "version": "20260508044715",
+    "name": "fix_name_duplicates_restore_limit",
+    "statements": [
+      "\n-- find_exact_name_duplicates handles all exact matches (fast, full table).\n-- find_name_duplicates only needs fuzzy/typo cases — restore LIMIT to avoid O(n²) timeout.\n-- Raised to 2000 (from original 1000) to cover more recent contacts.\nCREATE OR REPLACE FUNCTION public.find_name_duplicates()\nRETURNS TABLE(id_a uuid, id_b uuid, score double precision)\nLANGUAGE sql\nSECURITY DEFINER\nSET search_path TO 'public', 'pg_temp'\nAS $$\n  WITH recent AS (\n    SELECT id, name, name_en, email\n    FROM contacts\n    WHERE deleted_at IS NULL\n    ORDER BY created_at DESC\n    LIMIT 2000\n  )\n  SELECT a.id AS id_a, b.id AS id_b,\n    greatest(\n      similarity(coalesce(a.name,''), coalesce(b.name,'')),\n      similarity(coalesce(a.name_en,''), coalesce(b.name_en,''))\n    ) AS score\n  FROM recent a\n  JOIN recent b ON a.id < b.id\n  WHERE\n    greatest(\n      similarity(coalesce(a.name,''), coalesce(b.name,'')),\n      similarity(coalesce(a.name_en,''), coalesce(b.name_en,''))\n    ) >= 0.65\n    AND NOT (a.email IS NOT NULL AND a.email <> '' AND lower(a.email) = lower(b.email))\n    AND (a.name IS NOT NULL OR a.name_en IS NOT NULL)\n    AND (b.name IS NOT NULL OR b.name_en IS NOT NULL)\n    -- Exclude exact name matches (handled by find_exact_name_duplicates)\n    AND NOT (\n      COALESCE(NULLIF(TRIM(a.name),''), NULLIF(TRIM(a.name_en),''))\n      = COALESCE(NULLIF(TRIM(b.name),''), NULLIF(TRIM(b.name_en),''))\n    );\n$$;\n"
+    ]
+  },
+  {
+    "version": "20260512051802",
+    "name": "add_creator_ids_filter_to_interaction_logs_rpc",
+    "statements": [
+      "CREATE OR REPLACE FUNCTION public.get_interaction_logs_by_tags(\n  p_tag_ids uuid[],\n  p_date_from timestamp with time zone,\n  p_date_to timestamp with time zone,\n  p_created_by uuid DEFAULT NULL,\n  p_country_codes text[] DEFAULT NULL,\n  p_types text[] DEFAULT NULL,\n  p_created_by_ids uuid[] DEFAULT NULL\n)\nRETURNS TABLE(\n  contact_name text,\n  contact_company text,\n  type text,\n  content text,\n  email_subject text,\n  meeting_date date,\n  meeting_time time without time zone,\n  meeting_location text,\n  creator_name text\n)\nLANGUAGE plpgsql\nSECURITY DEFINER\nSET search_path TO 'public', 'pg_temp'\nAS $$\nBEGIN\n  RETURN QUERY\n  SELECT\n    c.name AS contact_name,\n    c.company AS contact_company,\n    il.type,\n    il.content,\n    il.email_subject,\n    il.meeting_date,\n    il.meeting_time::TIME,\n    il.meeting_location,\n    u.display_name AS creator_name\n  FROM interaction_logs il\n  JOIN contacts c ON c.id = il.contact_id\n  LEFT JOIN users u ON u.id = il.created_by\n  WHERE il.type != 'system'\n    AND (il.content IS NULL OR il.content NOT ILIKE '%透過 Telegram Bot 新增名片%')\n    AND il.created_at >= p_date_from\n    AND il.created_at <= p_date_to\n    AND (p_created_by IS NULL OR il.created_by = p_created_by)\n    AND (\n      p_created_by_ids IS NULL\n      OR cardinality(p_created_by_ids) = 0\n      OR il.created_by = ANY(p_created_by_ids)\n    )\n    AND (\n      p_tag_ids IS NULL OR cardinality(p_tag_ids) = 0\n      OR il.contact_id IN (\n        SELECT DISTINCT ct.contact_id FROM contact_tags ct WHERE ct.tag_id = ANY(p_tag_ids)\n      )\n    )\n    AND (\n      p_country_codes IS NULL OR cardinality(p_country_codes) = 0\n      OR c.country_code = ANY(p_country_codes)\n    )\n    AND (\n      p_types IS NULL OR cardinality(p_types) = 0\n      OR il.type = ANY(p_types)\n    )\n  ORDER BY il.created_at DESC;\nEND;\n$$;"
+    ]
+  },
+  {
+    "version": "20260512051857",
+    "name": "add_exclude_newsletter_to_interaction_logs_rpc",
+    "statements": [
+      "CREATE OR REPLACE FUNCTION public.get_interaction_logs_by_tags(\n  p_tag_ids uuid[],\n  p_date_from timestamp with time zone,\n  p_date_to timestamp with time zone,\n  p_created_by uuid DEFAULT NULL,\n  p_country_codes text[] DEFAULT NULL,\n  p_types text[] DEFAULT NULL,\n  p_created_by_ids uuid[] DEFAULT NULL,\n  p_exclude_newsletter boolean DEFAULT FALSE\n)\nRETURNS TABLE(\n  contact_name text,\n  contact_company text,\n  type text,\n  content text,\n  email_subject text,\n  meeting_date date,\n  meeting_time time without time zone,\n  meeting_location text,\n  creator_name text\n)\nLANGUAGE plpgsql\nSECURITY DEFINER\nSET search_path TO 'public', 'pg_temp'\nAS $$\nBEGIN\n  RETURN QUERY\n  SELECT\n    c.name AS contact_name,\n    c.company AS contact_company,\n    il.type,\n    il.content,\n    il.email_subject,\n    il.meeting_date,\n    il.meeting_time::TIME,\n    il.meeting_location,\n    u.display_name AS creator_name\n  FROM interaction_logs il\n  JOIN contacts c ON c.id = il.contact_id\n  LEFT JOIN users u ON u.id = il.created_by\n  WHERE il.type != 'system'\n    AND (il.content IS NULL OR il.content NOT ILIKE '%透過 Telegram Bot 新增名片%')\n    AND il.created_at >= p_date_from\n    AND il.created_at <= p_date_to\n    AND (p_created_by IS NULL OR il.created_by = p_created_by)\n    AND (\n      p_created_by_ids IS NULL\n      OR cardinality(p_created_by_ids) = 0\n      OR il.created_by = ANY(p_created_by_ids)\n    )\n    AND (\n      p_tag_ids IS NULL OR cardinality(p_tag_ids) = 0\n      OR il.contact_id IN (\n        SELECT DISTINCT ct.contact_id FROM contact_tags ct WHERE ct.tag_id = ANY(p_tag_ids)\n      )\n    )\n    AND (\n      p_country_codes IS NULL OR cardinality(p_country_codes) = 0\n      OR c.country_code = ANY(p_country_codes)\n    )\n    AND (\n      p_types IS NULL OR cardinality(p_types) = 0\n      OR il.type = ANY(p_types)\n    )\n    AND (\n      NOT p_exclude_newsletter\n      OR il.send_method IS DISTINCT FROM 'newsletter'\n    )\n  ORDER BY il.created_at DESC;\nEND;\n$$;"
+    ]
+  },
+  {
+    "version": "20260512062851",
+    "name": "add_log_date_to_interaction_logs_rpc_v2",
+    "statements": [
+      "DROP FUNCTION IF EXISTS public.get_interaction_logs_by_tags(uuid[], timestamp with time zone, timestamp with time zone, uuid, text[], text[], uuid[], boolean);\nDROP FUNCTION IF EXISTS public.get_interaction_logs_by_tags(uuid[], timestamp with time zone, timestamp with time zone, uuid);\n\nCREATE FUNCTION public.get_interaction_logs_by_tags(\n  p_tag_ids uuid[],\n  p_date_from timestamp with time zone,\n  p_date_to timestamp with time zone,\n  p_created_by uuid DEFAULT NULL,\n  p_country_codes text[] DEFAULT NULL,\n  p_types text[] DEFAULT NULL,\n  p_created_by_ids uuid[] DEFAULT NULL,\n  p_exclude_newsletter boolean DEFAULT FALSE\n)\nRETURNS TABLE(\n  contact_name text,\n  contact_company text,\n  type text,\n  content text,\n  email_subject text,\n  meeting_date date,\n  meeting_time time without time zone,\n  meeting_location text,\n  creator_name text,\n  log_date date\n)\nLANGUAGE plpgsql\nSECURITY DEFINER\nSET search_path TO 'public', 'pg_temp'\nAS $$\nBEGIN\n  RETURN QUERY\n  SELECT\n    c.name AS contact_name,\n    c.company AS contact_company,\n    il.type,\n    il.content,\n    il.email_subject,\n    il.meeting_date,\n    il.meeting_time::TIME,\n    il.meeting_location,\n    u.display_name AS creator_name,\n    il.created_at::date AS log_date\n  FROM interaction_logs il\n  JOIN contacts c ON c.id = il.contact_id\n  LEFT JOIN users u ON u.id = il.created_by\n  WHERE il.type != 'system'\n    AND (il.content IS NULL OR il.content NOT ILIKE '%透過 Telegram Bot 新增名片%')\n    AND il.created_at >= p_date_from\n    AND il.created_at <= p_date_to\n    AND (p_created_by IS NULL OR il.created_by = p_created_by)\n    AND (\n      p_created_by_ids IS NULL\n      OR cardinality(p_created_by_ids) = 0\n      OR il.created_by = ANY(p_created_by_ids)\n    )\n    AND (\n      p_tag_ids IS NULL OR cardinality(p_tag_ids) = 0\n      OR il.contact_id IN (\n        SELECT DISTINCT ct.contact_id FROM contact_tags ct WHERE ct.tag_id = ANY(p_tag_ids)\n      )\n    )\n    AND (\n      p_country_codes IS NULL OR cardinality(p_country_codes) = 0\n      OR c.country_code = ANY(p_country_codes)\n    )\n    AND (\n      p_types IS NULL OR cardinality(p_types) = 0\n      OR il.type = ANY(p_types)\n    )\n    AND (\n      NOT p_exclude_newsletter\n      OR il.send_method IS DISTINCT FROM 'newsletter'\n    )\n  ORDER BY il.created_at DESC;\nEND;\n$$;"
+    ]
+  }
+]

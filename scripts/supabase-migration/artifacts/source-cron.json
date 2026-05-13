@@ -1,0 +1,29 @@
+[
+  {
+    "jobid": 1,
+    "jobname": "cleanup-orphan-cards",
+    "schedule": "0 3 * * *",
+    "command": "\n  DELETE FROM storage.objects\n  WHERE bucket_id = 'cards'\n    AND created_at < NOW() - INTERVAL '24 hours'\n    AND name NOT IN (\n      SELECT substring(card_img_url from '.*/public/cards/(.+)$')\n      FROM contacts WHERE card_img_url IS NOT NULL\n      UNION\n      SELECT substring(card_img_back_url from '.*/public/cards/(.+)$')\n      FROM contacts WHERE card_img_back_url IS NOT NULL\n      UNION\n      SELECT storage_path FROM pending_contacts WHERE storage_path IS NOT NULL\n    );\n  ",
+    "active": true,
+    "database": "postgres",
+    "username": "postgres"
+  },
+  {
+    "jobid": 2,
+    "jobname": "send-reminder",
+    "schedule": "* * * * *",
+    "command": "\n  SELECT net.http_post(\n    url := 'https://zaqzqcvsckripotuujep.supabase.co/functions/v1/send-reminder',\n    headers := jsonb_build_object(\n      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphcXpxY3ZzY2tyaXBvdHV1amVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MDU2NTEsImV4cCI6MjA4ODk4MTY1MX0.3pV13x_CZNpNLhfUtkJJn-vGVmHynAuMPF0gkVoLDmo',\n      'Content-Type', 'application/json'\n    ),\n    body := '{}'::jsonb\n  )\n  ",
+    "active": true,
+    "database": "postgres",
+    "username": "postgres"
+  },
+  {
+    "jobid": 3,
+    "jobname": "send-newsletter-hourly",
+    "schedule": "0 * * * *",
+    "command": "\n  select net.http_post(\n    url := (select value from vault.secrets where name = 'SUPABASE_URL') || '/functions/v1/send-newsletter',\n    headers := jsonb_build_object(\n      'Authorization', 'Bearer ' || (select value from vault.secrets where name = 'SUPABASE_ANON_KEY'),\n      'Content-Type', 'application/json'\n    ),\n    body := '{}'::jsonb\n  )\n  ",
+    "active": true,
+    "database": "postgres",
+    "username": "postgres"
+  }
+]
