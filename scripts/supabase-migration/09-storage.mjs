@@ -29,18 +29,42 @@ function getConcurrency() {
   return arg ? parseInt(arg.split('=')[1], 10) : 10
 }
 
-async function copyOne(srcClient, tgtClient, bucket, obj) {
-  // Download from source
-  const { data: blob, error: dlErr } = await srcClient.storage.from(bucket).download(obj.name)
-  if (dlErr) throw new Error(`download ${bucket}/${obj.name}: ${dlErr.message}`)
-  const buf = Buffer.from(await blob.arrayBuffer())
-  // Upload to target with upsert=true (idempotent)
-  const { error: upErr } = await tgtClient.storage.from(bucket).upload(obj.name, buf, {
-    contentType: obj.mimetype,
-    upsert: true,
-  })
-  if (upErr) throw new Error(`upload ${bucket}/${obj.name}: ${upErr.message}`)
-  return buf.length
+async function copyOne(srcClient, tgtClient, bucket, obj, maxRetries = 3) {
+  let lastErr
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const { data: blob, error: dlErr } = await srcClient.storage.from(bucket).download(obj.name)
+      if (dlErr) throw new Error(dlErr.message)
+      const buf = Buffer.from(await blob.arrayBuffer())
+      const { error: upErr } = await tgtClient.storage.from(bucket).upload(obj.name, buf, {
+        contentType: obj.mimetype,
+        upsert: true,
+      })
+      if (upErr) throw new Error(upErr.message)
+      return buf.length
+    } catch (e) {
+      lastErr = e
+      // Brief backoff on retry
+      if (attempt < maxRetries - 1) await new Promise((r) => setTimeout(r, 500 * (attempt + 1)))
+    }
+  }
+  throw new Error(`${bucket}/${obj.name}: ${lastErr.message}`)
+}
+
+// Worker-pool concurrency (not flawed Promise.race approach).
+async function runPool(items, concurrency, work) {
+  const queue = items.slice()
+  const results = []
+  async function worker() {
+    while (queue.length > 0) {
+      const item = queue.shift()
+      const r = await work(item).catch((e) => ({ __error: e.message, item }))
+      results.push(r)
+    }
+  }
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker())
+  await Promise.all(workers)
+  return results
 }
 
 async function migrateBucket(bucket, srcClient, tgtClient, progress, dry) {
@@ -69,28 +93,29 @@ async function migrateBucket(bucket, srcClient, tgtClient, progress, dry) {
 
   let copied = 0, failed = 0, bytes = 0
   const errors = []
-  let inFlight = []
   const t0 = Date.now()
-  for (const obj of queue) {
-    const p = copyOne(srcClient, tgtClient, bucket, obj)
-      .then((n) => { copied++; bytes += n })
-      .catch((e) => { failed++; errors.push({ key: obj.name, error: e.message }) })
-    inFlight.push(p)
-    if (inFlight.length >= concurrency) {
-      await Promise.race(inFlight)
-      inFlight = inFlight.filter((x) => x.then ? !x.isResolved : true)
-      // Periodic checkpoint
-      if ((copied + failed) % 100 === 0 && copied > 0) {
-        const elapsed = (Date.now() - t0) / 1000
-        const rate = copied / elapsed
-        const eta = (queue.length - copied) / rate
-        log.info(`  ${bucket}: ${copied}/${queue.length}  rate=${rate.toFixed(1)}/s  ETA=${(eta / 60).toFixed(1)}min`)
-        progress[bucket] = { copied, failed, bytes }
-        writeFileSync(PROGRESS_PATH, JSON.stringify(progress, null, 2))
-      }
+  let lastLogged = 0
+
+  await runPool(queue, concurrency, async (obj) => {
+    try {
+      const n = await copyOne(srcClient, tgtClient, bucket, obj)
+      copied++
+      bytes += n
+    } catch (e) {
+      failed++
+      errors.push({ key: obj.name, error: e.message })
     }
-  }
-  await Promise.allSettled(inFlight)
+    // Periodic progress + checkpoint
+    if (copied + failed - lastLogged >= 100) {
+      lastLogged = copied + failed
+      const elapsed = (Date.now() - t0) / 1000
+      const rate = copied / elapsed
+      const eta = (queue.length - copied) / Math.max(rate, 0.1)
+      log.info(`  ${bucket}: ${copied}/${queue.length} (failed=${failed})  rate=${rate.toFixed(1)}/s  ETA=${(eta / 60).toFixed(1)}min`)
+      progress[bucket] = { copied, failed, bytes }
+      writeFileSync(PROGRESS_PATH, JSON.stringify(progress, null, 2))
+    }
+  })
 
   log.ok(`${bucket}: copied=${copied} failed=${failed} bytes=${fmtBytes(bytes)}`)
   progress[bucket] = { copied, failed, bytes, errors: errors.slice(0, 50) }
