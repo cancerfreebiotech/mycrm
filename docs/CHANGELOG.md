@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v6.3.2 — fix(sendgrid): Event Webhook 改用 ECDSA 簽章驗證（2026-05-14）
+
+### 變更項目
+- `/api/sendgrid/webhook` 從錯誤的 HMAC-SHA256 驗證改成正確的 ECDSA P-256 / SHA-256（SendGrid Event Webhook 官方用 ECDSA）
+- `SENDGRID_WEBHOOK_SECRET` env 接受 raw base64 (124 chars) 或完整 PEM 兩種格式，code 自動 wrap
+- 修復後 email tracking 恢復：open / click / bounce / unsubscribe events 都會進 `email_events` table
+
 ## v6.3.1 — fix(bot/migration/inbound): /cancel 提示 + 大附件 BCC 修復 + Edge Function deploy 正規化（2026-05-14）
 
 ### 變更項目

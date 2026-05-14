@@ -1,16 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
-import { createHmac } from 'crypto'
+import { createPublicKey, createVerify } from 'crypto'
 
-// Verify SendGrid webhook signature
+// Verify SendGrid Event Webhook signature.
+//
+// SendGrid signs the POST with ECDSA P-256 / SHA-256 (NOT HMAC). The
+// Verification Key in SendGrid dashboard is the base64 of the SPKI public
+// key. We accept the env var in either form:
+//   - Bare base64 (124 chars, no headers) — what SendGrid shows in dashboard
+//   - Full PEM with `-----BEGIN PUBLIC KEY-----` headers
 function verifySignature(req: NextRequest, rawBody: string): boolean {
   const secret = process.env.SENDGRID_WEBHOOK_SECRET
-  if (!secret) return true // skip verification if not configured
+  if (!secret) return true  // skip verification if not configured
   const signature = req.headers.get('x-twilio-email-event-webhook-signature') ?? ''
   const timestamp = req.headers.get('x-twilio-email-event-webhook-timestamp') ?? ''
-  const payload = timestamp + rawBody
-  const expected = createHmac('sha256', secret).update(payload).digest('base64')
-  return signature === expected
+  if (!signature || !timestamp) return false
+
+  const trimmed = secret.trim()
+  const pem = trimmed.startsWith('-----BEGIN')
+    ? trimmed
+    : `-----BEGIN PUBLIC KEY-----\n${trimmed.replace(/(.{64})/g, '$1\n').trim()}\n-----END PUBLIC KEY-----`
+
+  try {
+    const pubKey = createPublicKey({ key: pem, format: 'pem' })
+    const verifier = createVerify('SHA256')
+    verifier.update(timestamp + rawBody)
+    verifier.end()
+    return verifier.verify(pubKey, Buffer.from(signature, 'base64'))
+  } catch (e) {
+    console.error('[sendgrid-webhook] signature verify error:', (e as Error).message)
+    return false
+  }
 }
 
 interface SendGridEvent {
