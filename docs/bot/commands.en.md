@@ -14,6 +14,7 @@ nav_order: 2
 | `/visit [name]` | `/v` | Add a visit record for a contact |
 | `/a [name]` | — | Add a business card photo (OCR) for a contact; creates new contact if not found |
 | `/p [name]` | — | Add a group photo for a contact |
+| `/news` | — | Accumulate newsletter material (requires `newsletter` permission) |
 | `/b` | `/batch` | Enter batch mode: shoot many cards in a row, OCR runs in background |
 | `/done` | — | End batch mode and queue OCR |
 | `/cancel` | — | Abort current mode |
@@ -111,6 +112,28 @@ Used to add or replace a business card photo for a contact. After sending, AI OC
 ```
 
 Press "⏭ Skip, no card needed" to skip the card photo and complete contact creation.
+
+---
+
+### `/news` — Accumulate Newsletter Material
+
+Accumulate newsletter content throughout the month. At month-end, an admin runs "AI Compose" to generate 3 draft campaigns in one click. Requires the `newsletter` feature permission.
+
+```
+/news
+→ Bot: "Current period 2026-05. Which section?"
+   [📜 Last Month]  [🔮 Next Month]
+→ Pick section → Bot: "Story title?"
+→ Type: AACR Taiwan Night
+→ Bot: "Event date? YYYY-MM-DD or 'skip'"
+→ Type: 2026-04-29
+→ Bot: "Paste content (text + photos). /done when finished"
+→ Paste photos, paste text (multiple times OK)
+→ /done
+→ Bot: ✅ Saved to 2026-05 Last Month
+```
+
+Organization page at `/admin/newsletter/draft/{period}` — multi-user accumulation, edit, reorder, AI compose.
 
 ---
 

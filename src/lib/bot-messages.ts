@@ -173,6 +173,7 @@ const zh: BotMessages = {
     '/p [姓名] 或 /p 姓名 | 公司 — 為聯絡人新增合照（找不到可建立新聯絡人）\n' +
     '/li　　　　　　　　　 — 傳送 LinkedIn 截圖解析\n' +
     '/ai　　　　　　　　　 — AI 生成拜訪信/感謝函\n' +
+    '/news　　　　　　　　 — 累積電子報素材（需 newsletter 權限）\n' +
     '/task [任務內容]　　 — 新增任務\n' +
     '/meet [會議資訊]　　 — 新增行程\n' +
     '/members　　　　　　 — 查看組織成員\n' +
@@ -280,6 +281,7 @@ const en: BotMessages = {
     '/p [name] or /p name | company — Add personal photo (create contact on miss)\n' +
     '/li　　　　　　　　　　　 — Send LinkedIn screenshot to parse\n' +
     '/ai　　　　　　　　　　　 — AI generate follow-up / thank-you email\n' +
+    '/news　　　　　　　　　　 — Accumulate newsletter material (needs newsletter permission)\n' +
     '/task [task]　　　　　　 — Add task\n' +
     '/meet [meeting info]　 — Add schedule\n' +
     '/members　　　　　　　 — View team members\n' +
@@ -387,6 +389,7 @@ const ja: BotMessages = {
     '/p [名前] または /p 名前 | 会社 — 連絡先に写真を追加（未登録なら新規作成）\n' +
     '/li　　　　　　　　　　　　 — LinkedInスクショを解析\n' +
     '/ai　　　　　　　　　　　　 — AI でフォローアップメールを生成\n' +
+    '/news　　　　　　　　　　　 — ニュースレター素材を蓄積（newsletter 権限必要）\n' +
     '/task [タスク内容]　　　 — タスクを追加\n' +
     '/meet [会議情報]　　　　 — スケジュールを追加\n' +
     '/members　　　　　　　　 — メンバー一覧を表示\n' +

@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v6.3.0 — feat(newsletter): 多人協作素材累積 + AI 自動編寫（2026-05-14）
+
+### 變更項目
+- **新 table `newsletter_drafts`**：員工整月累積 story 素材，多人協作。RLS 走 `has_feature('newsletter') OR is_super_admin()`
+- **Telegram bot `/news` 指令**：手機隨手累積素材（section → title → date → 文字+照片 → /done），存到當月 draft
+- **Web 後台 `/admin/newsletter/draft/[period]`**：兩欄看板（上月回顧 / 下月預告），全員可看/編/刪/排序，可跨月搬移
+- **API routes**：`/api/newsletter/drafts/*`（GET/POST/PATCH/DELETE + photo upload + JSON export）
+- **AI 編寫 endpoint `/api/newsletter/compose-from-drafts`**：撈當月 drafts → Gemini 3.1 Pro 潤中文 → Gemini 3.1 Flash Lite 翻譯英日 + 生成 promo text → 套既有 skeleton-{lang}.html → 預覽 / Commit
+- **Commit 模式**：一鍵建立 3 個 draft campaigns（zh/en/ja），素材標 status='used'
+- **`src/lib/newsletter-ai.ts`**：refineProseZh / translateStory / generatePromoText，跑 Portkey + Gemini，吃 `skills/newsletter-composer/tone-samples/` 當 few-shot
+- Bot help / docs (zh/en/ja) 補 `/news` 指令說明
+
 ## v6.2.0 — feat(bot): /a 指令支援新增聯絡人 + 跳過名片選項（2026-05-12）
 
 ### 變更項目

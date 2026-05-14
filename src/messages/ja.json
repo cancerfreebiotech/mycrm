@@ -1144,6 +1144,12 @@
     }
   },
   "newsletter": {
+    "draftTitle": "ニュースレター素材 · {period}",
+    "lastMonthSection": "先月の振り返り",
+    "nextMonthSection": "来月の予告",
+    "exportJson": "JSON エクスポート",
+    "aiCompose": "AI 編集",
+    "aiComingPhase2": "AI 編集（近日対応）",
     "pageTitle": "ニュースレター管理",
     "pageDesc": "ニュースレター活動の作成・スケジュール・追跡",
     "unsubscribeManagement": "配信停止管理",

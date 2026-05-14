@@ -30,18 +30,17 @@ export async function GET() {
 
   // 2) Parallel-fetch all pages.
   const pageCount = Math.min(MAX_BATCHES, Math.ceil(total / BATCH_SIZE))
-  const pagePromises: Promise<{ data: unknown[] | null; error: { message: string } | null }>[] = []
+  const pagePromises: Array<Promise<{ data: unknown[] | null; error: { message: string } | null }>> = []
   for (let i = 0; i < pageCount; i++) {
     const from = i * BATCH_SIZE
-    pagePromises.push(
-      supabase
-        .from('contacts')
-        .select(SELECT_FIELDS)
-        .is('deleted_at', null)
-        .order('last_activity_at', { ascending: false })
-        .range(from, from + BATCH_SIZE - 1)
-        .then((r) => ({ data: r.data, error: r.error }))
-    )
+    const p = supabase
+      .from('contacts')
+      .select(SELECT_FIELDS)
+      .is('deleted_at', null)
+      .order('last_activity_at', { ascending: false })
+      .range(from, from + BATCH_SIZE - 1)
+      .then((r) => ({ data: r.data as unknown[] | null, error: r.error })) as Promise<{ data: unknown[] | null; error: { message: string } | null }>
+    pagePromises.push(p)
   }
 
   // 3) In parallel, fetch ALL newsletter_unsubscribes (small table — typically tens of rows).

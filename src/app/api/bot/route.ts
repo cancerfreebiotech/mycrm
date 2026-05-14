@@ -16,6 +16,19 @@ function countryToLanguage(code: string | null | undefined): string {
   return 'english'
 }
 
+function currentPeriod(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+async function userHasNewsletter(userId: string): Promise<boolean> {
+  const sb = createServiceClient()
+  const { data } = await sb.from('users').select('role, granted_features').eq('id', userId).single()
+  if (!data) return false
+  if (data.role === 'super_admin') return true
+  return (data.granted_features ?? []).includes('newsletter')
+}
+
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`
 
@@ -714,6 +727,30 @@ async function handlePhoto(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       await sendMessage(chatId, `❌ 收下失敗：${msg}`)
+    }
+    return
+  }
+
+  // /news: photo arrives during collection — upload to newsletter-assets and append to draft
+  if (session?.state === 'news_collecting') {
+    const draftId = session.context.draft_id as string
+    const period = session.context.period as string
+    try {
+      const buf = await downloadTelegramPhoto(photo.file_id)
+      const compressed = await processCardImage(buf)
+      const sb = createServiceClient()
+      const key = `drafts/${period}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`
+      const { error: upErr } = await sb.storage.from('newsletter-assets').upload(key, compressed, {
+        contentType: 'image/jpeg', upsert: false,
+      })
+      if (upErr) throw new Error(upErr.message)
+      const url = sb.storage.from('newsletter-assets').getPublicUrl(key).data.publicUrl
+      const { data: cur } = await sb.from('newsletter_drafts').select('photo_urls').eq('id', draftId).single()
+      const updated = [...(cur?.photo_urls ?? []), url]
+      await sb.from('newsletter_drafts').update({ photo_urls: updated }).eq('id', draftId)
+      await sendMessage(chatId, `📷 照片已加入（累計 ${updated.length} 張）。繼續貼，或 <code>/done</code> 結束`)
+    } catch (e) {
+      await sendMessage(chatId, `❌ 照片上傳失敗：${e instanceof Error ? e.message : '未知錯誤'}`)
     }
     return
   }
@@ -1897,6 +1934,28 @@ async function handleText(
 
   // ── /done — finish batch mode, wait for stragglers + send summary ────────
   if (cmd === '/done') {
+    // /done can finish: batch_mode (existing) OR news_collecting (new)
+    if (session?.state === 'news_collecting') {
+      const draftId = session.context.draft_id as string
+      const sb = createServiceClient()
+      const { data: d } = await sb.from('newsletter_drafts')
+        .select('title, content, photo_urls, event_date, section, period')
+        .eq('id', draftId).single()
+      await clearSession(fromId)
+      if (!d) { await sendMessage(chatId, '已退出'); return }
+      const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+      const link = appUrl ? `\n\n👀 <a href="${appUrl}/admin/newsletter/draft/${d.period}">整理頁面</a>` : ''
+      const photos = d.photo_urls?.length ?? 0
+      const charCount = (d.content ?? '').length
+      const secLabel = d.section === 'last_month' ? '上月回顧' : '下月預告'
+      await sendMessage(chatId,
+        `✅ 已存到 <b>${d.period}</b> · ${secLabel}\n` +
+        `Story: ${d.title}\n` +
+        `${d.event_date ? `📅 ${d.event_date}\n` : ''}` +
+        `📝 ${charCount} 字, 📷 ${photos} 張照片${link}`
+      )
+      return
+    }
     if (session?.state !== 'batch_mode') {
       await sendMessage(chatId, '目前不在 batch 模式。輸入 /b 進入後再傳照片。')
       return
@@ -1924,6 +1983,102 @@ async function handleText(
     await clearSession(fromId)
     await sendMessage(chatId, wasBatch ? '已取消 batch 模式（已收的照片留在 pending，可到 web 確認）。' : '已取消。')
     return
+  }
+
+  // ── /news — accumulate newsletter material ────────────────────────────────
+  if (cmd === '/news') {
+    if (!await userHasNewsletter(user.id)) {
+      await sendMessage(chatId, '⛔ 此指令需要 newsletter 權限，請聯絡管理員開通')
+      return
+    }
+    const period = currentPeriod()
+    await sendMessage(chatId,
+      `📰 累積 <b>${period}</b> 月電子報素材\n要加到哪一段？`,
+      { reply_markup: { inline_keyboard: [[
+        { text: '📜 上月回顧', callback_data: `news_sec_last_${period}` },
+        { text: '🔮 下月預告', callback_data: `news_sec_next_${period}` },
+      ]] } }
+    )
+    return
+  }
+
+  // ── Session: news_title — collect story title ──────────────────────────────
+  if (session?.state === 'news_title') {
+    if (cmd.startsWith('/')) { await clearSession(fromId) } else {
+    const title = text.trim()
+    if (title.length < 1 || title.length > 200) {
+      await sendMessage(chatId, '標題長度需要 1-200 字，請重新輸入')
+      return
+    }
+    await setSession(fromId, 'news_date', { ...session.context, title })
+    await sendMessage(chatId, '📅 事件日期？格式 <code>YYYY-MM-DD</code>（例：2026-04-29），或輸入「略過」')
+    return
+    }
+  }
+
+  // ── Session: news_date — collect event date ────────────────────────────────
+  if (session?.state === 'news_date') {
+    if (cmd.startsWith('/')) { await clearSession(fromId) } else {
+    const raw = text.trim()
+    let eventDate: string | null = null
+    if (raw === '略過' || raw.toLowerCase() === 'skip' || raw === '-') {
+      eventDate = null
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      eventDate = raw
+    } else {
+      await sendMessage(chatId, '日期格式不對。請輸入 <code>YYYY-MM-DD</code>（例：2026-04-29），或輸入「略過」')
+      return
+    }
+    // Create the draft now so subsequent photos/text can append
+    const sb = createServiceClient()
+    const { data: existing } = await sb
+      .from('newsletter_drafts')
+      .select('position')
+      .eq('period', session.context.period as string)
+      .eq('section', session.context.section as string)
+      .neq('status', 'deleted')
+      .order('position', { ascending: false }).limit(1)
+    const nextPos = (existing?.[0]?.position ?? -1) + 1
+    const { data: draft, error } = await sb.from('newsletter_drafts').insert({
+      period: session.context.period as string,
+      section: session.context.section as string,
+      title: session.context.title as string,
+      content: null,
+      event_date: eventDate,
+      photo_urls: [],
+      links: [],
+      created_by: user.id,
+      created_via: 'telegram',
+      position: nextPos,
+    }).select('id').single()
+    if (error || !draft) {
+      await clearSession(fromId)
+      await sendMessage(chatId, `❌ 建立失敗：${error?.message ?? '未知錯誤'}`)
+      return
+    }
+    await setSession(fromId, 'news_collecting', { ...session.context, draft_id: draft.id, event_date: eventDate })
+    await sendMessage(chatId,
+      `✅ 已建立 story「${session.context.title}」${eventDate ? `（${eventDate}）` : ''}\n\n` +
+      `現在請貼內容（文字 + 照片，任何順序）。\n` +
+      `每段文字會 append，每張照片會上傳。完成輸入 <code>/done</code>。`
+    )
+    return
+    }
+  }
+
+  // ── Session: news_collecting — text input appends to content
+  // (/done is handled in the main /done block above, which finalizes this state)
+  if (session?.state === 'news_collecting') {
+    if (cmd.startsWith('/')) { await clearSession(fromId) } else {
+    const draftId = session.context.draft_id as string
+    const sb = createServiceClient()
+    const { data: cur } = await sb.from('newsletter_drafts')
+      .select('content').eq('id', draftId).single()
+    const merged = (cur?.content ? cur.content + '\n\n' : '') + text.trim()
+    await sb.from('newsletter_drafts').update({ content: merged }).eq('id', draftId)
+    await sendMessage(chatId, `📝 已加入 (${text.trim().length} 字，累計 ${merged.length} 字)。繼續貼，或 <code>/done</code> 結束`)
+    return
+    }
   }
 
   // Default
@@ -2319,6 +2474,24 @@ export async function POST(req: NextRequest) {
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await clearSession(from.id)
           await sendMessage(from.id, '已取消')
+        }
+
+        // ── /news: pick section (last_month / next_month) ────────────────────
+        else if (data?.startsWith('news_sec_last_') || data?.startsWith('news_sec_next_')) {
+          if (!await userHasNewsletter(user.id)) {
+            await answerCallbackQuery(callbackQueryId, '無權限')
+            return NextResponse.json({ ok: true })
+          }
+          const section = data.startsWith('news_sec_last_') ? 'last_month' : 'next_month'
+          const period = data.replace('news_sec_last_', '').replace('news_sec_next_', '')
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await setSession(from.id, 'news_title', { period, section })
+          const secLabel = section === 'last_month' ? '上月回顧' : '下月預告'
+          await sendMessage(from.id,
+            `📰 <b>${period}</b> · ${secLabel}\n\n` +
+            `輸入 Story 標題（例：AACR Taiwan Night 2026）`
+          )
         }
 
         // ── Skip adding card photo ────────────────────────────────────────────

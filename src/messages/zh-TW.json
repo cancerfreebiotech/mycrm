@@ -1144,6 +1144,12 @@
     }
   },
   "newsletter": {
+    "draftTitle": "電子報素材 · {period}",
+    "lastMonthSection": "上月回顧",
+    "nextMonthSection": "下月預告",
+    "exportJson": "匯出 JSON",
+    "aiCompose": "AI 編寫",
+    "aiComingPhase2": "AI 編寫（即將上線）",
     "pageTitle": "Newsletter 管理",
     "pageDesc": "建立、排程並追蹤電子報活動",
     "unsubscribeManagement": "退訂管理",

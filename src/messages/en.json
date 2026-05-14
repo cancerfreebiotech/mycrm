@@ -1144,6 +1144,12 @@
     }
   },
   "newsletter": {
+    "draftTitle": "Newsletter Drafts · {period}",
+    "lastMonthSection": "Last Month Recap",
+    "nextMonthSection": "Next Month Preview",
+    "exportJson": "Export JSON",
+    "aiCompose": "AI Compose",
+    "aiComingPhase2": "AI Compose (coming soon)",
     "pageTitle": "Newsletter Management",
     "pageDesc": "Create, schedule, and track newsletter campaigns",
     "unsubscribeManagement": "Unsubscribes",
