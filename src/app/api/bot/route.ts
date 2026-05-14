@@ -1742,7 +1742,7 @@ async function handleText(
       const { data: lastContact } = await supabase.from('contacts').select('id, name, company').eq('id', lastContactId).single()
       if (lastContact) {
         await setSession(fromId, 'waiting_for_add_card', { contact_id: lastContactId, contact_name: lastContact.name })
-        await sendMessage(chatId, `上一位聯絡人：<b>${lastContact.name}</b>（${lastContact.company ?? ''}）\n\n請傳送名片照片`, {
+        await sendMessage(chatId, `上一位聯絡人：<b>${lastContact.name}</b>（${lastContact.company ?? ''}）\n\n請傳送名片照片（或 /cancel 取消）`, {
           reply_markup: { inline_keyboard: [[{ text: '⏭ 跳過，不需要名片', callback_data: 'skip_add_card' }]] },
         })
         return
@@ -1776,7 +1776,7 @@ async function handleText(
       })
     } else if (contacts.length === 1) {
       await setSession(fromId, 'waiting_for_add_card', { contact_id: contacts[0].id, contact_name: contacts[0].name })
-      await sendMessage(chatId, `找到：${contacts[0].name}\n\n請傳送名片照片`, {
+      await sendMessage(chatId, `找到：${contacts[0].name}\n\n請傳送名片照片（或 /cancel 取消）`, {
         reply_markup: { inline_keyboard: [[{ text: '⏭ 跳過，不需要名片', callback_data: 'skip_add_card' }]] },
       })
     } else {
@@ -1793,7 +1793,7 @@ async function handleText(
       const { data: lastContact } = await supabase.from('contacts').select('id, name, company').eq('id', lastContactId).single()
       if (lastContact) {
         await setSession(fromId, 'waiting_for_photo', { contact_id: lastContactId, contact_name: lastContact.name })
-        await sendMessage(chatId, `上一位聯絡人：<b>${lastContact.name}</b>（${lastContact.company ?? ''}）\n\n請傳送合照\n\n💡 長按照片 → <b>以檔案傳送</b>，可保留拍攝時間和 GPS 地點`)
+        await sendMessage(chatId, `上一位聯絡人：<b>${lastContact.name}</b>（${lastContact.company ?? ''}）\n\n請傳送合照（或 /cancel 取消）\n\n💡 長按照片 → <b>以檔案傳送</b>，可保留拍攝時間和 GPS 地點`)
         return
       }
     }
@@ -1828,7 +1828,7 @@ async function handleText(
       })
     } else if (contacts.length === 1) {
       await setSession(fromId, 'waiting_for_photo', { contact_id: contacts[0].id, contact_name: contacts[0].name })
-      await sendMessage(chatId, `找到：${contacts[0].name}\n\n請傳送合照\n\n💡 長按照片 → <b>以檔案傳送</b>，可保留拍攝時間和 GPS 地點`)
+      await sendMessage(chatId, `找到：${contacts[0].name}\n\n請傳送合照（或 /cancel 取消）\n\n💡 長按照片 → <b>以檔案傳送</b>，可保留拍攝時間和 GPS 地點`)
     } else {
       const buttons = contacts.map((c) => [{ text: `${c.name}（${c.company ?? ''}）`, callback_data: `select_photo_${c.id}` }])
       await sendMessage(chatId, '找到多筆聯絡人，請選擇：', { reply_markup: { inline_keyboard: buttons } })
@@ -1887,7 +1887,7 @@ async function handleText(
   // ── /li: LinkedIn screenshot ───────────────────────────────────────────────
   if (cmd === '/li' || cmd === '/linkedin') {
     await setSession(fromId, 'waiting_for_li', {})
-    await sendMessage(chatId, '📸 請傳送 LinkedIn 個人頁截圖，AI 將自動解析聯絡人資料。')
+    await sendMessage(chatId, '📸 請傳送 LinkedIn 個人頁截圖，AI 將自動解析聯絡人資料（或 /cancel 取消）。')
     return
   }
 
@@ -2011,7 +2011,7 @@ async function handleText(
       return
     }
     await setSession(fromId, 'news_date', { ...session.context, title })
-    await sendMessage(chatId, '📅 事件日期？格式 <code>YYYY-MM-DD</code>（例：2026-04-29），或輸入「略過」')
+    await sendMessage(chatId, '📅 事件日期？格式 <code>YYYY-MM-DD</code>（例：2026-04-29），或輸入「略過」（/cancel 取消）')
     return
     }
   }
@@ -2060,7 +2060,8 @@ async function handleText(
     await sendMessage(chatId,
       `✅ 已建立 story「${session.context.title}」${eventDate ? `（${eventDate}）` : ''}\n\n` +
       `現在請貼內容（文字 + 照片，任何順序）。\n` +
-      `每段文字會 append，每張照片會上傳。完成輸入 <code>/done</code>。`
+      `每段文字會 append，每張照片會上傳。
+完成輸入 <code>/done</code>，或 <code>/cancel</code> 取消`
     )
     return
     }
@@ -2082,7 +2083,7 @@ async function handleText(
   }
 
   // Default
-  await sendMessage(chatId, '請傳送名片照片，或輸入 /help（/h）查看可用指令。')
+  await sendMessage(chatId, '請傳送名片照片（或 /cancel 取消），或輸入 /help（/h）查看可用指令。')
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -2395,7 +2396,7 @@ export async function POST(req: NextRequest) {
           await setSession(from.id, 'waiting_for_add_card', { contact_id: contactId, contact_name: contact?.name })
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, `找到：${contact?.name}\n\n請傳送名片照片`, {
+          await sendMessage(from.id, `找到：${contact?.name}\n\n請傳送名片照片（或 /cancel 取消）`, {
             reply_markup: { inline_keyboard: [[{ text: '⏭ 跳過，不需要名片', callback_data: 'skip_add_card' }]] },
           })
         }
@@ -2461,7 +2462,7 @@ export async function POST(req: NextRequest) {
               const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
               const link = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">查看聯絡人頁面</a>` : ''
               const displayLine = companyQuery ? `<b>${nameQuery}</b>（${companyQuery}）` : `<b>${nameQuery}</b>`
-              await sendMessage(from.id, `✅ 已建立聯絡人：${displayLine}${link}\n\n請傳送名片照片`, {
+              await sendMessage(from.id, `✅ 已建立聯絡人：${displayLine}${link}\n\n請傳送名片照片（或 /cancel 取消）`, {
                 reply_markup: { inline_keyboard: [[{ text: '⏭ 跳過，不需要名片', callback_data: 'skip_add_card' }]] },
               })
             }
@@ -2490,7 +2491,8 @@ export async function POST(req: NextRequest) {
           const secLabel = section === 'last_month' ? '上月回顧' : '下月預告'
           await sendMessage(from.id,
             `📰 <b>${period}</b> · ${secLabel}\n\n` +
-            `輸入 Story 標題（例：AACR Taiwan Night 2026）`
+            `輸入 Story 標題（例：AACR Taiwan Night 2026）
+（/cancel 取消）`
           )
         }
 
@@ -2577,7 +2579,7 @@ export async function POST(req: NextRequest) {
               const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
               const link = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">查看聯絡人頁面</a>` : ''
               const displayLine = companyQuery ? `<b>${nameQuery}</b>（${companyQuery}）` : `<b>${nameQuery}</b>`
-              await sendMessage(from.id, `✅ 已建立聯絡人：${displayLine}${link}\n\n請傳送合照\n\n💡 長按照片 → <b>以檔案傳送</b>，可保留拍攝時間和 GPS 地點`)
+              await sendMessage(from.id, `✅ 已建立聯絡人：${displayLine}${link}\n\n請傳送合照（或 /cancel 取消）\n\n💡 長按照片 → <b>以檔案傳送</b>，可保留拍攝時間和 GPS 地點`)
 
               try {
                 const { enrichContactEmail, enrichStatusMessage } = await import('@/lib/hunter')
@@ -2603,7 +2605,7 @@ export async function POST(req: NextRequest) {
           await setSession(from.id, 'waiting_for_photo', { contact_id: contactId, contact_name: contact?.name })
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, `找到：${contact?.name}\n\n請傳送合照\n\n💡 長按照片 → <b>以檔案傳送</b>，可保留拍攝時間和 GPS 地點`)
+          await sendMessage(from.id, `找到：${contact?.name}\n\n請傳送合照（或 /cancel 取消）\n\n💡 長按照片 → <b>以檔案傳送</b>，可保留拍攝時間和 GPS 地點`)
         }
 
         // ── Done collecting /p photos → ask for note ─────────────────────────

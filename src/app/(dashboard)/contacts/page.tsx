@@ -121,7 +121,7 @@ export default function ContactsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [batchModalOpen, setBatchModalOpen] = useState(false)
   const [batchForm, setBatchForm] = useState({
-    met_at: '', met_date: new Date().toISOString().slice(0, 10), referred_by: '',
+    met_at: '', met_date: '', referred_by: '',
     company: '', country_code: '', language: '', _tag_ids: [] as string[],
   })
   const [batchSaving, setBatchSaving] = useState(false)
@@ -421,7 +421,7 @@ export default function ContactsPage() {
     setBatchSaving(false)
     setBatchModalOpen(false)
     setSelectedIds(new Set())
-    setBatchForm({ met_at: '', met_date: new Date().toISOString().slice(0, 10), referred_by: '', company: '', country_code: '', language: '', _tag_ids: [] })
+    setBatchForm({ met_at: '', met_date: '', referred_by: '', company: '', country_code: '', language: '', _tag_ids: [] })
   }
 
   async function handleLinkedInUpload(e: React.ChangeEvent<HTMLInputElement>) {

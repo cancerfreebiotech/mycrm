@@ -13,7 +13,6 @@
  *   );
  */
 
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -31,7 +30,7 @@ async function sendTelegram(chatId: number, text: string) {
   })
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   // Verify caller — accept only requests with the anon key or a dedicated cron secret
   const expectedKey = Deno.env.get('CRON_SECRET') ?? Deno.env.get('SUPABASE_ANON_KEY')
   if (expectedKey) {

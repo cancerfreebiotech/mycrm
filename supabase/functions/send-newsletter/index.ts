@@ -18,7 +18,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { createHmac } from 'https://deno.land/std@0.177.0/node/crypto.ts'
+import { createHmac } from 'node:crypto'
 
 const SENDGRID_API = 'https://api.sendgrid.com/v3/mail/send'
 

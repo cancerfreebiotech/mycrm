@@ -39,22 +39,27 @@ async function main() {
     log.info(`${fn.slug}: ${body.length} bytes, verify_jwt=${fn.verify_jwt}`)
     if (dry) continue
 
-    // Mgmt API: POST /v1/projects/{ref}/functions
-    // The body is the function source as a string; metadata is in query params.
-    // For multi-file functions we'd use a different endpoint, but ours are single-file.
+    // Use the multipart deploy endpoint — the JSON-body POST /functions
+    // endpoint does NOT bundle source correctly and produces BOOT_ERROR at
+    // runtime. The /functions/deploy multipart endpoint is what Supabase CLI
+    // uses internally and is the only path that produces a working function.
     try {
-      const params = new URLSearchParams({
-        slug: fn.slug,
+      const fd = new FormData()
+      fd.append('metadata', new Blob([JSON.stringify({
         name: fn.slug,
-        verify_jwt: String(fn.verify_jwt),
-      })
-      await mgmt('POST', `/v1/projects/${target.projectRef}/functions?${params}`, {
-        slug: fn.slug,
-        name: fn.slug,
-        body,
+        entrypoint_path: 'index.ts',
         verify_jwt: fn.verify_jwt,
+      })], { type: 'application/json' }))
+      fd.append('file', new Blob([body], { type: 'application/typescript' }), 'index.ts')
+
+      const url = `https://api.supabase.com/v1/projects/${target.projectRef}/functions/deploy?slug=${encodeURIComponent(fn.slug)}`
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${env.SUPABASE_MGMT_TOKEN}` },
+        body: fd,
       })
-      log.ok(`${fn.slug} deployed`)
+      if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`)
+      log.ok(`${fn.slug} deployed (multipart)`)
       deployed.push(fn.slug)
     } catch (e) {
       log.err(`${fn.slug}: ${e.message}`)

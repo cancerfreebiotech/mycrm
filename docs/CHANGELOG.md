@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v6.3.1 — fix(bot/migration/inbound): /cancel 提示 + 大附件 BCC 修復 + Edge Function deploy 正規化（2026-05-14）
+
+### 變更項目
+- **`/api/sendgrid/inbound-parse` 搬到 Supabase Edge Function**：Vercel 4.5 MB body limit 擋了帶 5 MB+ 附件的 BCC 信件。新 Edge Function `inbound-parse` 在 Supabase Edge（Pro 25 MB body），完整 port + 用 SendGrid parsed mode 跳過 mailparser 依賴。附件 binary 丟棄、只存檔名到 `interaction_logs.email_attachments`
+- **Edge Function 部署方法修正**：`/v1/projects/{ref}/functions` (JSON body) 無法正確 bundle，function 永遠 BOOT_ERROR。改用 `/v1/projects/{ref}/functions/deploy` (multipart) — Supabase CLI 用的同 endpoint。Migration toolkit Phase 07 同步更新
+- **重新部署 3 個 BOOT_ERROR 的 function**：`send-reminder` / `send-newsletter` / `send-report` 從 migration 後就壞，現在恢復。`std@0.177/http/server.ts` 的 `serve` 替換為內建 `Deno.serve`；`send-newsletter` 的 `std/node/crypto` 替換為 `node:crypto`
+- **Telegram bot session-starting prompts 加 `/cancel` 提示**：`/p`、`/a`、`/li`、`/news` 流程現在明示「（或 /cancel 取消）」
+- **批次編輯 met_date 不再帶今天的預設值**：之前所有人都會被誤改成 today
+
+### 仍待處理
+- `/api/sendgrid/webhook` (Event Webhook) 50+ 401：HMAC vs ECDSA 算法不匹配，需 SendGrid 端設定調整或 code 改用 ECDSA
+
 ## v6.3.0 — feat(newsletter): 多人協作素材累積 + AI 自動編寫（2026-05-14）
 
 ### 變更項目
