@@ -11,7 +11,12 @@ import { createPublicKey, createVerify } from 'crypto'
 //   - Full PEM with `-----BEGIN PUBLIC KEY-----` headers
 function verifySignature(req: NextRequest, rawBody: string): boolean {
   const secret = process.env.SENDGRID_WEBHOOK_SECRET
-  if (!secret) return true  // skip verification if not configured
+  // Fail-closed: if secret is missing, reject. Open-by-default was a real
+  // exposure today when INBOUND_PARSE_SECRET disappeared from Vercel env.
+  if (!secret) {
+    console.error('[sendgrid-webhook] SENDGRID_WEBHOOK_SECRET missing — rejecting')
+    return false
+  }
   const signature = req.headers.get('x-twilio-email-event-webhook-signature') ?? ''
   const timestamp = req.headers.get('x-twilio-email-event-webhook-timestamp') ?? ''
   if (!signature || !timestamp) return false

@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v6.3.3 — fix(security/newsletter): webhook fail-closed + AI commit cache（2026-05-15）
+
+### 變更項目
+- **`/api/sendgrid/webhook` fail-closed**：缺 `SENDGRID_WEBHOOK_SECRET` 時改為 reject（之前是放行，env 一旦消失就變開放）
+- **AI commit 改吃 preview cache**：新 table `newsletter_compose_cache`（30 分鐘 TTL）。preview 寫入 cache，commit 從 cache 讀。先前 commit 會再跑一次 Gemini → 員工 commit 的內容跟 preview 看到的不一樣（Gemini non-deterministic）。現在 commit 完全沿用 preview 的結果
+
 ## v6.3.2 — fix(sendgrid): Event Webhook 改用 ECDSA 簽章驗證（2026-05-14）
 
 ### 變更項目

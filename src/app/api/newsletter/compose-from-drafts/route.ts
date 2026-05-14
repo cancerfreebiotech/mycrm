@@ -5,17 +5,26 @@ import { refineProseZh, translateStory, generatePromoText } from '@/lib/newslett
 import { composeNewsletter, type NewsletterStory } from '@/lib/newsletter-compose'
 
 // POST /api/newsletter/compose-from-drafts
-//   Body: { period: 'YYYY-MM', action: 'preview' | 'commit' }
+//   Body (preview): { period: 'YYYY-MM', action: 'preview' }
+//   Body (commit):  { period: 'YYYY-MM', action: 'commit' }
 //
 // Flow:
-//   1. Authz: newsletter feature or super_admin
-//   2. Load drafts for period (sorted by section + event_date + position)
-//   3. AI refine zh prose for each story (Pro model)
-//   4. AI translate to en + ja (Lite model)
-//   5. AI generate promo text x 3 langs (Lite model)
-//   6. Compose 3 final HTMLs via existing newsletter-compose lib
-//   7. action='preview' → return HTML + metadata
-//      action='commit'  → INSERT 3 newsletter_campaigns + mark drafts status='used'
+//   action='preview':
+//     1. Authz: newsletter feature or super_admin
+//     2. Load drafts for period
+//     3. AI refine zh + translate to en/ja + generate promo
+//     4. Cache result in newsletter_compose_cache (so commit can re-use it)
+//     5. Return HTML + metadata
+//
+//   action='commit':
+//     1. Authz
+//     2. Read latest cache row for this period (must be < 30 min old; otherwise 409)
+//     3. INSERT 3 newsletter_campaigns from cached payload
+//     4. Mark drafts status='used'
+//     5. Delete the cache row
+//
+// Important: commit does NOT re-run AI — Gemini is non-deterministic so the
+// committed content would diverge from what the user previewed.
 
 const SECTION_LABELS = {
   'zh-TW': { last: '上月回顧', next: '下月預告' },
@@ -94,6 +103,43 @@ export async function POST(req: NextRequest) {
   }
 
   const service = createServiceClient()
+
+  // ── action='commit': read cached preview, INSERT campaigns, mark drafts used
+  if (action === 'commit') {
+    const { data: cached, error: cacheErr } = await service
+      .from('newsletter_compose_cache')
+      .select('id, payload, created_at')
+      .eq('period', period)
+      .gt('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())  // < 30 min old
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (cacheErr) return NextResponse.json({ error: cacheErr.message }, { status: 500 })
+    if (!cached) {
+      return NextResponse.json({ error: 'No recent preview to commit. Run preview first.' }, { status: 409 })
+    }
+    const payload = cached.payload as {
+      story_ids: string[]
+      preview: Record<Lang, { html: string; subject: string; promo: string }>
+    }
+    const langs: Lang[] = ['zh-TW', 'en', 'ja']
+    const rows = langs.map((lang) => ({
+      title: payload.preview[lang].subject,
+      subject: payload.preview[lang].subject,
+      content_html: payload.preview[lang].html,
+      promo_text: payload.preview[lang].promo,
+      status: 'draft' as const,
+      created_by: auth.userId,
+    }))
+    const { data: created, error: insErr } = await service
+      .from('newsletter_campaigns').insert(rows).select('id, title')
+    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
+    await service.from('newsletter_drafts').update({ status: 'used' }).in('id', payload.story_ids)
+    await service.from('newsletter_compose_cache').delete().eq('id', cached.id)
+    return NextResponse.json({ campaigns: created, story_count: payload.story_ids.length })
+  }
+
+  // ── action='preview' ────────────────────────────────────────────────────
   const { data: drafts, error } = await service
     .from('newsletter_drafts')
     .select('id, section, title, content, event_date, photo_urls, links, position')
@@ -181,40 +227,21 @@ export async function POST(req: NextRequest) {
     buildOneLang('ja'),
   ])
 
-  if (action === 'preview') {
-    return NextResponse.json({
-      preview: { 'zh-TW': zh, en, ja },
-      story_count: trilingual.length,
-      story_titles: trilingual.map((s) => ({ zh: s.zh.title, en: s.en.title, ja: s.ja.title })),
-    })
+  // Cache the AI result so commit doesn't re-run (Gemini is non-deterministic
+  // and the user would commit a different output than what they previewed).
+  const previewPayload = {
+    story_ids: valid.map((d) => d.id),
+    preview: { 'zh-TW': zh, en, ja },
   }
-
-  // ── action === 'commit' ───────────────────────────────────────────────────
-  // INSERT 3 newsletter_campaigns rows
-  const rows = ([
-    ['zh-TW', zh],
-    ['en', en],
-    ['ja', ja],
-  ] as Array<[Lang, { html: string; subject: string; promo: string }]>)
-    .map(([lang, r]) => ({
-      title: r.subject,
-      subject: r.subject,
-      content_html: r.html,
-      promo_text: r.promo,
-      status: 'draft' as const,
-      created_by: auth.userId,
-    }))
-
-  const { data: created, error: insErr } = await service
-    .from('newsletter_campaigns').insert(rows).select('id, title')
-  if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
-
-  // Mark drafts as used
-  await service.from('newsletter_drafts').update({ status: 'used' })
-    .in('id', valid.map((d) => d.id))
+  await service.from('newsletter_compose_cache').insert({
+    period,
+    created_by: auth.userId,
+    payload: previewPayload,
+  })
 
   return NextResponse.json({
-    campaigns: created,
+    preview: { 'zh-TW': zh, en, ja },
     story_count: trilingual.length,
+    story_titles: trilingual.map((s) => ({ zh: s.zh.title, en: s.en.title, ja: s.ja.title })),
   })
 }
