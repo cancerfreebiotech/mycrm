@@ -782,7 +782,16 @@
   "maintenance": {
     "title": "System Maintenance",
     "subtitle": "System Maintenance",
-    "message": "Please try again later. Contact admin if urgent."
+    "message": "Please try again later. Contact admin if urgent.",
+    "toggleTitle": "Maintenance Mode",
+    "toggleStatusOn": "Currently enabled: regular users are redirected to the maintenance page; only super_admin can use the system",
+    "toggleStatusOff": "Currently disabled: all users can use the system normally",
+    "toggleEnable": "Enable Maintenance Mode",
+    "toggleDisable": "Disable Maintenance Mode",
+    "confirmEnable": "Enable maintenance mode? Regular users will be blocked from logging in.",
+    "toggleFailed": "Failed to toggle. Please try again later.",
+    "bannerTitle": "Maintenance mode is on",
+    "bannerHint": "Regular users cannot log in"
   },
   "hunter": {
     "title": "Hunter.io Email Lookup",

@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import React, { useEffect, useRef, useState } from 'react'
-import { Users, LayoutDashboard, ShieldCheck, Mail, MailX, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon, Globe, BarChart2, ClipboardList, MapPin, Menu, X, ChevronLeft, ChevronRight, Newspaper, ScanSearch, FolderInput, Activity, Images, Trash2, MessageSquarePlus } from 'lucide-react'
+import { Users, LayoutDashboard, ShieldCheck, Mail, MailX, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon, Globe, BarChart2, ClipboardList, MapPin, Menu, X, ChevronLeft, ChevronRight, Newspaper, ScanSearch, FolderInput, Activity, Images, Trash2, MessageSquarePlus, Wrench } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
@@ -25,6 +25,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
   const t = useTranslations('nav')
   const tf = useTranslations('footer')
+  const tm = useTranslations('maintenance')
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
@@ -33,6 +34,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const localeRef = useRef<HTMLDivElement>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
+  const [maintenanceOn, setMaintenanceOn] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -75,7 +77,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         .select('display_name, role')
         .eq('email', user.email)
         .single()
-      if (data) setProfile(data)
+      if (data) {
+        setProfile(data)
+        // Only super_admin reaches dashboard during maintenance; fetch flag for banner
+        if (data.role === 'super_admin') {
+          fetch('/api/admin/maintenance')
+            .then(r => r.ok ? r.json() : null)
+            .then(d => { if (d) setMaintenanceOn(!!d.enabled) })
+            .catch(() => {})
+        }
+      }
     }
     loadProfile()
   }, [])
@@ -293,6 +304,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </button>
           </div>
         </header>
+
+        {/* Maintenance banner — super_admin only */}
+        {maintenanceOn && isSuperAdmin && (
+          <div className="flex items-center gap-2 px-4 sm:px-6 py-2 bg-amber-100 dark:bg-amber-950/50 border-b border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs sm:text-sm">
+            <Wrench size={14} className="shrink-0" />
+            <span className="font-medium">{tm('bannerTitle')}</span>
+            <span className="hidden sm:inline text-amber-700 dark:text-amber-300">— {tm('bannerHint')}</span>
+          </div>
+        )}
 
         {/* Content */}
         <main className="flex-1 overflow-auto p-4 sm:p-6">{children}</main>

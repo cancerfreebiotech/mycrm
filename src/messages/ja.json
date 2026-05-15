@@ -782,7 +782,16 @@
   "maintenance": {
     "title": "システムメンテナンス中",
     "subtitle": "System Maintenance",
-    "message": "しばらくしてからもう一度お試しください。急ぎの場合は管理者にご連絡ください。"
+    "message": "しばらくしてからもう一度お試しください。急ぎの場合は管理者にご連絡ください。",
+    "toggleTitle": "メンテナンスモード",
+    "toggleStatusOn": "現在有効：一般ユーザーはメンテナンスページにリダイレクトされ、super_admin のみ利用可能",
+    "toggleStatusOff": "現在無効：すべてのユーザーが通常通り利用可能",
+    "toggleEnable": "メンテナンスモードを有効化",
+    "toggleDisable": "メンテナンスモードを無効化",
+    "confirmEnable": "メンテナンスモードを有効化しますか？一般ユーザーはログインできなくなります。",
+    "toggleFailed": "切り替えに失敗しました。しばらくしてからもう一度お試しください。",
+    "bannerTitle": "メンテナンスモード有効中",
+    "bannerHint": "一般ユーザーはログインできません"
   },
   "hunter": {
     "title": "Hunter.io メール補完",

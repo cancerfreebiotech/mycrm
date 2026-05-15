@@ -528,10 +528,10 @@ export default function CamcardPage() {
     const language = cardLanguage[card.id] ?? 'english'
 
     return (
-      <div className={`bg-white dark:bg-gray-900 rounded-xl border p-4 ${hasDup ? 'border-yellow-300 dark:border-yellow-700' : selectedCards.has(card.id) ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
-        <div className="flex gap-4">
-          {/* Checkbox */}
-          <div className="flex items-start pt-1 shrink-0">
+      <div className={`bg-white dark:bg-gray-900 rounded-xl border p-3 sm:p-4 ${hasDup ? 'border-yellow-300 dark:border-yellow-700' : selectedCards.has(card.id) ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+          {/* Checkbox + thumbs (row on mobile, column on sm+) */}
+          <div className="flex sm:flex-col gap-3 sm:gap-1 items-start shrink-0">
             <input
               type="checkbox"
               checked={selectedCards.has(card.id)}
@@ -544,16 +544,14 @@ export default function CamcardPage() {
                   return next
                 })
               }}
-              className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+              className="w-5 h-5 sm:w-4 sm:h-4 mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
             />
-          </div>
-
-          {/* Card images: front + back stacked, click to enlarge */}
-          <div className="flex flex-col gap-1 shrink-0">
-            <CardThumb url={card.card_img_url} alt={t('sideFront')} onPreview={setPreviewUrl} />
-            {card.back_img_url && (
-              <CardThumb url={card.back_img_url} alt={t('sideBack')} onPreview={setPreviewUrl} />
-            )}
+            <div className="flex flex-row sm:flex-col gap-1 shrink-0">
+              <CardThumb url={card.card_img_url} alt={t('sideFront')} onPreview={setPreviewUrl} />
+              {card.back_img_url && (
+                <CardThumb url={card.back_img_url} alt={t('sideBack')} onPreview={setPreviewUrl} />
+              )}
+            </div>
           </div>
 
           {/* OCR data */}
@@ -585,13 +583,13 @@ export default function CamcardPage() {
             )}
           </div>
 
-          {/* Actions */}
-          <div className="flex flex-col gap-2 shrink-0 items-end">
+          {/* Actions — row on mobile (wraps), column on sm+ */}
+          <div className="flex flex-row flex-wrap sm:flex-col gap-2 shrink-0 sm:items-end">
             <button
               onClick={() => handleConfirm(card.id)}
               disabled={isLoading || isBlocked}
               title={isBlocked ? t('hasDupWarn') : t('confirmAddTitle')}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {isLoading ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
               {t('addAction')}
@@ -599,21 +597,21 @@ export default function CamcardPage() {
             <button
               onClick={() => openEdit(card)}
               disabled={isLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40"
+              className="min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40"
             >
               <Pencil size={12} /> {t('editAction')}
             </button>
             <button
               onClick={() => openMerge(card)}
               disabled={isLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-40"
+              className="min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-40"
             >
               <Merge size={12} /> {t('mergeAction')}
             </button>
             <button
               onClick={() => handleSkip(card.id)}
               disabled={isLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-700 text-gray-500 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
+              className="min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-700 text-gray-500 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
             >
               <X size={12} /> {t('skipAction')}
             </button>
@@ -703,7 +701,7 @@ export default function CamcardPage() {
     <PermissionGate feature="camcard">
     <div className="max-w-4xl">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('pageTitle')}</h1>
           <p className="text-sm text-gray-400 mt-1">
@@ -764,7 +762,7 @@ export default function CamcardPage() {
       {/* Filter bar */}
       <div className="mb-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 flex flex-wrap gap-3 items-center">
         {/* Search */}
-        <div className="relative flex-1 min-w-[180px]">
+        <div className="relative flex-1 min-w-[140px]">
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           <input
             type="text"
@@ -1009,8 +1007,8 @@ export default function CamcardPage() {
               <button onClick={() => setEditCard(null)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
             </div>
 
-            <div className="p-6 overflow-y-auto flex-1">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                 {([
                   ['name', t('fieldCnName')],
                   ['name_en', t('fieldNameEn')],
@@ -1177,7 +1175,7 @@ export default function CamcardPage() {
       )}
       {/* Floating bulk confirm bar */}
       {(selectedCards.size > 0 || bulkConfirming) && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-2xl shadow-2xl px-5 py-3">
+        <div className="fixed bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 flex flex-wrap justify-center items-center gap-2 sm:gap-3 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-2xl shadow-2xl px-3 sm:px-5 py-2.5 sm:py-3 max-w-[calc(100vw-1.5rem)]">
           {bulkConfirming && bulkProgress ? (
             <>
               <Loader2 size={16} className="animate-spin shrink-0" />

@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v6.4.0 — feat(admin): maintenance toggle + dashboard banner + mobile users/camcard（2026-05-15）
+
+### 變更項目
+- **Web 上開關 maintenance mode**：`/admin/users` 頁面頂部新增 toggle 區塊（super_admin only），呼叫新 API `/api/admin/maintenance`（GET 取目前狀態 / POST 切換）。原 Telegram bot `/stop` 指令仍可用，兩個入口寫同一個 `system_settings.maintenance_mode`
+- **Maintenance banner**：當 maintenance mode 開啟時，super_admin 在 dashboard 仍可瀏覽，但每頁頂部會顯示 `Wrench` icon + 「維護模式已啟用」amber banner，提醒目前一般使用者無法登入
+- **`/admin/users` mobile-friendly**：< sm 螢幕顯示 user 卡片清單（姓名、email、role badge、Telegram/Teams/MFA pill、Reset MFA 按鈕、權限切換），≥ sm 維持原有 table 並加 `overflow-x-auto`。所有按鈕觸控目標 ≥ 36px
+- **`/admin/camcard` mobile-friendly**：CardItem 改 `flex-col sm:flex-row`（mobile 直向排版：checkbox+thumb / OCR / 動作按鈕），edit modal 改 `grid-cols-1 sm:grid-cols-2`，floating bulk bar 加 `flex-wrap` + `max-w-[calc(100vw-1.5rem)]` 避免在窄螢幕溢出。動作按鈕觸控目標 ≥ 36px
+- **i18n**：新增 `maintenance.toggle*` / `maintenance.banner*` key 到 zh-TW / en / ja
+
 ## v6.3.3 — fix(security/newsletter): webhook fail-closed + AI commit cache（2026-05-15）
 
 ### 變更項目

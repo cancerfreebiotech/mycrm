@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
-import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
+import { ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Wrench } from 'lucide-react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { ALL_FEATURE_KEYS, FEATURE_LABELS } from '@/lib/features'
 
@@ -26,6 +26,7 @@ export default function AdminUsersPage() {
   const router = useRouter()
   const t = useTranslations('users')
   const tc = useTranslations('common')
+  const tm = useTranslations('maintenance')
   const supabase = createBrowserSupabaseClient()
 
   const [users, setUsers] = useState<CrmUser[]>([])
@@ -36,6 +37,10 @@ export default function AdminUsersPage() {
   const [mfaStatus, setMfaStatus] = useState<Record<string, boolean>>({})
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  // Maintenance mode
+  const [maintenanceEnabled, setMaintenanceEnabled] = useState<boolean | null>(null)
+  const [maintenanceSaving, setMaintenanceSaving] = useState(false)
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -117,15 +122,46 @@ export default function AdminUsersPage() {
       setUsers(data ?? [])
       setLoading(false)
 
-      // Load MFA status
-      const mfaRes = await fetch('/api/admin/mfa-status')
+      // Parallel: MFA status + maintenance status
+      const [mfaRes, mRes] = await Promise.all([
+        fetch('/api/admin/mfa-status'),
+        fetch('/api/admin/maintenance'),
+      ])
       if (mfaRes.ok) {
         const { status } = await mfaRes.json()
         setMfaStatus(status ?? {})
       }
+      if (mRes.ok) {
+        const { enabled } = await mRes.json()
+        setMaintenanceEnabled(!!enabled)
+      }
     }
     load()
   }, [])
+
+  async function toggleMaintenance() {
+    if (maintenanceEnabled === null) return
+    const next = !maintenanceEnabled
+    if (next && !confirm(tm('confirmEnable'))) return
+    setMaintenanceSaving(true)
+    try {
+      const res = await fetch('/api/admin/maintenance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: next }),
+      })
+      if (res.ok) {
+        setMaintenanceEnabled(next)
+      } else {
+        const data = await res.json()
+        alert(data.error ?? tm('toggleFailed'))
+      }
+    } catch {
+      alert(tm('toggleFailed'))
+    } finally {
+      setMaintenanceSaving(false)
+    }
+  }
 
   async function toggleRole(u: CrmUser) {
     const newRole = u.role === 'super_admin' ? 'member' : 'super_admin'
@@ -145,7 +181,6 @@ export default function AdminUsersPage() {
       const data = await res.json()
       if (res.ok) {
         alert(t('mfaDeleted', { count: data.deleted }))
-        // Refresh MFA status
         const mfaRes = await fetch('/api/admin/mfa-status')
         if (mfaRes.ok) {
           const { status } = await mfaRes.json()
@@ -174,12 +209,150 @@ export default function AdminUsersPage() {
     setUpdatingId(null)
   }
 
+  function RoleBadge({ role }: { role: string }) {
+    return role === 'super_admin' ? (
+      <span className="px-2 py-0.5 text-xs bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-400 rounded-full">super_admin</span>
+    ) : (
+      <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-full">member</span>
+    )
+  }
+
+  function StatusPill({ active, on, off }: { active: boolean; on: string; off: string }) {
+    return active ? (
+      <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 rounded-full">{on}</span>
+    ) : (
+      <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-full">{off}</span>
+    )
+  }
+
+  function ActionButtons({ u }: { u: CrmUser }) {
+    return (
+      <>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            onClick={() => toggleRole(u)}
+            disabled={updatingId === u.id || u.id === currentUserId}
+            title={u.id === currentUserId ? t('selfRoleHint') : undefined}
+            className="min-h-[36px] px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 transition-colors"
+          >
+            {updatingId === u.id
+              ? t('updating')
+              : u.role === 'super_admin'
+              ? t('demoteToMember')
+              : t('promoteToAdmin')}
+          </button>
+        </div>
+        {u.role !== 'super_admin' && (
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {ALL_FEATURE_KEYS.map((key) => {
+              const granted = (u.granted_features ?? []).includes(key)
+              return (
+                <button
+                  key={key}
+                  onClick={() => toggleFeature(u, key)}
+                  disabled={updatingId === u.id}
+                  className={`min-h-[32px] px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                    granted
+                      ? 'bg-blue-100 dark:bg-blue-950 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:border-gray-400'
+                  }`}
+                >
+                  {granted ? '✓ ' : ''}{FEATURE_LABELS[key]}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </>
+    )
+  }
+
   return (
     <div className="max-w-5xl">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">{t('title')}</h1>
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{t('subtitle')}</p>
 
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+      {/* Maintenance Mode toggle */}
+      <div className={`rounded-xl border mb-6 p-4 sm:p-5 ${
+        maintenanceEnabled
+          ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800'
+          : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700'
+      }`}>
+        <div className="flex items-start sm:items-center gap-3 flex-col sm:flex-row sm:justify-between">
+          <div className="flex items-start gap-3">
+            <Wrench size={20} className={maintenanceEnabled ? 'text-amber-600 dark:text-amber-400 shrink-0 mt-0.5' : 'text-gray-400 shrink-0 mt-0.5'} />
+            <div>
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{tm('toggleTitle')}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                {maintenanceEnabled ? tm('toggleStatusOn') : tm('toggleStatusOff')}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={toggleMaintenance}
+            disabled={maintenanceEnabled === null || maintenanceSaving}
+            className={`min-h-[44px] w-full sm:w-auto px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 ${
+              maintenanceEnabled
+                ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'
+            }`}
+          >
+            {maintenanceSaving ? (
+              <span className="flex items-center gap-2 justify-center">
+                <Loader2 size={14} className="animate-spin" /> {tc('loading')}
+              </span>
+            ) : maintenanceEnabled === null ? (
+              tc('loading')
+            ) : maintenanceEnabled ? (
+              tm('toggleDisable')
+            ) : (
+              tm('toggleEnable')
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile: card list */}
+      <div className="sm:hidden space-y-3">
+        {loading ? (
+          <p className="text-center text-gray-400 py-8">{tc('loading')}</p>
+        ) : sortedUsers.length === 0 ? (
+          <p className="text-center text-gray-400 py-8">{t('noUsers')}</p>
+        ) : (
+          sortedUsers.map((u) => (
+            <div key={u.id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-gray-900 dark:text-gray-100 truncate">{u.display_name || '—'}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{u.email}</p>
+                </div>
+                <RoleBadge role={u.role} />
+              </div>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                <StatusPill active={!!u.telegram_id} on={`TG ${t('telegramBound')}`} off={`TG ${t('telegramUnbound')}`} />
+                <StatusPill active={!!u.teams_user_id} on={`Teams ${t('teamsBound')}`} off={`Teams ${t('teamsUnbound')}`} />
+                <StatusPill active={!!mfaStatus[u.email]} on={`MFA ${t('mfaSet')}`} off={`MFA ${t('mfaNotSet')}`} />
+              </div>
+              <p className="text-xs text-gray-400 mb-3">
+                {t('colLastLogin')}: {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : '—'}
+              </p>
+              {mfaStatus[u.email] && (
+                <button
+                  onClick={() => resetMfa(u)}
+                  disabled={resetMfaId === u.id}
+                  className="min-h-[36px] mb-2 w-full px-3 py-1.5 text-xs border border-orange-200 dark:border-orange-800 rounded-lg text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/30 disabled:opacity-40 transition-colors"
+                >
+                  {resetMfaId === u.id ? t('resetting') : t('reset') + ' MFA'}
+                </button>
+              )}
+              <ActionButtons u={u} />
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop: table (sm+) */}
+      <div className="hidden sm:block bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <tr>
@@ -192,7 +365,7 @@ export default function AdminUsersPage() {
                 ['last_login', t('colLastLogin')],
                 ['mfa', 'MFA'],
               ] as const).map(([key, label]) => (
-                <th key={key} className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">
+                <th key={key} className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">
                   <button
                     onClick={() => toggleSort(key as SortKey)}
                     className="inline-flex items-center gap-1 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
@@ -220,36 +393,20 @@ export default function AdminUsersPage() {
                   <td className="px-4 py-3 text-gray-900 dark:text-gray-100 font-medium">{u.display_name || '—'}</td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{u.email}</td>
                   <td className="px-4 py-3">
-                    {u.telegram_id ? (
-                      <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 rounded-full">{t('telegramBound')}</span>
-                    ) : (
-                      <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-full">{t('telegramUnbound')}</span>
-                    )}
+                    <StatusPill active={!!u.telegram_id} on={t('telegramBound')} off={t('telegramUnbound')} />
                   </td>
                   <td className="px-4 py-3">
-                    {u.teams_user_id ? (
-                      <span className="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-400 rounded-full">{t('teamsBound')}</span>
-                    ) : (
-                      <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-full">{t('teamsUnbound')}</span>
-                    )}
+                    <StatusPill active={!!u.teams_user_id} on={t('teamsBound')} off={t('teamsUnbound')} />
                   </td>
                   <td className="px-4 py-3">
-                    {u.role === 'super_admin' ? (
-                      <span className="px-2 py-0.5 text-xs bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-400 rounded-full">super_admin</span>
-                    ) : (
-                      <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-full">member</span>
-                    )}
+                    <RoleBadge role={u.role} />
                   </td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
+                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">
                     {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : '—'}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-1.5 items-start">
-                      {mfaStatus[u.email] ? (
-                        <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 rounded-full">{t('mfaSet')}</span>
-                      ) : (
-                        <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-full">{t('mfaNotSet')}</span>
-                      )}
+                      <StatusPill active={!!mfaStatus[u.email]} on={t('mfaSet')} off={t('mfaNotSet')} />
                       {mfaStatus[u.email] && (
                         <button
                           onClick={() => resetMfa(u)}
@@ -262,41 +419,7 @@ export default function AdminUsersPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 space-y-2">
-                    <div className="flex flex-wrap gap-1.5">
-                      <button
-                        onClick={() => toggleRole(u)}
-                        disabled={updatingId === u.id || u.id === currentUserId}
-                        title={u.id === currentUserId ? t('selfRoleHint') : undefined}
-                        className="px-3 py-1 text-xs border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 transition-colors"
-                      >
-                        {updatingId === u.id
-                          ? t('updating')
-                          : u.role === 'super_admin'
-                          ? t('demoteToMember')
-                          : t('promoteToAdmin')}
-                      </button>
-                    </div>
-                    {u.role !== 'super_admin' && (
-                      <div className="flex flex-wrap gap-1.5 mt-1">
-                        {ALL_FEATURE_KEYS.map((key) => {
-                          const granted = (u.granted_features ?? []).includes(key)
-                          return (
-                            <button
-                              key={key}
-                              onClick={() => toggleFeature(u, key)}
-                              disabled={updatingId === u.id}
-                              className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${
-                                granted
-                                  ? 'bg-blue-100 dark:bg-blue-950 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
-                                  : 'border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:border-gray-400'
-                              }`}
-                            >
-                              {granted ? '✓ ' : ''}{FEATURE_LABELS[key]}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
+                    <ActionButtons u={u} />
                   </td>
                 </tr>
               ))

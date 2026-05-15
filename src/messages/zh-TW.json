@@ -782,7 +782,16 @@
   "maintenance": {
     "title": "系統維護中",
     "subtitle": "System Maintenance",
-    "message": "請稍後再試。如有急需請聯絡管理員。"
+    "message": "請稍後再試。如有急需請聯絡管理員。",
+    "toggleTitle": "維護模式",
+    "toggleStatusOn": "目前已啟用：一般使用者會被導向維護頁，僅 super_admin 可使用",
+    "toggleStatusOff": "目前未啟用：所有使用者皆可正常使用",
+    "toggleEnable": "啟用維護模式",
+    "toggleDisable": "關閉維護模式",
+    "confirmEnable": "確定要啟用維護模式？啟用後一般使用者將無法登入系統。",
+    "toggleFailed": "切換失敗，請稍後再試",
+    "bannerTitle": "維護模式已啟用",
+    "bannerHint": "一般使用者目前無法登入"
   },
   "hunter": {
     "title": "Hunter.io Email 補查",
