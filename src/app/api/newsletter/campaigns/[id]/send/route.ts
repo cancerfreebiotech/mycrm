@@ -66,7 +66,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // ── Gather recipients ──
   let recipients: Subscriber[] = []
-  let invalidEmails: string[] = []
+  const invalidEmails: string[] = []
 
   if (body.testOnly) {
     if (!body.testEmail) return NextResponse.json({ error: 'testEmail required' }, { status: 400 })
@@ -97,17 +97,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // a single .in() get silently truncated → empty result. Chunk every
     // .in() lookup to BATCH (200) to stay under the URL limit.
     const BATCH = 200
+    // Supabase's PostgrestFilterBuilder generics are deeply nested. Typing
+    // extraFilter against them triggers TS "excessively deep" (the previous
+    // ReturnType<ReturnType<...>> chain did). The query builder is runtime-
+    // chainable regardless of the static type, so we accept any here.
     async function chunkedIn<T>(
       table: string,
       select: string,
       column: string,
       values: string[],
-      extraFilter?: (q: ReturnType<ReturnType<typeof service.from>['select']>) => unknown
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      extraFilter?: (q: any) => any
     ): Promise<T[]> {
       const out: T[] = []
       for (let i = 0; i < values.length; i += BATCH) {
         let q = service.from(table).select(select).in(column, values.slice(i, i + BATCH))
-        if (extraFilter) q = extraFilter(q) as typeof q
+        if (extraFilter) q = extraFilter(q)
         const { data } = await q
         if (data) out.push(...(data as T[]))
       }
@@ -119,7 +124,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       'id, email, first_name, last_name, contact_id',
       'id',
       subIds,
-      (q) => (q as unknown as { is: (col: string, v: null) => unknown }).is('unsubscribed_at', null)
+      (q) => q.is('unsubscribed_at', null)
     )
 
     // Filter out suppressed emails.
@@ -135,11 +140,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       chunkedIn<{ email: string }>('newsletter_unsubscribes', 'email', 'email', emails),
       contactIds.length > 0
         ? chunkedIn<{ id: string }>('contacts', 'id', 'id', contactIds, (q) =>
-            (q as unknown as { not: (col: string, op: string, v: null) => unknown }).not(
-              'email_status',
-              'is',
-              null
-            )
+            q.not('email_status', 'is', null)
           )
         : Promise.resolve([] as { id: string }[]),
     ])

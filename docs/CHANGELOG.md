@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v6.4.2 — chore(newsletter): TS deeply-nested generics + lint cleanup（2026-05-18）
+
+### 變更項目
+- **修 `chunkedIn` helper 的 TS2589 "excessively deep"**：`extraFilter` 參數原本用 `ReturnType<ReturnType<typeof service.from>['select']>` 去抓 Supabase `PostgrestFilterBuilder` 的深層泛型，導致 TS 推導爆炸。改為 `(q: any) => any`，runtime 行為不變、編譯時不再爆。`next.config.ts` 雖然有 `typescript.ignoreBuildErrors`，但本機 `npx tsc --noEmit` 終於乾淨
+- **連帶清掉 3 處 callsite 的 `as unknown as { ... }` cast**：原本三個 callsite 為了繞過嚴格型別都用了醜醜的雙重 cast 寫 `q.is(...)` / `q.not(...)`。現在 `q` 是 `any`，直接呼叫即可
+- **lint cleanup**：`invalidEmails` 只被 push 不重入，`let` → `const`（pre-existing prefer-const error）
+
 ## v6.4.1 — feat(photos): 排序切換（上傳/拍攝/姓名）+ 預設改上傳時間（2026-05-18）
 
 ### 變更項目
