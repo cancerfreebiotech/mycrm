@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v6.4.1 — feat(photos): 排序切換（上傳/拍攝/姓名）+ 預設改上傳時間（2026-05-18）
+
+### 變更項目
+- **相簿排序預設改為「上傳時間」**：原本預設 `taken_at desc nulls last`，沒 EXIF 的照片（截圖、被剝掉 metadata 的）會沉到最後。改為 `created_at desc`，所有照片不分有無 EXIF 都按上傳時間排
+- **`/photos` 搜尋框下方加排序 pill button**：三種模式可切換 — `上傳時間`（預設）/ `拍攝時間`（保留舊行為，null 在最後）/ `聯絡人名稱`（依 `contact.name` localeCompare、不分大小寫，未歸類在最後）
+- **API `/api/photos` 接 `?sort=` 參數**：`created_at` / `taken_at` / `name`，未指定或不認得時 fallback `created_at`。`name` 模式 DB 仍按 `created_at desc` 拉，再用 JS `localeCompare` 排序（避開 PostgREST 對關聯 table 欄位排序的限制）
+- **i18n**：新增 `photos.sortBy` / `photos.sortCreated` / `photos.sortTaken` / `photos.sortName` 到 zh-TW / en / ja
+- **lint cleanup**：刪除沒意義的 `LightboxPhoto extends PhotoRow {}` empty interface、將 `lbOnDoubleClick` 的三元運算式 statement 改為 `if/else`
+
 ## v6.4.0 — feat(admin): maintenance toggle + dashboard banner + mobile users/camcard（2026-05-15）
 
 ### 變更項目

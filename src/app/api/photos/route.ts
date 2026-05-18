@@ -8,12 +8,22 @@ export async function GET(req: NextRequest) {
 
   const service = createServiceClient()
   const q = req.nextUrl.searchParams.get('q')?.trim() ?? ''
+  const sortParam = req.nextUrl.searchParams.get('sort') ?? 'created_at'
+  const sort: 'created_at' | 'taken_at' | 'name' =
+    sortParam === 'taken_at' || sortParam === 'name' ? sortParam : 'created_at'
 
   let query = service
     .from('contact_photos')
     .select('id, photo_url, storage_path, note, taken_at, location_name, latitude, longitude, created_at, contact_id, contacts(id, name, name_en)')
-    .order('taken_at', { ascending: false, nullsFirst: false })
-    .order('created_at', { ascending: false })
+
+  if (sort === 'taken_at') {
+    query = query
+      .order('taken_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+  } else {
+    // 'created_at' (default) and 'name' both pull by created_at desc; 'name' is re-sorted in JS below.
+    query = query.order('created_at', { ascending: false })
+  }
 
   if (q) {
     query = query.or(
@@ -50,6 +60,18 @@ export async function GET(req: NextRequest) {
       }
     })
   )
+
+  if (sort === 'name') {
+    photos.sort((a, b) => {
+      const aName = a.contact_name
+      const bName = b.contact_name
+      // Unassigned (null name) goes last
+      if (aName === null && bName === null) return 0
+      if (aName === null) return 1
+      if (bName === null) return -1
+      return aName.localeCompare(bName, undefined, { sensitivity: 'base' })
+    })
+  }
 
   return NextResponse.json({ photos, total: photos.length })
 }

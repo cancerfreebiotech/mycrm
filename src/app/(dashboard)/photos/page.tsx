@@ -24,7 +24,7 @@ interface ContactGroup {
   photos: PhotoRow[]
 }
 
-interface LightboxPhoto extends PhotoRow {}
+type SortMode = 'created_at' | 'taken_at' | 'name'
 
 export default function PhotosPage() {
   const t = useTranslations('photos')
@@ -33,18 +33,21 @@ export default function PhotosPage() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [keyword, setKeyword] = useState('')
-  const [lightbox, setLightbox] = useState<LightboxPhoto | null>(null)
+  const [sort, setSort] = useState<SortMode>('created_at')
+  const [lightbox, setLightbox] = useState<PhotoRow | null>(null)
   const [lbScale, setLbScale] = useState(1)
   const [lbOffset, setLbOffset] = useState({ x: 0, y: 0 })
   const lbDragRef = useRef(false)
   const lbStartRef = useRef({ x: 0, y: 0 })
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const fetchPhotos = useCallback(async (q: string) => {
+  const fetchPhotos = useCallback(async (q: string, s: SortMode) => {
     setLoading(true)
     try {
-      const params = q ? `?q=${encodeURIComponent(q)}` : ''
-      const res = await fetch(`/api/photos${params}`)
+      const params = new URLSearchParams()
+      if (q) params.set('q', q)
+      params.set('sort', s)
+      const res = await fetch(`/api/photos?${params.toString()}`)
       const data = await res.json()
       setPhotos(data.photos ?? [])
       setTotal(data.total ?? 0)
@@ -53,13 +56,11 @@ export default function PhotosPage() {
     }
   }, [])
 
-  useEffect(() => { fetchPhotos('') }, [fetchPhotos])
-
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => fetchPhotos(keyword), 300)
+    debounceRef.current = setTimeout(() => fetchPhotos(keyword, sort), 300)
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
-  }, [keyword, fetchPhotos])
+  }, [keyword, sort, fetchPhotos])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeLightbox() }
@@ -87,7 +88,7 @@ export default function PhotosPage() {
   function lbZoom(delta: number) { setLbScale(s => Math.min(5, Math.max(0.5, s + delta))) }
   function lbReset() { setLbScale(1); setLbOffset({ x: 0, y: 0 }) }
   function lbOnWheel(e: React.WheelEvent) { e.preventDefault(); lbZoom(e.deltaY < 0 ? 0.2 : -0.2) }
-  function lbOnDoubleClick() { lbScale > 1 ? lbReset() : setLbScale(2) }
+  function lbOnDoubleClick() { if (lbScale > 1) lbReset(); else setLbScale(2) }
   function lbOnMouseDown(e: React.MouseEvent) {
     if (lbScale <= 1) return
     lbDragRef.current = true
@@ -110,7 +111,7 @@ export default function PhotosPage() {
       </div>
 
       {/* Search */}
-      <div className="relative mb-8">
+      <div className="relative mb-3">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
           type="text"
@@ -124,6 +125,28 @@ export default function PhotosPage() {
             <X size={14} />
           </button>
         )}
+      </div>
+
+      {/* Sort */}
+      <div className="flex flex-wrap items-center gap-2 mb-8 text-sm">
+        <span className="text-gray-500 dark:text-gray-400">{t('sortBy')}</span>
+        {(['created_at', 'taken_at', 'name'] as const).map(mode => {
+          const active = sort === mode
+          const label = mode === 'created_at' ? t('sortCreated') : mode === 'taken_at' ? t('sortTaken') : t('sortName')
+          return (
+            <button
+              key={mode}
+              onClick={() => setSort(mode)}
+              className={`px-3 py-1.5 rounded-full border min-h-[36px] transition-colors ${
+                active
+                  ? 'bg-blue-600 border-blue-600 text-white'
+                  : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+              }`}
+            >
+              {label}
+            </button>
+          )
+        })}
       </div>
 
       {/* Content */}
