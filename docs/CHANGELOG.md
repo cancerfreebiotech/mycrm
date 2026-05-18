@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v6.4.6 — chore(docs): 移除沒在跑的 Gemini docs cron（2026-05-18）
+
+### 變更項目
+- 刪除 `src/app/api/docs/cron/route.ts`（連同其中 80 行嚴重過時的 `FEATURES_SUMMARY` — 寫的還是 v1.3.9 的功能清單，沒包含 v2/v3/v4/v5/v6.x 的任何新功能：camcard 匯入、newsletter、photos 相簿、MFA、`/admin/feedback`、軟刪除、maintenance mode、edit Telegram ID、Bot 多語、`/b /v /a /p /li /ai /news /meet /todos /lang` 等）
+- 這個 route 從來沒被加進 `vercel.json` 的 crons 清單，所以實際上從沒被定期觸發；DB 裡有內容是因為偶爾手動 fetch
+- **後續會用 Claude routine 取代**：每週六 02:00 Asia/Taipei，讀 repo 當前狀態（CLAUDE.md / README / CHANGELOG / src 結構）重生 9 份 `docs_content` (zh-TW / en / ja × quick_start / user / super_admin)
+
 ## v6.4.5 — chore(bot): 全面 i18n — Japanese/English users 不再看到中文（2026-05-18）
 
 ### 變更項目
