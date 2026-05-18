@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## v6.4.4 — feat(admin): super_admin 可從使用者管理修正 Telegram ID + 短數字軟提醒（2026-05-18）
+
+### 變更項目
+- **新 API `POST /api/admin/users/[id]/telegram-id`**：super_admin 才能呼叫，接 `{ telegramId: number | null }`。Server 驗「正整數或 null」、不擋短數字（信任 admin），plausibility 警告留給 UI 端做
+- **`/admin/users` Telegram 欄位現在顯示實際 ID**（不再只是 bound/unbound pill）：
+  - Desktop table cell：mono font 顯示 telegram_id 值 + pencil 按鈕
+  - Mobile card：新增「Edit Telegram ID: {value}」滿版按鈕
+- **編輯模式**：點 pencil → input 預填當前值 + Save/Cancel；`inputMode="numeric"` 手機跳數字鍵盤。Save 走新 API、Cancel 還原。input 留空儲存 = 把 telegram_id 設 null（解除綁定）
+- **短數字軟提醒**：如果輸入 < 1e8（< 8 位數），跳 `confirm("「{value}」看起來太短（一般是 9–10 位數）。仍要儲存？")` 防呆。Telegram user ID 典型 9–10 位，5–7 位通常是 typo
+- **i18n**：新增 `users.editTelegram` / `telegramIdPlaceholder` / `telegramIdInvalid` / `telegramIdSuspicious` / `telegramIdSaveFailed` 到 zh-TW / en / ja
+
+### 起因
+- MASATO YOKOYAMA 把自己的 telegram_id 在 /settings 填成 `82191`（只有 5 位數），導致 bot 收到他的照片時 `getAuthorizedUser` 找不到 row、回「⛔ 権限がありません」。/settings 原本只驗整數沒驗位數，所以擋不下來
+- 這個功能讓 super_admin 不用直接動 SQL 就能修正同事的 Telegram ID
+
 ## v6.4.3 — feat(camcard): approve 時可選 backdate + 預設 2000-01-01（2026-05-18）
 
 ### 變更項目

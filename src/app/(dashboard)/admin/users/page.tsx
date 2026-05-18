@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
-import { ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Wrench } from 'lucide-react'
+import { ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Wrench, Pencil, Check, X } from 'lucide-react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { ALL_FEATURE_KEYS, FEATURE_LABELS } from '@/lib/features'
 
@@ -37,6 +37,11 @@ export default function AdminUsersPage() {
   const [mfaStatus, setMfaStatus] = useState<Record<string, boolean>>({})
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  // Inline Telegram ID edit
+  const [editingTelegramFor, setEditingTelegramFor] = useState<string | null>(null)
+  const [telegramInput, setTelegramInput] = useState('')
+  const [savingTelegramFor, setSavingTelegramFor] = useState<string | null>(null)
 
   // Maintenance mode
   const [maintenanceEnabled, setMaintenanceEnabled] = useState<boolean | null>(null)
@@ -209,6 +214,52 @@ export default function AdminUsersPage() {
     setUpdatingId(null)
   }
 
+  function startEditTelegram(u: CrmUser) {
+    setEditingTelegramFor(u.id)
+    setTelegramInput(u.telegram_id ? String(u.telegram_id) : '')
+  }
+
+  function cancelEditTelegram() {
+    setEditingTelegramFor(null)
+    setTelegramInput('')
+  }
+
+  async function saveTelegramId(u: CrmUser) {
+    const trimmed = telegramInput.trim()
+    let payload: number | null = null
+    if (trimmed) {
+      const n = Number(trimmed)
+      if (!Number.isInteger(n) || n <= 0) {
+        alert(t('telegramIdInvalid'))
+        return
+      }
+      // Soft warn: real Telegram user IDs are typically 9–10 digits. Anything
+      // below 1e8 (8 digits) is usually a typo (e.g., Masato's 82191).
+      if (n < 100000000 && !confirm(t('telegramIdSuspicious', { value: trimmed }))) return
+      payload = n
+    }
+
+    setSavingTelegramFor(u.id)
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/telegram-id`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramId: payload }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(t('telegramIdSaveFailed', { error: data.error ?? 'unknown' }))
+        return
+      }
+      setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, telegram_id: payload } : x))
+      cancelEditTelegram()
+    } catch (e) {
+      alert(t('telegramIdSaveFailed', { error: e instanceof Error ? e.message : 'unknown' }))
+    } finally {
+      setSavingTelegramFor(null)
+    }
+  }
+
   function RoleBadge({ role }: { role: string }) {
     return role === 'super_admin' ? (
       <span className="px-2 py-0.5 text-xs bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-400 rounded-full">super_admin</span>
@@ -336,6 +387,42 @@ export default function AdminUsersPage() {
               <p className="text-xs text-gray-400 mb-3">
                 {t('colLastLogin')}: {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : '—'}
               </p>
+              {editingTelegramFor === u.id ? (
+                <div className="flex items-center gap-1.5 mb-2">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={telegramInput}
+                    onChange={(e) => setTelegramInput(e.target.value)}
+                    placeholder={t('telegramIdPlaceholder')}
+                    className="flex-1 min-h-[44px] text-base px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    onClick={() => saveTelegramId(u)}
+                    disabled={savingTelegramFor === u.id}
+                    className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg"
+                    title={tc('save')}
+                  >
+                    {savingTelegramFor === u.id ? <Loader2 size={14} className="animate-spin" /> : <Check size={16} />}
+                  </button>
+                  <button
+                    onClick={cancelEditTelegram}
+                    disabled={savingTelegramFor === u.id}
+                    className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400"
+                    title={tc('cancel')}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => startEditTelegram(u)}
+                  className="min-h-[44px] mb-2 w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  <Pencil size={12} />
+                  <span>{t('editTelegram')}: <span className="font-mono">{u.telegram_id ?? '—'}</span></span>
+                </button>
+              )}
               {mfaStatus[u.email] && (
                 <button
                   onClick={() => resetMfa(u)}
@@ -393,7 +480,45 @@ export default function AdminUsersPage() {
                   <td className="px-4 py-3 text-gray-900 dark:text-gray-100 font-medium">{u.display_name || '—'}</td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{u.email}</td>
                   <td className="px-4 py-3">
-                    <StatusPill active={!!u.telegram_id} on={t('telegramBound')} off={t('telegramUnbound')} />
+                    {editingTelegramFor === u.id ? (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={telegramInput}
+                          onChange={(e) => setTelegramInput(e.target.value)}
+                          placeholder={t('telegramIdPlaceholder')}
+                          className="w-36 text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button
+                          onClick={() => saveTelegramId(u)}
+                          disabled={savingTelegramFor === u.id}
+                          className="inline-flex items-center justify-center px-1.5 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded"
+                          title={tc('save')}
+                        >
+                          {savingTelegramFor === u.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                        </button>
+                        <button
+                          onClick={cancelEditTelegram}
+                          disabled={savingTelegramFor === u.id}
+                          className="inline-flex items-center justify-center px-1.5 py-1 border border-gray-300 dark:border-gray-600 rounded text-gray-600 dark:text-gray-400"
+                          title={tc('cancel')}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs text-gray-700 dark:text-gray-300">{u.telegram_id ?? '—'}</span>
+                        <button
+                          onClick={() => startEditTelegram(u)}
+                          title={t('editTelegram')}
+                          className="inline-flex items-center justify-center px-1.5 py-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 border border-gray-200 dark:border-gray-700 rounded"
+                        >
+                          <Pencil size={11} />
+                        </button>
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <StatusPill active={!!u.teams_user_id} on={t('teamsBound')} off={t('teamsUnbound')} />

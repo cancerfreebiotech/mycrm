@@ -523,7 +523,12 @@
     "mfaSet": "已設定",
     "mfaNotSet": "未設定",
     "resetting": "重設中...",
-    "reset": "重設"
+    "reset": "重設",
+    "editTelegram": "編輯 Telegram ID",
+    "telegramIdPlaceholder": "例：123456789",
+    "telegramIdInvalid": "Telegram ID 必須為正整數",
+    "telegramIdSuspicious": "「{value}」看起來太短（一般是 9–10 位數）。仍要儲存？",
+    "telegramIdSaveFailed": "更新失敗：{error}"
   },
   "templates": {
     "title": "郵件範本",

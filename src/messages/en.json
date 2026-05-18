@@ -523,7 +523,12 @@
     "mfaSet": "Set",
     "mfaNotSet": "Not set",
     "resetting": "Resetting...",
-    "reset": "Reset"
+    "reset": "Reset",
+    "editTelegram": "Edit Telegram ID",
+    "telegramIdPlaceholder": "e.g., 123456789",
+    "telegramIdInvalid": "Telegram ID must be a positive integer",
+    "telegramIdSuspicious": "\"{value}\" looks too short (typically 9–10 digits). Save anyway?",
+    "telegramIdSaveFailed": "Update failed: {error}"
   },
   "templates": {
     "title": "Email Templates",
