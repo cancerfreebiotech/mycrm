@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## v6.4.5 — chore(bot): 全面 i18n — Japanese/English users 不再看到中文（2026-05-18）
+
+### 變更項目
+- **Telegram bot 全面 i18n**：route.ts ~216 處硬編中文字串改用 `BOT_MESSAGES` 翻譯 key；BotMessages interface 新增 229 個 key（zh / en / ja 三語並行）
+- **`toLocaleString` 改吃 user lang**：新增 `dateLocale(lang)` helper，task due/postpone/list、`formatTaipeiRange` 都用 user 設定的語言格式化日期。task 指派通知用 **assignee 的** bot 語言（不是 assigner 的）— 日本同事被指派時看到日文
+- **Hunter.io 富化訊息**：新增 `hunterLang(lang)` mapping `'zh-TW' | 'en' | 'ja'`，3 處 callsite 通通切換
+- **CARD_FIELD_LABELS dict 改成 per-lang `cardFieldLabel(key)` function**：名片 OCR 差異展示的 field label (`姓名` / `Name` / `氏名`) 隨 user lang 切換
+- **TYPE_LABEL dict 同步 i18n**：互動紀錄類型 (`筆記/會議/郵件/系統`) 三語版
+- **國家名稱顯示**：`countries.name_zh/name_en/name_ja` 依 bot 語言挑選（fallback name_zh）
+- **`（台北）` timezone annotation 三語版**：ja `（台北時間）` / en `(Taipei)` / zh `（台北）`
+- **skip token 擴充**：`/v` `/news` 等流程允許日文使用者輸入「スキップ」（原本只接受「略過」/「skip」）
+- **NOT 翻譯**：interaction_logs DB content (`【名片新資料】...`)、internal `throw new Error(...)`、comments、callback_data 值 — 這些不會送到 Telegram
+
+### 起因
+- MASATO YOKOYAMA (Japanese user) 反映 bot 很多回覆還是中文，雖然他的語言設成 japanese
+- 例如「⏳ OCR 辨識中」、「✅ 名片已儲存」、「❌ 處理失敗」、`(台北)` 時區、cardField label「姓名/公司」等
+
+### 已知保留
+- `sendMessage()` 內部 503 retry 訊息（`tgBusy` / `tgSendFailed`）目前 fallback zh — 因為這個 function 沒 user lang context。極罕見 case，留 inline 註解
+- 部分 `/p` 量詞單位（中文 `張` / 日文 `枚`）走 inline lang 條件，沒走 BOT_MESSAGES — 量詞變化複雜，inline 比較清楚
+
 ## v6.4.4 — feat(admin): super_admin 可從使用者管理修正 Telegram ID + 短數字軟提醒（2026-05-18）
 
 ### 變更項目

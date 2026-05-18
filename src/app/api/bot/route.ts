@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
-import { getBotLanguage, BOT_MESSAGES, type BotMessages } from '@/lib/bot-messages'
+import { getBotLanguage, BOT_MESSAGES, type BotMessages, type BotLang } from '@/lib/bot-messages'
 import { analyzeBusinessCard, generateEmailContent, parseTaskCommand, parseMeetingCommand, parseMetCommand, parseVisitNote, parseLinkedInScreenshot } from '@/lib/gemini'
 import { processCardImage, processPhotoWithExif, extractExif, generateCardFilename } from '@/lib/imageProcessor'
 import { checkDuplicates } from '@/lib/duplicate'
@@ -14,6 +14,20 @@ function countryToLanguage(code: string | null | undefined): string {
   if (code === 'TW' || code === 'CN') return 'chinese'
   if (code === 'JP') return 'japanese'
   return 'english'
+}
+
+// Map BotLang → hunter.ts / enrichStatusMessage locale codes.
+function hunterLang(lang: BotLang): 'zh-TW' | 'en' | 'ja' {
+  if (lang === 'ja') return 'ja'
+  if (lang === 'en') return 'en'
+  return 'zh-TW'
+}
+
+// Map BotLang → toLocaleString locale codes.
+function dateLocale(lang: BotLang): string {
+  if (lang === 'ja') return 'ja-JP'
+  if (lang === 'en') return 'en-US'
+  return 'zh-TW'
 }
 
 function currentPeriod(): string {
@@ -42,11 +56,13 @@ async function sendMessage(chatId: number, text: string, extra?: object): Promis
     body: payload,
   })
   if (res.status === 503) {
-    // Notify user we're retrying (best-effort)
+    // Notify user we're retrying (best-effort).
+    // Note: sendMessage doesn't have a language context here, so we fall back to
+    // zh defaults — these strings are infrastructure-level and rarely surfaced.
     await fetch(`${TELEGRAM_API}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: '⏳ Telegram 暫時繁忙，3 秒後自動重試...', parse_mode: 'HTML' }),
+      body: JSON.stringify({ chat_id: chatId, text: BOT_MESSAGES.zh.tgBusy, parse_mode: 'HTML' }),
     }).catch(() => {})
     await new Promise(r => setTimeout(r, 3000))
     const retry = await fetch(`${TELEGRAM_API}/sendMessage`, {
@@ -58,7 +74,7 @@ async function sendMessage(chatId: number, text: string, extra?: object): Promis
       await fetch(`${TELEGRAM_API}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text: '❌ 傳送失敗，請稍後再試。', parse_mode: 'HTML' }),
+        body: JSON.stringify({ chat_id: chatId, text: BOT_MESSAGES.zh.tgSendFailed, parse_mode: 'HTML' }),
       }).catch(() => {})
     }
     const retryData = await retry?.json().catch(() => null)
@@ -170,7 +186,7 @@ async function downloadTelegramPhoto(fileId: string): Promise<Buffer> {
 async function handleAI(chatId: number, aiModelId: string | null, m: BotMessages) {
   const supabase = createServiceClient()
   if (!aiModelId) {
-    await sendMessage(chatId, '🤖 目前使用預設模型：<b>gemini-2.5-flash</b>')
+    await sendMessage(chatId, m.aiModelDefault)
     return
   }
   const { data: model } = await supabase
@@ -179,16 +195,11 @@ async function handleAI(chatId: number, aiModelId: string | null, m: BotMessages
     .eq('id', aiModelId)
     .single()
   if (!model) {
-    await sendMessage(chatId, '🤖 目前使用預設模型：<b>gemini-2.5-flash</b>')
+    await sendMessage(chatId, m.aiModelDefault)
     return
   }
   const endpointName = (model.ai_endpoints as unknown as { name: string } | null)?.name ?? ''
-  await sendMessage(chatId,
-    `🤖 目前使用的 AI 模型：\n\n` +
-    `<b>${model.display_name}</b>\n` +
-    `模型 ID：<code>${model.model_id}</code>` +
-    (endpointName ? `\n端點：${endpointName}` : '')
-  )
+  await sendMessage(chatId, m.aiModelInfo(model.display_name, model.model_id, endpointName))
 }
 
 // ── Search contacts ───────────────────────────────────────────────────────────
@@ -206,22 +217,16 @@ async function searchContacts(query: string) {
 
 // ── Meeting helpers ────────────────────────────────────────────────────────────
 
-function formatTaipeiRange(startIso: string, durationMinutes: number): string {
+function formatTaipeiRange(startIso: string, durationMinutes: number, m: BotMessages, lang: BotLang): string {
   const start = new Date(startIso)
   const end = new Date(start.getTime() + durationMinutes * 60000)
-  const fmt = (d: Date) => d.toLocaleString('zh-TW', {
+  const loc = dateLocale(lang)
+  const fmt = (d: Date) => d.toLocaleString(loc, {
     timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric',
     weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
   })
-  const endTime = end.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false })
-  return `${fmt(start)} – ${endTime}（台北）`
-}
-
-function durationLabel(minutes: number): string {
-  if (minutes === 30) return '30 分鐘'
-  if (minutes === 60) return '1 小時'
-  if (minutes === 90) return '1.5 小時'
-  return '2 小時'
+  const endTime = end.toLocaleString(loc, { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false })
+  return m.meetTimeRange(`${fmt(start)} – ${endTime}`)
 }
 
 async function handleMeet(
@@ -229,6 +234,7 @@ async function handleMeet(
   user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
   text: string,
   m: BotMessages,
+  lang: BotLang,
 ) {
   const supabase = createServiceClient()
   if (!text.trim()) {
@@ -292,22 +298,22 @@ async function handleMeet(
     return
   }
 
-  const timeLabel = formatTaipeiRange(parsed.start_iso, parsed.duration_minutes)
-  const allAttendees = ['你', ...attendeeNames]
+  const timeLabel = formatTaipeiRange(parsed.start_iso, parsed.duration_minutes, m, lang)
+  const allAttendees = [m.meetSelfLabel, ...attendeeNames]
   const confirmText =
-    `📅 <b>確認建立行程</b>\n\n` +
-    `<b>標題：</b>${parsed.title}\n` +
-    `<b>時間：</b>${timeLabel}\n` +
-    `<b>時長：</b>${durationLabel(parsed.duration_minutes)}\n` +
-    `<b>參與者：</b>${allAttendees.join('、')}\n` +
-    (parsed.location ? `<b>地點：</b>${parsed.location}\n` : '') +
-    `\n請確認後按下方按鈕。`
+    m.meetConfirmHeader +
+    `<b>${m.meetFieldTitle}：</b>${parsed.title}\n` +
+    `<b>${m.meetFieldTime}：</b>${timeLabel}\n` +
+    `<b>${m.meetFieldDuration}：</b>${m.meetDurationLabel(parsed.duration_minutes)}\n` +
+    `<b>${m.meetFieldAttendees}：</b>${allAttendees.join('、')}\n` +
+    (parsed.location ? `<b>${m.meetFieldLocation}：</b>${parsed.location}\n` : '') +
+    m.meetConfirmFooter
 
   await sendMessage(chatId, confirmText, {
     reply_markup: {
       inline_keyboard: [[
-        { text: '✅ 確認建立', callback_data: `meet_confirm_${draft.id}` },
-        { text: '❌ 取消', callback_data: `meet_cancel_${draft.id}` },
+        { text: m.btnConfirmCreate, callback_data: `meet_confirm_${draft.id}` },
+        { text: m.btnCancel, callback_data: `meet_cancel_${draft.id}` },
       ]],
     },
   })
@@ -343,7 +349,7 @@ async function handleUser(chatId: number, m: BotMessages) {
 
 // ── Handle /search ────────────────────────────────────────────────────────────
 
-async function handleSearch(chatId: number, keyword: string, m: BotMessages) {
+async function handleSearch(chatId: number, keyword: string, m: BotMessages, lang: BotLang) {
   const contacts = await searchContacts(keyword)
   if (contacts.length === 0) {
     await sendMessage(chatId, m.searchNotFound(keyword))
@@ -351,18 +357,22 @@ async function handleSearch(chatId: number, keyword: string, m: BotMessages) {
   }
 
   for (const c of contacts) {
+    const empty = m.cardEmptyValue
     const info =
-      `👤 <b>${c.name || '—'}</b>\n` +
-      `🏢 ${c.company || '—'}\n` +
-      `💼 ${c.job_title || '—'}\n` +
-      `📧 ${c.email || '—'}\n` +
-      `📞 ${c.phone || '—'}`
+      `👤 <b>${c.name || empty}</b>\n` +
+      `🏢 ${c.company || empty}\n` +
+      `💼 ${c.job_title || empty}\n` +
+      `📧 ${c.email || empty}\n` +
+      `📞 ${c.phone || empty}`
 
+    const emailLabel = lang === 'ja' ? '✉️ メール' : lang === 'en' ? '✉️ Email' : '✉️ 發信'
+    const noteLabel = lang === 'ja' ? '📝 メモ' : lang === 'en' ? '📝 Note' : '📝 筆記'
+    const logLabel = lang === 'ja' ? '📋 記録' : lang === 'en' ? '📋 Logs' : '📋 互動紀錄'
     const buttons = [
       [
-        { text: '✉️ 發信', callback_data: `email_contact_${c.id}` },
-        { text: '📝 筆記', callback_data: `note_contact_${c.id}` },
-        { text: '📋 互動紀錄', callback_data: `log_contact_${c.id}_0` },
+        { text: emailLabel, callback_data: `email_contact_${c.id}` },
+        { text: noteLabel, callback_data: `note_contact_${c.id}` },
+        { text: logLabel, callback_data: `log_contact_${c.id}_0` },
       ],
     ]
 
@@ -376,13 +386,6 @@ async function handleSearch(chatId: number, keyword: string, m: BotMessages) {
 // ── Process back card photo (shared by photo handler and confirm callback) ────
 
 // ── /a: Add card photo — OCR → show diff → user decides ──────────────────────
-
-const CARD_FIELD_LABELS: Record<string, string> = {
-  name: '姓名', name_en: '英文姓名', name_local: '日文姓名',
-  company: '公司', job_title: '職稱',
-  email: 'Email', phone: '電話', second_phone: '第二電話',
-  address: '地址', website: '網站',
-}
 
 async function processAddCardPhoto(
   chatId: number,
@@ -405,7 +408,7 @@ async function processAddCardPhoto(
       .eq('id', contactId)
       .single()
 
-    await sendMessage(chatId, '⏳ OCR 辨識中，請稍候...')
+    await sendMessage(chatId, _m.cardOcring)
     const cardData = await analyzeBusinessCard(compressed, user.ai_model_id)
 
     if (cardData.rotation) {
@@ -443,25 +446,25 @@ async function processAddCardPhoto(
     for (const [key, newVal] of Object.entries(ocrFields)) {
       if (!newVal) continue
       const oldVal = (existing as Record<string, unknown> | null)?.[key] as string | null | undefined
-      if (!oldVal) toFill.push({ key, label: CARD_FIELD_LABELS[key] ?? key, value: newVal })
-      else if (oldVal !== newVal) conflicts.push({ key, label: CARD_FIELD_LABELS[key] ?? key, newVal, oldVal })
+      if (!oldVal) toFill.push({ key, label: _m.cardFieldLabel(key), value: newVal })
+      else if (oldVal !== newVal) conflicts.push({ key, label: _m.cardFieldLabel(key), newVal, oldVal })
     }
 
     // Build diff message
-    const displayName = contactNameHint ?? existing?.name ?? '此聯絡人'
-    let diffText = `📇 <b>${displayName}</b> 名片 OCR 結果：\n\n`
+    const displayName = contactNameHint ?? existing?.name ?? _m.cardThisContact
+    let diffText = _m.cardDiffHeader(displayName)
     if (toFill.length > 0) {
-      diffText += `✅ <b>填入空白欄位：</b>\n`
-      toFill.forEach(f => { diffText += `• ${f.label}：${f.value}\n` })
+      diffText += _m.cardDiffFillHeader
+      toFill.forEach(f => { diffText += _m.cardDiffFillRow(f.label, f.value) })
       diffText += '\n'
     }
     if (conflicts.length > 0) {
-      diffText += `⚠️ <b>與現有不同（存入備註）：</b>\n`
-      conflicts.forEach(c => { diffText += `• ${c.label}：${c.newVal}（現有：${c.oldVal}）\n` })
+      diffText += _m.cardDiffConflictHeader
+      conflicts.forEach(c => { diffText += _m.cardDiffConflictRow(c.label, c.newVal, c.oldVal) })
       diffText += '\n'
     }
     if (toFill.length === 0 && conflicts.length === 0) {
-      diffText += '資料與現有記錄相同，名片將直接存入。\n'
+      diffText += _m.cardDiffNoChange
     }
 
     // Store in session for apply step
@@ -477,15 +480,15 @@ async function processAddCardPhoto(
     await sendMessage(chatId, diffText, {
       reply_markup: {
         inline_keyboard: [[
-          { text: '✅ 確認套用', callback_data: `apply_card_${contactId}` },
-          { text: '📎 只存名片', callback_data: `skip_card_apply_${contactId}` },
+          { text: _m.btnConfirmApply, callback_data: `apply_card_${contactId}` },
+          { text: _m.btnSaveCardOnly, callback_data: `skip_card_apply_${contactId}` },
         ]]
       }
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[bot] add card error:', msg)
-    await sendMessage(chatId, `❌ 處理失敗：${msg}`)
+    await sendMessage(chatId, _m.processingFailed(msg))
   }
 }
 
@@ -495,7 +498,8 @@ async function applyCardDiff(
   chatId: number,
   fromId: number,
   contactId: string,
-  apply: boolean
+  apply: boolean,
+  m: BotMessages,
 ) {
   const supabase = createServiceClient()
   try {
@@ -508,7 +512,7 @@ async function applyCardDiff(
     const conflicts = (ctx.conflicts as Array<{ key: string; label: string; newVal: string; oldVal: string }>) ?? []
 
     if (!cardUrl) {
-      await sendMessage(chatId, '❌ 找不到待處理名片資料，請重新傳送。')
+      await sendMessage(chatId, m.cardDiffSessionMissing)
       await clearSession(fromId)
       return
     }
@@ -541,12 +545,12 @@ async function applyCardDiff(
     await updateLastContact(fromId, contactId)
     await clearSession(fromId)
     const applyMsg = apply
-      ? (toFill.length > 0 ? `已填入 ${toFill.length} 個欄位` + (conflicts.length > 0 ? `，${conflicts.length} 項衝突存入備註` : '') : '資料已是最新')
-      : '名片已存入，聯絡人資料未變更'
-    await sendMessage(chatId, `✅ <b>${displayName ?? '聯絡人'}</b> 名片已儲存。${applyMsg}`)
+      ? m.cardDiffAppliedSummary(toFill.length, conflicts.length)
+      : m.cardDiffSkippedSummary
+    await sendMessage(chatId, m.cardSavedWithApply(displayName ?? m.cardThisContact, applyMsg))
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    await sendMessage(chatId, `❌ 處理失敗：${msg}`)
+    await sendMessage(chatId, m.processingFailed(msg))
   }
 }
 
@@ -597,9 +601,9 @@ async function processPersonalPhoto(
 
     await updateLastContact(fromId, contactId)
     await clearSession(fromId)
-    const displayName = contactNameHint ?? '此聯絡人'
-    const countMsg = fileIds.length > 1 ? ` ${fileIds.length} 張` : ''
-    const noteMsg = note ? '，附註已存入互動紀錄' : ''
+    const displayName = contactNameHint ?? _m.cardThisContact
+    const countMsg = fileIds.length > 1 ? ` ${fileIds.length}` : ''
+    const noteMsg = note ? _m.photoNoteAttached : ''
     await sendMessage(chatId, _m.photoSaved(displayName, countMsg, noteMsg))
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -616,7 +620,8 @@ async function handlePhoto(
   user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
   photo: { file_id: string },
   session: { state: string; context: Record<string, unknown> } | null,
-  m: BotMessages = BOT_MESSAGES.zh
+  m: BotMessages = BOT_MESSAGES.zh,
+  lang: BotLang = 'zh',
 ) {
   const supabase = createServiceClient()
 
@@ -626,10 +631,10 @@ async function handlePhoto(
     const contactName = session.context.contact_name as string | undefined
     await setSession(fromId, 'waiting_for_add_card', { ...session.context, pending_file_id: photo.file_id })
     await sendMessage(chatId,
-      `收到照片！要新增為 <b>${contactName ?? '此聯絡人'}</b> 的名片嗎？`,
+      m.cardReceivedAskAdd(contactName ?? m.cardThisContact),
       { reply_markup: { inline_keyboard: [[
-        { text: '✅ 確認', callback_data: `confirm_add_card_${contactId}` },
-        { text: '❌ 取消', callback_data: 'cancel_add_card' },
+        { text: m.btnConfirm, callback_data: `confirm_add_card_${contactId}` },
+        { text: m.btnCancel, callback_data: 'cancel_add_card' },
       ]] } }
     )
     return
@@ -637,7 +642,7 @@ async function handlePhoto(
 
   // /li: LinkedIn screenshot — OCR → confirm → insert contact
   if (session?.state === 'waiting_for_li') {
-    await sendMessage(chatId, '⏳ AI 解析中，請稍候...')
+    await sendMessage(chatId, m.liAnalyzing)
     try {
       const imgBuffer = await downloadTelegramPhoto(photo.file_id)
       const compressed = await processCardImage(imgBuffer)
@@ -647,15 +652,15 @@ async function handlePhoto(
 
       const parsed = await parseLinkedInScreenshot(compressed, profile?.ai_model_id ?? null)
 
-      const displayName = parsed.name || parsed.name_en || '（無姓名）'
+      const displayName = parsed.name || parsed.name_en || m.liUnnamed
       if (!parsed.name && !parsed.name_en) {
         await clearSession(fromId)
-        await sendMessage(chatId, '❌ 無法識別為 LinkedIn 截圖，請確認截圖內容後重新傳送。')
+        await sendMessage(chatId, m.liNotLinkedIn)
         return
       }
 
       const summary =
-        `🔗 <b>LinkedIn 解析結果</b>\n\n` +
+        m.liResultHeader +
         `👤 ${displayName}\n` +
         (parsed.job_title ? `💼 ${parsed.job_title}\n` : '') +
         (parsed.company ? `🏢 ${parsed.company}\n` : '') +
@@ -666,14 +671,14 @@ async function handlePhoto(
       await setSession(fromId, 'waiting_for_li_confirm', { parsed, file_id: photo.file_id })
       await sendMessage(chatId, summary, {
         reply_markup: { inline_keyboard: [[
-          { text: '✅ 確認新增', callback_data: 'confirm_li' },
-          { text: '❌ 取消', callback_data: 'cancel_li' },
+          { text: m.btnConfirmAdd, callback_data: 'confirm_li' },
+          { text: m.btnCancel, callback_data: 'cancel_li' },
         ]] }
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       await clearSession(fromId)
-      await sendMessage(chatId, `❌ 解析失敗：${msg}`)
+      await sendMessage(chatId, m.liFailed(msg))
     }
     return
   }
@@ -703,13 +708,13 @@ async function handlePhoto(
         .insert({ data: initialData, created_by: user.id, storage_path: storagePath, status: 'pending' })
         .select('id')
         .single()
-      if (pendingError || !pending) throw new Error(pendingError?.message ?? '暫存失敗')
+      if (pendingError || !pending) throw new Error(pendingError?.message ?? m.batchPendingFallback)
 
       const existingIds = (session.context?.pending_ids as string[] | undefined) ?? []
       const newIds = [...existingIds, pending.id]
       // Preserve met context (set by /b 描述) for subsequent photos in this batch
       await setSession(fromId, 'batch_mode', { ...session.context, count: newIds.length, pending_ids: newIds })
-      await sendMessage(chatId, `📥 已收第 ${newIds.length} 張，背景辨識中。繼續傳送或打 /done 結束。`)
+      await sendMessage(chatId, m.batchReceivedNth(newIds.length))
 
       // Fire OCR immediately in background — no need to wait for /done
       const rowForWorker = {
@@ -726,7 +731,7 @@ async function handlePhoto(
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      await sendMessage(chatId, `❌ 收下失敗：${msg}`)
+      await sendMessage(chatId, m.batchUploadFailed(msg))
     }
     return
   }
@@ -748,9 +753,9 @@ async function handlePhoto(
       const { data: cur } = await sb.from('newsletter_drafts').select('photo_urls').eq('id', draftId).single()
       const updated = [...(cur?.photo_urls ?? []), url]
       await sb.from('newsletter_drafts').update({ photo_urls: updated }).eq('id', draftId)
-      await sendMessage(chatId, `📷 照片已加入（累計 ${updated.length} 張）。繼續貼，或 <code>/done</code> 結束`)
+      await sendMessage(chatId, m.newsPhotoAdded(updated.length))
     } catch (e) {
-      await sendMessage(chatId, `❌ 照片上傳失敗：${e instanceof Error ? e.message : '未知錯誤'}`)
+      await sendMessage(chatId, m.newsPhotoFailed(e instanceof Error ? e.message : m.unknownError))
     }
     return
   }
@@ -762,21 +767,21 @@ async function handlePhoto(
     const existingIds = (session.context.pending_file_ids as string[] | undefined) ?? []
     const newIds = [...existingIds, photo.file_id]
     const countMsgId = session.context.count_message_id as number | undefined
-    const displayName = contactName ?? '此聯絡人'
-    const doneText = `✅ 完成（${newIds.length} 張）`
+    const displayName = contactName ?? m.cardThisContact
+    const doneText = m.photoDoneLabel(newIds.length)
     const keyboard = [[
       { text: doneText, callback_data: `done_photo_${contactId}` },
-      { text: '❌ 取消', callback_data: 'cancel_photo' },
+      { text: m.btnCancel, callback_data: 'cancel_photo' },
     ]]
     if (countMsgId) {
       await editMessageText(chatId, countMsgId,
-        `📷 已收到 <b>${newIds.length}</b> 張（${displayName}）\n繼續傳送，或按「完成」`,
+        m.photoCountReceived(newIds.length, displayName),
         keyboard
       )
       await setSession(fromId, 'waiting_for_photo', { ...session.context, pending_file_ids: newIds })
     } else {
       const sent = await sendMessage(chatId,
-        `📷 已收到 <b>1</b> 張（${displayName}）\n繼續傳送，或按「完成」`,
+        m.photoCountReceived(1, displayName),
         { reply_markup: { inline_keyboard: keyboard } }
       )
       await setSession(fromId, 'waiting_for_photo', { ...session.context, pending_file_ids: newIds, count_message_id: sent?.message_id })
@@ -867,12 +872,12 @@ async function handlePhoto(
       const e = exact[0]
       mergeTargetId = e.id
       mergeTargetName = e.name
-      dupWarning += `\n⚠️ 此 email 已有聯絡人：${e.name}（${e.company}），是否仍要新增？`
+      dupWarning += m.cardDupEmailExists(e.name ?? '', e.company ?? '')
     } else if (similar.length > 0) {
       const s = similar[0]
       mergeTargetId = s.id
       mergeTargetName = s.name
-      dupWarning += `\n🔍 系統有相似聯絡人：${s.name}（${s.company}），請確認是否為同一人`
+      dupWarning += m.cardDupSimilar(s.name ?? '', s.company ?? '')
     }
 
     // 同名偵測：若既有 contact 的 email 已是 bounced/invalid，且新名片有不同 email，
@@ -889,7 +894,7 @@ async function handlePhoto(
         cardData.email.trim().toLowerCase() !== (targetRow.email ?? '').trim().toLowerCase()
       ) {
         mergeTargetIsBounced = true
-        dupWarning += `\n🔧 既有聯絡人 email (${targetRow.email}) 狀態為 ${targetRow.email_status}，建議「換工作」用新 email 覆蓋`
+        dupWarning += m.cardDupBouncedHint(targetRow.email ?? '', targetRow.email_status)
       }
     }
 
@@ -905,28 +910,33 @@ async function handlePhoto(
       .insert({ data: contactPayload, created_by: user.id, storage_path: storagePath })
       .select('id')
       .single()
-    if (pendingError || !pending) throw new Error(pendingError?.message ?? '暫存失敗')
+    if (pendingError || !pending) throw new Error(pendingError?.message ?? m.batchPendingFallback)
 
-    let countryDisplay = '—'
+    let countryDisplay = m.cardEmptyValue
     if (cardData.country_code) {
+      // Pick localized country name column per bot language; fall back to zh.
+      const nameCol = lang === 'ja' ? 'name_ja' : lang === 'en' ? 'name_en' : 'name_zh'
       const { data: countryRow } = await supabase
         .from('countries')
-        .select('emoji, name_zh')
+        .select(`emoji, ${nameCol}, name_zh`)
         .eq('code', cardData.country_code)
         .single()
-      countryDisplay = countryRow
-        ? `${countryRow.emoji} ${countryRow.name_zh}`
+      const row = countryRow as Record<string, unknown> | null
+      const localized = (row?.[nameCol] as string | null) ?? (row?.name_zh as string | null)
+      countryDisplay = row
+        ? `${row.emoji ?? ''} ${localized ?? cardData.country_code}`.trim()
         : cardData.country_code
     }
 
+    const empty = m.cardEmptyValue
     const resultText =
-      `📇 辨識結果：\n\n` +
-      `👤 姓名：${cardData.name || '—'}\n` +
-      `🏢 公司：${cardData.company || '—'}\n` +
-      `💼 職稱：${cardData.job_title || '—'}\n` +
-      `📧 Email：${cardData.email || '—'}\n` +
-      `📞 電話：${cardData.phone || '—'}\n` +
-      `🌍 國家：${countryDisplay}` +
+      m.cardOcrResultHeader +
+      m.cardFieldLine('👤', m.cardResultName, cardData.name || empty) +
+      m.cardFieldLine('🏢', m.cardResultCompany, cardData.company || empty) +
+      m.cardFieldLine('💼', m.cardResultJobTitle, cardData.job_title || empty) +
+      m.cardFieldLine('📧', m.cardResultEmail, cardData.email || empty) +
+      m.cardFieldLine('📞', m.cardResultPhone, cardData.phone || empty) +
+      `🌍 ${m.cardResultCountry}：${countryDisplay}` +
       dupWarning +
       m.cardConfirmPrompt
 
@@ -936,23 +946,23 @@ async function handlePhoto(
     const cardButtons: Array<Array<{ text: string; callback_data: string }>> = []
     if (mergeTargetId && mergeTargetName && mergeTargetIsBounced) {
       cardButtons.push([
-        { text: `🔧 更新「${mergeTargetName}」email（換工作）`, callback_data: `replace_${pending.id}` },
+        { text: m.btnUpdateEmail(mergeTargetName), callback_data: `replace_${pending.id}` },
       ])
     }
     cardButtons.push([
-      { text: mergeTargetId ? '✅ 仍建立新聯絡人' : '✅ 確認存檔', callback_data: `save_${pending.id}` },
+      { text: mergeTargetId ? m.btnSaveNewAnyway : m.btnConfirmSave, callback_data: `save_${pending.id}` },
     ])
     if (mergeTargetId && mergeTargetName) {
       cardButtons.push([
-        { text: `📌 加到「${mergeTargetName}」`, callback_data: `merge_${pending.id}` },
+        { text: m.btnMergeInto(mergeTargetName), callback_data: `merge_${pending.id}` },
       ])
       if (!mergeTargetIsBounced) {
         cardButtons.push([
-          { text: `🔄 更新「${mergeTargetName}」（換工作）`, callback_data: `replace_${pending.id}` },
+          { text: m.btnReplaceJob(mergeTargetName), callback_data: `replace_${pending.id}` },
         ])
       }
     }
-    cardButtons.push([{ text: '❌ 不存檔', callback_data: `cancel_${pending.id}` }])
+    cardButtons.push([{ text: m.btnNotSave, callback_data: `cancel_${pending.id}` }])
 
     await sendMessage(chatId, resultText, {
       reply_markup: { inline_keyboard: cardButtons },
@@ -975,7 +985,7 @@ async function handlePhoto(
     } else {
       console.error('[bot] no storagePath/cardImgUrl — skipping failed_scans insert. storagePath:', storagePath, 'cardImgUrl:', cardImgUrl)
     }
-    await sendMessage(chatId, `❌ 處理失敗：${msg}`)
+    await sendMessage(chatId, m.processingFailed(msg))
   }
 }
 
@@ -985,8 +995,9 @@ async function handleWork(
   chatId: number,
   user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
   naturalText: string,
-  lastContactId?: string | null,
-  m: BotMessages = BOT_MESSAGES.zh
+  lastContactId: string | null | undefined,
+  m: BotMessages,
+  lang: BotLang,
 ) {
   const supabase = createServiceClient()
   await sendMessage(chatId, m.taskParsing)
@@ -995,7 +1006,7 @@ async function handleWork(
   try {
     parsed = await parseTaskCommand(naturalText, new Date().toISOString(), user.ai_model_id)
   } catch {
-    await sendMessage(chatId, '❌ AI 解析失敗，請重試或換個說法。')
+    await sendMessage(chatId, m.taskParseFailed)
     return
   }
 
@@ -1027,9 +1038,7 @@ async function handleWork(
     }
   }
 
-  const contactLine = contactName
-    ? `🔗 聯絡人：${contactName}${contactCompany ? `（${contactCompany}）` : ''}\n`
-    : ''
+  const contactLine = contactName ? m.taskContactLine(contactName, contactCompany ?? '') : ''
 
   // Resolve assignees from users table
   const assigneeEmails: string[] = []
@@ -1051,7 +1060,7 @@ async function handleWork(
   const isSelfReminder = assigneeEmails.length === 0
   if (isSelfReminder) {
     assigneeEmails.push(user.email)
-    assigneeNames.push('自己')
+    assigneeNames.push(m.taskSelfReminderLabel)
   }
 
   // Create task
@@ -1087,22 +1096,29 @@ async function handleWork(
   for (const au of notifyUsers ?? []) {
     if (au.email === user.email) continue
 
-    // Telegram notification
+    // Telegram notification. Look up the assignee's bot language so the
+    // notification reaches them in their preferred locale, not the assigner's.
     if (au.telegram_id) {
+      const assigneeLang = await getBotLanguage({ id: au.telegram_id }, supabase)
+      const am = BOT_MESSAGES[assigneeLang]
       const tgExtra: Record<string, unknown> = {
         reply_markup: {
           inline_keyboard: [[
-            { text: '✅ 標記完成', callback_data: `task_done_${task.id}` },
-            ...(appUrl ? [{ text: '📋 任務管理', url: `${appUrl}/tasks` }] : []),
+            { text: am.taskBtnMarkDone, callback_data: `task_done_${task.id}` },
+            ...(appUrl ? [{ text: am.taskBtnManage, url: `${appUrl}/tasks` }] : []),
           ]],
         },
       }
+      const dueLine = parsed.due_at
+        ? am.taskDueLabel(new Date(parsed.due_at).toLocaleString(dateLocale(assigneeLang), { timeZone: 'Asia/Taipei' })) + '\n'
+        : ''
       await sendMessage(au.telegram_id,
-        `📋 <b>新任務指派給你</b>\n\n` +
-        `📌 ${parsed.title}\n` +
-        (contactLine ? contactLine : '') +
-        (parsed.due_at ? `⏰ 截止：${new Date(parsed.due_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}\n` : '') +
-        `\n由 ${user.display_name ?? user.email.split('@')[0]} 指派。`,
+        am.taskAssignedNotice(
+          parsed.title,
+          contactLine,
+          dueLine,
+          user.display_name ?? user.email.split('@')[0],
+        ),
         tgExtra
       )
     }
@@ -1124,13 +1140,14 @@ async function handleWork(
     }
   }
 
-  const dueStr = parsed.due_at
-    ? `\n⏰ 截止：${new Date(parsed.due_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}`
+  const dueLine = parsed.due_at
+    ? '\n' + m.taskDueLabel(new Date(parsed.due_at).toLocaleString(dateLocale(lang), { timeZone: 'Asia/Taipei' }))
     : ''
-  const assigneeStr = isSelfReminder ? '（自我提醒）' : `→ ${assigneeNames.join('、')}`
 
   await sendMessage(chatId,
-    `✅ 任務已建立 ${assigneeStr}\n\n📌 ${parsed.title}\n${contactLine}${dueStr}`
+    isSelfReminder
+      ? m.taskCreatedSelf(parsed.title, contactLine, dueLine)
+      : m.taskCreatedAssigned(assigneeNames.join('、'), parsed.title, contactLine, dueLine)
   )
 }
 
@@ -1147,14 +1164,14 @@ async function handleMet(
   const nowIso = new Date().toISOString()
 
   console.log('[bot] handleMet called:', { chatId, count, description })
-  await sendMessage(chatId, '🤖 AI 分析中...')
+  await sendMessage(chatId, m.aiAnalyzing)
   let parsed
   try {
     parsed = await parseMetCommand(description, nowIso, user.ai_model_id)
     console.log('[bot] parseMetCommand result:', parsed)
   } catch (e) {
     console.error('[bot] parseMetCommand error:', e)
-    await sendMessage(chatId, '❌ AI 解析失敗，請再試一次')
+    await sendMessage(chatId, m.aiParseFailed)
     return
   }
 
@@ -1167,19 +1184,20 @@ async function handleMet(
     .limit(count)
 
   if (!contacts || contacts.length === 0) {
-    await sendMessage(chatId, '找不到最近的聯絡人記錄')
+    await sendMessage(chatId, m.metContactNotFound)
     return
   }
 
   const metDateStr = parsed.met_date
-  const metAtStr = parsed.met_at ?? '（未指定）'
-  const referredStr = parsed.referred_by ? `\n介紹人：${parsed.referred_by}` : ''
+  const metAtStr = parsed.met_at ?? m.metOccasionUnspecified
+  const referredStr = parsed.referred_by ? `\n${m.metFieldReferrer}：${parsed.referred_by}` : ''
 
-  const contactList = contacts.map((c, i) => `${i + 1}. ${c.name ?? '—'}（${c.company ?? '—'}）`).join('\n')
+  const empty = m.cardEmptyValue
+  const contactList = contacts.map((c, i) => `${i + 1}. ${c.name ?? empty}（${c.company ?? empty}）`).join('\n')
 
   const confirmMsg =
-    `📍 準備套用到最近 ${contacts.length} 位聯絡人：\n\n` +
-    `場合：${metAtStr}\n日期：${metDateStr}${referredStr}\n\n` +
+    m.metContactsHeader(contacts.length) +
+    `${m.metFieldOccasion}：${metAtStr}\n${m.metFieldDate}：${metDateStr}${referredStr}\n\n` +
     `${contactList}`
 
   // Store context in session (Telegram callback_data has 64-byte limit)
@@ -1193,8 +1211,8 @@ async function handleMet(
   await sendMessage(chatId, confirmMsg, {
     reply_markup: {
       inline_keyboard: [[
-        { text: '✅ 確認套用', callback_data: 'met_confirm' },
-        { text: '❌ 取消', callback_data: 'met_cancel' },
+        { text: m.btnConfirmApply, callback_data: 'met_confirm' },
+        { text: m.btnCancel, callback_data: 'met_cancel' },
       ]],
     },
   })
@@ -1205,7 +1223,8 @@ async function handleMet(
 async function handleTasks(
   chatId: number,
   user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
-  m: BotMessages = BOT_MESSAGES.zh
+  m: BotMessages,
+  lang: BotLang,
 ) {
   const supabase = createServiceClient()
 
@@ -1233,19 +1252,19 @@ async function handleTasks(
 
   for (const task of tasks) {
     const dueStr = task.due_at
-      ? `⏰ ${new Date(task.due_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}`
-      : '⏰ 無截止時間'
+      ? m.taskDueLabel(new Date(task.due_at).toLocaleString(dateLocale(lang), { timeZone: 'Asia/Taipei' }))
+      : m.taskDueNone
     const isAssignedToMe = assignedIds.includes(task.id)
-    const roleStr = task.created_by === user.email && !isAssignedToMe ? '（我建立）' : '（指派給我）'
+    const roleStr = task.created_by === user.email && !isAssignedToMe ? m.taskRoleCreated : m.taskRoleAssigned
 
     await sendMessage(chatId,
       `📋 <b>${task.title}</b> ${roleStr}\n${dueStr}`,
       {
         reply_markup: {
           inline_keyboard: [[
-            { text: '✅ 完成', callback_data: `task_done_${task.id}` },
-            { text: '⏭ 延後', callback_data: `task_postpone_${task.id}` },
-            { text: '❌ 取消', callback_data: `task_cancel_${task.id}` },
+            { text: m.taskBtnDone, callback_data: `task_done_${task.id}` },
+            { text: m.taskBtnPostpone, callback_data: `task_postpone_${task.id}` },
+            { text: m.taskBtnCancel, callback_data: `task_cancel_${task.id}` },
           ]],
         },
       }
@@ -1261,7 +1280,8 @@ async function handleText(
   user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
   text: string,
   session: { state: string; context: Record<string, unknown>; last_contact_id: string | null } | null,
-  m: BotMessages = BOT_MESSAGES.zh
+  m: BotMessages,
+  lang: BotLang,
 ) {
   const supabase = createServiceClient()
 
@@ -1329,7 +1349,7 @@ async function handleText(
   // ── /search /s ─────────────────────────────────────────────────────────────
   const searchMatch = cmd.match(/^\/(?:search|s)\s+(.+)/)
   if (searchMatch) {
-    await handleSearch(chatId, searchMatch[1].trim(), m)
+    await handleSearch(chatId, searchMatch[1].trim(), m, lang)
     return
   }
 
@@ -1341,17 +1361,17 @@ async function handleText(
         .from('contacts').select('id, name, company, email').eq('id', lastContactId).single()
       if (lastContact) {
         await sendMessage(chatId,
-          `要針對上一位聯絡人嗎？\n👤 ${lastContact.name}（${lastContact.company ?? ''}）`,
+          m.emailLastContactAsk(lastContact.name ?? '', lastContact.company ?? ''),
           { reply_markup: { inline_keyboard: [[
-            { text: '✅ 是，就是他', callback_data: `use_last_email_${lastContactId}` },
-            { text: '🔍 搜尋其他人', callback_data: 'search_other_email' },
+            { text: m.btnYesThatOne, callback_data: `use_last_email_${lastContactId}` },
+            { text: m.btnSearchOther, callback_data: 'search_other_email' },
           ]] } }
         )
         return
       }
     }
     await setSession(fromId, 'waiting_contact_for_email', {})
-    await sendMessage(chatId, '請輸入聯絡人姓名或公司關鍵字：')
+    await sendMessage(chatId, m.emailEnterContactQuery)
     return
   }
 
@@ -1362,7 +1382,7 @@ async function handleText(
     } else {
       const contacts = await searchContacts(text.trim())
       if (contacts.length === 0) {
-        await sendMessage(chatId, '找不到符合的聯絡人，請再試一次：')
+        await sendMessage(chatId, m.searchNotFoundTry)
       } else if (contacts.length === 1) {
         await setSession(fromId, 'waiting_email_method', {
           contact_id: contacts[0].id,
@@ -1370,11 +1390,10 @@ async function handleText(
           contact_email: contacts[0].email,
         })
         await sendMessage(chatId,
-          `收件人：<b>${contacts[0].name}</b>（${contacts[0].email || '無 email'}）\n\n` +
-          `請選擇發信方式：\n1. 使用 Email Template\n2. 直接描述，AI 幫你生成`,
+          m.emailRecipientPrompt(contacts[0].name ?? '', contacts[0].email || m.emailEmptyEmailLabel),
           { reply_markup: { inline_keyboard: [[
-            { text: '1️⃣ 使用 Template', callback_data: 'email_method_1' },
-            { text: '2️⃣ AI 生成', callback_data: 'email_method_2' },
+            { text: m.emailBtnTemplate, callback_data: 'email_method_1' },
+            { text: m.emailBtnAI, callback_data: 'email_method_2' },
           ]] } }
         )
       } else {
@@ -1382,7 +1401,7 @@ async function handleText(
           text: `${c.name}（${c.company ?? ''}）`,
           callback_data: `select_email_contact_${c.id}`,
         }])
-        await sendMessage(chatId, '找到多筆聯絡人，請選擇：', { reply_markup: { inline_keyboard: buttons } })
+        await sendMessage(chatId, m.noteFoundContactSelect, { reply_markup: { inline_keyboard: buttons } })
       }
       return
     }
@@ -1391,10 +1410,10 @@ async function handleText(
   // ── Session: waiting_email_description ───────────────────────────────────
   if (session?.state === 'waiting_email_description') {
     if (cmd.startsWith('/')) { await clearSession(fromId) } else {
-    await sendMessage(chatId, '⏳ AI 生成中，請稍候...')
+    await sendMessage(chatId, m.aiGenerating)
     try {
       const body = await generateEmailContent(text.trim(), undefined, user.ai_model_id)
-      const subject = `關於：${text.trim().slice(0, 40)}${text.trim().length > 40 ? '...' : ''}`
+      const subject = `${m.emailSubjectPrefix}${text.trim().slice(0, 40)}${text.trim().length > 40 ? '...' : ''}`
       const preview = body.text.replace(/<[^>]+>/g, '').slice(0, 200)
 
       await setSession(fromId, 'waiting_email_confirm', {
@@ -1403,15 +1422,15 @@ async function handleText(
         body_html: body.text,
       })
       await sendMessage(chatId,
-        `📧 郵件預覽\n\n主旨：${subject}\n\n${preview}${preview.length >= 200 ? '...' : ''}`,
+        m.emailPreview(subject, preview, preview.length >= 200),
         { reply_markup: { inline_keyboard: [[
-          { text: '✅ 確認發送', callback_data: 'confirm_email' },
-          { text: '❌ 取消', callback_data: 'cancel_email' },
+          { text: m.emailBtnConfirmSend, callback_data: 'confirm_email' },
+          { text: m.btnCancel, callback_data: 'cancel_email' },
         ]] } }
       )
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      await sendMessage(chatId, `❌ AI 生成失敗：${msg}`)
+      await sendMessage(chatId, m.aiGenerateFailed(msg))
     }
     return
     } // end command escape
@@ -1420,12 +1439,14 @@ async function handleText(
   // ── Session: waiting_email_supplement ─────────────────────────────────────
   if (session?.state === 'waiting_email_supplement') {
     if (cmd.startsWith('/')) { await clearSession(fromId) } else {
-    await sendMessage(chatId, '⏳ AI 生成中，請稍候...')
+    await sendMessage(chatId, m.aiGenerating)
     try {
       const templateContent = session.context.template_body as string
       const supplement = text.trim().toLowerCase() === 'skip' ? '' : text.trim()
-      const body = await generateEmailContent(supplement || '請依照範本生成', templateContent, user.ai_model_id)
-      const subject = session.context.template_subject as string || '（無主旨）'
+      // Fallback prompt when user types "skip" — instruct AI to generate from template alone.
+      // Use English here since it's an instruction for the AI, not the user.
+      const body = await generateEmailContent(supplement || 'Generate per the template', templateContent, user.ai_model_id)
+      const subject = session.context.template_subject as string || m.emailSubjectNone
       const preview = body.text.replace(/<[^>]+>/g, '').slice(0, 200)
 
       await setSession(fromId, 'waiting_email_confirm', {
@@ -1434,15 +1455,15 @@ async function handleText(
         body_html: body.text,
       })
       await sendMessage(chatId,
-        `📧 郵件預覽\n\n主旨：${subject}\n\n${preview}${preview.length >= 200 ? '...' : ''}`,
+        m.emailPreview(subject, preview, preview.length >= 200),
         { reply_markup: { inline_keyboard: [[
-          { text: '✅ 確認發送', callback_data: 'confirm_email' },
-          { text: '❌ 取消', callback_data: 'cancel_email' },
+          { text: m.emailBtnConfirmSend, callback_data: 'confirm_email' },
+          { text: m.btnCancel, callback_data: 'cancel_email' },
         ]] } }
       )
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      await sendMessage(chatId, `❌ AI 生成失敗：${msg}`)
+      await sendMessage(chatId, m.aiGenerateFailed(msg))
     }
     return
     } // end command escape
@@ -1454,8 +1475,8 @@ async function handleText(
     const contactId = session.context.contact_id as string
     const fileIds = (session.context.pending_file_ids as string[] | undefined) ?? []
     const contactNameHint = session.context.contact_name as string | undefined
-    await sendMessage(chatId, '⏳ 上傳中...')
-    await processPersonalPhoto(chatId, fromId, contactId, fileIds, contactNameHint, text.trim())
+    await sendMessage(chatId, m.photoUploading)
+    await processPersonalPhoto(chatId, fromId, contactId, fileIds, contactNameHint, text.trim(), m)
     return
     } // end command escape
   }
@@ -1466,13 +1487,13 @@ async function handleText(
     const contacts = await searchContacts(text.trim())
     if (contacts.length === 0) {
       await setSession(fromId, 'waiting_for_note_content', { contact_id: null })
-      await sendMessage(chatId, '找不到此聯絡人，筆記將存為未歸類，可至網頁手動歸類。\n\n請輸入筆記內容：')
+      await sendMessage(chatId, m.noteContactNotFound)
     } else if (contacts.length === 1) {
       await setSession(fromId, 'waiting_for_note_content', { contact_id: contacts[0].id, contact_name: contacts[0].name })
-      await sendMessage(chatId, `找到：${contacts[0].name}（${contacts[0].company ?? ''}）\n\n請輸入筆記內容：`)
+      await sendMessage(chatId, m.noteContactFound(contacts[0].name ?? '', contacts[0].company ?? ''))
     } else {
       const buttons = contacts.map((c) => [{ text: `${c.name}（${c.company ?? ''}）`, callback_data: `select_contact_${c.id}` }])
-      await sendMessage(chatId, '找到多筆聯絡人，請選擇：', { reply_markup: { inline_keyboard: buttons } })
+      await sendMessage(chatId, m.noteFoundContactSelect, { reply_markup: { inline_keyboard: buttons } })
     }
     return
     } // end command escape
@@ -1513,10 +1534,7 @@ async function handleText(
     if (meetingLocation) detailParts.push(`📍 ${meetingLocation}`)
     const detail = detailParts.length > 0 ? `\n${detailParts.join('  ')}` : ''
 
-    await sendMessage(chatId, contactName
-      ? `✅ 已儲存${logType === 'meeting' ? '拜訪紀錄' : '筆記'}（${contactName}）${detail}`
-      : `✅ 已儲存為未歸類${logType === 'meeting' ? '拜訪紀錄' : '筆記'}${detail}`
-    )
+    await sendMessage(chatId, m.noteSavedWithDetail(contactName ?? null, logType === 'meeting', detail))
     return
     } // end command escape
   }
@@ -1527,13 +1545,13 @@ async function handleText(
     const contacts = await searchContacts(text.trim())
     if (contacts.length === 0) {
       await setSession(fromId, 'waiting_for_visit_datetime', { contact_id: null, contact_name: null })
-      await sendMessage(chatId, '找不到此聯絡人，拜訪紀錄將存為未歸類。\n\n請輸入拜訪日期時間（例：2026-03-29 14:00），或輸入「略過」：')
+      await sendMessage(chatId, m.visitContactNotFound)
     } else if (contacts.length === 1) {
       await setSession(fromId, 'waiting_for_visit_datetime', { contact_id: contacts[0].id, contact_name: contacts[0].name })
-      await sendMessage(chatId, `找到：${contacts[0].name}（${contacts[0].company ?? ''}）\n\n請輸入拜訪日期時間（例：2026-03-29 14:00），或輸入「略過」：`)
+      await sendMessage(chatId, m.visitContactFound(contacts[0].name ?? '', contacts[0].company ?? ''))
     } else {
       const buttons = contacts.map((c) => [{ text: `${c.name}（${c.company ?? ''}）`, callback_data: `select_visit_contact_${c.id}` }])
-      await sendMessage(chatId, '找到多筆聯絡人，請選擇：', { reply_markup: { inline_keyboard: buttons } })
+      await sendMessage(chatId, m.noteFoundContactSelect, { reply_markup: { inline_keyboard: buttons } })
     }
     return
     } // end command escape
@@ -1542,16 +1560,18 @@ async function handleText(
   // ── Session: waiting_for_visit_datetime ───────────────────────────────────
   if (session?.state === 'waiting_for_visit_datetime') {
     if (cmd.startsWith('/')) { await clearSession(fromId) } else {
-    const skip = text.trim() === '略過' || text.trim().toLowerCase() === 'skip'
+    // Accept zh "略過", ja "スキップ", or "skip" (case-insensitive)
+    const trimmed = text.trim()
+    const skip = trimmed === '略過' || trimmed === 'スキップ' || trimmed.toLowerCase() === 'skip'
     let meetingDate: string | null = null
     let meetingTime: string | null = null
     if (!skip) {
-      const match = text.trim().match(/^(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2}))?/)
+      const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2}))?/)
       if (match) {
         meetingDate = match[1]
         meetingTime = match[2] ?? null
       } else {
-        await sendMessage(chatId, '格式不正確，請輸入 YYYY-MM-DD 或 YYYY-MM-DD HH:MM，或輸入「略過」：')
+        await sendMessage(chatId, m.visitDatetimeInvalid)
         return
       }
     }
@@ -1560,7 +1580,7 @@ async function handleText(
       meeting_date: meetingDate,
       meeting_time: meetingTime,
     })
-    await sendMessage(chatId, '請輸入拜訪地點，或輸入「略過」：')
+    await sendMessage(chatId, m.visitEnterLocation)
     return
     } // end command escape
   }
@@ -1568,12 +1588,13 @@ async function handleText(
   // ── Session: waiting_for_visit_location ───────────────────────────────────
   if (session?.state === 'waiting_for_visit_location') {
     if (cmd.startsWith('/')) { await clearSession(fromId) } else {
-    const skip = text.trim() === '略過' || text.trim().toLowerCase() === 'skip'
+    const trimmed = text.trim()
+    const skip = trimmed === '略過' || trimmed === 'スキップ' || trimmed.toLowerCase() === 'skip'
     await setSession(fromId, 'waiting_for_visit_content', {
       ...session.context,
-      meeting_location: skip ? null : text.trim(),
+      meeting_location: skip ? null : trimmed,
     })
-    await sendMessage(chatId, '請輸入拜訪內容（筆記）：')
+    await sendMessage(chatId, m.visitEnterContent)
     return
     } // end command escape
   }
@@ -1602,10 +1623,7 @@ async function handleText(
     if (ctx.meeting_date) parts.push(`📅 ${ctx.meeting_date}${ctx.meeting_time ? ` ${ctx.meeting_time}` : ''}`)
     if (ctx.meeting_location) parts.push(`📍 ${ctx.meeting_location}`)
     const detail = parts.length > 0 ? `\n${parts.join('  ')}` : ''
-    await sendMessage(chatId, ctx.contact_name
-      ? `✅ 已儲存拜訪紀錄（${ctx.contact_name}）${detail}`
-      : `✅ 已儲存為未歸類拜訪紀錄${detail}`
-    )
+    await sendMessage(chatId, m.visitSavedDetailed(ctx.contact_name, detail))
     return
     } // end command escape
   }
@@ -1613,7 +1631,7 @@ async function handleText(
   // ── /work /w ───────────────────────────────────────────────────────────────
   const workMatch = cmd.match(/^\/(?:work|w)\s+(.+)/s)
   if (workMatch) {
-    await handleWork(chatId, user, workMatch[1].trim(), session?.last_contact_id, m)
+    await handleWork(chatId, user, workMatch[1].trim(), session?.last_contact_id, m, lang)
     return
   }
 
@@ -1629,13 +1647,13 @@ async function handleText(
   // ── /meet /m ───────────────────────────────────────────────────────────────
   const meetMatch = text.match(/^\/(?:meet|m)(?:@\S+)?\s*([\s\S]*)$/i)
   if (meetMatch) {
-    await handleMeet(chatId, user, meetMatch[1].trim(), m)
+    await handleMeet(chatId, user, meetMatch[1].trim(), m, lang)
     return
   }
 
   // ── /tasks /t ──────────────────────────────────────────────────────────────
   if (cmd === '/tasks' || cmd === '/t') {
-    await handleTasks(chatId, user, m)
+    await handleTasks(chatId, user, m, lang)
     return
   }
 
@@ -1647,12 +1665,12 @@ async function handleText(
     // Try to parse the date
     const parsed = Date.parse(dateStr)
     if (isNaN(parsed)) {
-      await sendMessage(chatId, '無法解析日期，請輸入格式如：2026-03-20 15:00 或 tomorrow 3pm')
+      await sendMessage(chatId, m.taskPostponeFormatBad)
       return
     }
     await supabase.from('tasks').update({ due_at: new Date(parsed).toISOString() }).eq('id', taskId)
     await clearSession(fromId)
-    await sendMessage(chatId, `✅ 已延後任務截止時間至 ${new Date(parsed).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}`)
+    await sendMessage(chatId, m.taskPostponed(new Date(parsed).toLocaleString(dateLocale(lang), { timeZone: 'Asia/Taipei' })))
     return
     } // end command escape
   }
@@ -1663,13 +1681,13 @@ async function handleText(
     const contacts = await searchContacts(noteNameMatch[1].trim())
     if (contacts.length === 0) {
       await setSession(fromId, 'waiting_for_note_content', { contact_id: null })
-      await sendMessage(chatId, '找不到此聯絡人，筆記將存為未歸類。\n\n請輸入筆記內容：')
+      await sendMessage(chatId, m.noteContactNotFound)
     } else if (contacts.length === 1) {
       await setSession(fromId, 'waiting_for_note_content', { contact_id: contacts[0].id, contact_name: contacts[0].name })
-      await sendMessage(chatId, `找到：${contacts[0].name}（${contacts[0].company ?? ''}）\n\n請輸入筆記內容：`)
+      await sendMessage(chatId, m.noteContactFound(contacts[0].name ?? '', contacts[0].company ?? ''))
     } else {
       const buttons = contacts.map((c) => [{ text: `${c.name}（${c.company ?? ''}）`, callback_data: `select_contact_${c.id}` }])
-      await sendMessage(chatId, '找到多筆聯絡人，請選擇：', { reply_markup: { inline_keyboard: buttons } })
+      await sendMessage(chatId, m.noteFoundContactSelect, { reply_markup: { inline_keyboard: buttons } })
     }
     return
   }
@@ -1682,17 +1700,17 @@ async function handleText(
         .from('contacts').select('id, name, company').eq('id', lastContactId).single()
       if (lastContact) {
         await sendMessage(chatId,
-          `要針對上一位聯絡人嗎？\n👤 ${lastContact.name}（${lastContact.company ?? ''}）`,
+          m.noteLastContactAsk(lastContact.name ?? '', lastContact.company ?? ''),
           { reply_markup: { inline_keyboard: [[
-            { text: '✅ 是，就是他', callback_data: `use_last_note_${lastContactId}` },
-            { text: '🔍 搜尋其他人', callback_data: 'search_other_note' },
+            { text: m.btnYesThatOne, callback_data: `use_last_note_${lastContactId}` },
+            { text: m.btnSearchOther, callback_data: 'search_other_note' },
           ]] } }
         )
         return
       }
     }
     await setSession(fromId, 'waiting_for_note_contact', {})
-    await sendMessage(chatId, '請輸入聯絡人姓名或 Email：')
+    await sendMessage(chatId, m.emailEnterContactNameOrCompany)
     return
   }
 
@@ -1702,13 +1720,13 @@ async function handleText(
     const contacts = await searchContacts(visitNameMatch[1].trim())
     if (contacts.length === 0) {
       await setSession(fromId, 'waiting_for_visit_datetime', { contact_id: null, contact_name: null })
-      await sendMessage(chatId, '找不到此聯絡人，拜訪紀錄將存為未歸類。\n\n請輸入拜訪日期時間（例：2026-03-29 14:00），或輸入「略過」：')
+      await sendMessage(chatId, m.visitContactNotFound)
     } else if (contacts.length === 1) {
       await setSession(fromId, 'waiting_for_visit_datetime', { contact_id: contacts[0].id, contact_name: contacts[0].name })
-      await sendMessage(chatId, `找到：${contacts[0].name}（${contacts[0].company ?? ''}）\n\n請輸入拜訪日期時間（例：2026-03-29 14:00），或輸入「略過」：`)
+      await sendMessage(chatId, m.visitContactFound(contacts[0].name ?? '', contacts[0].company ?? ''))
     } else {
       const buttons = contacts.map((c) => [{ text: `${c.name}（${c.company ?? ''}）`, callback_data: `select_visit_contact_${c.id}` }])
-      await sendMessage(chatId, '找到多筆聯絡人，請選擇：', { reply_markup: { inline_keyboard: buttons } })
+      await sendMessage(chatId, m.noteFoundContactSelect, { reply_markup: { inline_keyboard: buttons } })
     }
     return
   }
@@ -1721,17 +1739,17 @@ async function handleText(
         .from('contacts').select('id, name, company').eq('id', lastContactId).single()
       if (lastContact) {
         await sendMessage(chatId,
-          `要為上一位聯絡人新增拜訪紀錄嗎？\n👤 ${lastContact.name}（${lastContact.company ?? ''}）`,
+          m.visitLastContactAsk(lastContact.name ?? '', lastContact.company ?? ''),
           { reply_markup: { inline_keyboard: [[
-            { text: '✅ 是，就是他', callback_data: `use_last_visit_${lastContactId}` },
-            { text: '🔍 搜尋其他人', callback_data: 'search_other_visit' },
+            { text: m.btnYesThatOne, callback_data: `use_last_visit_${lastContactId}` },
+            { text: m.btnSearchOther, callback_data: 'search_other_visit' },
           ]] } }
         )
         return
       }
     }
     await setSession(fromId, 'waiting_for_visit_contact', {})
-    await sendMessage(chatId, '請輸入聯絡人姓名或 Email：')
+    await sendMessage(chatId, m.emailEnterContactNameOrCompany)
     return
   }
 
@@ -1742,13 +1760,13 @@ async function handleText(
       const { data: lastContact } = await supabase.from('contacts').select('id, name, company').eq('id', lastContactId).single()
       if (lastContact) {
         await setSession(fromId, 'waiting_for_add_card', { contact_id: lastContactId, contact_name: lastContact.name })
-        await sendMessage(chatId, `上一位聯絡人：<b>${lastContact.name}</b>（${lastContact.company ?? ''}）\n\n請傳送名片照片（或 /cancel 取消）`, {
-          reply_markup: { inline_keyboard: [[{ text: '⏭ 跳過，不需要名片', callback_data: 'skip_add_card' }]] },
+        await sendMessage(chatId, m.addCardLastContact(lastContact.name ?? '', lastContact.company ?? ''), {
+          reply_markup: { inline_keyboard: [[{ text: m.btnSkipNoCard, callback_data: 'skip_add_card' }]] },
         })
         return
       }
     }
-    await sendMessage(chatId, '找不到上一位聯絡人，請先掃描名片或用 <code>/a 姓名</code> 指定。')
+    await sendMessage(chatId, m.addCardNoLast)
     return
   }
 
@@ -1765,23 +1783,23 @@ async function handleText(
     const contacts = await searchContacts(queryName)
     if (contacts.length === 0) {
       await setSession(fromId, 'confirm_create_a', { name: queryName, company: queryCompany })
-      const createLabel = queryCompany ? `✅ 建立「${queryName} · ${queryCompany}」` : `✅ 建立「${queryName}」`
-      await sendMessage(chatId, `找不到聯絡人「${queryName}」，要建立新聯絡人嗎？`, {
+      const createLabel = m.addCardCreateLabel(queryName, queryCompany)
+      await sendMessage(chatId, m.addCardNotFound(queryName), {
         reply_markup: {
           inline_keyboard: [[
             { text: createLabel, callback_data: 'confirm_create_a' },
-            { text: '❌ 取消', callback_data: 'cancel_a' },
+            { text: m.btnCancel, callback_data: 'cancel_a' },
           ]],
         },
       })
     } else if (contacts.length === 1) {
       await setSession(fromId, 'waiting_for_add_card', { contact_id: contacts[0].id, contact_name: contacts[0].name })
-      await sendMessage(chatId, `找到：${contacts[0].name}\n\n請傳送名片照片（或 /cancel 取消）`, {
-        reply_markup: { inline_keyboard: [[{ text: '⏭ 跳過，不需要名片', callback_data: 'skip_add_card' }]] },
+      await sendMessage(chatId, m.addCardFoundOne(contacts[0].name ?? ''), {
+        reply_markup: { inline_keyboard: [[{ text: m.btnSkipNoCard, callback_data: 'skip_add_card' }]] },
       })
     } else {
       const buttons = contacts.map((c) => [{ text: `${c.name}（${c.company ?? ''}）`, callback_data: `select_add_card_${c.id}` }])
-      await sendMessage(chatId, '找到多筆聯絡人，請選擇要新增名片的對象：', { reply_markup: { inline_keyboard: buttons } })
+      await sendMessage(chatId, m.addCardMultipleSelect, { reply_markup: { inline_keyboard: buttons } })
     }
     return
   }
@@ -1793,11 +1811,11 @@ async function handleText(
       const { data: lastContact } = await supabase.from('contacts').select('id, name, company').eq('id', lastContactId).single()
       if (lastContact) {
         await setSession(fromId, 'waiting_for_photo', { contact_id: lastContactId, contact_name: lastContact.name })
-        await sendMessage(chatId, `上一位聯絡人：<b>${lastContact.name}</b>（${lastContact.company ?? ''}）\n\n請傳送合照（或 /cancel 取消）\n\n💡 長按照片 → <b>以檔案傳送</b>，可保留拍攝時間和 GPS 地點`)
+        await sendMessage(chatId, m.personPhotoLastContact(lastContact.name ?? '', lastContact.company ?? ''))
         return
       }
     }
-    await sendMessage(chatId, '找不到上一位聯絡人，請先掃描名片或用 <code>/p 姓名</code> 指定。')
+    await sendMessage(chatId, m.personPhotoNoLast)
     return
   }
 
@@ -1817,21 +1835,21 @@ async function handleText(
       // Use session to carry name + company — Telegram callback_data has a
       // hard 64-byte limit, so we can't embed arbitrary-length strings there.
       await setSession(fromId, 'confirm_create_p', { name: queryName, company: queryCompany })
-      const createLabel = queryCompany ? `✅ 建立「${queryName} · ${queryCompany}」` : `✅ 建立「${queryName}」`
-      await sendMessage(chatId, `找不到聯絡人「${queryName}」，要建立新聯絡人嗎？`, {
+      const createLabel = m.addCardCreateLabel(queryName, queryCompany)
+      await sendMessage(chatId, m.personPhotoNotFound(queryName), {
         reply_markup: {
           inline_keyboard: [[
             { text: createLabel, callback_data: 'confirm_create_p' },
-            { text: '❌ 取消', callback_data: 'cancel_p' },
+            { text: m.btnCancel, callback_data: 'cancel_p' },
           ]],
         },
       })
     } else if (contacts.length === 1) {
       await setSession(fromId, 'waiting_for_photo', { contact_id: contacts[0].id, contact_name: contacts[0].name })
-      await sendMessage(chatId, `找到：${contacts[0].name}\n\n請傳送合照（或 /cancel 取消）\n\n💡 長按照片 → <b>以檔案傳送</b>，可保留拍攝時間和 GPS 地點`)
+      await sendMessage(chatId, m.personPhotoFoundOne(contacts[0].name ?? ''))
     } else {
       const buttons = contacts.map((c) => [{ text: `${c.name}（${c.company ?? ''}）`, callback_data: `select_photo_${c.id}` }])
-      await sendMessage(chatId, '找到多筆聯絡人，請選擇：', { reply_markup: { inline_keyboard: buttons } })
+      await sendMessage(chatId, m.personPhotoMultipleSelect, { reply_markup: { inline_keyboard: buttons } })
     }
     return
   }
@@ -1846,13 +1864,13 @@ async function handleText(
     if (!content) {
       if (contacts.length === 0) {
         await setSession(fromId, 'waiting_for_note_content', { contact_id: null })
-        await sendMessage(chatId, '找不到此聯絡人，筆記將存為未歸類。\n\n請輸入筆記內容：')
+        await sendMessage(chatId, m.noteContactNotFound)
       } else if (contacts.length === 1) {
         await setSession(fromId, 'waiting_for_note_content', { contact_id: contacts[0].id, contact_name: contacts[0].name })
-        await sendMessage(chatId, `找到：${contacts[0].name}\n\n請輸入筆記內容：`)
+        await sendMessage(chatId, m.noteFoundOnePlain(contacts[0].name ?? ''))
       } else {
         const buttons = contacts.map((c) => [{ text: `${c.name}（${c.company ?? ''}）`, callback_data: `select_contact_${c.id}` }])
-        await sendMessage(chatId, '找到多筆聯絡人，請選擇：', { reply_markup: { inline_keyboard: buttons } })
+        await sendMessage(chatId, m.noteFoundContactSelect, { reply_markup: { inline_keyboard: buttons } })
       }
       return
     }
@@ -1867,7 +1885,7 @@ async function handleText(
     } else {
       await setSession(fromId, 'waiting_for_note_content_after_select', { content })
       const buttons = contacts.map((c) => [{ text: `${c.name}（${c.company ?? ''}）`, callback_data: `select_contact_${c.id}` }])
-      await sendMessage(chatId, '找到多筆聯絡人，請選擇：', { reply_markup: { inline_keyboard: buttons } })
+      await sendMessage(chatId, m.noteFoundContactSelect, { reply_markup: { inline_keyboard: buttons } })
       return
     }
 
@@ -1877,17 +1895,14 @@ async function handleText(
       content,
       created_by: user.id,
     })
-    await sendMessage(chatId, contactName
-      ? `✅ 已儲存筆記（${contactName}）`
-      : '✅ 已儲存為未歸類筆記'
-    )
+    await sendMessage(chatId, m.noteSavedWithDetail(contactName ?? null, false, ''))
     return
   }
 
   // ── /li: LinkedIn screenshot ───────────────────────────────────────────────
   if (cmd === '/li' || cmd === '/linkedin') {
     await setSession(fromId, 'waiting_for_li', {})
-    await sendMessage(chatId, '📸 請傳送 LinkedIn 個人頁截圖，AI 將自動解析聯絡人資料（或 /cancel 取消）。')
+    await sendMessage(chatId, m.liPrompt)
     return
   }
 
@@ -1897,7 +1912,7 @@ async function handleText(
     const description = batchMatch[2]?.trim()
     let metContext: { met_at: string | null; met_date: string; referred_by: string | null } | null = null
     if (description) {
-      await sendMessage(chatId, '🤖 解析「在哪裡遇見」...')
+      await sendMessage(chatId, m.batchParsingMet)
       try {
         const nowIso = new Date().toISOString()
         const parsed = await parseMetCommand(description, nowIso, user.ai_model_id)
@@ -1908,7 +1923,7 @@ async function handleText(
         }
       } catch (e) {
         console.error('[bot] /b parseMetCommand error:', e)
-        await sendMessage(chatId, '⚠️ AI 解析失敗，仍進入 batch 模式但「在哪裡遇見」不會自動填')
+        await sendMessage(chatId, m.batchMetParseFailed)
       }
     }
 
@@ -1919,16 +1934,13 @@ async function handleText(
       const parts: string[] = []
       if (metContext.met_at) parts.push(`📍 ${metContext.met_at}`)
       if (metContext.met_date) parts.push(`📅 ${metContext.met_date}`)
-      if (metContext.referred_by) parts.push(`🤝 介紹人 ${metContext.referred_by}`)
-      if (parts.length > 0) metInfo = `\n\n這批會自動標記：\n${parts.join('\n')}`
+      if (metContext.referred_by) parts.push(`🤝 ${m.metFieldReferrer} ${metContext.referred_by}`)
+      if (parts.length > 0) metInfo = m.batchMetInfo(parts.join('\n'))
     }
 
     const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
-    const link = appUrl ? `\n📋 待審核：<a href="${appUrl}/contacts/pending">${appUrl}/contacts/pending</a>` : ''
-    await sendMessage(chatId,
-      `📦 已進入 batch 模式${metInfo}\n\n繼續傳送名片照片，每張會立即收下、稍後一起辨識。\n\n` +
-      `完成請打 /done，取消打 /cancel。${link}`
-    )
+    const link = appUrl ? `\n📋 <a href="${appUrl}/contacts/pending">${appUrl}/contacts/pending</a>` : ''
+    await sendMessage(chatId, m.batchEntered(metInfo, link))
     return
   }
 
@@ -1942,33 +1954,29 @@ async function handleText(
         .select('title, content, photo_urls, event_date, section, period')
         .eq('id', draftId).single()
       await clearSession(fromId)
-      if (!d) { await sendMessage(chatId, '已退出'); return }
+      if (!d) { await sendMessage(chatId, m.newsExited); return }
       const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
-      const link = appUrl ? `\n\n👀 <a href="${appUrl}/admin/newsletter/draft/${d.period}">整理頁面</a>` : ''
+      const link = appUrl ? `\n\n👀 <a href="${appUrl}/admin/newsletter/draft/${d.period}">${appUrl}/admin/newsletter/draft/${d.period}</a>` : ''
       const photos = d.photo_urls?.length ?? 0
       const charCount = (d.content ?? '').length
-      const secLabel = d.section === 'last_month' ? '上月回顧' : '下月預告'
-      await sendMessage(chatId,
-        `✅ 已存到 <b>${d.period}</b> · ${secLabel}\n` +
-        `Story: ${d.title}\n` +
-        `${d.event_date ? `📅 ${d.event_date}\n` : ''}` +
-        `📝 ${charCount} 字, 📷 ${photos} 張照片${link}`
-      )
+      const secLabel = d.section === 'last_month' ? m.newsSectionLastLabel : m.newsSectionNextLabel
+      const eventDateLine = d.event_date ? `📅 ${d.event_date}\n` : ''
+      await sendMessage(chatId, m.newsDoneSummary(d.period, secLabel, d.title, eventDateLine, charCount, photos, link))
       return
     }
     if (session?.state !== 'batch_mode') {
-      await sendMessage(chatId, '目前不在 batch 模式。輸入 /b 進入後再傳照片。')
+      await sendMessage(chatId, m.batchNotInMode)
       return
     }
     const pendingIds = (session.context?.pending_ids as string[] | undefined) ?? []
     if (pendingIds.length === 0) {
       await clearSession(fromId)
-      await sendMessage(chatId, '沒有任何名片，已退出 batch 模式。')
+      await sendMessage(chatId, m.batchEmptyDone)
       return
     }
     const total = pendingIds.length
     await clearSession(fromId)
-    await sendMessage(chatId, `✅ 共 ${total} 張已收到，等所有辨識完成後再通知你。`)
+    await sendMessage(chatId, m.batchDoneAck(total))
     // Background: poll up to 60s for all rows to finish, then send single summary
     after(async () => {
       const sb = createServiceClient()
@@ -1981,22 +1989,22 @@ async function handleText(
   if (cmd === '/cancel') {
     const wasBatch = session?.state === 'batch_mode'
     await clearSession(fromId)
-    await sendMessage(chatId, wasBatch ? '已取消 batch 模式（已收的照片留在 pending，可到 web 確認）。' : '已取消。')
+    await sendMessage(chatId, wasBatch ? m.batchCancelled : m.cancelGeneric)
     return
   }
 
   // ── /news — accumulate newsletter material ────────────────────────────────
   if (cmd === '/news') {
     if (!await userHasNewsletter(user.id)) {
-      await sendMessage(chatId, '⛔ 此指令需要 newsletter 權限，請聯絡管理員開通')
+      await sendMessage(chatId, m.newsNoPermission)
       return
     }
     const period = currentPeriod()
     await sendMessage(chatId,
-      `📰 累積 <b>${period}</b> 月電子報素材\n要加到哪一段？`,
+      m.newsPromptSection(period),
       { reply_markup: { inline_keyboard: [[
-        { text: '📜 上月回顧', callback_data: `news_sec_last_${period}` },
-        { text: '🔮 下月預告', callback_data: `news_sec_next_${period}` },
+        { text: m.newsBtnLastMonth, callback_data: `news_sec_last_${period}` },
+        { text: m.newsBtnNextMonth, callback_data: `news_sec_next_${period}` },
       ]] } }
     )
     return
@@ -2007,11 +2015,11 @@ async function handleText(
     if (cmd.startsWith('/')) { await clearSession(fromId) } else {
     const title = text.trim()
     if (title.length < 1 || title.length > 200) {
-      await sendMessage(chatId, '標題長度需要 1-200 字，請重新輸入')
+      await sendMessage(chatId, m.newsTitleLengthError)
       return
     }
     await setSession(fromId, 'news_date', { ...session.context, title })
-    await sendMessage(chatId, '📅 事件日期？格式 <code>YYYY-MM-DD</code>（例：2026-04-29），或輸入「略過」（/cancel 取消）')
+    await sendMessage(chatId, m.newsDatePrompt)
     return
     }
   }
@@ -2021,12 +2029,12 @@ async function handleText(
     if (cmd.startsWith('/')) { await clearSession(fromId) } else {
     const raw = text.trim()
     let eventDate: string | null = null
-    if (raw === '略過' || raw.toLowerCase() === 'skip' || raw === '-') {
+    if (raw === '略過' || raw === 'スキップ' || raw.toLowerCase() === 'skip' || raw === '-') {
       eventDate = null
     } else if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
       eventDate = raw
     } else {
-      await sendMessage(chatId, '日期格式不對。請輸入 <code>YYYY-MM-DD</code>（例：2026-04-29），或輸入「略過」')
+      await sendMessage(chatId, m.newsDateBad)
       return
     }
     // Create the draft now so subsequent photos/text can append
@@ -2053,16 +2061,11 @@ async function handleText(
     }).select('id').single()
     if (error || !draft) {
       await clearSession(fromId)
-      await sendMessage(chatId, `❌ 建立失敗：${error?.message ?? '未知錯誤'}`)
+      await sendMessage(chatId, m.newsCreateFailed(error?.message ?? m.unknownError))
       return
     }
     await setSession(fromId, 'news_collecting', { ...session.context, draft_id: draft.id, event_date: eventDate })
-    await sendMessage(chatId,
-      `✅ 已建立 story「${session.context.title}」${eventDate ? `（${eventDate}）` : ''}\n\n` +
-      `現在請貼內容（文字 + 照片，任何順序）。\n` +
-      `每段文字會 append，每張照片會上傳。
-完成輸入 <code>/done</code>，或 <code>/cancel</code> 取消`
-    )
+    await sendMessage(chatId, m.newsStoryCreated(session.context.title as string, eventDate ?? ''))
     return
     }
   }
@@ -2077,13 +2080,13 @@ async function handleText(
       .select('content').eq('id', draftId).single()
     const merged = (cur?.content ? cur.content + '\n\n' : '') + text.trim()
     await sb.from('newsletter_drafts').update({ content: merged }).eq('id', draftId)
-    await sendMessage(chatId, `📝 已加入 (${text.trim().length} 字，累計 ${merged.length} 字)。繼續貼，或 <code>/done</code> 結束`)
+    await sendMessage(chatId, m.newsTextAdded(text.trim().length, merged.length))
     return
     }
   }
 
   // Default
-  await sendMessage(chatId, '請傳送名片照片（或 /cancel 取消），或輸入 /help（/h）查看可用指令。')
+  await sendMessage(chatId, m.defaultPrompt)
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -2117,11 +2120,12 @@ export async function POST(req: NextRequest) {
     // --- Callback Query ---
     if (body.callback_query) {
       const { id: callbackQueryId, from, message, data } = body.callback_query
+      // Resolve language outside the try block so the catch handler can use it.
+      const lang = await getBotLanguage(from, supabase)
+      const m = BOT_MESSAGES[lang]
 
       try {
         const user = await getAuthorizedUser(from.id)
-        const lang = await getBotLanguage(from, supabase)
-        const m = BOT_MESSAGES[lang]
         if (!user) {
           await answerCallbackQuery(callbackQueryId, m.unauthorized)
           return NextResponse.json({ ok: true })
@@ -2153,7 +2157,7 @@ export async function POST(req: NextRequest) {
             .insert({ ...contactFields, created_by: user.id })
             .select('id')
             .single()
-          if (error || !inserted) throw new Error(error?.message ?? '存檔失敗')
+          if (error || !inserted) throw new Error(error?.message ?? m.insertFailedFallback)
 
           await supabase.from('interaction_logs').insert({
             contact_id: inserted.id,
@@ -2179,8 +2183,8 @@ export async function POST(req: NextRequest) {
           await updateLastContact(from.id, inserted.id)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
-          const contactLink = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">查看聯絡人頁面</a>` : ''
-          await sendMessage(from.id, `✅ 已成功存檔！${contactLink}`)
+          const contactLink = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">${m.cardViewContactLink}</a>` : ''
+          await sendMessage(from.id, m.cardSavedWithLink(contactLink))
 
           // Hunter.io auto-enrich when namecard OCR yielded no email
           const currentEmail = (pendingData.email as string | null | undefined) ?? null
@@ -2193,7 +2197,7 @@ export async function POST(req: NextRequest) {
                 (pendingData.name as string | null) ?? null,
                 (pendingData.company as string | null) ?? null,
               )
-              await sendMessage(from.id, enrichStatusMessage(r, 'zh-TW'))
+              await sendMessage(from.id, enrichStatusMessage(r, hunterLang(lang)))
             } catch { /* non-fatal */ }
           }
         }
@@ -2216,12 +2220,12 @@ export async function POST(req: NextRequest) {
           const pdata = pending.data as Record<string, unknown>
           const targetId = pdata._merge_target_id as string | undefined
           if (!targetId) {
-            await answerCallbackQuery(callbackQueryId, '無合併目標')
-            await sendMessage(from.id, '❌ 找不到合併目標聯絡人，請重新掃描。')
+            await answerCallbackQuery(callbackQueryId, m.mergeNoTargetCb)
+            await sendMessage(from.id, m.mergeNoTarget)
             return NextResponse.json({ ok: true })
           }
 
-          await answerCallbackQuery(callbackQueryId, '處理中...')
+          await answerCallbackQuery(callbackQueryId, m.cbProcessing)
 
           const now = new Date()
           const cardLabel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -2238,7 +2242,7 @@ export async function POST(req: NextRequest) {
           })
 
           if (!result.ok) {
-            await sendMessage(from.id, `❌ ${result.error ?? '合併失敗'}`)
+            await sendMessage(from.id, `❌ ${result.error ?? m.mergeFailedFallback}`)
             return NextResponse.json({ ok: true })
           }
 
@@ -2247,14 +2251,14 @@ export async function POST(req: NextRequest) {
           await editMessageReplyMarkup(message.chat.id, message.message_id)
 
           const summary: string[] = []
-          if (result.filled > 0) summary.push(`✅ 填入 ${result.filled} 個空白欄位`)
-          if (isReplace && result.replaced > 0) summary.push(`🔄 覆蓋 ${result.replaced} 個欄位（舊值寫入互動紀錄）`)
-          if (!isReplace && result.conflicts > 0) summary.push(`📝 ${result.conflicts} 個衝突欄位寫入互動紀錄`)
-          if (pdata.card_img_url) summary.push('🖼 名片圖已加入')
+          if (result.filled > 0) summary.push(m.mergeFilled(result.filled))
+          if (isReplace && result.replaced > 0) summary.push(m.mergeReplaced(result.replaced))
+          if (!isReplace && result.conflicts > 0) summary.push(m.mergeConflicts(result.conflicts))
+          if (pdata.card_img_url) summary.push(m.mergeCardAdded)
           const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
-          const link = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${targetId}">查看 ${result.contact_name ?? ''}</a>` : ''
-          const verb = isReplace ? '已更新' : '已加到'
-          await sendMessage(from.id, `${verb}「${result.contact_name ?? ''}」：\n${summary.join('\n')}${link}`)
+          const link = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${targetId}">${m.mergeViewLink(result.contact_name ?? '')}</a>` : ''
+          const verb = isReplace ? m.mergeVerbUpdated : m.mergeVerbAddedTo
+          await sendMessage(from.id, m.mergeResult(verb, result.contact_name ?? '', summary.join('\n'), link))
         }
 
         // ── Cancel card ───────────────────────────────────────────────────────
@@ -2284,7 +2288,7 @@ export async function POST(req: NextRequest) {
             .single()
 
           if (!draft) {
-            await answerCallbackQuery(callbackQueryId, '已過期或不存在')
+            await answerCallbackQuery(callbackQueryId, m.meetExpired)
             await editMessageReplyMarkup(message.chat.id, message.message_id)
             return NextResponse.json({ ok: true })
           }
@@ -2310,12 +2314,12 @@ export async function POST(req: NextRequest) {
             await supabase.from('meeting_drafts').delete().eq('id', draftId)
             await answerCallbackQuery(callbackQueryId, m.cbMeetConfirmed)
             await editMessageReplyMarkup(message.chat.id, message.message_id)
-            const timeLabel = formatTaipeiRange(draft.start_at, draft.duration_minutes)
-            const linkText = webLink ? `\n\n🔗 <a href="${webLink}">在 Outlook 開啟</a>` : ''
-            await sendMessage(from.id, `✅ <b>行程已建立！</b>\n\n📅 ${draft.title}\n🕐 ${timeLabel}${linkText}`)
+            const timeLabel = formatTaipeiRange(draft.start_at, draft.duration_minutes, m, lang)
+            const linkText = webLink ? `\n\n🔗 <a href="${webLink}">${m.meetOpenInOutlook}</a>` : ''
+            await sendMessage(from.id, m.meetCreatedDetail(draft.title, timeLabel, linkText))
           } catch (e) {
-            await answerCallbackQuery(callbackQueryId, '❌ 建立失敗')
-            await sendMessage(from.id, `❌ 建立行程失敗：${e instanceof Error ? e.message : '請稍後再試'}`)
+            await answerCallbackQuery(callbackQueryId, m.meetCreateFailedCb)
+            await sendMessage(from.id, m.meetCreateFailedDetail(e instanceof Error ? e.message : m.meetTryAgainLater))
           }
         }
 
@@ -2336,7 +2340,7 @@ export async function POST(req: NextRequest) {
           await setSession(from.id, 'waiting_for_visit_datetime', { contact_id: contactId, contact_name: contact?.name })
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, `聯絡人：${contact?.name}\n\n請輸入拜訪日期時間（例：2026-03-29 14:00），或輸入「略過」：`)
+          await sendMessage(from.id, m.visitAfterContactPick(contact?.name ?? ''))
         }
 
         // ── /visit: search other contact ─────────────────────────────────────
@@ -2344,7 +2348,7 @@ export async function POST(req: NextRequest) {
           await setSession(from.id, 'waiting_for_visit_contact', {})
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, '請輸入聯絡人姓名或 Email：')
+          await sendMessage(from.id, m.emailEnterContactNameOrCompany)
         }
 
         // ── /visit: select contact from search results ───────────────────────
@@ -2355,7 +2359,7 @@ export async function POST(req: NextRequest) {
           await setSession(from.id, 'waiting_for_visit_datetime', { contact_id: contactId, contact_name: contact?.name })
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, `找到：${contact?.name}\n\n請輸入拜訪日期時間（例：2026-03-29 14:00），或輸入「略過」：`)
+          await sendMessage(from.id, m.visitAfterContactPick(contact?.name ?? ''))
         }
 
         // ── Select contact for note ───────────────────────────────────────────
@@ -2380,12 +2384,12 @@ export async function POST(req: NextRequest) {
             await clearSession(from.id)
             await answerCallbackQuery(callbackQueryId)
             await editMessageReplyMarkup(message.chat.id, message.message_id)
-            await sendMessage(from.id, `✅ 已儲存筆記（${contact?.name ?? ''}）`)
+            await sendMessage(from.id, m.noteSavedForContact(contact?.name ?? ''))
           } else {
             await setSession(from.id, 'waiting_for_note_content', { contact_id: contactId, contact_name: contact?.name })
             await answerCallbackQuery(callbackQueryId)
             await editMessageReplyMarkup(message.chat.id, message.message_id)
-            await sendMessage(from.id, `找到：${contact?.name}\n\n請輸入筆記內容：`)
+            await sendMessage(from.id, m.noteFoundOnePlain(contact?.name ?? ''))
           }
         }
 
@@ -2396,8 +2400,8 @@ export async function POST(req: NextRequest) {
           await setSession(from.id, 'waiting_for_add_card', { contact_id: contactId, contact_name: contact?.name })
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, `找到：${contact?.name}\n\n請傳送名片照片（或 /cancel 取消）`, {
-            reply_markup: { inline_keyboard: [[{ text: '⏭ 跳過，不需要名片', callback_data: 'skip_add_card' }]] },
+          await sendMessage(from.id, m.addCardFoundOne(contact?.name ?? ''), {
+            reply_markup: { inline_keyboard: [[{ text: m.btnSkipNoCard, callback_data: 'skip_add_card' }]] },
           })
         }
 
@@ -2410,10 +2414,10 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           if (!fileId) {
-            await sendMessage(from.id, '❌ 找不到待處理照片，請重新傳送。')
+            await sendMessage(from.id, m.pendingPhotoMissing)
             await clearSession(from.id)
           } else {
-            await processAddCardPhoto(from.id, from.id, user, contactId, fileId, contactNameHint)
+            await processAddCardPhoto(from.id, from.id, user, contactId, fileId, contactNameHint, m)
           }
         }
 
@@ -2422,7 +2426,7 @@ export async function POST(req: NextRequest) {
           await clearSession(from.id)
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, '已取消。')
+          await sendMessage(from.id, m.cancelGeneric)
         }
 
         // ── /a name not found → create minimal contact ────────────────────────
@@ -2437,7 +2441,7 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           if (!nameQuery) {
-            await sendMessage(from.id, '❌ 建立失敗，請重新輸入 /a 姓名')
+            await sendMessage(from.id, m.addCardCreateFailedPrompt)
           } else {
             const insertPayload: Record<string, unknown> = { name: nameQuery, created_by: user.id }
             if (companyQuery) insertPayload.company = companyQuery
@@ -2447,7 +2451,7 @@ export async function POST(req: NextRequest) {
               .select('id')
               .single()
             if (error || !inserted) {
-              await sendMessage(from.id, `❌ 建立失敗：${error?.message ?? '未知錯誤'}`)
+              await sendMessage(from.id, m.addCardCreateFailed(error?.message ?? m.unknownError))
             } else {
               await supabase.from('interaction_logs').insert({
                 contact_id: inserted.id,
@@ -2460,10 +2464,10 @@ export async function POST(req: NextRequest) {
               await updateLastContact(from.id, inserted.id)
               await setSession(from.id, 'waiting_for_add_card', { contact_id: inserted.id, contact_name: nameQuery })
               const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
-              const link = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">查看聯絡人頁面</a>` : ''
+              const link = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">${m.cardViewContactLink}</a>` : ''
               const displayLine = companyQuery ? `<b>${nameQuery}</b>（${companyQuery}）` : `<b>${nameQuery}</b>`
-              await sendMessage(from.id, `✅ 已建立聯絡人：${displayLine}${link}\n\n請傳送名片照片（或 /cancel 取消）`, {
-                reply_markup: { inline_keyboard: [[{ text: '⏭ 跳過，不需要名片', callback_data: 'skip_add_card' }]] },
+              await sendMessage(from.id, m.addCardContactCreated(displayLine, link), {
+                reply_markup: { inline_keyboard: [[{ text: m.btnSkipNoCard, callback_data: 'skip_add_card' }]] },
               })
             }
           }
@@ -2474,13 +2478,13 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await clearSession(from.id)
-          await sendMessage(from.id, '已取消')
+          await sendMessage(from.id, m.cbCancelled)
         }
 
         // ── /news: pick section (last_month / next_month) ────────────────────
         else if (data?.startsWith('news_sec_last_') || data?.startsWith('news_sec_next_')) {
           if (!await userHasNewsletter(user.id)) {
-            await answerCallbackQuery(callbackQueryId, '無權限')
+            await answerCallbackQuery(callbackQueryId, m.newsNoPermissionCb)
             return NextResponse.json({ ok: true })
           }
           const section = data.startsWith('news_sec_last_') ? 'last_month' : 'next_month'
@@ -2488,12 +2492,8 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await setSession(from.id, 'news_title', { period, section })
-          const secLabel = section === 'last_month' ? '上月回顧' : '下月預告'
-          await sendMessage(from.id,
-            `📰 <b>${period}</b> · ${secLabel}\n\n` +
-            `輸入 Story 標題（例：AACR Taiwan Night 2026）
-（/cancel 取消）`
-          )
+          const secLabel = section === 'last_month' ? m.newsSectionLastLabel : m.newsSectionNextLabel
+          await sendMessage(from.id, m.newsStoryTitlePrompt(period, secLabel))
         }
 
         // ── Skip adding card photo ────────────────────────────────────────────
@@ -2505,9 +2505,9 @@ export async function POST(req: NextRequest) {
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await clearSession(from.id)
           const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
-          const link = (appUrl && skipContactId) ? `\n\n👤 <a href="${appUrl}/contacts/${skipContactId}">查看聯絡人頁面</a>` : ''
-          const displayLine = skipContactName ? `<b>${skipContactName}</b>` : '聯絡人'
-          await sendMessage(from.id, `✅ 已跳過名片，${displayLine} 已建立${link}`)
+          const link = (appUrl && skipContactId) ? `\n\n👤 <a href="${appUrl}/contacts/${skipContactId}">${m.cardViewContactLink}</a>` : ''
+          const displayLine = skipContactName ? `<b>${skipContactName}</b>` : m.cardThisContact
+          await sendMessage(from.id, m.addCardSkipped(displayLine, link))
         }
 
         // ── Apply OCR diff to contact ─────────────────────────────────────────
@@ -2515,7 +2515,7 @@ export async function POST(req: NextRequest) {
           const contactId = data.replace('apply_card_', '')
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await applyCardDiff(from.id, from.id, contactId, true)
+          await applyCardDiff(from.id, from.id, contactId, true, m)
         }
 
         // ── Skip OCR diff — save card only ────────────────────────────────────
@@ -2523,7 +2523,7 @@ export async function POST(req: NextRequest) {
           const contactId = data.replace('skip_card_apply_', '')
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await applyCardDiff(from.id, from.id, contactId, false)
+          await applyCardDiff(from.id, from.id, contactId, false, m)
         }
 
         // ── /p name not found → create minimal contact ────────────────────────
@@ -2554,7 +2554,7 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           if (!nameQuery) {
-            await sendMessage(from.id, '❌ 建立失敗，請重新輸入 /p 姓名')
+            await sendMessage(from.id, m.personPhotoCreateFailedPrompt)
           } else {
             const insertPayload: Record<string, unknown> = { name: nameQuery, created_by: user.id }
             if (companyQuery) insertPayload.company = companyQuery
@@ -2564,7 +2564,7 @@ export async function POST(req: NextRequest) {
               .select('id')
               .single()
             if (error || !inserted) {
-              await sendMessage(from.id, `❌ 建立失敗：${error?.message ?? '未知錯誤'}`)
+              await sendMessage(from.id, m.addCardCreateFailed(error?.message ?? m.unknownError))
             } else {
               await supabase.from('interaction_logs').insert({
                 contact_id: inserted.id,
@@ -2577,14 +2577,14 @@ export async function POST(req: NextRequest) {
               await updateLastContact(from.id, inserted.id)
               await setSession(from.id, 'waiting_for_photo', { contact_id: inserted.id, contact_name: nameQuery })
               const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
-              const link = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">查看聯絡人頁面</a>` : ''
+              const link = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">${m.cardViewContactLink}</a>` : ''
               const displayLine = companyQuery ? `<b>${nameQuery}</b>（${companyQuery}）` : `<b>${nameQuery}</b>`
-              await sendMessage(from.id, `✅ 已建立聯絡人：${displayLine}${link}\n\n請傳送合照（或 /cancel 取消）\n\n💡 長按照片 → <b>以檔案傳送</b>，可保留拍攝時間和 GPS 地點`)
+              await sendMessage(from.id, m.personPhotoContactCreated(displayLine, link))
 
               try {
                 const { enrichContactEmail, enrichStatusMessage } = await import('@/lib/hunter')
                 const r = await enrichContactEmail(inserted.id, null, nameQuery, companyQuery)
-                await sendMessage(from.id, enrichStatusMessage(r, 'zh-TW'))
+                await sendMessage(from.id, enrichStatusMessage(r, hunterLang(lang)))
               } catch { /* non-fatal */ }
             }
           }
@@ -2595,7 +2595,7 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await clearSession(from.id)
-          await sendMessage(from.id, '已取消')
+          await sendMessage(from.id, m.cbCancelled)
         }
 
         // ── Select contact for /p photo ───────────────────────────────────────
@@ -2605,7 +2605,7 @@ export async function POST(req: NextRequest) {
           await setSession(from.id, 'waiting_for_photo', { contact_id: contactId, contact_name: contact?.name })
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, `找到：${contact?.name}\n\n請傳送合照（或 /cancel 取消）\n\n💡 長按照片 → <b>以檔案傳送</b>，可保留拍攝時間和 GPS 地點`)
+          await sendMessage(from.id, m.personPhotoFoundOne(contact?.name ?? ''))
         }
 
         // ── Done collecting /p photos → ask for note ─────────────────────────
@@ -2617,13 +2617,19 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           if (fileIds.length === 0) {
-            await sendMessage(from.id, '❌ 找不到待處理照片，請重新傳送。')
+            await sendMessage(from.id, m.pendingPhotoMissing)
             await clearSession(from.id)
           } else {
             await setSession(from.id, 'waiting_for_photo_note', { contact_id: contactId, contact_name: contactNameHint, pending_file_ids: fileIds })
-            await sendMessage(from.id, `📝 要幫這 ${fileIds.length === 1 ? '張' : fileIds.length + ' 張'}照片加共同附註嗎？直接回覆文字，或按「跳過」`, {
+            // Count text: zh / en / ja have different pluralization conventions; show the number with a unit-appropriate suffix.
+            const countText = lang === 'ja'
+              ? `${fileIds.length} 枚の`
+              : lang === 'en'
+                ? `${fileIds.length} `
+                : (fileIds.length === 1 ? '張' : `${fileIds.length} 張`)
+            await sendMessage(from.id, m.photoNoteAsk(countText), {
               reply_markup: { inline_keyboard: [[
-                { text: '⏭ 跳過，直接存入', callback_data: 'skip_photo_note' },
+                { text: m.btnSkipDirectSave, callback_data: 'skip_photo_note' },
               ]] }
             })
           }
@@ -2638,13 +2644,13 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           if (!fileId) {
-            await sendMessage(from.id, '❌ 找不到待處理照片，請重新傳送。')
+            await sendMessage(from.id, m.pendingPhotoMissing)
             await clearSession(from.id)
           } else {
             await setSession(from.id, 'waiting_for_photo_note', { contact_id: contactId, contact_name: contactNameHint, pending_file_ids: [fileId] })
-            await sendMessage(from.id, '📝 要加附註嗎？直接回覆文字會存入互動紀錄。', {
+            await sendMessage(from.id, m.photoNoteAskSingle, {
               reply_markup: { inline_keyboard: [[
-                { text: '⏭ 跳過，直接存入', callback_data: 'skip_photo_note' },
+                { text: m.btnSkipDirectSave, callback_data: 'skip_photo_note' },
               ]] }
             })
           }
@@ -2659,11 +2665,11 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           if (!contactId || fileIds.length === 0) {
-            await sendMessage(from.id, '❌ 找不到待處理照片，請重新傳送。')
+            await sendMessage(from.id, m.pendingPhotoMissing)
             await clearSession(from.id)
           } else {
-            await sendMessage(from.id, '⏳ 上傳中...')
-            await processPersonalPhoto(from.id, from.id, contactId, fileIds, contactNameHint)
+            await sendMessage(from.id, m.photoUploading)
+            await processPersonalPhoto(from.id, from.id, contactId, fileIds, contactNameHint, undefined, m)
           }
         }
 
@@ -2672,7 +2678,7 @@ export async function POST(req: NextRequest) {
           await clearSession(from.id)
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, '已取消。')
+          await sendMessage(from.id, m.cancelGeneric)
         }
 
         // ── Confirm LinkedIn contact ───────────────────────────────────────────
@@ -2683,7 +2689,7 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           if (!parsed) {
-            await sendMessage(from.id, '❌ 找不到解析資料，請重新傳送截圖。')
+            await sendMessage(from.id, m.liNotFound)
             await clearSession(from.id)
           } else {
             // Name fallback: use English name if no local language name
@@ -2704,7 +2710,7 @@ export async function POST(req: NextRequest) {
               .select('id')
               .single()
             if (error || !inserted) {
-              await sendMessage(from.id, `❌ 新增失敗：${error?.message ?? '未知錯誤'}`)
+              await sendMessage(from.id, m.liInsertFailed(error?.message ?? m.unknownError))
             } else {
               // Upload LinkedIn screenshot to Storage
               if (liFileId) {
@@ -2732,9 +2738,9 @@ export async function POST(req: NextRequest) {
               }
               await updateLastContact(from.id, inserted.id)
               const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
-              const contactLink = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">查看聯絡人頁面</a>` : ''
-              const displayName = parsed.name || parsed.name_en || '聯絡人'
-              await sendMessage(from.id, `✅ 已新增聯絡人：<b>${displayName}</b>${contactLink}`)
+              const contactLink = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">${m.cardViewContactLink}</a>` : ''
+              const displayName = parsed.name || parsed.name_en || m.cardThisContact
+              await sendMessage(from.id, m.liSavedWithLink(displayName, contactLink))
 
               // Hunter.io email enrichment — only if no email was found
               if (!parsed.email) {
@@ -2746,7 +2752,7 @@ export async function POST(req: NextRequest) {
                     parsed.name ?? null,
                     parsed.company ?? null,
                   )
-                  await sendMessage(from.id, enrichStatusMessage(r, 'zh-TW'))
+                  await sendMessage(from.id, enrichStatusMessage(r, hunterLang(lang)))
                 } catch {
                   // Hunter.io enrichment failure is non-fatal
                 }
@@ -2761,7 +2767,7 @@ export async function POST(req: NextRequest) {
           await clearSession(from.id)
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, '已取消。')
+          await sendMessage(from.id, m.cancelGeneric)
         }
 
         // ── /search: quick email from contact ────────────────────────────────
@@ -2780,11 +2786,10 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await sendMessage(from.id,
-            `收件人：<b>${contact?.name}</b>（${contact?.email || '無 email'}）\n\n` +
-            `請選擇發信方式：`,
+            m.emailRecipientPromptShort(contact?.name ?? '', contact?.email || m.emailEmptyEmailLabel),
             { reply_markup: { inline_keyboard: [[
-              { text: '1️⃣ 使用 Template', callback_data: 'email_method_1' },
-              { text: '2️⃣ AI 生成', callback_data: 'email_method_2' },
+              { text: m.emailBtnTemplate, callback_data: 'email_method_1' },
+              { text: m.emailBtnAI, callback_data: 'email_method_2' },
             ]] } }
           )
         }
@@ -2800,7 +2805,7 @@ export async function POST(req: NextRequest) {
           await setSession(from.id, 'waiting_for_note_content', { contact_id: contactId, contact_name: contact?.name })
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, `聯絡人：${contact?.name}\n\n請輸入筆記內容：`)
+          await sendMessage(from.id, m.noteFoundOnePlain(contact?.name ?? ''))
         }
 
         // ── /email: select contact from list ─────────────────────────────────
@@ -2819,11 +2824,10 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await sendMessage(from.id,
-            `收件人：<b>${contact?.name}</b>（${contact?.email || '無 email'}）\n\n` +
-            `請選擇發信方式：`,
+            m.emailRecipientPromptShort(contact?.name ?? '', contact?.email || m.emailEmptyEmailLabel),
             { reply_markup: { inline_keyboard: [[
-              { text: '1️⃣ 使用 Template', callback_data: 'email_method_1' },
-              { text: '2️⃣ AI 生成', callback_data: 'email_method_2' },
+              { text: m.emailBtnTemplate, callback_data: 'email_method_1' },
+              { text: m.emailBtnAI, callback_data: 'email_method_2' },
             ]] } }
           )
         }
@@ -2838,8 +2842,8 @@ export async function POST(req: NextRequest) {
             .limit(10)
 
           if (!templates || templates.length === 0) {
-            await answerCallbackQuery(callbackQueryId, '目前無可用範本')
-            await sendMessage(from.id, '目前沒有郵件範本，請先至網頁新增。')
+            await answerCallbackQuery(callbackQueryId, m.emailNoTemplatesPick)
+            await sendMessage(from.id, m.emailNoTemplates)
             return NextResponse.json({ ok: true })
           }
 
@@ -2850,7 +2854,7 @@ export async function POST(req: NextRequest) {
           await setSession(from.id, 'waiting_template_choice', session?.context ?? {})
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, '請選擇郵件範本：', { reply_markup: { inline_keyboard: buttons } })
+          await sendMessage(from.id, m.emailPickTemplate, { reply_markup: { inline_keyboard: buttons } })
         }
 
         // ── /email: method choice 2 (AI generate) ────────────────────────────
@@ -2859,7 +2863,7 @@ export async function POST(req: NextRequest) {
           await setSession(from.id, 'waiting_email_description', session?.context ?? {})
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, '請描述這封信的目的：')
+          await sendMessage(from.id, m.emailDescribePurpose)
         }
 
         // ── /email: select template ───────────────────────────────────────────
@@ -2880,16 +2884,13 @@ export async function POST(req: NextRequest) {
           })
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id,
-            `已選擇範本：<b>${tpl?.title}</b>\n\n` +
-            `有要補充的內容嗎？（直接傳送請回覆 <code>skip</code>）`
-          )
+          await sendMessage(from.id, m.emailTemplateChosen(tpl?.title ?? ''))
         }
 
         // ── /email: confirm send ──────────────────────────────────────────────
         else if (data === 'confirm_email') {
           const session = await getSession(from.id)
-          if (!session?.context) throw new Error('找不到郵件資料')
+          if (!session?.context) throw new Error(m.emailSessionMissing)
 
           const contactEmail = session.context.contact_email as string
           const contactId = session.context.contact_id as string
@@ -2897,13 +2898,13 @@ export async function POST(req: NextRequest) {
           const bodyHtml = session.context.body_html as string
 
           if (!contactEmail) {
-            await answerCallbackQuery(callbackQueryId, '此聯絡人無 email')
-            await sendMessage(from.id, '❌ 此聯絡人沒有 email，無法發送。')
+            await answerCallbackQuery(callbackQueryId, m.emailNoEmailAddrCb)
+            await sendMessage(from.id, m.emailNoEmailAddr)
             await clearSession(from.id)
             return NextResponse.json({ ok: true })
           }
 
-          await sendMessage(from.id, '⏳ 發送中...')
+          await sendMessage(from.id, m.emailSending)
           try {
             const accessToken = await getValidProviderToken(user.id)
             await sendMail({
@@ -2920,12 +2921,12 @@ export async function POST(req: NextRequest) {
               created_by: user.id,
             })
             await clearSession(from.id)
-            await answerCallbackQuery(callbackQueryId, '✅ 已發送！')
+            await answerCallbackQuery(callbackQueryId, m.emailSentCb)
             await editMessageReplyMarkup(message.chat.id, message.message_id)
-            await sendMessage(from.id, `✅ 郵件已發送！\n主旨：${subject}`)
+            await sendMessage(from.id, m.emailSentDetail(subject))
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)
-            throw new Error(`發送失敗：${msg}`)
+            throw new Error(m.emailSendFailed(msg))
           }
         }
 
@@ -2948,23 +2949,29 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
 
           if (!logs || logs.length === 0) {
-            await sendMessage(from.id, `📋 ${contact?.name ?? ''} 無互動紀錄`)
+            await sendMessage(from.id, m.logsNone(contact?.name ?? ''))
           } else {
-            const TYPE_LABEL: Record<string, string> = { note: '筆記', meeting: '會議', email: '郵件', system: '系統' }
+            const typeLabel = (t: string): string => {
+              if (t === 'note') return m.logTypeNote
+              if (t === 'meeting') return m.logTypeMeeting
+              if (t === 'email') return m.logTypeEmail
+              if (t === 'system') return m.logTypeSystem
+              return t
+            }
             const lines = logs.map((l) => {
-              const label = TYPE_LABEL[l.type] ?? l.type
-              const date = new Date(l.created_at).toLocaleDateString('zh-TW')
+              const label = typeLabel(l.type)
+              const date = new Date(l.created_at).toLocaleDateString(dateLocale(lang))
               const preview = (l.content ?? '').replace(/<[^>]+>/g, '').slice(0, 80)
               return `[${label}] ${date}\n${preview}`
             }).join('\n\n')
 
             const hasMore = logs.length === 5
             const buttons = hasMore
-              ? [[{ text: '載入更多', callback_data: `log_contact_${contactId}_${offset + 5}` }]]
+              ? [[{ text: m.logsBtnLoadMore, callback_data: `log_contact_${contactId}_${offset + 5}` }]]
               : []
 
             await sendMessage(from.id,
-              `📋 <b>${contact?.name ?? ''} 互動紀錄</b>（第 ${offset + 1}–${offset + logs.length} 筆）\n\n${lines}`,
+              m.logsHeader(contact?.name ?? '', offset + 1, offset + logs.length) + lines,
               buttons.length > 0 ? { reply_markup: { inline_keyboard: buttons } } : {}
             )
           }
@@ -2978,7 +2985,7 @@ export async function POST(req: NextRequest) {
           await setSession(from.id, 'waiting_for_note_content', { contact_id: contactId, contact_name: contact?.name })
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, `聯絡人：${contact?.name}\n\n請輸入筆記內容：`)
+          await sendMessage(from.id, m.noteFoundOnePlain(contact?.name ?? ''))
         }
 
         // ── /note: search other contact ───────────────────────────────────────
@@ -2986,7 +2993,7 @@ export async function POST(req: NextRequest) {
           await setSession(from.id, 'waiting_for_note_contact', {})
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, '請輸入聯絡人姓名或 Email：')
+          await sendMessage(from.id, m.emailEnterContactNameOrCompany)
         }
 
         // ── /email: use last contact ──────────────────────────────────────────
@@ -3002,10 +3009,10 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await sendMessage(from.id,
-            `收件人：<b>${contact?.name}</b>（${contact?.email || '無 email'}）\n\n請選擇發信方式：`,
+            m.emailRecipientPromptShort(contact?.name ?? '', contact?.email || m.emailEmptyEmailLabel),
             { reply_markup: { inline_keyboard: [[
-              { text: '1️⃣ 使用 Template', callback_data: 'email_method_1' },
-              { text: '2️⃣ AI 生成', callback_data: 'email_method_2' },
+              { text: m.emailBtnTemplate, callback_data: 'email_method_1' },
+              { text: m.emailBtnAI, callback_data: 'email_method_2' },
             ]] } }
           )
         }
@@ -3015,50 +3022,48 @@ export async function POST(req: NextRequest) {
           await setSession(from.id, 'waiting_contact_for_email', {})
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, '請輸入聯絡人姓名或公司關鍵字：')
+          await sendMessage(from.id, m.emailEnterContactQuery)
         }
 
         // ── /email: cancel ────────────────────────────────────────────────────
         else if (data === 'cancel_email') {
           await clearSession(from.id)
-          await answerCallbackQuery(callbackQueryId, '已取消')
+          await answerCallbackQuery(callbackQueryId, m.cbCancelled)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, '已取消發信。')
+          await sendMessage(from.id, m.emailCancelled)
         }
 
         // ── /met: confirm apply ───────────────────────────────────────────────
         else if (data === 'met_confirm') {
-          await answerCallbackQuery(callbackQueryId, '套用中...')
+          await answerCallbackQuery(callbackQueryId, m.metCbApplying)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           try {
             const session = await getSession(from.id)
             const ctx = session?.context as { contact_ids: string[]; met_at: string | null; met_date: string; referred_by: string | null } | undefined
-            if (!ctx?.contact_ids?.length) throw new Error('找不到待套用資料')
+            if (!ctx?.contact_ids?.length) throw new Error(m.metApplyMissing)
             const { contact_ids, met_at, met_date, referred_by } = ctx
             await supabase.from('contacts').update({
               met_at: met_at ?? null,
               met_date: met_date ?? null,
               referred_by: referred_by ?? null,
             }).in('id', contact_ids)
-            const logContent =
-              `認識於：${met_at ?? '—'}（${met_date}）` +
-              (referred_by ? `，介紹人：${referred_by}` : '')
+            const logContent = m.metLogContent(met_at ?? m.cardEmptyValue, met_date, referred_by ?? '')
             await supabase.from('interaction_logs').insert(
               contact_ids.map((contact_id) => ({ contact_id, type: 'meeting', content: logContent, created_by: user.id }))
             )
             await clearSession(from.id)
-            await sendMessage(from.id, `✅ 已套用至 ${contact_ids.length} 位聯絡人`)
+            await sendMessage(from.id, m.metAppliedTo(contact_ids.length))
           } catch (e) {
-            await sendMessage(from.id, `❌ 套用失敗：${e instanceof Error ? e.message : '請再試一次'}`)
+            await sendMessage(from.id, m.metApplyFailed(e instanceof Error ? e.message : m.meetTryAgainLater))
           }
         }
 
         // ── /met: cancel ──────────────────────────────────────────────────────
         else if (data === 'met_cancel') {
           await clearSession(from.id)
-          await answerCallbackQuery(callbackQueryId, '已取消')
+          await answerCallbackQuery(callbackQueryId, m.cbCancelled)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, '已取消。')
+          await sendMessage(from.id, m.cancelGeneric)
         }
 
         // ── /tasks: mark done ─────────────────────────────────────────────────
@@ -3074,11 +3079,15 @@ export async function POST(req: NextRequest) {
             completed_by: user.email,
             completed_at: new Date().toISOString(),
           }).eq('id', taskId)
-          await answerCallbackQuery(callbackQueryId, '✅ 已完成')
+          await answerCallbackQuery(callbackQueryId, m.taskDoneCallback)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, `✅ 任務已完成：${task?.title ?? ''}`)
+          await sendMessage(from.id, m.taskDoneNotice(task?.title ?? ''))
 
-          // Notify task creator + other assignees via Teams
+          // Notify task creator + other assignees via Teams.
+          // Teams notification is localized to the actor's bot language (the
+          // recipient's preferred language isn't easily reachable here without
+          // an extra query per user, and Teams notifications historically use a
+          // single locale — keeping behavior simple).
           if (task) {
             const completedBy = user.display_name ?? user.email.split('@')[0]
             const assigneeEmails = ((task.task_assignees ?? []) as Array<{ assignee_email: string }>)
@@ -3097,7 +3106,7 @@ export async function POST(req: NextRequest) {
                 if (!au.teams_conversation_id || !au.teams_service_url) continue
                 try {
                   await sendTeamsMessage(au.teams_service_url, au.teams_conversation_id,
-                    `✅ 任務已完成：${task.title}\n由 ${completedBy} 標記完成`)
+                    m.taskDoneTeamsNotify(task.title, completedBy))
                 } catch (e) {
                   console.error('[Teams] task done notification failed:', e)
                 }
@@ -3112,7 +3121,7 @@ export async function POST(req: NextRequest) {
           await setSession(from.id, 'waiting_task_postpone_date', { task_id: taskId })
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, '請輸入新的截止時間（例：2026-03-20 15:00）：')
+          await sendMessage(from.id, m.taskPostponePrompt)
         }
 
         // ── /tasks: cancel task ───────────────────────────────────────────────
@@ -3120,9 +3129,9 @@ export async function POST(req: NextRequest) {
           const taskId = data.replace('task_cancel_', '')
           const { data: task } = await supabase.from('tasks').select('title').eq('id', taskId).single()
           await supabase.from('tasks').update({ status: 'cancelled' }).eq('id', taskId)
-          await answerCallbackQuery(callbackQueryId, '已取消任務')
+          await answerCallbackQuery(callbackQueryId, m.taskCancelCallback)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          await sendMessage(from.id, `❌ 任務已取消：${task?.title ?? ''}`)
+          await sendMessage(from.id, m.taskCancelledNotice(task?.title ?? ''))
         }
 
       } catch (err) {
@@ -3130,8 +3139,8 @@ export async function POST(req: NextRequest) {
           ? err.message
           : (typeof err === 'object' && err !== null ? JSON.stringify(err) : String(err))
         console.error('[bot] callback error:', msg)
-        await answerCallbackQuery(callbackQueryId, '❌ 操作失敗')
-        await sendMessage(from.id, `❌ 處理失敗：${msg}`)
+        await answerCallbackQuery(callbackQueryId, m.callbackOpFailed)
+        await sendMessage(from.id, m.processingFailed(msg))
       }
 
       return NextResponse.json({ ok: true })
@@ -3161,7 +3170,7 @@ export async function POST(req: NextRequest) {
         .eq('key', 'maintenance_mode')
         .single()
       if (setting?.value === 'true') {
-        await sendMessage(chatId, '🔧 系統維護中，請稍後再試。')
+        await sendMessage(chatId, m.maintenanceUserBlocked)
         return NextResponse.json({ ok: true })
       }
     }
@@ -3170,13 +3179,13 @@ export async function POST(req: NextRequest) {
 
     if (message.photo) {
       const photo = message.photo[message.photo.length - 1]
-      await handlePhoto(chatId, fromId, user, photo, session, m)
+      await handlePhoto(chatId, fromId, user, photo, session, m, lang)
     } else if (message.document && message.document.mime_type?.startsWith('image/')) {
       // Image sent as file — route to same handlers; EXIF will be preserved
       const doc = { file_id: message.document.file_id }
-      await handlePhoto(chatId, fromId, user, doc, session, m)
+      await handlePhoto(chatId, fromId, user, doc, session, m, lang)
     } else if (message.text) {
-      await handleText(chatId, fromId, user, message.text, session, m)
+      await handleText(chatId, fromId, user, message.text, session, m, lang)
     }
 
     return NextResponse.json({ ok: true })
