@@ -28,6 +28,13 @@ const OCR_TO_CONTACT: Record<string, string> = {
 
 const KNOWN_CONTACT_KEYS = new Set(Object.values(OCR_TO_CONTACT))
 
+// Backdate default for camcard_pending approvals. Approver can override
+// per-request via body.backdate (YYYY-MM-DD); when omitted or invalid we
+// stamp this. The point is to keep batch-imported old cards from
+// clustering at the top of /contacts (which sorts by last_activity_at).
+// imported_at still records approve moment for audit.
+const HISTORIC_BACKDATE = '2000-01-01T00:00:00.000Z'
+
 /**
  * POST /api/camcard/[id]/confirm
  * Creates a new contact from camcard_pending OCR data.
@@ -42,6 +49,15 @@ export async function POST(
   const tagIds: string[] = body.tagIds ?? []
   const importance: string = ['high', 'medium', 'low'].includes(body.importance) ? body.importance : 'medium'
   const language: string = ['chinese', 'english', 'japanese'].includes(body.language) ? body.language : 'english'
+
+  // Approver can override the backdate. Expect YYYY-MM-DD from a <input type="date">.
+  // Anything else (missing, malformed, NaN) falls back to HISTORIC_BACKDATE.
+  let backdateIso = HISTORIC_BACKDATE
+  if (typeof body.backdate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.backdate)) {
+    const parsed = new Date(`${body.backdate}T00:00:00.000Z`)
+    if (!Number.isNaN(parsed.getTime())) backdateIso = parsed.toISOString()
+  }
+
   const supabase = createServiceClient()
 
   // Resolve confirming user via session cookies (most reliable)
@@ -73,8 +89,8 @@ export async function POST(
   const contactData: Record<string, unknown> = {
     source: 'camcard',
     imported_at: new Date().toISOString(),
-    created_at: pending.created_at,
-    last_activity_at: pending.created_at,
+    created_at: backdateIso,
+    last_activity_at: backdateIso,
   }
   if (confirmedByUserId) contactData.created_by = confirmedByUserId
   contactData.importance = importance

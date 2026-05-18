@@ -1239,6 +1239,8 @@
   "camcard": {
     "pageTitle": "名片王匯入審查",
     "pageDesc": "待審查：{count} 張 · 按公司分組顯示",
+    "backdateTitle": "批次 backdate（建檔日期）",
+    "backdateHint": "預設 {date}，避免老名片擠在新聯絡人前；改成你估的年代即可",
     "unknownCompany": "（未知公司）",
     "operationFailed": "操作失敗",
     "mergeFailed": "合併失敗",

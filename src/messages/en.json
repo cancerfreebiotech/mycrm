@@ -1239,6 +1239,8 @@
   "camcard": {
     "pageTitle": "Card Import Review",
     "pageDesc": "Pending: {count} · Grouped by company",
+    "backdateTitle": "Backdate on approve (created date)",
+    "backdateHint": "Default {date} — keeps old cards out of the recent list; change to a year you estimate",
     "unknownCompany": "(Unknown company)",
     "operationFailed": "Operation failed",
     "mergeFailed": "Merge failed",

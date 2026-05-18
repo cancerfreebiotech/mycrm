@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## v6.4.3 — feat(camcard): approve 時可選 backdate + 預設 2000-01-01（2026-05-18）
+
+### 變更項目
+- **新行為：`/api/camcard/[id]/confirm` 統一把 `contact.created_at` + `last_activity_at` 設為 backdate**，而不是原本的 `pending.created_at`（≈ import script 跑的時間）。批量匯入的舊名片不再擠在 `/contacts`「最近」位置汙染新進聯絡人視覺（`/contacts` 預設按 `last_activity_at desc` 排）
+- **新欄位：API 接 `body.backdate`（`YYYY-MM-DD`）**：approver 可手動覆寫；無給或格式不合法時 fallback `HISTORIC_BACKDATE = 2000-01-01T00:00:00.000Z`
+- **UI：`/admin/camcard` amber「批次 met_at」工具列上方新增 slate「批次 backdate」工具列**：date input、預設 `2000-01-01`、approver 可改成估計年代（例 2018-05-01）。同一 page session 內所有 approve（單張、按公司、multi-select bulk）共用此值；refresh 頁面回到預設
+- **`imported_at` 仍記錄 approve 當下**（audit trail），不受 backdate 影響
+- **`met_date` 不受影響**：依然從 `ocr_data.met_date` 抓（若 OCR 或手動填過）
+- **i18n**：新增 `camcard.backdateTitle` / `camcard.backdateHint` 到 zh-TW / en / ja
+
+### 既有互動已驗證
+- 有互動（note、寄信）後 `last_activity_at` 會被更新成當下 → 那筆 contact 自動冒回 /contacts 最上面（「有用」的浮上來、「沉睡」的下沉，符合直覺）
+- 報表「最近 X 天新進」這類 created_at 過濾不會抓到他們
+
 ## v6.4.2 — chore(newsletter): TS deeply-nested generics + lint cleanup（2026-05-18）
 
 ### 變更項目

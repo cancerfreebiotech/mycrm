@@ -1239,6 +1239,8 @@
   "camcard": {
     "pageTitle": "名刺インポート審査",
     "pageDesc": "審査待ち：{count} 枚 · 会社ごとに表示",
+    "backdateTitle": "承認時の登録日（一括設定）",
+    "backdateHint": "デフォルト {date}。古い名刺が新規連絡先のリストを汚さないように。推定年に変更可",
     "unknownCompany": "（不明な会社）",
     "operationFailed": "操作に失敗しました",
     "mergeFailed": "統合に失敗しました",

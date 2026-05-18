@@ -7,7 +7,7 @@ import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import {
   FolderInput, Loader2, Check, X, Merge, ExternalLink,
   ChevronDown, ChevronRight, AlertTriangle, CheckSquare, ZoomIn,
-  ChevronLeft, Pencil, Search, RotateCcw, CalendarCheck,
+  ChevronLeft, Pencil, Search, RotateCcw, CalendarCheck, History,
 } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
 
@@ -94,6 +94,11 @@ export default function CamcardPage() {
   const [batchMetAt, setBatchMetAt] = useState('')
   const [batchMetDate, setBatchMetDate] = useState('')
   const [applyingBatch, setApplyingBatch] = useState(false)
+
+  // Approve-time backdate (sent in confirm body; API falls back to 2000-01-01
+  // if missing). Keeps batch-imported old cards out of the "recent" cluster
+  // on /contacts. Reset on each page load — no localStorage persistence.
+  const [backdate, setBackdate] = useState('2000-01-01')
 
   // Multi-select bulk confirm
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set())
@@ -278,7 +283,7 @@ export default function CamcardPage() {
       const res = await fetch(`/api/camcard/${cardId}/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tagIds, importance, language, confirmedByUserId: user?.id, confirmedByName: user?.display_name }),
+        body: JSON.stringify({ tagIds, importance, language, backdate, confirmedByUserId: user?.id, confirmedByName: user?.display_name }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
       removeCard(cardId)
@@ -366,7 +371,7 @@ export default function CamcardPage() {
         await fetch(`/api/camcard/${card.id}/confirm`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ confirmedByUserId: user?.id, confirmedByName: user?.display_name }),
+          body: JSON.stringify({ backdate, confirmedByUserId: user?.id, confirmedByName: user?.display_name }),
         })
         removeCard(card.id)
       }
@@ -453,7 +458,7 @@ export default function CamcardPage() {
           const res = await fetch(`/api/camcard/${id}/confirm`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tagIds, importance, language, confirmedByUserId: user?.id, confirmedByName: user?.display_name }),
+            body: JSON.stringify({ tagIds, importance, language, backdate, confirmedByUserId: user?.id, confirmedByName: user?.display_name }),
           })
           if (res.ok) {
             removeCard(id)
@@ -881,6 +886,21 @@ export default function CamcardPage() {
           </button>
         )}
       </div>
+
+      {/* Approve-time backdate toolbar — affects contact.created_at on confirm */}
+      {!loading && groups.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-2 px-3 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700">
+          <History size={14} className="text-slate-600 dark:text-slate-400 shrink-0" />
+          <span className="text-xs text-slate-700 dark:text-slate-300 font-medium shrink-0">{t('backdateTitle')}</span>
+          <input
+            type="date"
+            value={backdate}
+            onChange={(e) => setBackdate(e.target.value)}
+            className="text-base px-2 py-1 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
+          />
+          <span className="text-xs text-slate-500 dark:text-slate-400">{t('backdateHint', { date: '2000-01-01' })}</span>
+        </div>
+      )}
 
       {/* Batch met_at toolbar — shown when there are visible cards */}
       {!loading && groups.length > 0 && (
