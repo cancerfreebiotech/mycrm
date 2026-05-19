@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## v6.4.8 — feat(notify): /api/admin/notify-release endpoint（2026-05-19）
+
+### 變更項目
+- 新增 `POST /api/admin/notify-release`：給 Claude Code 端的 `notify-release` skill 呼叫，每次 push 完自動寄送 release 通知給所有 MFA-enabled user
+- **Auth**：`Authorization: Bearer ${RELEASE_NOTIFY_TOKEN}`（env var 共享密鑰）
+- **Sender**：`pohan.chen@cancerfree.io`，透過 Microsoft Graph `/me/sendMail`。Token 過期會自動用 `provider_refresh_token` 走 Azure OAuth 換新（複用 `getValidProviderToken`）
+- **Recipients**：複用 `get_users_mfa_status` RPC，只發給 `has_mfa = true` 的 user
+- **`dryRun`**：回傳 recipient 清單但不真的寄
+- **`testEmail`**：只發給單一 address，覆蓋 MFA query
+- **失敗回報**：個別失敗會收集到 `errors[]`、不會中斷其他 recipient
+
+### 還沒做
+- Claude Code 的 `notify-release` skill 本體（user-level、跨 project）— 下一步
+- `RELEASE_NOTIFY_TOKEN` 加到 Vercel env vars — 部署完手動加
+
 ## v6.4.7 — fix(contacts): 修 web 新增聯絡人壞掉 + 加姓名必填驗證 + DB CHECK（2026-05-19）
 
 ### 變更項目
