@@ -187,6 +187,8 @@
     "editContact": "連絡先を編集",
     "scanCard": "名刺をスキャンして自動入力",
     "sectionBasic": "基本情報",
+    "nameRequiredHint": "氏名（中国語 / 英語 / 現地語）のうち少なくとも 1 つを入力してください",
+    "nameRequiredError": "氏名（中国語・英語・現地語のいずれか）を 1 つ以上入力してください",
     "sectionNotes": "備考",
     "sectionCompany": "会社情報",
     "sectionContact": "連絡先情報",

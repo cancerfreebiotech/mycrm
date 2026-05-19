@@ -187,6 +187,8 @@
     "editContact": "編輯聯絡人",
     "scanCard": "掃描名片以自動填入資料",
     "sectionBasic": "基本資訊",
+    "nameRequiredHint": "姓名（中文 / 英文 / 當地）至少填一個",
+    "nameRequiredError": "請至少填一個姓名欄位（中文、英文或當地語言）",
     "sectionNotes": "備註",
     "sectionCompany": "公司資訊",
     "sectionContact": "聯絡資訊",

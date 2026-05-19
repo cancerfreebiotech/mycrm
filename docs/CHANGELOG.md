@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## v6.4.7 — fix(contacts): 修 web 新增聯絡人壞掉 + 加姓名必填驗證 + DB CHECK（2026-05-19）
+
+### 變更項目
+
+#### P0 — 致命 fix: `/contacts/new` 儲存失敗
+- `EMPTY_FORM` 把 `source: ''`（line 36）改成 `source: 'web'`
+- **原因鏈**：`source: ''` 是死 init（form 沒讓使用者編輯 source）→ `handleSubmit` 把空字串轉 null（`v.trim() || null`）→ payload 帶 `source: null` 去 INSERT → DB schema `source TEXT NOT NULL DEFAULT 'web'` 在「顯式傳 null」時不會套 default，直接 NOT NULL violation → 「儲存失敗」。歷史上 web 來源有 515 筆 contact，表示某次某人加了 NOT NULL 到 source 之後就壞掉、但因為大家平常用 telegram bot / camcard 不走 web 表單、沒人發現
+
+#### P1 — Client validation + UI 標記必填
+- `Field` component 新增 `required: boolean` props，渲染紅色 `*`
+- `name` / `name_en` / `name_local` 三欄 label 都加 `*`
+- 基本資訊區塊頂部加灰字 hint「姓名（中文 / 英文 / 當地）至少填一個」
+- `handleSubmit` 開頭加 client validation：三個 name trim 後全空 → `setError(t('nameRequiredError'))` 不送出
+- i18n `contacts.nameRequiredHint` / `contacts.nameRequiredError` 三語同步
+
+#### P2 — DB CHECK constraint
+- `supabase/contacts_has_name.sql`：新增 `contacts_has_name` CHECK `coalesce(name, name_en, name_local) IS NOT NULL`
+- `NOT VALID` 模式 — 不影響現有 3 個 ghost row（都來自 camcard 批次匯入、有 email/phone/company），未來所有 INSERT/UPDATE 都會檢查
+- 涵蓋所有寫 contacts 的 path（web 表單、telegram bot 流程、camcard approve、Ragic 匯入、inbound_email 等），不只 web 表單
+- 已 apply 到 production
+
+### 安全性 / CLAUDE.md 規範
+- 滿足「**表單 Label 在上方、錯誤訊息在下方、必填加 `*`**」
+- 三語錯誤訊息
+
 ## v6.4.6 — chore(docs): 移除沒在跑的 Gemini docs cron（2026-05-18）
 
 ### 變更項目

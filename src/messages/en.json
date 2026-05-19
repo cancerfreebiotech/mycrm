@@ -187,6 +187,8 @@
     "editContact": "Edit Contact",
     "scanCard": "Scan card to auto-fill data",
     "sectionBasic": "Basic Info",
+    "nameRequiredHint": "Fill in at least one name (Chinese / English / Local)",
+    "nameRequiredError": "Please fill in at least one name field (Chinese, English, or local language)",
     "sectionNotes": "Notes",
     "sectionCompany": "Company Info",
     "sectionContact": "Contact Info",

@@ -33,7 +33,7 @@ const EMPTY_FORM: OcrFields & { notes: string; country_code: string; met_at: str
   met_date: '',
   referred_by: '',
   importance: 'medium',
-  source: '',
+  source: 'web',
   language: 'english',
   hospital: '',
   department: '',
@@ -48,11 +48,14 @@ function countryToLanguage(code: string | null | undefined): string {
 const inputClass = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
 const labelClass = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1'
 
-type FieldProps = { label: string; value: string; onChange: (v: string) => void; onBlur?: () => void; type?: string }
-function Field({ label, value, onChange, onBlur, type }: FieldProps) {
+type FieldProps = { label: string; value: string; onChange: (v: string) => void; onBlur?: () => void; type?: string; required?: boolean }
+function Field({ label, value, onChange, onBlur, type, required }: FieldProps) {
   return (
     <div>
-      <label className={labelClass}>{label}</label>
+      <label className={labelClass}>
+        {label}
+        {required && <span className="text-red-500 ml-0.5" aria-label="required">*</span>}
+      </label>
       <input
         type={type ?? 'text'}
         value={value}
@@ -283,6 +286,13 @@ export default function NewContactPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    // At least one of the three name fields must be filled.
+    // Mirrors the contacts_has_name DB CHECK; client check gives a friendly
+    // error before hitting the network.
+    if (!form.name.trim() && !form.name_en.trim() && !form.name_local.trim()) {
+      setError(t('nameRequiredError'))
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -563,10 +573,11 @@ export default function NewContactPage() {
         {/* Basic info */}
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
           <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('sectionBasic')}</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">{t('nameRequiredHint')}</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Field label={t('name')} value={form.name} onChange={(v) => set('name', v)} onBlur={checkDup} />
-            <Field label={t('nameEn')} value={form.name_en} onChange={(v) => set('name_en', v)} />
-            <Field label={t('nameLocal')} value={form.name_local} onChange={(v) => set('name_local', v)} />
+            <Field label={t('name')} value={form.name} onChange={(v) => set('name', v)} onBlur={checkDup} required />
+            <Field label={t('nameEn')} value={form.name_en} onChange={(v) => set('name_en', v)} required />
+            <Field label={t('nameLocal')} value={form.name_local} onChange={(v) => set('name_local', v)} required />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label={t('company')} value={form.company} onChange={(v) => set('company', v)} />
