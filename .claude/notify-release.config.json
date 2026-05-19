@@ -1,0 +1,16 @@
+{
+  "$comment": "Config for the user-level /notify-release skill. After each git push to main, the skill reads this, renders the CHANGELOG section for the current version, and POSTs to apiUrl.",
+  "apiUrl": "https://crm.cancerfree.io/api/admin/notify-release",
+  "tokenEnvFile": ".env.local",
+  "tokenEnvVar": "RELEASE_NOTIFY_TOKEN",
+  "changelogPath": "docs/CHANGELOG.md",
+  "versionSource": "package.json",
+  "projectName": "myCRM",
+  "subjectTemplate": "{projectName} 已更新到 v{version}",
+  "greeting": "大家好,",
+  "introTemplate": "{projectName} 發布了 v{version}。",
+  "signature": "— Po-Han",
+  "timezone": "Asia/Taipei",
+  "language": "zh-TW",
+  "releaseTimeLabel": "發布時間"
+}

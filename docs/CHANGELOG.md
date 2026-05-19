@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## v6.4.9 — chore(notify): SendGrid 取代 Microsoft Graph + skill 完整接好（2026-05-19）
+
+### 變更項目
+- **`/api/admin/notify-release` 改用 SendGrid**：原本走 Microsoft Graph `/me/sendMail` 用 pohan.chen 的 OAuth token，但 token 過期後的 refresh 路徑被 Vercel 上失效的 `AZURE_OAUTH_CLIENT_SECRET` 擋住（`AADSTS7000215`）。改成 SendGrid（newsletter 已用同條路、穩定）。SendGrid 用 static API key、不會有 token 過期問題
+- **From / Reply-To 分離**：`From: SENDGRID_FROM_EMAIL` + name `Po-Han Chen (myCRM)`、`Reply-To: pohan.chen@cancerfree.io`。收件人回信會回到 pohan 信箱
+- **`.claude/notify-release.config.json`**：per-project 設定檔（API URL、token env、CHANGELOG 路徑、subject template、語氣模板）。`projectName` 抽出成獨立欄位避免 hardcode 在 template 字串裡
+- **`.gitignore`**：`.claude/` 改成 `.claude/*` 配 `!.claude/notify-release.config.json`，讓專案級 settings 仍然 gitignore、但 notify-release config 跟著 repo 走
+
+### 配套（不在這個 commit）
+- User-level skill `~/.claude/skills/notify-release/SKILL.md`（跨 project 通用）
+- mycrm memory `feedback_notify_release_after_push.md`（auto-trigger 規則）
+- `.env.local` 加 `RELEASE_NOTIFY_TOKEN` (gitignored)
+- Vercel env 加 `RELEASE_NOTIFY_TOKEN` (production)
+
+### 潛伏 bug 觀察（未修）
+- pohan.chen 的 Microsoft Graph token refresh 仍壞掉（`AADSTS7000215`），影響任何走 `/contacts/[id]` 寄信功能的 path。修需要進 Azure portal 把 flightpath app (91ec2d94-...) 的 client_secret 重新發、更新 Vercel env
+
 ## v6.4.8 — feat(notify): /api/admin/notify-release endpoint（2026-05-19）
 
 ### 變更項目
