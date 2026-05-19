@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
-import { getValidProviderToken } from '@/lib/graph-server'
 
 // POST /api/admin/notify-release
 //
-// Called by the Claude Code skill after each git push to broadcast a release
-// notification to MFA-enabled users. Sends as pohan.chen@cancerfree.io via
-// Microsoft Graph (token auto-refreshed if expired).
+// Called by the Claude Code notify-release skill after each git push to
+// broadcast a release notification to MFA-enabled users. Sends via SendGrid
+// (static API key — no OAuth token expiry to worry about).
 //
 // Auth: shared secret in `Authorization: Bearer ${RELEASE_NOTIFY_TOKEN}` header.
 //
@@ -15,8 +14,10 @@ import { getValidProviderToken } from '@/lib/graph-server'
 //   subject    — email subject (e.g. "myCRM 已更新到 v6.4.7")
 //   bodyHtml   — full HTML body
 //   dryRun?    — if true, returns recipient list without sending
-//   testEmail? — if set, only sends to this single address (overrides recipient query)
-const SENDER_EMAIL = 'pohan.chen@cancerfree.io'
+//   testEmail? — if set, only sends to this single address (overrides MFA query)
+const SG_SEND_URL = 'https://api.sendgrid.com/v3/mail/send'
+const REPLY_TO_EMAIL = 'pohan.chen@cancerfree.io'
+const FROM_NAME = 'Po-Han Chen (myCRM)'
 
 interface RequestBody {
   version?: string
@@ -43,19 +44,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'version, subject, bodyHtml are required' }, { status: 400 })
   }
 
-  const supabase = createServiceClient()
-
-  const { data: sender } = await supabase
-    .from('users')
-    .select('id, email')
-    .eq('email', SENDER_EMAIL)
-    .single()
-  if (!sender) return NextResponse.json({ error: `sender ${SENDER_EMAIL} not found in users table` }, { status: 500 })
+  const sgKey = process.env.SENDGRID_API_KEY
+  const fromEmail = process.env.SENDGRID_FROM_EMAIL
+  if (!sgKey || !fromEmail) {
+    return NextResponse.json({ error: 'SendGrid not configured (SENDGRID_API_KEY / SENDGRID_FROM_EMAIL)' }, { status: 500 })
+  }
 
   let recipients: string[]
   if (testEmail) {
     recipients = [testEmail]
   } else {
+    const supabase = createServiceClient()
     const { data: mfaRows, error: rpcErr } = await supabase.rpc('get_users_mfa_status')
     if (rpcErr) return NextResponse.json({ error: `mfa lookup failed: ${rpcErr.message}` }, { status: 500 })
     recipients = ((mfaRows ?? []) as { email: string; has_mfa: boolean }[])
@@ -71,52 +70,37 @@ export async function POST(req: Request) {
     return NextResponse.json({ version, dryRun: true, recipients, count: recipients.length })
   }
 
-  let accessToken: string
-  try {
-    accessToken = await getValidProviderToken(sender.id)
-  } catch (e) {
-    return NextResponse.json({
-      error: e instanceof Error ? e.message : 'token refresh failed',
-      hint: `${SENDER_EMAIL} needs to sign out and sign back in to refresh the Microsoft Graph token`,
-    }, { status: 500 })
+  // SendGrid: one personalization per recipient so each To: only contains
+  // that recipient (no BCC leak). Capped at 1000 per call; we have ≤ 8.
+  const payload = {
+    from: { email: fromEmail, name: FROM_NAME },
+    reply_to: { email: REPLY_TO_EMAIL },
+    subject,
+    content: [{ type: 'text/html', value: bodyHtml }],
+    personalizations: recipients.map((email) => ({ to: [{ email }] })),
   }
 
-  const errors: { email: string; error: string }[] = []
-  let sent = 0
-  for (const email of recipients) {
-    const payload = {
-      message: {
-        subject,
-        body: { contentType: 'HTML', content: bodyHtml },
-        toRecipients: [{ emailAddress: { address: email } }],
-      },
-      saveToSentItems: 'true',
-    }
-    try {
-      const res = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        errors.push({ email, error: err?.error?.message ?? `HTTP ${res.status}` })
-      } else {
-        sent++
-      }
-    } catch (e) {
-      errors.push({ email, error: e instanceof Error ? e.message : 'unknown' })
-    }
+  const res = await fetch(SG_SEND_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${sgKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '')
+    return NextResponse.json({
+      version,
+      sent: 0,
+      failed: recipients.length,
+      total: recipients.length,
+      error: `SendGrid ${res.status}: ${errText.slice(0, 500)}`,
+    }, { status: 502 })
   }
 
   return NextResponse.json({
     version,
-    sent,
-    failed: errors.length,
+    sent: recipients.length,
+    failed: 0,
     total: recipients.length,
-    errors,
   })
 }
