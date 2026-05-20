@@ -41,21 +41,14 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: 'Auth user not found' }, { status: 404 })
   }
 
-  // Delete all verified MFA factors directly via admin API
-  const { data: factorsData, error: listError } = await service.auth.admin.mfa.listFactors({ userId: authUserId })
-  if (listError) return NextResponse.json({ error: listError.message }, { status: 500 })
+  // Delete ALL factors (verified + unverified) via SECURITY DEFINER RPC.
+  // admin.mfa.listFactors hides unverified factors, leaving users stuck mid-
+  // enrollment with no way to reset; direct DELETE on auth.mfa_factors covers
+  // both states.
+  const { data: deleted, error: rpcError } = await service.rpc('admin_delete_all_mfa_factors', {
+    p_user_id: authUserId,
+  })
+  if (rpcError) return NextResponse.json({ error: rpcError.message }, { status: 500 })
 
-  // Supabase admin.mfa.listFactors returns { factors: Factor[] }; filter to TOTP + phone
-  // (exclude webauthn which uses a different deletion flow).
-  const allFactors = (factorsData?.factors ?? []).filter(
-    (f) => f.factor_type === 'totp' || f.factor_type === 'phone',
-  )
-
-  let deleted = 0
-  for (const factor of allFactors) {
-    const { error } = await service.auth.admin.mfa.deleteFactor({ userId: authUserId, id: factor.id })
-    if (!error) deleted++
-  }
-
-  return NextResponse.json({ ok: true, deleted })
+  return NextResponse.json({ ok: true, deleted: deleted ?? 0 })
 }

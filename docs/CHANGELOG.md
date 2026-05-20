@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v6.4.10 — fix(auth): 重設 MFA 按鈕現在會清掉 unverified factor（2026-05-20）
+
+### 變更項目
+- **修好「重設 MFA」按鈕對 stuck mid-enroll 使用者無效的 bug**：原本 `/api/admin/users/[id]/reset-mfa` 透過 `service.auth.admin.mfa.listFactors()` 取得 factor 清單，但這個 admin API 在現行 Auth 版本只回 `verified` 狀態的 factors，導致 unverified（半設定 / 沒驗證碼通過）的 factor 一直留在 `auth.mfa_factors` 裡。Kevin / Lucia 就卡在這個狀態 — 網頁上按重設沒反應、自己也沒辦法重新設定 MFA
+- **改用 SECURITY DEFINER RPC `admin_delete_all_mfa_factors(uuid)`** 直接 `DELETE FROM auth.mfa_factors WHERE user_id = ?`，一次清乾淨 verified + unverified
+- **權限**：只有 `service_role` 可以執行該 function（`REVOKE FROM PUBLIC, anon, authenticated`），endpoint 內仍維持 super_admin 檢查
+- SQL 紀錄在 `supabase/admin_delete_all_mfa_factors.sql`
+
 ## v6.4.9 — chore(notify): SendGrid 取代 Microsoft Graph + skill 完整接好（2026-05-19）
 
 ### 變更項目

@@ -1,8 +1,10 @@
 {
-  "$comment": "Config for the user-level /notify-release skill. After each git push to main, the skill reads this, renders the CHANGELOG section for the current version, and POSTs to apiUrl.",
-  "apiUrl": "https://crm.cancerfree.io/api/admin/notify-release",
-  "tokenEnvFile": ".env.local",
-  "tokenEnvVar": "RELEASE_NOTIFY_TOKEN",
+  "$comment": "Config for the user-level /notify-release skill. Skill queries recipients via Supabase MCP using supabaseProjectRef + recipientRpc, then sends directly via SendGrid using credentials at ~/.claude/notify-release.env. The legacy apiUrl endpoint is kept as a fallback.",
+  "supabaseProjectRef": "gaxjgcztzfxokesiraai",
+  "recipientRpc": "get_users_mfa_status",
+  "recipientFilter": "mfa_only",
+  "replyToEmail": "pohan.chen@cancerfree.io",
+  "fromName": "Po-Han Chen (myCRM)",
   "changelogPath": "docs/CHANGELOG.md",
   "versionSource": "package.json",
   "projectName": "myCRM",
@@ -12,5 +14,8 @@
   "signature": "— Po-Han",
   "timezone": "Asia/Taipei",
   "language": "zh-TW",
-  "releaseTimeLabel": "發布時間"
+  "releaseTimeLabel": "發布時間",
+  "legacyApiUrl": "https://crm.cancerfree.io/api/admin/notify-release",
+  "legacyTokenEnvFile": ".env.local",
+  "legacyTokenEnvVar": "RELEASE_NOTIFY_TOKEN"
 }

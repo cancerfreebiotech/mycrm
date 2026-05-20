@@ -34,7 +34,7 @@ export default function AdminUsersPage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [resetMfaId, setResetMfaId] = useState<string | null>(null)
-  const [mfaStatus, setMfaStatus] = useState<Record<string, boolean>>({})
+  const [mfaStatus, setMfaStatus] = useState<Record<string, { verified: boolean; anyFactor: boolean }>>({})
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
@@ -87,8 +87,8 @@ export default function AdminUsersPage() {
           bv = b.last_login_at ? new Date(b.last_login_at).getTime() : 0
           break
         case 'mfa':
-          av = mfaStatus[a.email] ? 1 : 0
-          bv = mfaStatus[b.email] ? 1 : 0
+          av = mfaStatus[a.email]?.verified ? 1 : 0
+          bv = mfaStatus[b.email]?.verified ? 1 : 0
           break
       }
       if (av < bv) return -1 * dir
@@ -382,7 +382,7 @@ export default function AdminUsersPage() {
               <div className="flex flex-wrap gap-1.5 mb-3">
                 <StatusPill active={!!u.telegram_id} on={`TG ${t('telegramBound')}`} off={`TG ${t('telegramUnbound')}`} />
                 <StatusPill active={!!u.teams_user_id} on={`Teams ${t('teamsBound')}`} off={`Teams ${t('teamsUnbound')}`} />
-                <StatusPill active={!!mfaStatus[u.email]} on={`MFA ${t('mfaSet')}`} off={`MFA ${t('mfaNotSet')}`} />
+                <StatusPill active={!!mfaStatus[u.email]?.verified} on={`MFA ${t('mfaSet')}`} off={`MFA ${t('mfaNotSet')}`} />
               </div>
               <p className="text-xs text-gray-400 mb-3">
                 {t('colLastLogin')}: {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : '—'}
@@ -423,7 +423,7 @@ export default function AdminUsersPage() {
                   <span>{t('editTelegram')}: <span className="font-mono">{u.telegram_id ?? '—'}</span></span>
                 </button>
               )}
-              {mfaStatus[u.email] && (
+              {mfaStatus[u.email]?.anyFactor && (
                 <button
                   onClick={() => resetMfa(u)}
                   disabled={resetMfaId === u.id}
@@ -531,8 +531,8 @@ export default function AdminUsersPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-1.5 items-start">
-                      <StatusPill active={!!mfaStatus[u.email]} on={t('mfaSet')} off={t('mfaNotSet')} />
-                      {mfaStatus[u.email] && (
+                      <StatusPill active={!!mfaStatus[u.email]?.verified} on={t('mfaSet')} off={t('mfaNotSet')} />
+                      {mfaStatus[u.email]?.anyFactor && (
                         <button
                           onClick={() => resetMfa(u)}
                           disabled={resetMfaId === u.id}
