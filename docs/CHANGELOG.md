@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v6.5.0 — docs(rules): 版本進位規則改成兩位數時帶上一級（2026-05-20）
+
+### 變更項目
+- CLAUDE.md 版本規則新增：PATCH 進位到兩位數 → MINOR +1、PATCH 歸零；MINOR 進位到兩位數 → MAJOR +1、MINOR/PATCH 歸零。例：`6.4.9 → 6.5.0`（不是 6.4.10）、`1.9.x → 2.0.0`
+- 核心原則：PATCH / MINOR 都不允許出現兩位數
+- v6.4.10 視為新規則生效前的最後一個版本，不回頭改
+
 ## v6.4.10 — fix(auth): 重設 MFA 按鈕現在會清掉 unverified factor（2026-05-20）
 
 ### 變更項目
