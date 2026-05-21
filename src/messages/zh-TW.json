@@ -1415,6 +1415,25 @@
     "nameRequired": "名稱不可為空",
     "descriptionPlaceholder": "備註（可選）",
     "exportHint": "匯出此清單訂閱者為 CSV",
-    "exportFailed": "匯出失敗"
+    "exportFailed": "匯出失敗",
+    "importButton": "從 CSV 匯入",
+    "importModalTitle": "從 CSV 匯入收件名單",
+    "importPrompt": "選擇 CSV 檔案（兩欄：「名字」+「email」，email 必填）。清單名稱會用檔名自動產生，匯入後可在列表頁編輯。",
+    "importUploading": "上傳中…",
+    "importStatsHeader": "匯入結果",
+    "importStatsTotal": "原始列數",
+    "importStatsImported": "✓ 已匯入",
+    "importStatsSkipped": "⚠ 跳過",
+    "importStatsInvalidFormat": "Email 格式錯誤",
+    "importStatsDuplicates": "CSV 內重複",
+    "importStatsNoteHeader": "已照加進清單（提醒）",
+    "importStatsBounced": "過去被拒收",
+    "importStatsUnsubscribed": "過去退訂",
+    "importClose": "完成",
+    "importCreatedMsg": "已建立清單「{name}」",
+    "importErrHeaders": "CSV 必須有「名字」與「email」兩個欄位",
+    "importErrEmpty": "CSV 是空的",
+    "importErrFile": "請選擇一個 CSV 檔案",
+    "importErrGeneric": "匯入失敗"
   }
 }

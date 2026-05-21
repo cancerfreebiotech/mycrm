@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## v6.6.0 — feat(newsletter): CSV 匯入建立收件名單 + dedup + format 檢查 + bounce/unsub 提醒（2026-05-21）
+
+### 變更項目
+- **新增 `/admin/newsletter/lists` 的「從 CSV 匯入」按鈕**：點擊開啟 modal、選擇 CSV、上傳後建立新清單並把訂閱者批次加入
+- **CSV 格式**：兩個欄位 `名字` + `email`，email 必填；header 不符會回 400 + 明確錯誤訊息
+- **清單名稱來源**：從檔名自動生成（去掉 `.csv` 與所有空白 / 非字母數字，CJK 保留），匯入後可在列表頁就地編輯
+- **匯入時自動處理**：
+  - Email 格式檢查（不合格略過、計入 stats）
+  - CSV 內重複去重（同 email 重複出現只匯一次、計入 stats）
+  - 比對 `newsletter_blacklist` / `newsletter_unsubscribes` 標示曾被拒收 / 退訂（**仍會加入清單**，僅提醒）
+- **回應 stats**：原始列數、已匯入、Email 格式錯誤數、CSV 內重複數、曾被拒收數、曾退訂數
+- **不會建立任何 contact 列**：trigger `link_subscriber_to_contact` 只反向把 subscriber 連到既有 contact，不會新增 contact
+- 新增 `src/lib/csv.ts`（RFC4180-lite parser，跟 `scripts/import-newsletter-subscribers.mjs` 同一條邏輯）
+- 新增 endpoint `POST /api/newsletter/lists/import-csv`（multipart/form-data，super_admin / newsletter 權限）
+
+### 設計決定
+- Bounce / unsub 是「提醒」不是「過濾」 — 使用者決定要不要事後手動移除
+- CSV header 採嚴格匹配（不接受同義詞），降低誤匯入機會
+
 ## v6.5.0 — docs(rules): 版本進位規則改成兩位數時帶上一級（2026-05-20）
 
 ### 變更項目

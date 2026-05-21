@@ -1415,6 +1415,25 @@
     "nameRequired": "名前は必須です",
     "descriptionPlaceholder": "備考（任意）",
     "exportHint": "このリストの購読者を CSV エクスポート",
-    "exportFailed": "エクスポートに失敗しました"
+    "exportFailed": "エクスポートに失敗しました",
+    "importButton": "CSVからインポート",
+    "importModalTitle": "CSVから受信者リストをインポート",
+    "importPrompt": "2列の CSV を選択してください（「名字」+「email」、email は必須）。リスト名はファイル名から自動生成され、インポート後に編集できます。",
+    "importUploading": "アップロード中…",
+    "importStatsHeader": "インポート結果",
+    "importStatsTotal": "元の行数",
+    "importStatsImported": "✓ インポート済み",
+    "importStatsSkipped": "⚠ スキップ",
+    "importStatsInvalidFormat": "Email 形式エラー",
+    "importStatsDuplicates": "CSV 内重複",
+    "importStatsNoteHeader": "リストには追加済み（参考情報）",
+    "importStatsBounced": "過去にバウンス",
+    "importStatsUnsubscribed": "過去に配信停止",
+    "importClose": "完了",
+    "importCreatedMsg": "リスト「{name}」を作成しました",
+    "importErrHeaders": "CSV には「名字」と「email」の列が必要です",
+    "importErrEmpty": "CSV が空です",
+    "importErrFile": "CSV ファイルを選択してください",
+    "importErrGeneric": "インポートに失敗しました"
   }
 }

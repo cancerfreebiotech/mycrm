@@ -1415,6 +1415,25 @@
     "nameRequired": "Name cannot be empty",
     "descriptionPlaceholder": "Description (optional)",
     "exportHint": "Export this list's subscribers to CSV",
-    "exportFailed": "Export failed"
+    "exportFailed": "Export failed",
+    "importButton": "Import from CSV",
+    "importModalTitle": "Import recipient list from CSV",
+    "importPrompt": "Choose a CSV with two columns: \"名字\" (name) + \"email\" (required). List name is derived from the filename and can be edited after import.",
+    "importUploading": "Uploading…",
+    "importStatsHeader": "Import results",
+    "importStatsTotal": "Total rows",
+    "importStatsImported": "✓ Imported",
+    "importStatsSkipped": "⚠ Skipped",
+    "importStatsInvalidFormat": "Invalid email format",
+    "importStatsDuplicates": "Duplicate in CSV",
+    "importStatsNoteHeader": "Added to list anyway (informational)",
+    "importStatsBounced": "Previously bounced",
+    "importStatsUnsubscribed": "Previously unsubscribed",
+    "importClose": "Done",
+    "importCreatedMsg": "Created list \"{name}\"",
+    "importErrHeaders": "CSV must have columns \"名字\" and \"email\"",
+    "importErrEmpty": "CSV is empty",
+    "importErrFile": "Please choose a CSV file",
+    "importErrGeneric": "Import failed"
   }
 }

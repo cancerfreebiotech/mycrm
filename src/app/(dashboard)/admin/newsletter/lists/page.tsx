@@ -1,11 +1,27 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { PermissionGate } from '@/components/PermissionGate'
-import { Loader2, Users, ArrowLeft, Trash2, Pencil, Check, X, Download } from 'lucide-react'
+import { Loader2, Users, ArrowLeft, Trash2, Pencil, Check, X, Download, Upload } from 'lucide-react'
+
+interface ImportStats {
+  total: number
+  imported: number
+  duplicates_in_csv: number
+  invalid_format: number
+  bounced: number
+  unsubscribed: number
+}
+
+interface ImportResult {
+  list_id: string
+  list_key: string
+  list_name: string
+  stats: ImportStats
+}
 
 interface ListRow {
   id: string
@@ -29,6 +45,11 @@ export default function ListsIndexPage() {
   const [editName, setEditName] = useState('')
   const [editDesc, setEditDesc] = useState('')
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const [importErr, setImportErr] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     (async () => {
@@ -91,6 +112,62 @@ export default function ListsIndexPage() {
     }
   }
 
+  function openImport() {
+    setImportOpen(true)
+    setImportResult(null)
+    setImportErr(null)
+    setImporting(false)
+  }
+
+  function closeImport() {
+    setImportOpen(false)
+    setImporting(false)
+    if (importResult) {
+      // Refresh list table after a successful import
+      (async () => {
+        const { data: lists } = await supabase
+          .from('newsletter_lists')
+          .select('id, key, name, description, created_at')
+          .order('created_at')
+        const withCounts = await Promise.all(
+          (lists ?? []).map(async (l) => {
+            const { count } = await supabase
+              .from('newsletter_subscriber_lists')
+              .select('subscriber_id', { count: 'exact', head: true })
+              .eq('list_id', l.id)
+            return { ...l, memberCount: count ?? 0 } as ListRow
+          })
+        )
+        setRows(withCounts)
+      })()
+    }
+    setImportResult(null)
+    setImportErr(null)
+  }
+
+  async function handleFileChosen(file: File) {
+    setImporting(true)
+    setImportErr(null)
+    setImportResult(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/newsletter/lists/import-csv', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) {
+        if (data.error === 'csv_headers') setImportErr(t('importErrHeaders'))
+        else if (data.error === 'csv_empty') setImportErr(t('importErrEmpty'))
+        else setImportErr(data.error ?? t('importErrGeneric'))
+        return
+      }
+      setImportResult(data as ImportResult)
+    } catch (e) {
+      setImportErr(e instanceof Error ? e.message : t('importErrGeneric'))
+    } finally {
+      setImporting(false)
+    }
+  }
+
   async function deleteList(id: string) {
     setDeletingId(id)
     setBanner(null)
@@ -119,10 +196,17 @@ export default function ListsIndexPage() {
             <ArrowLeft size={18} />
           </Link>
           <Users size={22} className="text-blue-500" />
-          <div>
+          <div className="flex-1">
             <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">收件名單</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">電子報訂閱者群組</p>
           </div>
+          <button
+            onClick={openImport}
+            className="min-h-[44px] inline-flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+          >
+            <Upload size={16} />
+            <span>{t('importButton')}</span>
+          </button>
         </div>
 
         {banner && (
@@ -259,6 +343,92 @@ export default function ListsIndexPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {importOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={(e) => { if (e.target === e.currentTarget && !importing) closeImport() }}
+          >
+            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 w-full max-w-md p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('importModalTitle')}</h2>
+                <button
+                  onClick={closeImport}
+                  disabled={importing}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-40"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {!importResult && !importErr && (
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{t('importPrompt')}</p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,text/csv"
+                    disabled={importing}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0]
+                      if (f) handleFileChosen(f)
+                    }}
+                    className="block w-full text-sm text-gray-700 dark:text-gray-300 file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border-0 file:bg-blue-50 dark:file:bg-blue-950/40 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-950/60"
+                  />
+                  {importing && (
+                    <div className="mt-4 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>{t('importUploading')}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {importErr && (
+                <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
+                  {importErr}
+                </div>
+              )}
+
+              {importResult && (
+                <div className="space-y-3 text-sm">
+                  <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2 text-green-800 dark:text-green-300">
+                    {t('importCreatedMsg', { name: importResult.list_name })}
+                  </div>
+                  <div className="border border-gray-200 dark:border-gray-800 rounded-lg p-3">
+                    <div className="font-medium text-gray-900 dark:text-gray-100 mb-2">{t('importStatsHeader')}</div>
+                    <dl className="space-y-1 text-gray-700 dark:text-gray-300">
+                      <div className="flex justify-between"><dt>{t('importStatsTotal')}</dt><dd className="font-mono">{importResult.stats.total}</dd></div>
+                      <div className="flex justify-between text-green-700 dark:text-green-400"><dt>{t('importStatsImported')}</dt><dd className="font-mono">{importResult.stats.imported}</dd></div>
+                      {(importResult.stats.invalid_format > 0 || importResult.stats.duplicates_in_csv > 0) && (
+                        <div className="pt-2 mt-2 border-t border-gray-100 dark:border-gray-800 text-amber-700 dark:text-amber-400">
+                          <div className="flex justify-between"><dt>{t('importStatsSkipped')}</dt><dd className="font-mono">{importResult.stats.invalid_format + importResult.stats.duplicates_in_csv}</dd></div>
+                          <div className="flex justify-between pl-3 text-xs"><dt>{t('importStatsInvalidFormat')}</dt><dd className="font-mono">{importResult.stats.invalid_format}</dd></div>
+                          <div className="flex justify-between pl-3 text-xs"><dt>{t('importStatsDuplicates')}</dt><dd className="font-mono">{importResult.stats.duplicates_in_csv}</dd></div>
+                        </div>
+                      )}
+                      {(importResult.stats.bounced > 0 || importResult.stats.unsubscribed > 0) && (
+                        <div className="pt-2 mt-2 border-t border-gray-100 dark:border-gray-800">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('importStatsNoteHeader')}</div>
+                          <div className="flex justify-between pl-3 text-xs text-orange-700 dark:text-orange-400"><dt>{t('importStatsBounced')}</dt><dd className="font-mono">{importResult.stats.bounced}</dd></div>
+                          <div className="flex justify-between pl-3 text-xs text-orange-700 dark:text-orange-400"><dt>{t('importStatsUnsubscribed')}</dt><dd className="font-mono">{importResult.stats.unsubscribed}</dd></div>
+                        </div>
+                      )}
+                    </dl>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={closeImport}
+                      className="min-h-[44px] px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                    >
+                      {t('importClose')}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
