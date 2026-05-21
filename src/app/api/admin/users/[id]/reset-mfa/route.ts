@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { hasFeature } from '@/lib/features'
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient()
@@ -8,14 +9,16 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   const service = createServiceClient()
 
-  // Verify caller is super_admin
+  // Verify caller has user-management capability (super_admin or feature-granted)
   const { data: profile } = await service
     .from('users')
-    .select('role')
+    .select('role, granted_features')
     .eq('email', user.email!)
     .single()
 
-  if (profile?.role !== 'super_admin') {
+  const role = profile?.role ?? ''
+  const granted = (profile?.granted_features as string[] | null) ?? []
+  if (role !== 'super_admin' && !hasFeature(role, granted, 'user_management')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

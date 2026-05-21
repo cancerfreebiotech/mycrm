@@ -15,6 +15,7 @@ export type FeatureKey =
   | 'trash'
   | 'export_contacts'
   | 'bulk_email'
+  | 'user_management'
 
 export const FEATURE_ROUTES: Record<FeatureKey, string> = {
   tags: '/admin/tags',
@@ -29,6 +30,7 @@ export const FEATURE_ROUTES: Record<FeatureKey, string> = {
   trash: '/admin/trash',
   export_contacts: '/contacts',
   bulk_email: '/email/compose',
+  user_management: '/admin/users',
 }
 
 export const FEATURE_LABELS: Record<FeatureKey, string> = {
@@ -44,6 +46,7 @@ export const FEATURE_LABELS: Record<FeatureKey, string> = {
   trash: '資源回收桶',
   export_contacts: '匯出聯絡人',
   bulk_email: '群發郵件（20人以上）',
+  user_management: '使用者管理（限重設 MFA / 編輯 Telegram）',
 }
 
 export const ALL_FEATURE_KEYS = Object.keys(FEATURE_ROUTES) as FeatureKey[]

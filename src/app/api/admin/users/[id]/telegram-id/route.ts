@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { hasFeature } from '@/lib/features'
 
 // POST /api/admin/users/[id]/telegram-id
 // super_admin updates a teammate's telegram_id. Body: { telegramId: number | null }
@@ -14,11 +15,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const { data: profile } = await service
     .from('users')
-    .select('role')
+    .select('role, granted_features')
     .eq('email', user.email!)
     .single()
 
-  if (profile?.role !== 'super_admin') {
+  const role = profile?.role ?? ''
+  const granted = (profile?.granted_features as string[] | null) ?? []
+  if (role !== 'super_admin' && !hasFeature(role, granted, 'user_management')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

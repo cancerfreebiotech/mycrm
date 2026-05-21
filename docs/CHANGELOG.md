@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## v6.7.0 — feat(auth): 新增「使用者管理」grantable feature（限重設 MFA / 編輯 Telegram）（2026-05-21）
+
+### 變更項目
+- **新增 grantable feature key `user_management`**：super_admin 可以在 `/admin/users` 把這個權限授予指定使用者
+- 被授予 `user_management` 的人可以：
+  - 看到 `/admin/users` 整張表（含每位 user 的 MFA / Telegram / Teams 狀態）
+  - 對指定 user 按「重設 MFA」清掉 factor
+  - 編輯指定 user 的 Telegram ID
+- **不能做的事**（仍只限 super_admin）：
+  - 切換 super_admin / member 角色
+  - 授予 / 取消任何 grantable feature
+  - 開啟 / 關閉維護模式
+- 三個 API endpoint 同步放行（`/api/admin/mfa-status`、`/api/admin/users/[id]/reset-mfa`、`/api/admin/users/[id]/telegram-id`）：原本只接 super_admin、現在接 super_admin 或 `user_management` feature
+- 標籤顯示「使用者管理（限重設 MFA / 編輯 Telegram）」便於 super_admin 在權限矩陣裡認得
+
 ## v6.6.0 — feat(newsletter): CSV 匯入建立收件名單 + dedup + format 檢查 + bounce/unsub 提醒（2026-05-21）
 
 ### 變更項目

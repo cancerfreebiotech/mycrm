@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Wrench, Pencil, Check, X } from 'lucide-react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { ALL_FEATURE_KEYS, FEATURE_LABELS } from '@/lib/features'
+import { ALL_FEATURE_KEYS, FEATURE_LABELS, hasFeature } from '@/lib/features'
 
 type SortKey = 'name' | 'email' | 'telegram' | 'teams' | 'role' | 'last_login' | 'mfa'
 type SortDir = 'asc' | 'desc'
@@ -33,6 +33,7 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [resetMfaId, setResetMfaId] = useState<string | null>(null)
   const [mfaStatus, setMfaStatus] = useState<Record<string, { verified: boolean; anyFactor: boolean }>>({})
   const [sortKey, setSortKey] = useState<SortKey>('name')
@@ -112,11 +113,15 @@ export default function AdminUsersPage() {
 
       const { data: profile } = await supabase
         .from('users')
-        .select('id, role')
+        .select('id, role, granted_features')
         .eq('email', user.email)
         .single()
 
-      if (profile?.role !== 'super_admin') { router.push('/'); return }
+      const role = profile?.role ?? ''
+      const granted = (profile?.granted_features as string[] | null) ?? []
+      const canView = role === 'super_admin' || hasFeature(role, granted, 'user_management')
+      if (!profile || !canView) { router.push('/'); return }
+      setIsSuperAdmin(role === 'super_admin')
       setCurrentUserId(profile.id)
 
       const { data } = await supabase
@@ -323,7 +328,8 @@ export default function AdminUsersPage() {
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">{t('title')}</h1>
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{t('subtitle')}</p>
 
-      {/* Maintenance Mode toggle */}
+      {/* Maintenance Mode toggle — super_admin only */}
+      {isSuperAdmin && (
       <div className={`rounded-xl border mb-6 p-4 sm:p-5 ${
         maintenanceEnabled
           ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800'
@@ -362,6 +368,7 @@ export default function AdminUsersPage() {
           </button>
         </div>
       </div>
+      )}
 
       {/* Mobile: card list */}
       <div className="sm:hidden space-y-3">
@@ -432,7 +439,7 @@ export default function AdminUsersPage() {
                   {resetMfaId === u.id ? t('resetting') : t('reset') + ' MFA'}
                 </button>
               )}
-              <ActionButtons u={u} />
+              {isSuperAdmin && <ActionButtons u={u} />}
             </div>
           ))
         )}
@@ -544,7 +551,7 @@ export default function AdminUsersPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 space-y-2">
-                    <ActionButtons u={u} />
+                    {isSuperAdmin && <ActionButtons u={u} />}
                   </td>
                 </tr>
               ))
