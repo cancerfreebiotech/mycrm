@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v6.7.4 — fix(auth): 有 user_management 權限但 sidebar 看不到「使用者」連結（2026-05-22）
+
+### 變更項目
+- v6.7.0 把 `user_management` feature 引進來時漏改 sidebar：`/admin/users` link 只放在 `superAdminItems`（只給 super_admin 看）。Luna 被授予 `user_management` 後可以進直接網址，但點不到 sidebar 連結
+- 拆出 `userMgmtItems`（super_admin OR `user_management` 任一即顯示），把 `/admin/users` link 移過去
+- 同時 layout `UserProfile` interface 跟 SELECT 都補 `granted_features` 欄位
+
 ## v6.7.3 — feat(newsletter): Story 草稿頁期數可點擊編輯 + bot /news 改 4 鍵一次選月份段落（2026-05-22）
 
 ### 變更項目

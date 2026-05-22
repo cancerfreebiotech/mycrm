@@ -18,6 +18,7 @@ const LOCALE_LABELS: Record<Locale, string> = {
 interface UserProfile {
   display_name: string | null
   role: string
+  granted_features: string[] | null
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -74,7 +75,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (!user) return
       const { data } = await supabase
         .from('users')
-        .select('display_name, role')
+        .select('display_name, role, granted_features')
         .eq('email', user.email)
         .single()
       if (data) {
@@ -109,6 +110,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   const isSuperAdmin = profile?.role === 'super_admin'
+  const canUserManagement = isSuperAdmin || (profile?.granted_features ?? []).includes('user_management')
   const docsUrl = process.env.NEXT_PUBLIC_DOCS_URL ?? '/docs'
 
   type NavItem = { href: string; label: string; icon: React.ElementType; external?: boolean }
@@ -144,11 +146,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Super admin only — hidden from regular users
   const superAdminItems: NavItem[] = isSuperAdmin ? [
     { href: '/admin/models', label: t('models'), icon: ShieldCheck },
-    { href: '/admin/users', label: t('users'), icon: ShieldCheck },
     { href: '/admin/health', label: t('health'), icon: Activity },
     { href: '/admin/feedback', label: t('feedbackManage'), icon: MessageSquarePlus },
   ] : []
-  const adminItems = [...grantableItems, ...superAdminItems]
+  // User-management gated separately — super_admin OR has user_management feature
+  const userMgmtItems: NavItem[] = canUserManagement
+    ? [{ href: '/admin/users', label: t('users'), icon: ShieldCheck }]
+    : []
+  const adminItems = [...grantableItems, ...userMgmtItems, ...superAdminItems]
 
   // Label span shared classes — hidden on tablet, shown on hover & desktop (unless collapsed)
   const labelCls = collapsed
