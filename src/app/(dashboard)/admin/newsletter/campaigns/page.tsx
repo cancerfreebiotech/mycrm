@@ -109,6 +109,9 @@ export default function CampaignsIndexPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <a href="/admin/newsletter/draft" className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+              Story 草稿管理 →
+            </a>
             <a href="/admin/newsletter/lists" className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
               收件名單管理 →
             </a>

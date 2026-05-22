@@ -277,8 +277,14 @@ function Column({ section, title, drafts, onAdd, onEdit, onDelete }: {
               <div className="font-medium text-gray-900 dark:text-gray-100 truncate flex-1">
                 {d.title ?? <span className="text-gray-400">(無標題)</span>}
               </div>
-              <button onClick={(e) => { e.stopPropagation(); onDelete(d.id, d.title) }}
-                className="text-gray-400 hover:text-red-500"><Trash2 size={14} /></button>
+              <div className="flex items-center gap-1 shrink-0">
+                <button onClick={(e) => { e.stopPropagation(); onEdit(d) }}
+                  title="編輯標題與內容"
+                  className="text-gray-400 hover:text-blue-500"><Pencil size={14} /></button>
+                <button onClick={(e) => { e.stopPropagation(); onDelete(d.id, d.title) }}
+                  title="刪除"
+                  className="text-gray-400 hover:text-red-500"><Trash2 size={14} /></button>
+              </div>
             </div>
             {d.event_date && (
               <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">

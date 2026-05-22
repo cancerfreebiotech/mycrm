@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v6.7.2 — feat(newsletter): Story 草稿頁加入口 + 每個 story 加可見的編輯按鈕（2026-05-22）
+
+### 變更項目
+- `/admin/newsletter/campaigns` 頁面 header 新增「Story 草稿管理 →」入口（之前只能用直接網址進去）
+- `/admin/newsletter/draft/[period]` 每張 story 卡片右上加 Pencil 編輯按鈕，跟 Trash 並列。點下去開既有的編輯 modal（可改標題、內容、日期、期數、段落、照片）
+- 整張卡片 click 開編輯 modal 的行為保留 — 多一個明顯的按鈕只是讓編輯動作更明顯
+
 ## v6.7.1 — fix(bot): 修好 /news 在 Telegram 卡 FK violation（2026-05-22）
 
 ### 變更項目
