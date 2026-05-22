@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v6.7.1 — fix(bot): 修好 /news 在 Telegram 卡 FK violation（2026-05-22）
+
+### 變更項目
+- `newsletter_drafts.created_by` 的 FK 原本指到 `auth.users(id)`，但 bot `getAuthorizedUser` 與 `/api/newsletter/drafts` authorize helper 都回傳 `public.users.id`（不同的 UUID） → 每次 insert 都 FK violation。Telegram `/news` 跟 Web 端寫入新 draft 都被卡住
+- 改成 `FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL`，配合既有 code 與 PostgREST GET 那條 `creator:created_by(display_name)` join 的意圖
+- 套用時 `newsletter_drafts` 表是空的（0 筆），沒有資料遷移風險
+- SQL 紀錄在 `supabase/fix_newsletter_drafts_created_by_fkey.sql`
+
 ## v6.7.0 — feat(auth): 新增「使用者管理」grantable feature（限重設 MFA / 編輯 Telegram）（2026-05-21）
 
 ### 變更項目
