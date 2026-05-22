@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v6.7.3 — feat(newsletter): Story 草稿頁期數可點擊編輯 + bot /news 改 4 鍵一次選月份段落（2026-05-22）
+
+### 變更項目
+- `/admin/newsletter/draft/[period]` 頁面標題的期數變成可點擊編輯：點 `2026-05` → input 變藍框 → 輸入新 YYYY-MM → Enter 或 blur 跳到該期、Escape 取消
+- Telegram bot `/news` 一鍵改成 4 個選項（本月 + 下月 × 上月回顧 / 下月預告），不再只能用「本月」。對應 5 月底準備 6 月電子報的場景
+- prompt 文字三語同步更新
+
 ## v6.7.2 — feat(newsletter): Story 草稿頁加入口 + 每個 story 加可見的編輯按鈕（2026-05-22）
 
 ### 變更項目

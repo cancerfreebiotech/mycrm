@@ -58,6 +58,16 @@ function Inner() {
   const [composing, setComposing] = useState<{ section: Section } | null>(null)
   const [aiBusy, setAiBusy] = useState(false)
   const [aiPreview, setAiPreview] = useState<AiPreviewData | null>(null)
+  const [editingPeriod, setEditingPeriod] = useState(false)
+  const [periodInput, setPeriodInput] = useState(period)
+
+  function commitPeriod() {
+    const v = periodInput.trim()
+    if (/^\d{4}-(0[1-9]|1[0-2])$/.test(v) && v !== period) {
+      router.push(`/admin/newsletter/draft/${v}`)
+    }
+    setEditingPeriod(false)
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -156,9 +166,29 @@ function Inner() {
             className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800">
             <ChevronLeft size={20} />
           </button>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {t('draftTitle', { period })}
-          </h1>
+          {editingPeriod ? (
+            <input
+              autoFocus
+              value={periodInput}
+              onChange={(e) => setPeriodInput(e.target.value)}
+              onBlur={commitPeriod}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); commitPeriod() }
+                if (e.key === 'Escape') { setEditingPeriod(false); setPeriodInput(period) }
+              }}
+              placeholder="YYYY-MM"
+              pattern="^\d{4}-\d{2}$"
+              className="text-2xl font-bold px-2 py-1 border border-blue-400 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 w-44 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          ) : (
+            <h1
+              onClick={() => { setPeriodInput(period); setEditingPeriod(true) }}
+              title="點擊修改期數"
+              className="text-2xl font-bold text-gray-900 dark:text-gray-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 px-2 py-1 rounded"
+            >
+              {t('draftTitle', { period })}
+            </h1>
+          )}
           <button onClick={() => router.push(`/admin/newsletter/draft/${shiftPeriod(period, +1)}`)}
             className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800">
             <ChevronRight size={20} />

@@ -35,6 +35,12 @@ function currentPeriod(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
+function nextPeriod(): string {
+  const d = new Date()
+  d.setMonth(d.getMonth() + 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
 async function userHasNewsletter(userId: string): Promise<boolean> {
   const sb = createServiceClient()
   const { data } = await sb.from('users').select('role, granted_features').eq('id', userId).single()
@@ -1999,13 +2005,20 @@ async function handleText(
       await sendMessage(chatId, m.newsNoPermission)
       return
     }
-    const period = currentPeriod()
+    const cur = currentPeriod()
+    const nxt = nextPeriod()
     await sendMessage(chatId,
-      m.newsPromptSection(period),
-      { reply_markup: { inline_keyboard: [[
-        { text: m.newsBtnLastMonth, callback_data: `news_sec_last_${period}` },
-        { text: m.newsBtnNextMonth, callback_data: `news_sec_next_${period}` },
-      ]] } }
+      m.newsPromptSection,
+      { reply_markup: { inline_keyboard: [
+        [
+          { text: `${cur} ${m.newsBtnLastMonth}`, callback_data: `news_sec_last_${cur}` },
+          { text: `${cur} ${m.newsBtnNextMonth}`, callback_data: `news_sec_next_${cur}` },
+        ],
+        [
+          { text: `${nxt} ${m.newsBtnLastMonth}`, callback_data: `news_sec_last_${nxt}` },
+          { text: `${nxt} ${m.newsBtnNextMonth}`, callback_data: `news_sec_next_${nxt}` },
+        ],
+      ] } }
     )
     return
   }

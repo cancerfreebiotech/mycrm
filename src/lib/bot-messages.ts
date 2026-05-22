@@ -363,7 +363,7 @@ export interface BotMessages {
 
   // ── Newsletter (/news) ─────────────────────────────────────────────────────
   newsNoPermission: string
-  newsPromptSection: (period: string) => string
+  newsPromptSection: string
   newsBtnLastMonth: string
   newsBtnNextMonth: string
   newsSectionLastLabel: string
@@ -768,7 +768,7 @@ const zh: BotMessages = {
 
   // ── Newsletter (/news) ─────────────────────────────────────────────────────
   newsNoPermission: '⛔ 此指令需要 newsletter 權限，請聯絡管理員開通',
-  newsPromptSection: (period) => `📰 累積 <b>${period}</b> 月電子報素材\n要加到哪一段？`,
+  newsPromptSection: '📰 累積電子報素材 — 選擇月份與段落',
   newsBtnLastMonth: '📜 上月回顧',
   newsBtnNextMonth: '🔮 下月預告',
   newsSectionLastLabel: '上月回顧',
@@ -1167,7 +1167,7 @@ const en: BotMessages = {
 
   // ── Newsletter (/news) ─────────────────────────────────────────────────────
   newsNoPermission: '⛔ This command needs newsletter permission. Please contact an admin.',
-  newsPromptSection: (period) => `📰 Accumulate newsletter material for <b>${period}</b>\nWhich section?`,
+  newsPromptSection: '📰 Accumulate newsletter material — pick month and section',
   newsBtnLastMonth: '📜 Last month review',
   newsBtnNextMonth: '🔮 Next month preview',
   newsSectionLastLabel: 'Last month review',
@@ -1566,7 +1566,7 @@ const ja: BotMessages = {
 
   // ── Newsletter (/news) ─────────────────────────────────────────────────────
   newsNoPermission: '⛔ このコマンドには newsletter 権限が必要です。管理者にお問い合わせください',
-  newsPromptSection: (period) => `📰 <b>${period}</b> 月のニュースレター素材を蓄積\nどのセクションに追加しますか？`,
+  newsPromptSection: '📰 ニュースレター素材を蓄積 — 月とセクションを選択',
   newsBtnLastMonth: '📜 先月のレビュー',
   newsBtnNextMonth: '🔮 来月のプレビュー',
   newsSectionLastLabel: '先月のレビュー',
