@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v6.7.5 — fix(newsletter): 草稿頁期數編輯加 Save/Cancel 按鈕、不再失焦就跳（2026-05-22）
+
+### 變更項目
+- v6.7.3 加的期數可編輯功能，原本只要 input 失焦（onBlur）或按 Enter 就會直接跳期，使用者改到一半點旁邊就被跳走、來不及確認
+- 改成跟其他 inline-edit（newsletter lists、admin/users）一致的兩按鈕模式：✓ Save / ✗ Cancel
+- 移除 onBlur 自動 commit；Enter 仍可快速 save、Esc 取消
+- Save 按鈕在輸入不合法或跟現值相同時 disabled
+
 ## v6.7.4 — fix(auth): 有 user_management 權限但 sidebar 看不到「使用者」連結（2026-05-22）
 
 ### 變更項目

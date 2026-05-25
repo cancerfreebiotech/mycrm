@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { PermissionGate } from '@/components/PermissionGate'
-import { Loader2, Plus, Trash2, X, Calendar, ChevronLeft, ChevronRight, Pencil, Download, Wand2 } from 'lucide-react'
+import { Loader2, Plus, Trash2, X, Calendar, ChevronLeft, ChevronRight, Pencil, Download, Wand2, Check } from 'lucide-react'
 
 type Section = 'last_month' | 'next_month'
 
@@ -167,19 +167,35 @@ function Inner() {
             <ChevronLeft size={20} />
           </button>
           {editingPeriod ? (
-            <input
-              autoFocus
-              value={periodInput}
-              onChange={(e) => setPeriodInput(e.target.value)}
-              onBlur={commitPeriod}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') { e.preventDefault(); commitPeriod() }
-                if (e.key === 'Escape') { setEditingPeriod(false); setPeriodInput(period) }
-              }}
-              placeholder="YYYY-MM"
-              pattern="^\d{4}-\d{2}$"
-              className="text-2xl font-bold px-2 py-1 border border-blue-400 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 w-44 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <div className="flex items-center gap-1">
+              <input
+                autoFocus
+                value={periodInput}
+                onChange={(e) => setPeriodInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); commitPeriod() }
+                  if (e.key === 'Escape') { setEditingPeriod(false); setPeriodInput(period) }
+                }}
+                placeholder="YYYY-MM"
+                pattern="^\d{4}-\d{2}$"
+                className="text-2xl font-bold px-2 py-1 border border-blue-400 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 w-44 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={commitPeriod}
+                disabled={!/^\d{4}-(0[1-9]|1[0-2])$/.test(periodInput.trim()) || periodInput.trim() === period}
+                title="跳到此期"
+                className="p-2 rounded text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <Check size={20} />
+              </button>
+              <button
+                onClick={() => { setEditingPeriod(false); setPeriodInput(period) }}
+                title="取消"
+                className="p-2 rounded text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <X size={20} />
+              </button>
+            </div>
           ) : (
             <h1
               onClick={() => { setPeriodInput(period); setEditingPeriod(true) }}
