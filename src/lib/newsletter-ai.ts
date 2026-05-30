@@ -41,12 +41,14 @@ function stripJsonFence(t: string): string {
 }
 
 // Load past newsletter samples for tone reference. Files in
-// skills/newsletter-composer/tone-samples/ follow naming "{YYYY-MM}-{lang}.md".
+// skills/newsletter-composer/tone-samples/ follow naming "{YYYY-MM}-{suffix}.md"
+// where suffix is 'zh' / 'en' / 'ja' (note: 'zh' on disk maps to 'zh-TW' Lang).
 async function loadToneCorpus(lang: Lang, count = 2): Promise<string> {
+  const suffix = lang === 'zh-TW' ? 'zh' : lang
   const dir = path.join(process.cwd(), 'skills', 'newsletter-composer', 'tone-samples')
   try {
     const all = await fs.readdir(dir)
-    const matched = all.filter((f) => f.endsWith(`-${lang}.md`)).sort().reverse().slice(0, count)
+    const matched = all.filter((f) => f.endsWith(`-${suffix}.md`)).sort().reverse().slice(0, count)
     const bodies = await Promise.all(matched.map((f) => fs.readFile(path.join(dir, f), 'utf8')))
     return bodies.join('\n\n---\n\n')
   } catch {

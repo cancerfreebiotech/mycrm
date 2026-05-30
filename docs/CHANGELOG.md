@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v6.7.7 — fix(newsletter): AI 撰寫中文潤稿沒讀到 tone 樣本（2026-05-30）
+
+### 變更項目
+- `loadToneCorpus(lang)` 拿 `lang` 直接拼成 `-${lang}.md` 找檔，但實際 `skills/newsletter-composer/tone-samples/` 下中文檔名是 `2026-04-zh.md`（不是 `-zh-TW.md`）→ `lang='zh-TW'` 時永遠對不到
+- 結果：AI 撰寫中文潤稿一直走 `(無過往樣本)` fallback，沒參考過去 4 期 newsletter 的語氣
+- 英文與日文檔名跟 lang code 一致（`-en.md` / `-ja.md`），沒受影響
+- 解法：在 loadToneCorpus 加一行 `const suffix = lang === 'zh-TW' ? 'zh' : lang`
+
 ## v6.7.6 — fix(newsletter): AI 撰寫 500 — Gemini model 名拼錯，補上 -preview 後綴（2026-05-30）
 
 ### 變更項目
