@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
     const validIdsSorted = valid.map((d) => d.id).sort().join(',')
     const { data: existingCache } = await service
       .from('newsletter_compose_cache')
-      .select('payload, created_at')
+      .select('id, payload, created_at')
       .eq('period', period)
       .gt('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
       .order('created_at', { ascending: false })
@@ -181,6 +181,11 @@ export async function POST(req: NextRequest) {
       }
       const cachedIdsSorted = [...cached.story_ids].sort().join(',')
       if (cachedIdsSorted === validIdsSorted) {
+        // Refresh timestamp so commit (which also requires < 30 min) sees a
+        // fresh row even if the user takes their time reviewing the preview.
+        await service.from('newsletter_compose_cache')
+          .update({ created_at: new Date().toISOString() })
+          .eq('id', existingCache.id)
         return NextResponse.json({
           preview: cached.preview,
           story_count: cached.story_ids.length,

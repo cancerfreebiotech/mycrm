@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v6.7.9 — fix(newsletter): commit 卡 "No recent preview" — preview cache hit 補 refresh timestamp（2026-05-30）
+
+### 變更項目
+- v6.7.8 引進 preview cache hit 後，使用者再按 AI 撰寫只回傳快取，**沒更新原 cache row 的 timestamp**。如果原 cache 寫入超過 30 分鐘前，後續 commit (`建立 3 個 draft campaigns`) 找不到 < 30 分鐘的 cache → 回 409 `No recent preview to commit. Run preview first.`
+- Preview 命中 cache 時 `UPDATE newsletter_compose_cache SET created_at = now()`，commit 看到的就是 fresh row
+
+### 立刻能用的 workaround（不用等 deploy）
+- 在預覽 modal 點「🔄 重新生成」→ 重跑 AI + 寫新 cache → 立刻按 commit 就會成功
+
 ## v6.7.8 — fix(newsletter): AI 撰寫補 logo + 讀連結內容 + preview 快取（2026-05-30）
 
 ### 變更項目
