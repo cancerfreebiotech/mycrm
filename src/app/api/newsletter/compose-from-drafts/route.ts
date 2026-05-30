@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from '@/lib/supabase'
 import { hasFeature } from '@/lib/features'
 import { refineProseZh, translateStory, generatePromoText } from '@/lib/newsletter-ai'
 import { composeNewsletter, type NewsletterStory } from '@/lib/newsletter-compose'
+import { fetchUrlContext } from '@/lib/fetch-url-context'
 
 // POST /api/newsletter/compose-from-drafts
 //   Body (preview): { period: 'YYYY-MM', action: 'preview' }
@@ -94,7 +95,8 @@ export async function POST(req: NextRequest) {
   const auth = await authorize()
   if (!auth) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { period, action } = await req.json() as { period: string; action: 'preview' | 'commit' }
+  const body = await req.json() as { period: string; action: 'preview' | 'commit'; force?: boolean }
+  const { period, action, force } = body
   if (!period || !/^\d{4}-\d{2}$/.test(period)) {
     return NextResponse.json({ error: 'period required (YYYY-MM)' }, { status: 400 })
   }
@@ -159,11 +161,50 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No drafts have both title and content yet' }, { status: 400 })
   }
 
+  // Check cache: if a fresh preview exists with the exact same story set, reuse it.
+  // This avoids re-running Gemini (21+ calls) when user cancels and re-opens.
+  // `force: true` bypasses the cache for explicit "regenerate".
+  if (!force) {
+    const validIdsSorted = valid.map((d) => d.id).sort().join(',')
+    const { data: existingCache } = await service
+      .from('newsletter_compose_cache')
+      .select('payload, created_at')
+      .eq('period', period)
+      .gt('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (existingCache) {
+      const cached = existingCache.payload as {
+        story_ids: string[]
+        preview: Record<Lang, { html: string; subject: string; promo: string }>
+      }
+      const cachedIdsSorted = [...cached.story_ids].sort().join(',')
+      if (cachedIdsSorted === validIdsSorted) {
+        return NextResponse.json({
+          preview: cached.preview,
+          story_count: cached.story_ids.length,
+          from_cache: true,
+          cached_at: existingCache.created_at,
+        })
+      }
+    }
+  }
+
   // AI pipeline: refine zh → translate to en + ja
   // Run stories in parallel for speed (each story = 3 sequential calls but stories parallel)
   const trilingual: StoryTrilingual[] = await Promise.all(
     valid.map(async (d) => {
-      const zh = await refineProseZh({ title: d.title!, content: d.content!, event_date: d.event_date })
+      // If story has a link, fetch its content and prepend to the AI prompt
+      // so the model has actual destination material to write from (instead
+      // of seeing only "見以下連結" with no substance).
+      const firstUrl = d.links?.[0]?.url
+      const linkContext = firstUrl ? await fetchUrlContext(firstUrl) : ''
+      const enrichedContent = linkContext
+        ? `【連結內容參考（自動抓取）】\n${linkContext}\n\n【原始素材】\n${d.content!}`
+        : d.content!
+
+      const zh = await refineProseZh({ title: d.title!, content: enrichedContent, event_date: d.event_date })
       const [en, ja] = await Promise.all([
         translateStory(zh, 'en'),
         translateStory(zh, 'ja'),
@@ -212,7 +253,7 @@ export async function POST(req: NextRequest) {
       upcoming_stories: upcoming,
       recap_title: labels.last,
       recap_stories: recap,
-      logo_url: 'https://cancerfree.io/logo.png',
+      logo_url: process.env.NEWSLETTER_LOGO_URL ?? 'https://listmonk.avatarmedicine.xyz/uploads/logo-v3.0-(1).png',
       substack_url: '',
       facebook_url: 'https://www.facebook.com/cancerfreebio',
       linkedin_url: 'https://www.linkedin.com/company/cancerfree-biotech',

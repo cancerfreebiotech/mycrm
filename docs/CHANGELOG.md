@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v6.7.8 — fix(newsletter): AI 撰寫補 logo + 讀連結內容 + preview 快取（2026-05-30）
+
+### 變更項目
+- **Logo**：`composeNewsletter` 預設 `logo_url` 從 `https://cancerfree.io/logo.png`（404）改成 `https://listmonk.avatarmedicine.xyz/uploads/logo-v3.0-(1).png`（過去 newsletter 一直在用、200 OK）。可用 `NEWSLETTER_LOGO_URL` env var override
+- **AI 讀連結內容**：新增 `src/lib/fetch-url-context.ts`。Story 有 link 時自動抓網頁/YouTube（YouTube 走 oEmbed 拿標題＋作者，其他抓 HTML 抽純文字、上限 2000 字、timeout 10 秒），抓到的文字注入 refineProseZh 的 prompt 當「連結內容參考」。原本 AI 只看到 URL 字串、不知道連結背後寫什麼
+- **Preview 快取**：每按一次「🪄 AI 撰寫」會先查 `newsletter_compose_cache`，若 30 分鐘內已有對同一組 story_ids 的快取就直接回傳，不會重跑 21 次 Gemini call。Modal 標題顯示「· 取自快取」標示
+- **重新生成按鈕**：Preview modal 左下加「🔄 重新生成」按鈕，明確要 Gemini 重跑時點這顆（傳 `force: true`）
+
 ## v6.7.7 — fix(newsletter): AI 撰寫中文潤稿沒讀到 tone 樣本（2026-05-30）
 
 ### 變更項目

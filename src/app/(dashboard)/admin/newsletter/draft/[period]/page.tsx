@@ -13,6 +13,7 @@ interface AiPreviewData {
   en: { html: string; subject: string; promo: string }
   ja: { html: string; subject: string; promo: string }
   story_count: number
+  from_cache?: boolean
 }
 
 interface Draft {
@@ -126,16 +127,16 @@ function Inner() {
     window.location.href = `/api/newsletter/drafts/export?period=${period}`
   }
 
-  async function aiCompose() {
+  async function aiCompose(force = false) {
     setAiBusy(true)
     try {
       const r = await fetch('/api/newsletter/compose-from-drafts', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ period, action: 'preview' }),
+        body: JSON.stringify({ period, action: 'preview', force }),
       })
       const j = await r.json()
       if (!r.ok) { alert(j.error ?? 'AI 編寫失敗'); return }
-      setAiPreview({ ...j.preview, story_count: j.story_count })
+      setAiPreview({ ...j.preview, story_count: j.story_count, from_cache: !!j.from_cache })
     } finally { setAiBusy(false) }
   }
 
@@ -215,7 +216,7 @@ function Inner() {
             className="flex items-center gap-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-800">
             <Download size={16} /> {t('exportJson')}
           </button>
-          <button onClick={aiCompose} disabled={aiBusy || drafts.length === 0}
+          <button onClick={() => aiCompose(false)} disabled={aiBusy || drafts.length === 0}
             className="flex items-center gap-1 px-3 py-2 text-sm bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed">
             {aiBusy ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />} {t('aiCompose')}
           </button>
@@ -252,17 +253,19 @@ function Inner() {
       {/* AI preview modal */}
       {aiPreview && (
         <AiPreviewModal preview={aiPreview} busy={aiBusy}
-          onClose={() => setAiPreview(null)} onCommit={aiCommit} />
+          onClose={() => setAiPreview(null)} onCommit={aiCommit}
+          onRegenerate={() => aiCompose(true)} />
       )}
     </div>
   )
 }
 
-function AiPreviewModal({ preview, busy, onClose, onCommit }: {
+function AiPreviewModal({ preview, busy, onClose, onCommit, onRegenerate }: {
   preview: AiPreviewData
   busy: boolean
   onClose: () => void
   onCommit: () => void
+  onRegenerate: () => void
 }) {
   const [tab, setTab] = useState<'zh-TW' | 'en' | 'ja'>('zh-TW')
   const current = preview[tab]
@@ -271,7 +274,10 @@ function AiPreviewModal({ preview, busy, onClose, onCommit }: {
       <div onClick={(e) => e.stopPropagation()}
         className="bg-white dark:bg-gray-900 rounded-lg max-w-5xl w-full p-6 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex justify-between items-center mb-3">
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100">🤖 AI 編寫預覽（{preview.story_count} stories）</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+            🤖 AI 編寫預覽（{preview.story_count} stories）
+            {preview.from_cache && <span className="ml-2 text-xs font-normal text-gray-500">· 取自快取（按右下「重新生成」可重跑 AI）</span>}
+          </h3>
           <button onClick={onClose}><X size={18} /></button>
         </div>
         <div className="flex gap-2 mb-3 border-b border-gray-200 dark:border-gray-700">
@@ -290,13 +296,19 @@ function AiPreviewModal({ preview, busy, onClose, onCommit }: {
           <div className="text-xs text-gray-500 mt-3">HTML 預覽</div>
           <iframe srcDoc={current.html} className="w-full h-[55vh] border border-gray-200 dark:border-gray-700 rounded bg-white" />
         </div>
-        <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-          <button onClick={onClose}
-            className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded">取消</button>
-          <button onClick={onCommit} disabled={busy}
-            className="px-4 py-2 text-sm bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50">
-            {busy ? '建立中…' : '建立 3 個 draft campaigns'}
+        <div className="flex justify-between gap-2 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+          <button onClick={onRegenerate} disabled={busy}
+            className="flex items-center gap-1 px-4 py-2 text-sm border border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-300 rounded hover:bg-purple-50 dark:hover:bg-purple-950/30 disabled:opacity-50">
+            {busy ? <Loader2 size={14} className="animate-spin" /> : '🔄'} 重新生成
           </button>
+          <div className="flex gap-2">
+            <button onClick={onClose}
+              className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded">取消</button>
+            <button onClick={onCommit} disabled={busy}
+              className="px-4 py-2 text-sm bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50">
+              {busy ? '建立中…' : '建立 3 個 draft campaigns'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
