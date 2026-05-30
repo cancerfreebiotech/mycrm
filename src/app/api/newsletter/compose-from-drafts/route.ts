@@ -279,11 +279,18 @@ export async function POST(req: NextRequest) {
     story_ids: valid.map((d) => d.id),
     preview: { 'zh-TW': zh, en, ja },
   }
-  await service.from('newsletter_compose_cache').insert({
-    period,
-    created_by: auth.userId,
-    payload: previewPayload,
-  })
+  const { error: cacheInsertErr } = await service
+    .from('newsletter_compose_cache')
+    .insert({
+      period,
+      created_by: auth.userId,
+      payload: previewPayload,
+    })
+  if (cacheInsertErr) {
+    // Don't fail the whole preview — user still sees the result. But surface
+    // the error in logs so silent FK / schema issues don't hide again.
+    console.error('newsletter_compose_cache insert failed:', cacheInsertErr.message)
+  }
 
   return NextResponse.json({
     preview: { 'zh-TW': zh, en, ja },

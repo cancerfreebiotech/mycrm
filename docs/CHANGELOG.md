@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v6.8.0 — fix(newsletter): newsletter_compose_cache FK 又指錯表，preview cache 永遠寫不進去（2026-05-31）
+
+### 變更項目
+- v6.7.9 修了 timestamp，但 commit 仍然 409。根因：`newsletter_compose_cache.created_by` 的 FK **指到 `auth.users(id)`**，但 code 傳的 `auth.userId` 是 `public.users.id`（authorize helper 回傳的）→ 每次 preview INSERT 都 FK violation → cache **永遠是空的** → commit 找不到 cache row → 409
+- 跟 v6.7.1 修的 `newsletter_drafts.created_by_fkey` 一模一樣的 bug（rmer）
+- DB 改 FK 指向 `public.users(id) ON DELETE CASCADE`
+- Code 補 error check：cache INSERT 如果失敗，不再 silent — 會 `console.error` 印到 Vercel log（之後同類 FK / schema 問題不會再藏起來）
+- SQL 紀錄 `supabase/fix_newsletter_compose_cache_created_by_fkey.sql`
+
+### 版本進位
+- v6.7.9 → v6.8.0（PATCH 達兩位數規則）
+
 ## v6.7.9 — fix(newsletter): commit 卡 "No recent preview" — preview cache hit 補 refresh timestamp（2026-05-30）
 
 ### 變更項目
