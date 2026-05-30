@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v6.7.6 — fix(newsletter): AI 撰寫 500 — Gemini model 名拼錯，補上 -preview 後綴（2026-05-30）
+
+### 變更項目
+- `/admin/newsletter/draft/[period]` 按「🪄 AI 撰寫」回 500，前端 `Unexpected end of JSON input` — 因為 server function 在 Gemini call 時 crash 沒寫 JSON response
+- 根因：`src/lib/newsletter-ai.ts:13` 的 `MODEL_REFINE` 預設是 `gemini-3.1-pro`，**但 Google API 沒有這個 model**（只有 `gemini-3.1-pro-preview`）。translate 用的 `gemini-3.1-flash-lite` 是有效的不用改
+- 解：補上 `-preview` 後綴
+- 仍可用 `NEWSLETTER_MODEL_REFINE` env var 在 Vercel 上 override
+
 ## v6.7.5 — fix(newsletter): 草稿頁期數編輯加 Save/Cancel 按鈕、不再失焦就跳（2026-05-22）
 
 ### 變更項目

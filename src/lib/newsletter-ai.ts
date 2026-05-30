@@ -10,7 +10,7 @@ import path from 'node:path'
 
 export type Lang = 'zh-TW' | 'en' | 'ja'
 
-const MODEL_REFINE = process.env.NEWSLETTER_MODEL_REFINE ?? 'gemini-3.1-pro'
+const MODEL_REFINE = process.env.NEWSLETTER_MODEL_REFINE ?? 'gemini-3.1-pro-preview'
 const MODEL_TRANSLATE = process.env.NEWSLETTER_MODEL_TRANSLATE ?? 'gemini-3.1-flash-lite'
 
 function makePortkey(): Portkey {
