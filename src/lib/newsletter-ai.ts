@@ -147,6 +147,26 @@ ${refined.paragraphs_html}
   }
 }
 
+// ── Translate a standalone HTML block (used for per-period highlight) ───────
+export async function translateHtml(html: string, target: 'en' | 'ja'): Promise<string> {
+  if (!html.trim()) return ''
+  const langName = target === 'en' ? 'English' : 'Japanese'
+  const prompt = `Translate the Traditional Chinese HTML block below into ${langName}.
+
+[Rules]
+- Natural prose, NOT literal
+- Preserve HTML structure exactly (same <p>, <strong>, <em>, <ul>, <li>, <br>, <a> tags)
+- No <h1>, <h2>, <img>, code fences, markdown
+${target === 'ja' ? '- Use 敬語 (です/ます)\n' : '- Active voice, professional but warm\n'}
+[Source HTML]
+${html}
+
+[Output]
+Translated HTML only, no JSON wrapper, no explanation, no quotes.`
+  const raw = await generate(MODEL_TRANSLATE, prompt)
+  return stripJsonFence(raw).trim()
+}
+
 // ── Promo text (LINE / Slack / chat share) ──────────────────────────────────
 export async function generatePromoText(
   period: string,

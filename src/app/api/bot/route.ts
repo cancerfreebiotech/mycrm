@@ -2007,16 +2007,29 @@ async function handleText(
     }
     const cur = currentPeriod()
     const nxt = nextPeriod()
+    // Pull custom labels for both periods (if user has renamed sections on the web)
+    const sb = createServiceClient()
+    const { data: metas } = await sb
+      .from('newsletter_period_meta')
+      .select('period, label_last, label_next')
+      .in('period', [cur, nxt])
+    type MetaRow = { period: string; label_last: string | null; label_next: string | null }
+    const labelOf = (period: string, kind: 'last' | 'next'): string => {
+      const row = (metas as MetaRow[] | null)?.find((r) => r.period === period)
+      const custom = kind === 'last' ? row?.label_last : row?.label_next
+      const fallback = kind === 'last' ? m.newsBtnLastMonth : m.newsBtnNextMonth
+      return (custom?.trim()) || fallback
+    }
     await sendMessage(chatId,
       m.newsPromptSection,
       { reply_markup: { inline_keyboard: [
         [
-          { text: `${cur} ${m.newsBtnLastMonth}`, callback_data: `news_sec_last_${cur}` },
-          { text: `${cur} ${m.newsBtnNextMonth}`, callback_data: `news_sec_next_${cur}` },
+          { text: `${cur} ${labelOf(cur, 'last')}`, callback_data: `news_sec_last_${cur}` },
+          { text: `${cur} ${labelOf(cur, 'next')}`, callback_data: `news_sec_next_${cur}` },
         ],
         [
-          { text: `${nxt} ${m.newsBtnLastMonth}`, callback_data: `news_sec_last_${nxt}` },
-          { text: `${nxt} ${m.newsBtnNextMonth}`, callback_data: `news_sec_next_${nxt}` },
+          { text: `${nxt} ${labelOf(nxt, 'last')}`, callback_data: `news_sec_last_${nxt}` },
+          { text: `${nxt} ${labelOf(nxt, 'next')}`, callback_data: `news_sec_next_${nxt}` },
         ],
       ] } }
     )

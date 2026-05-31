@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## v6.8.1 — feat(newsletter): 草稿頁加 highlight + 段落 label 可自訂（2026-05-31）
+
+### 變更項目
+- **新增「📌 本期重點」highlight 區塊**（每期一個、選填）：在 `/admin/newsletter/draft/[period]` 頁面最上方，編輯後會自動出現在電子報最頂部
+  - 寫中文即可，AI 撰寫時會自動翻成英文 / 日文（透過新加的 `translateHtml`）
+- **段落 label 可自訂**：原本固定「上月回顧 / 下月預告」現在點段落標題可以重新命名（例：「五月回顧」「六月重點活動」）。清空則回復預設
+- **Telegram bot `/news` 同步**：4 顆按鈕的文字會反映你自訂的 label（沒設則回退預設）
+- **AI 撰寫採用 meta**：highlight 自動翻譯 + 注入電子報的 `intro_html`；段落 label 套到 3 個語言的最終 HTML
+- **Meta 改了自動清快取**：PATCH period-meta 會 DELETE `newsletter_compose_cache`，下次 preview 會重跑 AI 用新設定
+
+### Schema
+- 新表 `newsletter_period_meta(period PK, highlight_html, label_last, label_next, updated_by, updated_at)`
+- RLS：讀公開、寫需 `newsletter` feature
+- SQL 紀錄 `supabase/newsletter_period_meta.sql`
+
 ## v6.8.0 — fix(newsletter): newsletter_compose_cache FK 又指錯表，preview cache 永遠寫不進去（2026-05-31）
 
 ### 變更項目

@@ -61,6 +61,11 @@ function Inner() {
   const [aiPreview, setAiPreview] = useState<AiPreviewData | null>(null)
   const [editingPeriod, setEditingPeriod] = useState(false)
   const [periodInput, setPeriodInput] = useState(period)
+  const [highlight, setHighlight] = useState<string>('')
+  const [labelLast, setLabelLast] = useState<string>('')
+  const [labelNext, setLabelNext] = useState<string>('')
+  const [highlightExpanded, setHighlightExpanded] = useState(false)
+  const [highlightSaving, setHighlightSaving] = useState(false)
 
   function commitPeriod() {
     const v = periodInput.trim()
@@ -73,13 +78,35 @@ function Inner() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const r = await fetch(`/api/newsletter/drafts?period=${period}`)
-      const j = await r.json()
-      setDrafts(j.drafts ?? [])
+      const [draftsRes, metaRes] = await Promise.all([
+        fetch(`/api/newsletter/drafts?period=${period}`),
+        fetch(`/api/newsletter/period-meta?period=${period}`),
+      ])
+      const draftsJ = await draftsRes.json()
+      setDrafts(draftsJ.drafts ?? [])
+      if (metaRes.ok) {
+        const meta = await metaRes.json()
+        setHighlight(meta.highlight_html ?? '')
+        setLabelLast(meta.label_last ?? '')
+        setLabelNext(meta.label_next ?? '')
+      }
     } finally { setLoading(false) }
   }, [period])
 
   useEffect(() => { if (period) load() }, [period, load])
+
+  async function saveMeta(patch: { highlight_html?: string | null; label_last?: string | null; label_next?: string | null }) {
+    setHighlightSaving(true)
+    try {
+      const r = await fetch('/api/newsletter/period-meta', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period, ...patch }),
+      })
+      if (!r.ok) alert((await r.json()).error ?? '儲存失敗')
+    } finally {
+      setHighlightSaving(false)
+    }
+  }
 
   async function createDraft(section: Section, fields: { title: string; content: string; event_date: string }) {
     const r = await fetch('/api/newsletter/drafts', {
@@ -226,12 +253,33 @@ function Inner() {
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-400" /></div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Column section="last_month" title={t('lastMonthSection')} drafts={lastMonth}
-            onAdd={() => setComposing({ section: 'last_month' })} onEdit={setEditing} onDelete={deleteDraft} />
-          <Column section="next_month" title={t('nextMonthSection')} drafts={nextMonth}
-            onAdd={() => setComposing({ section: 'next_month' })} onEdit={setEditing} onDelete={deleteDraft} />
-        </div>
+        <>
+          {/* Period highlight — optional, rendered at top of every generated newsletter */}
+          <HighlightCard
+            value={highlight}
+            expanded={highlightExpanded}
+            saving={highlightSaving}
+            onToggle={() => setHighlightExpanded((v) => !v)}
+            onChange={setHighlight}
+            onSave={() => saveMeta({ highlight_html: highlight.trim() || null })}
+          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Column section="last_month"
+              label={labelLast || t('lastMonthSection')}
+              defaultLabel={t('lastMonthSection')}
+              labelValue={labelLast}
+              onRename={(v) => { setLabelLast(v); saveMeta({ label_last: v.trim() || null }) }}
+              drafts={lastMonth}
+              onAdd={() => setComposing({ section: 'last_month' })} onEdit={setEditing} onDelete={deleteDraft} />
+            <Column section="next_month"
+              label={labelNext || t('nextMonthSection')}
+              defaultLabel={t('nextMonthSection')}
+              labelValue={labelNext}
+              onRename={(v) => { setLabelNext(v); saveMeta({ label_next: v.trim() || null }) }}
+              drafts={nextMonth}
+              onAdd={() => setComposing({ section: 'next_month' })} onEdit={setEditing} onDelete={deleteDraft} />
+          </div>
+        </>
       )}
 
       {/* Compose new */}
@@ -316,16 +364,101 @@ function AiPreviewModal({ preview, busy, onClose, onCommit, onRegenerate }: {
 }
 
 
-function Column({ section, title, drafts, onAdd, onEdit, onDelete }: {
-  section: Section; title: string; drafts: Draft[];
-  onAdd: () => void; onEdit: (d: Draft) => void; onDelete: (id: string, title: string | null) => void
+function HighlightCard({ value, expanded, saving, onToggle, onChange, onSave }: {
+  value: string
+  expanded: boolean
+  saving: boolean
+  onToggle: () => void
+  onChange: (v: string) => void
+  onSave: () => void
 }) {
+  const hasContent = value.trim().length > 0
+  return (
+    <div className="mb-6 border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 rounded-lg overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left hover:bg-amber-100/50 dark:hover:bg-amber-950/40"
+      >
+        <span className="flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-300">
+          📌 本期重點 highlight
+          {hasContent && <span className="text-xs text-amber-600 dark:text-amber-400">（已設定，會出現在電子報最上方）</span>}
+          {!hasContent && <span className="text-xs text-amber-600/70 dark:text-amber-400/70">（選填）</span>}
+        </span>
+        <span className="text-xs text-amber-600 dark:text-amber-400">{expanded ? '收起 ▲' : '展開 ▼'}</span>
+      </button>
+      {expanded && (
+        <div className="p-4 pt-2 space-y-2">
+          <textarea
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="例：本月公司獲得 XX 大獎，特別感謝大家支持⋯（純文字或 <p><strong> 等基本 HTML）"
+            rows={5}
+            className="w-full px-3 py-2 text-sm border border-amber-300 dark:border-amber-700 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+          />
+          <div className="flex justify-end">
+            <button
+              onClick={onSave}
+              disabled={saving}
+              className="px-3 py-1.5 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded disabled:opacity-50"
+            >
+              {saving ? '儲存中…' : '儲存'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+function Column({ section, label, defaultLabel, labelValue, onRename, drafts, onAdd, onEdit, onDelete }: {
+  section: Section
+  label: string
+  defaultLabel: string
+  labelValue: string
+  onRename: (v: string) => void
+  drafts: Draft[]
+  onAdd: () => void
+  onEdit: (d: Draft) => void
+  onDelete: (id: string, title: string | null) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draftInput, setDraftInput] = useState(labelValue)
+  function commit() {
+    onRename(draftInput.trim())
+    setEditing(false)
+  }
   return (
     <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold text-gray-800 dark:text-gray-200">
-          {section === 'last_month' ? '📜' : '🔮'} {title} <span className="text-sm text-gray-500">({drafts.length})</span>
-        </h2>
+      <div className="flex items-center justify-between mb-3 group">
+        {editing ? (
+          <div className="flex items-center gap-1 flex-1">
+            <span className="text-base">{section === 'last_month' ? '📜' : '🔮'}</span>
+            <input
+              autoFocus
+              value={draftInput}
+              onChange={(e) => setDraftInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); commit() }
+                if (e.key === 'Escape') { setEditing(false); setDraftInput(labelValue) }
+              }}
+              placeholder={defaultLabel}
+              className="flex-1 px-2 py-1 text-sm border border-blue-400 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button onClick={commit} title="儲存" className="p-1 text-green-600 hover:text-green-700"><Check size={14} /></button>
+            <button onClick={() => { setEditing(false); setDraftInput(labelValue) }} title="取消" className="p-1 text-gray-400 hover:text-gray-600"><X size={14} /></button>
+          </div>
+        ) : (
+          <h2
+            onClick={() => { setDraftInput(labelValue); setEditing(true) }}
+            title="點擊重新命名（清空則回復預設）"
+            className="font-semibold text-gray-800 dark:text-gray-200 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 px-2 py-1 rounded -ml-2 inline-flex items-center gap-1"
+          >
+            {section === 'last_month' ? '📜' : '🔮'} {label}
+            <span className="text-sm text-gray-500">({drafts.length})</span>
+            <Pencil size={12} className="text-gray-300 opacity-0 group-hover:opacity-100" />
+          </h2>
+        )}
       </div>
       <div className="space-y-3">
         {drafts.map((d) => (

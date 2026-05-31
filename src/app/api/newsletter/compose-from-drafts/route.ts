@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { hasFeature } from '@/lib/features'
-import { refineProseZh, translateStory, generatePromoText } from '@/lib/newsletter-ai'
+import { refineProseZh, translateStory, generatePromoText, translateHtml } from '@/lib/newsletter-ai'
 import { composeNewsletter, type NewsletterStory } from '@/lib/newsletter-compose'
 import { fetchUrlContext } from '@/lib/fetch-url-context'
 
@@ -161,6 +161,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No drafts have both title and content yet' }, { status: 400 })
   }
 
+  // Load period meta (highlight + custom section labels). Falls back to
+  // defaults below when missing or NULL.
+  const { data: meta } = await service
+    .from('newsletter_period_meta')
+    .select('highlight_html, label_last, label_next')
+    .eq('period', period)
+    .maybeSingle()
+  const highlightZh = meta?.highlight_html?.trim() || ''
+  const customLabelLast = meta?.label_last?.trim() || ''
+  const customLabelNext = meta?.label_next?.trim() || ''
+
   // Check cache: if a fresh preview exists with the exact same story set, reuse it.
   // This avoids re-running Gemini (21+ calls) when user cancels and re-opens.
   // `force: true` bypasses the cache for explicit "regenerate".
@@ -240,7 +251,13 @@ export async function POST(req: NextRequest) {
       image: s.image_url ? { url: s.image_url, alt: s[langKey as 'zh' | 'en' | 'ja'].title } : undefined,
     }))
     const monthLabel = MONTH_LABEL[lang](period)
-    const labels = SECTION_LABELS[lang]
+    const defaults = SECTION_LABELS[lang]
+    // Custom labels (if set on newsletter_period_meta) apply to ALL languages —
+    // we only store one label per section, not 3-language translations.
+    const labels = {
+      last: customLabelLast || defaults.last,
+      next: customLabelNext || defaults.next,
+    }
     const promoTitles = trilingual.slice(0, 3).map((s) => s[langKey as 'zh' | 'en' | 'ja'].title)
     const promo = await generatePromoText(period, promoTitles, lang)
     const subject = lang === 'zh-TW'
@@ -254,7 +271,7 @@ export async function POST(req: NextRequest) {
       subject,
       month_label: monthLabel,
       upcoming_title: labels.next,
-      intro_html: '',
+      intro_html: highlightByLang[lang] || '',
       upcoming_stories: upcoming,
       recap_title: labels.last,
       recap_stories: recap,
@@ -265,6 +282,17 @@ export async function POST(req: NextRequest) {
       website_url: 'https://www.cancerfree.io',
     })
     return { html, subject, promo }
+  }
+
+  // Translate the highlight block once for each non-zh language (only if set)
+  const [highlightEn, highlightJa] = await Promise.all([
+    highlightZh ? translateHtml(highlightZh, 'en') : Promise.resolve(''),
+    highlightZh ? translateHtml(highlightZh, 'ja') : Promise.resolve(''),
+  ])
+  const highlightByLang: Record<Lang, string> = {
+    'zh-TW': highlightZh,
+    en: highlightEn,
+    ja: highlightJa,
   }
 
   const [zh, en, ja] = await Promise.all([
