@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json() as {
     period: string
-    section: 'last_month' | 'next_month'
+    section: 'last_month' | 'next_month' | 'highlight'
     title?: string
     content?: string
     event_date?: string
@@ -63,8 +63,8 @@ export async function POST(req: NextRequest) {
   if (!body.period || !/^\d{4}-\d{2}$/.test(body.period)) {
     return NextResponse.json({ error: 'period required (YYYY-MM)' }, { status: 400 })
   }
-  if (body.section !== 'last_month' && body.section !== 'next_month') {
-    return NextResponse.json({ error: "section must be 'last_month' or 'next_month'" }, { status: 400 })
+  if (body.section !== 'last_month' && body.section !== 'next_month' && body.section !== 'highlight') {
+    return NextResponse.json({ error: "section must be 'last_month', 'next_month' or 'highlight'" }, { status: 400 })
   }
 
   const service = createServiceClient()

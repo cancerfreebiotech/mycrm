@@ -6,9 +6,12 @@ import { hasFeature } from '@/lib/features'
 //   Returns the meta row for the period, or default-shaped object if none.
 //
 // PATCH /api/newsletter/period-meta
-//   Body: { period: 'YYYY-MM', highlight_html?: string|null, label_last?: string|null, label_next?: string|null }
+//   Body: { period: 'YYYY-MM', label_last?: string|null, label_next?: string|null }
 //   Upserts the row + invalidates newsletter_compose_cache for that period
 //   (so the next preview re-runs compose with the new meta).
+//
+// Note: highlight is no longer stored here. It's a newsletter_drafts row with
+// section='highlight' (v6.8.2+).
 
 async function authorize() {
   const sb = await createClient()
@@ -33,12 +36,11 @@ export async function GET(req: NextRequest) {
   const service = createServiceClient()
   const { data } = await service
     .from('newsletter_period_meta')
-    .select('period, highlight_html, label_last, label_next, updated_at')
+    .select('period, label_last, label_next, updated_at')
     .eq('period', period)
     .maybeSingle()
   return NextResponse.json({
     period,
-    highlight_html: data?.highlight_html ?? null,
     label_last: data?.label_last ?? null,
     label_next: data?.label_next ?? null,
     updated_at: data?.updated_at ?? null,
@@ -51,7 +53,6 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json().catch(() => ({})) as {
     period?: string
-    highlight_html?: string | null
     label_last?: string | null
     label_next?: string | null
   }
@@ -65,7 +66,6 @@ export async function PATCH(req: NextRequest) {
   // Build patch with only the fields the caller actually sent. undefined means
   // "don't touch"; null means "clear back to default".
   const patch: Record<string, unknown> = { period, updated_by: auth.userId, updated_at: new Date().toISOString() }
-  if (body.highlight_html !== undefined) patch.highlight_html = body.highlight_html
   if (body.label_last !== undefined) patch.label_last = body.label_last
   if (body.label_next !== undefined) patch.label_next = body.label_next
 
@@ -77,7 +77,7 @@ export async function PATCH(req: NextRequest) {
 
   const { data } = await service
     .from('newsletter_period_meta')
-    .select('period, highlight_html, label_last, label_next, updated_at')
+    .select('period, label_last, label_next, updated_at')
     .eq('period', period)
     .single()
   return NextResponse.json({ ok: true, meta: data })

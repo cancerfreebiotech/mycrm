@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { hasFeature } from '@/lib/features'
-import { refineProseZh, translateStory, generatePromoText, translateHtml } from '@/lib/newsletter-ai'
+import { refineProseZh, translateStory, generatePromoText } from '@/lib/newsletter-ai'
 import { composeNewsletter, type NewsletterStory } from '@/lib/newsletter-compose'
 import { fetchUrlContext } from '@/lib/fetch-url-context'
 
@@ -63,9 +63,11 @@ async function authorize() {
   return { userId: profile.id }
 }
 
+type DraftSection = 'last_month' | 'next_month' | 'highlight'
+
 interface DraftRow {
   id: string
-  section: 'last_month' | 'next_month'
+  section: DraftSection
   title: string | null
   content: string | null
   event_date: string | null
@@ -76,12 +78,28 @@ interface DraftRow {
 
 interface StoryTrilingual {
   draftId: string
-  section: 'last_month' | 'next_month'
+  section: DraftSection
   zh: { title: string; paragraphs_html: string }
   en: { title: string; paragraphs_html: string }
   ja: { title: string; paragraphs_html: string }
   image_url: string | null
   link_html: string | null
+}
+
+// Render a highlight story as standalone HTML (no number prefix, with optional
+// image). Inlined here so we don't have to expand the public composeNewsletter API.
+function renderHighlightHtml(story: StoryTrilingual, langKey: 'zh' | 'en' | 'ja'): string {
+  const s = story[langKey]
+  const title = s.title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const imgHtml = story.image_url
+    ? `<div style="padding:12px 0;text-align:center"><img src="${story.image_url.replace(/"/g, '&quot;')}" alt="${title}" style="max-width:100%;border:none;display:inline-block"/></div>`
+    : ''
+  return `<div style="margin:0 0 16px 0">
+    <p style="margin:0 0 8px 0;font-size:18px;color:#0D9488"><strong>📌 ${title}</strong></p>
+    ${s.paragraphs_html}
+    ${story.link_html ?? ''}
+    ${imgHtml}
+  </div>`
 }
 
 function pickFirstLink(links: DraftRow['links']): string | null {
@@ -161,14 +179,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No drafts have both title and content yet' }, { status: 400 })
   }
 
-  // Load period meta (highlight + custom section labels). Falls back to
-  // defaults below when missing or NULL.
+  // Load period meta (custom section labels). Falls back to defaults below.
   const { data: meta } = await service
     .from('newsletter_period_meta')
-    .select('highlight_html, label_last, label_next')
+    .select('label_last, label_next')
     .eq('period', period)
     .maybeSingle()
-  const highlightZh = meta?.highlight_html?.trim() || ''
   const customLabelLast = meta?.label_last?.trim() || ''
   const customLabelNext = meta?.label_next?.trim() || ''
 
@@ -235,6 +251,10 @@ export async function POST(req: NextRequest) {
     })
   )
 
+  // Split out the (at most one) highlight story — it renders at the very top
+  // of the newsletter, not in the upcoming/recap columns.
+  const highlightStory = trilingual.find((s) => s.section === 'highlight') ?? null
+
   // Build per-lang inputs to composeNewsletter
   async function buildOneLang(lang: Lang): Promise<{ html: string; subject: string; promo: string }> {
     const langKey = lang === 'zh-TW' ? 'zh' : lang
@@ -271,7 +291,7 @@ export async function POST(req: NextRequest) {
       subject,
       month_label: monthLabel,
       upcoming_title: labels.next,
-      intro_html: highlightByLang[lang] || '',
+      intro_html: highlightStory ? renderHighlightHtml(highlightStory, langKey as 'zh' | 'en' | 'ja') : '',
       upcoming_stories: upcoming,
       recap_title: labels.last,
       recap_stories: recap,
@@ -282,17 +302,6 @@ export async function POST(req: NextRequest) {
       website_url: 'https://www.cancerfree.io',
     })
     return { html, subject, promo }
-  }
-
-  // Translate the highlight block once for each non-zh language (only if set)
-  const [highlightEn, highlightJa] = await Promise.all([
-    highlightZh ? translateHtml(highlightZh, 'en') : Promise.resolve(''),
-    highlightZh ? translateHtml(highlightZh, 'ja') : Promise.resolve(''),
-  ])
-  const highlightByLang: Record<Lang, string> = {
-    'zh-TW': highlightZh,
-    en: highlightEn,
-    ja: highlightJa,
   }
 
   const [zh, en, ja] = await Promise.all([

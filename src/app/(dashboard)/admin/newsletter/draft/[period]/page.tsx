@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl'
 import { PermissionGate } from '@/components/PermissionGate'
 import { Loader2, Plus, Trash2, X, Calendar, ChevronLeft, ChevronRight, Pencil, Download, Wand2, Check } from 'lucide-react'
 
-type Section = 'last_month' | 'next_month'
+type Section = 'last_month' | 'next_month' | 'highlight'
 
 interface AiPreviewData {
   'zh-TW': { html: string; subject: string; promo: string }
@@ -61,11 +61,8 @@ function Inner() {
   const [aiPreview, setAiPreview] = useState<AiPreviewData | null>(null)
   const [editingPeriod, setEditingPeriod] = useState(false)
   const [periodInput, setPeriodInput] = useState(period)
-  const [highlight, setHighlight] = useState<string>('')
   const [labelLast, setLabelLast] = useState<string>('')
   const [labelNext, setLabelNext] = useState<string>('')
-  const [highlightExpanded, setHighlightExpanded] = useState(false)
-  const [highlightSaving, setHighlightSaving] = useState(false)
 
   function commitPeriod() {
     const v = periodInput.trim()
@@ -86,7 +83,6 @@ function Inner() {
       setDrafts(draftsJ.drafts ?? [])
       if (metaRes.ok) {
         const meta = await metaRes.json()
-        setHighlight(meta.highlight_html ?? '')
         setLabelLast(meta.label_last ?? '')
         setLabelNext(meta.label_next ?? '')
       }
@@ -95,17 +91,12 @@ function Inner() {
 
   useEffect(() => { if (period) load() }, [period, load])
 
-  async function saveMeta(patch: { highlight_html?: string | null; label_last?: string | null; label_next?: string | null }) {
-    setHighlightSaving(true)
-    try {
-      const r = await fetch('/api/newsletter/period-meta', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ period, ...patch }),
-      })
-      if (!r.ok) alert((await r.json()).error ?? '儲存失敗')
-    } finally {
-      setHighlightSaving(false)
-    }
+  async function saveMeta(patch: { label_last?: string | null; label_next?: string | null }) {
+    const r = await fetch('/api/newsletter/period-meta', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ period, ...patch }),
+    })
+    if (!r.ok) alert((await r.json()).error ?? '儲存失敗')
   }
 
   async function createDraft(section: Section, fields: { title: string; content: string; event_date: string }) {
@@ -182,6 +173,7 @@ function Inner() {
     } finally { setAiBusy(false) }
   }
 
+  const highlightDraft = drafts.find((d) => d.section === 'highlight') ?? null
   const lastMonth = drafts.filter((d) => d.section === 'last_month')
   const nextMonth = drafts.filter((d) => d.section === 'next_month')
 
@@ -254,14 +246,12 @@ function Inner() {
         <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-400" /></div>
       ) : (
         <>
-          {/* Period highlight — optional, rendered at top of every generated newsletter */}
-          <HighlightCard
-            value={highlight}
-            expanded={highlightExpanded}
-            saving={highlightSaving}
-            onToggle={() => setHighlightExpanded((v) => !v)}
-            onChange={setHighlight}
-            onSave={() => saveMeta({ highlight_html: highlight.trim() || null })}
+          {/* Period highlight — optional story rendered at top of every generated newsletter */}
+          <HighlightSection
+            draft={highlightDraft}
+            onAdd={() => setComposing({ section: 'highlight' })}
+            onEdit={() => highlightDraft && setEditing(highlightDraft)}
+            onDelete={() => highlightDraft && deleteDraft(highlightDraft.id, highlightDraft.title)}
           />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Column section="last_month"
@@ -364,48 +354,61 @@ function AiPreviewModal({ preview, busy, onClose, onCommit, onRegenerate }: {
 }
 
 
-function HighlightCard({ value, expanded, saving, onToggle, onChange, onSave }: {
-  value: string
-  expanded: boolean
-  saving: boolean
-  onToggle: () => void
-  onChange: (v: string) => void
-  onSave: () => void
+function HighlightSection({ draft, onAdd, onEdit, onDelete }: {
+  draft: Draft | null
+  onAdd: () => void
+  onEdit: () => void
+  onDelete: () => void
 }) {
-  const hasContent = value.trim().length > 0
-  return (
-    <div className="mb-6 border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 rounded-lg overflow-hidden">
+  if (!draft) {
+    return (
       <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left hover:bg-amber-100/50 dark:hover:bg-amber-950/40"
+        onClick={onAdd}
+        className="w-full mb-6 flex items-center justify-center gap-2 p-4 border-2 border-dashed border-amber-300 dark:border-amber-800 rounded-lg text-sm text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors"
       >
-        <span className="flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-300">
-          📌 本期重點 highlight
-          {hasContent && <span className="text-xs text-amber-600 dark:text-amber-400">（已設定，會出現在電子報最上方）</span>}
-          {!hasContent && <span className="text-xs text-amber-600/70 dark:text-amber-400/70">（選填）</span>}
-        </span>
-        <span className="text-xs text-amber-600 dark:text-amber-400">{expanded ? '收起 ▲' : '展開 ▼'}</span>
+        <Plus size={18} /> 📌 新增本期重點（會出現在電子報最上方，跟 story 一樣可放標題 / 圖片 / 連結 / 內文）
       </button>
-      {expanded && (
-        <div className="p-4 pt-2 space-y-2">
-          <textarea
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder="例：本月公司獲得 XX 大獎，特別感謝大家支持⋯（純文字或 <p><strong> 等基本 HTML）"
-            rows={5}
-            className="w-full px-3 py-2 text-sm border border-amber-300 dark:border-amber-700 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
-          <div className="flex justify-end">
-            <button
-              onClick={onSave}
-              disabled={saving}
-              className="px-3 py-1.5 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded disabled:opacity-50"
-            >
-              {saving ? '儲存中…' : '儲存'}
-            </button>
-          </div>
+    )
+  }
+  return (
+    <div className="mb-6 bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-800 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-amber-800 dark:text-amber-300 text-sm">
+          📌 本期重點 highlight
+          <span className="ml-2 text-xs font-normal text-amber-600 dark:text-amber-400">（出現在電子報最上方）</span>
+        </h2>
+        <div className="flex items-center gap-1">
+          <button onClick={onEdit} title="編輯" className="p-1 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/40 rounded">
+            <Pencil size={14} />
+          </button>
+          <button onClick={onDelete} title="刪除" className="p-1 text-amber-700 dark:text-amber-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-amber-100 dark:hover:bg-amber-950/40 rounded">
+            <Trash2 size={14} />
+          </button>
         </div>
-      )}
+      </div>
+      <div onClick={onEdit} className="cursor-pointer bg-white dark:bg-gray-800 rounded p-3 border border-amber-100 dark:border-amber-900 hover:border-amber-400 dark:hover:border-amber-700">
+        <div className="font-medium text-gray-900 dark:text-gray-100 mb-1">
+          {draft.title ?? <span className="text-gray-400">(無標題)</span>}
+        </div>
+        {draft.content && (
+          <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-3 whitespace-pre-wrap">{draft.content}</p>
+        )}
+        <div className="flex items-center gap-3 mt-2">
+          {draft.photo_urls.length > 0 && (
+            <div className="flex gap-1">
+              {draft.photo_urls.slice(0, 3).map((u) => (
+                <img key={u} src={u} alt="" className="w-12 h-12 object-cover rounded" />
+              ))}
+              {draft.photo_urls.length > 3 && (
+                <div className="w-12 h-12 rounded bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs">+{draft.photo_urls.length - 3}</div>
+              )}
+            </div>
+          )}
+          {draft.links.length > 0 && (
+            <div className="text-xs text-blue-600 dark:text-blue-400 truncate">🔗 {draft.links[0].label ?? draft.links[0].url}</div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -527,7 +530,7 @@ function ComposeModal({ section, period, onCancel, onSubmit }: {
         className="bg-white dark:bg-gray-900 rounded-lg max-w-2xl w-full p-6">
         <div className="flex justify-between items-center mb-4">
           <h3 className="font-semibold text-gray-900 dark:text-gray-100">
-            新增 Story · {period} · {section === 'last_month' ? '上月回顧' : '下月預告'}
+            新增 Story · {period} · {section === 'last_month' ? '上月回顧' : section === 'next_month' ? '下月預告' : '📌 本期重點'}
           </h3>
           <button onClick={onCancel}><X size={18} /></button>
         </div>
@@ -611,6 +614,7 @@ function EditModal({ draft, period: _period, onClose, onSave, onUploadPhoto, onR
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
                 <option value="last_month">📜 上月回顧</option>
                 <option value="next_month">🔮 下月預告</option>
+                <option value="highlight">📌 本期重點</option>
               </select>
             </div>
             <div>

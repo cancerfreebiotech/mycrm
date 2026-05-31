@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## v6.8.2 — feat(newsletter): highlight 改成完整 story 結構（標題 / 圖 / 連結 / 內文）（2026-05-31）
+
+### 變更項目
+- v6.8.1 的 highlight 是單一 textarea（純文字 / HTML）。改成跟一般 story 一樣的結構：標題 + 內文 + 圖片 + 連結，仍只有一個 per period
+- 復用既有 ComposeModal / EditModal / 照片上傳 — UI 跟現有 story 編輯一致
+- AI 撰寫時自動跑 refine + 翻譯 pipeline（不再需要單獨的 translateHtml，已移除）
+- 在電子報最頂部用 `📌 {標題}` 的形式渲染（不帶 story 編號，跟下面 1/2/3 區隔）
+
+### Schema
+- `newsletter_drafts.section` CHECK 加入 `'highlight'`
+- 新 partial unique index：每個 period 至多 1 個 highlight draft（不含 deleted）
+- 拿掉 `newsletter_period_meta.highlight_html` 欄位（v6.8.1 加的、實際沒人用就改架構了）
+- SQL 紀錄 `supabase/newsletter_drafts_add_highlight_section.sql`
+
 ## v6.8.1 — feat(newsletter): 草稿頁加 highlight + 段落 label 可自訂（2026-05-31）
 
 ### 變更項目
