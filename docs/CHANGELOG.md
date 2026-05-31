@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v6.8.3 — fix(newsletter): highlight 在預覽中跑到「下月預告」section 裡（2026-05-31）
+
+### 變更項目
+- v6.8.2 把 highlight 渲染進 `{{intro_html}}` 但 3 個 template skeleton 把 `{{intro_html}}` 放在 `{{upcoming_title}}` **後面**，所以視覺上 highlight 變成「下月預告」的開頭內容
+- 修：3 個 template (`skeleton-zh-TW.html` / `skeleton-en.html` / `skeleton-ja.html`) 把 intro_html 移到 upcoming_title **上方**（在 header 分隔線後）
+- 結果：highlight 正確出現在電子報最頂部、跟兩個段落 (上月 / 下月) 分開
+
 ## v6.8.2 — feat(newsletter): highlight 改成完整 story 結構（標題 / 圖 / 連結 / 內文）（2026-05-31）
 
 ### 變更項目

@@ -43,17 +43,17 @@
 
             <div style="padding:16px 0"><hr style="width:100%;border:none;border-top:1px solid #CCCCCC;margin:0"/></div>
 
-            <!-- ==================== INTRO (本月摘要) ==================== -->
+            <!-- ==================== HIGHLIGHT（本期重點，optional，最頂部） ==================== -->
+            <div style="font-weight:normal;padding:0 24px 16px 24px">
+              {{intro_html}}
+            </div>
+
+            <!-- ==================== UPCOMING SECTIONS（本月預告） ==================== -->
             <div style="font-size:16px;padding:16px 24px 16px 24px">
               <h2 style="font-size:1.25rem;font-weight:bold;padding-left:12px;border-left:7px solid #0D9488;line-height:1.4;margin:24px 0">
                 {{upcoming_title}}
               </h2>
             </div>
-            <div style="font-weight:normal;padding:16px 24px 16px 24px">
-              {{intro_html}}
-            </div>
-
-            <!-- ==================== UPCOMING SECTIONS（本月預告） ==================== -->
             {{upcoming_blocks}}
 
             <!-- ==================== DIVIDER ==================== -->
