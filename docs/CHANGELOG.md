@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v6.8.4 — fix(newsletter): logo 搬到 Supabase Storage（修「匯出圖片」logo 不見）（2026-05-31）
+
+### 變更項目
+- 之前 logo 用 `https://listmonk.avatarmedicine.xyz/uploads/logo-v3.0-(1).png`，listmonk **沒送 CORS headers** → 在 `/admin/newsletter/quick-send` 按「匯出圖片」時，html2canvas 因為 cross-origin 被擋，logo 不會畫進 canvas，匯出的 jpg 左上角空白
+- 解：把 logo 搬到 Supabase Storage 的 `newsletter-assets/branding/cancerfree-logo.png`（同 bucket、有 `Access-Control-Allow-Origin: *`）
+- `compose-from-drafts/route.ts` 預設 `logo_url` 改成新 URL；可用 `NEWSLETTER_LOGO_URL` env var override
+- 既有 3 個 6 月 campaign 的 logo URL 已直接在 DB 替換掉，立即生效
+
 ## v6.8.3 — fix(newsletter): highlight 在預覽中跑到「下月預告」section 裡（2026-05-31）
 
 ### 變更項目

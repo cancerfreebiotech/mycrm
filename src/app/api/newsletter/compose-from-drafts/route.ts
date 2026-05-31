@@ -295,7 +295,7 @@ export async function POST(req: NextRequest) {
       upcoming_stories: upcoming,
       recap_title: labels.last,
       recap_stories: recap,
-      logo_url: process.env.NEWSLETTER_LOGO_URL ?? 'https://listmonk.avatarmedicine.xyz/uploads/logo-v3.0-(1).png',
+      logo_url: process.env.NEWSLETTER_LOGO_URL ?? 'https://gaxjgcztzfxokesiraai.supabase.co/storage/v1/object/public/newsletter-assets/branding/cancerfree-logo.png',
       substack_url: '',
       facebook_url: 'https://www.facebook.com/cancerfreebio',
       linkedin_url: 'https://www.linkedin.com/company/cancerfree-biotech',
