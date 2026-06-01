@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Activity, Loader2, RefreshCw, CheckCircle2, XCircle } from 'lucide-react'
 
@@ -14,12 +14,26 @@ interface AgentAction {
   error_message: string | null
   ip_hash: string | null
   created_at: string
+  token_id: string | null
+  acting_as: string | null
+  token: { name: string } | null
+  actor: { display_name: string | null; email: string } | null
 }
 
 const PAGE_SIZE = 100
 
 export default function McpActivityPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-400" /></div>}>
+      <McpActivityInner />
+    </Suspense>
+  )
+}
+
+function McpActivityInner() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const tokenIdParam = searchParams.get('token_id')
   const supabase = createBrowserSupabaseClient()
   const [rows, setRows] = useState<AgentAction[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,12 +56,14 @@ export default function McpActivityPage() {
 
   const load = async () => {
     setLoading(true)
-    const { data } = await supabase
+    let q = supabase
       .from('agent_actions')
-      .select('id, tool_name, arguments, result_summary, succeeded, error_message, ip_hash, created_at')
+      .select('id, tool_name, arguments, result_summary, succeeded, error_message, ip_hash, created_at, token_id, acting_as, token:token_id(name), actor:acting_as(display_name, email)')
       .order('created_at', { ascending: false })
       .limit(PAGE_SIZE)
-    setRows((data ?? []) as AgentAction[])
+    if (tokenIdParam) q = q.eq('token_id', tokenIdParam)
+    const { data } = await q
+    setRows((data ?? []) as unknown as AgentAction[])
     setLoading(false)
   }
 
@@ -143,6 +159,8 @@ export default function McpActivityPage() {
                 <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">時間</th>
                 <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400">工具</th>
                 <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400">狀態</th>
+                <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400 hidden lg:table-cell">Token</th>
+                <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400 hidden lg:table-cell">身份</th>
                 <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400 hidden md:table-cell">IP hash</th>
                 <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400">參數 / 錯誤</th>
               </tr>
@@ -163,6 +181,8 @@ export default function McpActivityPage() {
                         <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400"><XCircle size={14} /> fail</span>
                       )}
                     </td>
+                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400 text-xs hidden lg:table-cell">{r.token?.name ?? (r.token_id ? '—' : 'env (legacy)')}</td>
+                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400 text-xs hidden lg:table-cell">{r.actor?.display_name || r.actor?.email || '—'}</td>
                     <td className="px-3 py-2 text-gray-400 dark:text-gray-500 text-xs font-mono hidden md:table-cell">{r.ip_hash ?? '—'}</td>
                     <td className="px-3 py-2 text-xs">
                       <button

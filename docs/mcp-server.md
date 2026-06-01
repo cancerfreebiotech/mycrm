@@ -4,25 +4,27 @@ mycrm exposes a [Model Context Protocol](https://modelcontextprotocol.io/) endpo
 at `POST https://crm.cancerfree.io/api/mcp` so external Claude agents can query
 the CRM (and, in future versions, update it).
 
+> **v2 (v7.0.0)**: tokens are now issued per-agent from `/admin/mcp-tokens`
+> (super_admin only) with scopes, expiry, and an assignee — not a single env
+> var. The old `MCP_AGENT_TOKEN` env var still works as a **read-only**
+> fallback. Write tools require a v2 token + an `X-Acting-User` header.
+
 ## Setup
 
-### 1. Generate a token
+### 1. Issue a token
 
-```bash
-openssl rand -hex 32
-```
+Go to **`/admin/mcp-tokens`** → 發 Token. Pick:
+- Name + 用途說明
+- 發給誰用 (assignee)
+- Scopes (read/write per area)
+- Expiry (default 永久)
 
-### 2. Set it in Vercel
+The plaintext token (`mcp_…`) is shown **once** — copy it immediately.
 
-```bash
-vercel env add MCP_AGENT_TOKEN production
-# paste the token from step 1
-vercel deploy --prod   # or wait for next deploy
-```
+(Legacy fallback for read-only: set `MCP_AGENT_TOKEN` in Vercel env. Not
+recommended for new agents — use a real scoped token.)
 
-Keep this token secret — anyone who has it can read all your CRM data.
-
-### 3. Connect a Claude Code agent
+### 2. Connect a Claude Code agent
 
 Edit `~/.claude/settings.json` (or project-level `.mcp.json`):
 
@@ -33,14 +35,19 @@ Edit `~/.claude/settings.json` (or project-level `.mcp.json`):
       "type": "http",
       "url": "https://crm.cancerfree.io/api/mcp",
       "headers": {
-        "Authorization": "Bearer <YOUR_TOKEN_FROM_STEP_1>"
+        "Authorization": "Bearer mcp_xxxxx",
+        "X-Acting-User": "you@cancerfree.io"
       }
     }
   }
 }
 ```
 
-Restart Claude Code. The agent should see 5 new tools under the `mycrm` prefix.
+`X-Acting-User` must be a known mycrm user email — it's who writes get
+attributed to (`created_by` + `via_mcp=true`). Required for write tools,
+optional for read-only.
+
+Restart Claude Code. The agent sees only the tools its token has scope for.
 
 ### 4. Connect from raw curl (testing)
 
@@ -60,24 +67,37 @@ curl -s https://crm.cancerfree.io/api/mcp \
   -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_contacts","arguments":{"query":"chen","limit":5}},"id":2}'
 ```
 
-## Tools (v1 — read-only)
+## Tools
 
-| Tool | Description |
-|------|-------------|
-| `search_contacts(query, limit?)` | Substring search across name (zh/en/local) + email + company. Excludes soft-deleted. Max 100. |
-| `get_contact(id)` | Full contact details + tags + 5 most recent interaction logs. |
-| `list_newsletter_lists()` | All newsletter lists with member counts. |
-| `search_subscribers_in_list(list_id, query?, limit?)` | Subscribers in a list, optionally filtered by substring. Max 500. |
-| `list_tags()` | All CRM tags + email-blacklist flag. |
+### Read (require read scopes)
 
-Write tools (`update_contact`, `add_note`, `add_to_newsletter_list`) are
-planned for v2 — not in v1 so the surface stays safe to expose.
+| Tool | Scope | Description |
+|------|-------|-------------|
+| `search_contacts(query, limit?)` | `read:contacts` | Substring search across name (zh/en/local) + email + company. Excludes soft-deleted. Max 100. |
+| `get_contact(id)` | `read:contacts` | Full contact details + tags + 5 most recent interaction logs. |
+| `list_newsletter_lists()` | `read:newsletter` | All newsletter lists with member counts. |
+| `search_subscribers_in_list(list_id, query?, limit?)` | `read:newsletter` | Subscribers in a list, optionally filtered. Max 500. |
+| `list_tags()` | `read:tags` | All CRM tags + email-blacklist flag. |
 
-## Auth model
+### Write (require write scopes + `X-Acting-User`)
 
-- Single shared token via `MCP_AGENT_TOKEN` env var. One token = one agent.
-- All requests must include `Authorization: Bearer <token>`.
-- Requests without / with wrong token get 401.
+| Tool | Scope | Description |
+|------|-------|-------------|
+| `update_contact(id, patch)` | `write:contacts` | Update whitelisted contact fields. Rejects email/email_status/opt_out/deletion/system fields. Stamps last_updated_by + via_mcp. |
+| `add_contact_note(contact_id, body, meeting_date?)` | `write:notes` | Add a note (interaction_logs type=note). |
+| `add_to_newsletter_list(list_id, email, first_name?, last_name?)` | `write:newsletter` | Find-or-create subscriber + attach to list. |
+| `tag_contact(contact_id, tag_id, action)` | `write:newsletter` | Add/remove a tag on a contact. |
+
+`tools/list` only returns the tools the calling token has scope for.
+
+## Auth model (v2)
+
+- **Per-agent tokens** in `agent_tokens` (issued from `/admin/mcp-tokens`). Token compared by sha256 hash; checks not-disabled + not-expired.
+- **Scopes**: token only runs tools whose required scope it holds.
+- **`X-Acting-User` header**: resolves to a `public.users` row. Required for write tools (becomes `created_by`); optional for reads.
+- **Legacy fallback**: `MCP_AGENT_TOKEN` env var → read-only scopes, no acting user, no write.
+- **Rate limit**: 120 requests/min per token.
+- Missing/invalid token → 401; missing scope → error; write without acting user → error.
 
 ## Audit log
 
