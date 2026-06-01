@@ -23,9 +23,14 @@ MCP 從「單一共享 token、只能讀」升級成「每個 agent 一把 token
 ### 版本進位
 - v6.9.1 → v7.0.0（新 surface `/admin/mcp-tokens` 屬 MINOR，但 6.9 進 MINOR 會變兩位數 → 依規則帶動 MAJOR 歸零）
 
+### 安全強化（多 agent adversarial review 後修補）
+- **X-Acting-User 預設綁 assigned_to**：防止 token 把寫入偽造掛在他人（含 super_admin）名下；共用 bot 要明確開 `allow_any_actor`
+- env token 比較改 timing-safe、`search_contacts` escape 逗號防 PostgREST filter 注入、email regex 收緊、`update_contact` patch 加大小限制（防 DoS）、`add_to_newsletter_list`/`tag_contact` 補 row-level 歸屬
+- 兩個 race condition（rate-limit TOCTOU、停用後 in-flight）延 v2.1，正解需 atomic store
+
 ### 部署需要的動作
 - v1 的 `MCP_AGENT_TOKEN` env 可留可不留（只影響 read fallback）
-- 實際用：進 `/admin/mcp-tokens` 發一把 token → agent 帶 `Authorization: Bearer <token>` + 寫入時加 `X-Acting-User: <email>`
+- 實際用：進 `/admin/mcp-tokens` 發一把 token → agent 帶 `Authorization: Bearer <token>` + 寫入時加 `X-Acting-User: <email>`（預設必須等於 assignee）
 
 ## v6.9.1 — feat(mcp): admin 後台「MCP 活動紀錄」viewer（2026-06-01）
 

@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
     assigned_to?: string
     scopes?: string[]
     expires_in?: '24h' | '30d' | '1y' | 'never'
+    allow_any_actor?: boolean
   }
   const name = body.name?.trim()
   if (!name) return NextResponse.json({ error: 'name required' }, { status: 400 })
@@ -71,6 +72,7 @@ export async function POST(req: NextRequest) {
       scopes,
       created_by: admin.id,
       expires_at,
+      allow_any_actor: !!body.allow_any_actor,
     })
     .select('id, name, prefix, scopes, expires_at')
     .single()

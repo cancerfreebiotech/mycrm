@@ -46,3 +46,14 @@ ALTER TABLE public.agent_actions ADD COLUMN IF NOT EXISTS acting_as UUID REFEREN
 
 COMMENT ON TABLE public.agent_tokens IS
 'MCP v2 per-agent tokens. super_admin issues. token_hash = sha256(plaintext). scopes independent of assigned_to permissions.';
+
+-- ── Security review hardening (v7.0.0, 2026-06-01) ──────────────────────────
+-- #1 (critical): bind X-Acting-User to assigned_to by default. allow_any_actor
+--    opts a token into shared-bot mode where it may act as any user.
+ALTER TABLE public.agent_tokens ADD COLUMN IF NOT EXISTS allow_any_actor BOOLEAN NOT NULL DEFAULT false;
+
+-- #2 (high): row-level attribution for the two write tools whose target tables
+--    previously stored only via_mcp (no created_by).
+ALTER TABLE public.contact_tags                ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES public.users(id) ON DELETE SET NULL;
+ALTER TABLE public.newsletter_subscriber_lists ADD COLUMN IF NOT EXISTS added_by   UUID REFERENCES public.users(id) ON DELETE SET NULL;
+ALTER TABLE public.newsletter_subscribers      ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES public.users(id) ON DELETE SET NULL;

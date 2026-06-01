@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
-import { createHash } from 'node:crypto'
+import { createHash, timingSafeEqual } from 'node:crypto'
 
 // Model Context Protocol (MCP) server for mycrm — v2.
 // JSON-RPC 2.0 over HTTP POST.
@@ -42,7 +42,25 @@ const CONTACT_WRITABLE_FIELDS = new Set([
   'met_at', 'met_date', 'referred_by', 'notes', 'importance', 'language', 'hospital',
 ])
 
-const EMAIL_RX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
+// Tighter than the loose `.+@.+\..+` — rejects consecutive dots and
+// leading/trailing hyphens in the domain (security review v7.0.0).
+const EMAIL_RX = /^[A-Za-z0-9](?:[A-Za-z0-9._%+-]*[A-Za-z0-9])?@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/
+function isValidEmail(e: string): boolean {
+  if (e.length > 254) return false
+  if (e.includes('..')) return false
+  return EMAIL_RX.test(e)
+}
+
+// Limits for update_contact patch (DoS hardening, security review v7.0.0)
+const MAX_PATCH_FIELDS = 50
+const MAX_FIELD_LEN = 20_000
+
+function timingSafeStrEqual(a: string, b: string): boolean {
+  const ba = Buffer.from(a)
+  const bb = Buffer.from(b)
+  if (ba.length !== bb.length) return false
+  return timingSafeEqual(ba, bb)
+}
 
 type Scope = 'read:contacts' | 'read:newsletter' | 'read:tags' | 'write:contacts' | 'write:notes' | 'write:newsletter'
 
@@ -120,7 +138,8 @@ async function searchContacts(args: { query?: string; limit?: number }) {
   if (!q) return []
   const limit = Math.min(Math.max(args.limit ?? 20, 1), 100)
   const supabase = createServiceClient()
-  const safe = q.replace(/[\\%_]/g, (c) => `\\${c}`)
+  // Escape PostgREST special chars incl. comma (the .or() condition separator)
+  const safe = q.replace(/[\\%_,]/g, (c) => `\\${c}`)
   const { data, error } = await supabase
     .from('contacts')
     .select('id, name, name_en, name_local, email, company, job_title, country_code, last_activity_at')
@@ -194,11 +213,19 @@ async function listTags() {
 async function updateContact(args: { id?: string; patch?: Record<string, unknown> }, actingAs: string) {
   if (!args.id) throw new Error('id required')
   const patch = args.patch ?? {}
+  const keys = Object.keys(patch)
+  if (keys.length > MAX_PATCH_FIELDS) throw new Error(`patch too large (${keys.length} fields, max ${MAX_PATCH_FIELDS})`)
   const clean: Record<string, unknown> = {}
   const rejected: string[] = []
   for (const [k, v] of Object.entries(patch)) {
-    if (CONTACT_WRITABLE_FIELDS.has(k)) clean[k] = v
-    else rejected.push(k)
+    // Only own enumerable string keys on the whitelist — guards against
+    // __proto__ / prototype-pollution style keys (they're not in the Set anyway).
+    if (CONTACT_WRITABLE_FIELDS.has(k)) {
+      if (typeof v === 'string' && v.length > MAX_FIELD_LEN) throw new Error(`field '${k}' too long (max ${MAX_FIELD_LEN} chars)`)
+      clean[k] = v
+    } else {
+      rejected.push(k)
+    }
   }
   if (Object.keys(clean).length === 0) {
     throw new Error(`No writable fields in patch. Rejected: ${rejected.join(', ') || '(empty)'}. Allowed: ${[...CONTACT_WRITABLE_FIELDS].join(', ')}`)
@@ -243,10 +270,10 @@ async function addContactNote(args: { contact_id?: string; body?: string; meetin
   return { note_id: data.id, created_at: data.created_at }
 }
 
-async function addToNewsletterList(args: { list_id?: string; email?: string; first_name?: string; last_name?: string }) {
+async function addToNewsletterList(args: { list_id?: string; email?: string; first_name?: string; last_name?: string }, actingAs: string) {
   if (!args.list_id) throw new Error('list_id required')
   const email = (args.email ?? '').trim().toLowerCase()
-  if (!EMAIL_RX.test(email)) throw new Error('valid email required')
+  if (!isValidEmail(email)) throw new Error('valid email required')
   const supabase = createServiceClient()
   // list must exist
   const { data: list } = await supabase.from('newsletter_lists').select('id').eq('id', args.list_id).maybeSingle()
@@ -258,7 +285,7 @@ async function addToNewsletterList(args: { list_id?: string; email?: string; fir
   if (!subscriberId) {
     const { data: ins, error: insErr } = await supabase
       .from('newsletter_subscribers')
-      .insert({ email, first_name: args.first_name?.trim() || null, last_name: args.last_name?.trim() || null, source: 'mcp', via_mcp: true })
+      .insert({ email, first_name: args.first_name?.trim() || null, last_name: args.last_name?.trim() || null, source: 'mcp', via_mcp: true, created_by: actingAs })
       .select('id')
       .single()
     if (insErr) throw new Error(insErr.message)
@@ -268,12 +295,12 @@ async function addToNewsletterList(args: { list_id?: string; email?: string; fir
   // attach to list (ignore if already a member)
   const { error: linkErr } = await supabase
     .from('newsletter_subscriber_lists')
-    .upsert({ subscriber_id: subscriberId, list_id: args.list_id, via_mcp: true }, { onConflict: 'subscriber_id,list_id', ignoreDuplicates: true })
+    .upsert({ subscriber_id: subscriberId, list_id: args.list_id, via_mcp: true, added_by: actingAs }, { onConflict: 'subscriber_id,list_id', ignoreDuplicates: true })
   if (linkErr) throw new Error(linkErr.message)
   return { subscriber_id: subscriberId, subscriber_created: created, attached_to_list: args.list_id }
 }
 
-async function tagContact(args: { contact_id?: string; tag_id?: string; action?: string }) {
+async function tagContact(args: { contact_id?: string; tag_id?: string; action?: string }, actingAs: string) {
   if (!args.contact_id) throw new Error('contact_id required')
   if (!args.tag_id) throw new Error('tag_id required')
   if (args.action !== 'add' && args.action !== 'remove') throw new Error("action must be 'add' or 'remove'")
@@ -281,7 +308,7 @@ async function tagContact(args: { contact_id?: string; tag_id?: string; action?:
   if (args.action === 'add') {
     const { error } = await supabase
       .from('contact_tags')
-      .upsert({ contact_id: args.contact_id, tag_id: args.tag_id, via_mcp: true }, { onConflict: 'contact_id,tag_id', ignoreDuplicates: true })
+      .upsert({ contact_id: args.contact_id, tag_id: args.tag_id, via_mcp: true, created_by: actingAs }, { onConflict: 'contact_id,tag_id', ignoreDuplicates: true })
     if (error) throw new Error(error.message)
     return { contact_id: args.contact_id, tag_id: args.tag_id, action: 'add' }
   } else {
@@ -300,8 +327,8 @@ async function executeTool(name: string, args: Record<string, unknown>, actingAs
     case 'list_tags': return await listTags()
     case 'update_contact': return await updateContact(args, actingAs!)
     case 'add_contact_note': return await addContactNote(args, actingAs!)
-    case 'add_to_newsletter_list': return await addToNewsletterList(args)
-    case 'tag_contact': return await tagContact(args)
+    case 'add_to_newsletter_list': return await addToNewsletterList(args, actingAs!)
+    case 'tag_contact': return await tagContact(args, actingAs!)
     default: throw new Error(`Unknown tool: ${name}`)
   }
 }
@@ -309,9 +336,11 @@ async function executeTool(name: string, args: Record<string, unknown>, actingAs
 // ─────────────────────────── auth + infra ───────────────────────────
 
 interface TokenContext {
-  tokenId: string | null      // null = legacy env token
+  tokenId: string | null        // null = legacy env token
   scopes: Scope[]
   legacy: boolean
+  assignedTo: string | null     // the user this token is bound to (null for legacy)
+  allowAnyActor: boolean         // if false, X-Acting-User is forced to assignedTo
 }
 
 const LEGACY_SCOPES: Scope[] = ['read:contacts', 'read:newsletter', 'read:tags']
@@ -322,17 +351,23 @@ async function resolveToken(bearer: string): Promise<TokenContext | null> {
   const hash = createHash('sha256').update(bearer).digest('hex')
   const { data: row } = await supabase
     .from('agent_tokens')
-    .select('id, scopes, disabled_at, expires_at')
+    .select('id, scopes, disabled_at, expires_at, assigned_to, allow_any_actor')
     .eq('token_hash', hash)
     .maybeSingle()
   if (row) {
     if (row.disabled_at) return null
     if (row.expires_at && new Date(row.expires_at as string).getTime() < Date.now()) return null
-    return { tokenId: row.id as string, scopes: (row.scopes as Scope[]) ?? [], legacy: false }
+    return {
+      tokenId: row.id as string,
+      scopes: (row.scopes as Scope[]) ?? [],
+      legacy: false,
+      assignedTo: (row.assigned_to as string) ?? null,
+      allowAnyActor: !!row.allow_any_actor,
+    }
   }
-  // Legacy env fallback — read-only
-  if (envToken && bearer === envToken) {
-    return { tokenId: null, scopes: LEGACY_SCOPES, legacy: true }
+  // Legacy env fallback — read-only, timing-safe comparison
+  if (envToken && timingSafeStrEqual(bearer, envToken)) {
+    return { tokenId: null, scopes: LEGACY_SCOPES, legacy: true, assignedTo: null, allowAnyActor: false }
   }
   return null
 }
@@ -396,7 +431,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, { status: 400 })
   }
 
-  const actingAs = await resolveActingUser(req.headers.get('x-acting-user'))
+  // Resolve the acting identity, then enforce the binding to assigned_to.
+  // - legacy env token: read-only, no acting user
+  // - allow_any_actor=true: trust X-Acting-User (shared-bot case)
+  // - allow_any_actor=false (default): X-Acting-User is LOCKED to assigned_to.
+  //   If a header is sent and resolves to a different user → reject (no spoofing).
+  const headerActor = await resolveActingUser(req.headers.get('x-acting-user'))
+  let actingAs: string | null = null
+  let actingError: string | null = null
+  if (!ctx.legacy) {
+    if (ctx.allowAnyActor) {
+      actingAs = headerActor
+    } else if (headerActor && headerActor !== ctx.assignedTo) {
+      actingError = 'X-Acting-User does not match this token’s assigned user (token is not allow_any_actor). Omit the header or use the assigned user.'
+    } else {
+      actingAs = ctx.assignedTo  // locked
+    }
+  }
 
   let result: unknown = null
   let error: { code: number; message: string } | null = null
@@ -423,9 +474,11 @@ export async function POST(req: NextRequest) {
         if (!ctx.scopes.includes(tool.scope)) {
           throw new Error(`Permission denied — this token lacks scope '${tool.scope}' required by ${toolName}`)
         }
+        // reject up front if the acting identity was invalid (spoof attempt / mismatch)
+        if (actingError) throw new Error(actingError)
         // write tools need an acting user
         if (tool.write && !actingAs) {
-          throw new Error(`X-Acting-User header required for write tool '${toolName}' (must be a known mycrm user email)`)
+          throw new Error(`X-Acting-User required for write tool '${toolName}' (must be a known mycrm user; for non-shared tokens it is bound to the assigned user)`)
         }
         // rate limit (real tokens only)
         if (ctx.tokenId) {

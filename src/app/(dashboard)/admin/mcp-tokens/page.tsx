@@ -200,6 +200,7 @@ function CreateModal({ users, plaintext, copied, onCopy, onCreated, onClose }: {
   const [description, setDescription] = useState('')
   const [scopes, setScopes] = useState<string[]>(['read:contacts'])
   const [expiresIn, setExpiresIn] = useState<'24h' | '30d' | '1y' | 'never'>('never')
+  const [allowAnyActor, setAllowAnyActor] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   const assignee = users.find((u) => u.id === assignedTo)
@@ -226,7 +227,7 @@ function CreateModal({ users, plaintext, copied, onCopy, onCreated, onClose }: {
     try {
       const res = await fetch('/api/admin/mcp-tokens', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), assigned_to: assignedTo, description: description.trim() || undefined, scopes, expires_in: expiresIn }),
+        body: JSON.stringify({ name: name.trim(), assigned_to: assignedTo, description: description.trim() || undefined, scopes, expires_in: expiresIn, allow_any_actor: allowAnyActor }),
       })
       const data = await res.json()
       if (!res.ok) { alert(data.error ?? '發放失敗'); return }
@@ -295,6 +296,15 @@ function CreateModal({ users, plaintext, copied, onCopy, onCreated, onClose }: {
                 ⚠ 部分 scope 超過該使用者的 mycrm 權限（token 仍可發、scope 獨立）：<br />{warnings.join('；')}
               </div>
             )}
+            <div>
+              <label className="flex items-start gap-2 px-2 py-2 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+                <input type="checkbox" checked={allowAnyActor} onChange={(e) => setAllowAnyActor(e.target.checked)} className="mt-0.5" />
+                <span className="text-xs text-gray-700 dark:text-gray-300">
+                  <span className="font-medium">允許代任意使用者操作</span>（共用 bot 用）<br />
+                  <span className="text-gray-500 dark:text-gray-400">預設關閉：寫入一律掛在「{assignee?.display_name || assignee?.email || '指定使用者'}」名下，`X-Acting-User` 不符會被拒。開啟後 bot 才能用 `X-Acting-User` 代不同人操作。</span>
+                </span>
+              </label>
+            </div>
             <div>
               <label className="text-xs text-gray-500 dark:text-gray-400">過期時間</label>
               <div className="mt-1 flex flex-wrap gap-2">

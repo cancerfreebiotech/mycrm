@@ -43,9 +43,16 @@ Edit `~/.claude/settings.json` (or project-level `.mcp.json`):
 }
 ```
 
-`X-Acting-User` must be a known mycrm user email — it's who writes get
-attributed to (`created_by` + `via_mcp=true`). Required for write tools,
-optional for read-only.
+`X-Acting-User` is who writes get attributed to (`created_by` + `via_mcp=true`).
+
+**Binding (default)**: a token's acting user is **locked to its assignee**.
+If you send `X-Acting-User` matching the assignee (or omit it), writes are
+attributed to that person. Sending a *different* user → request rejected. This
+stops a token from attributing writes to someone else (e.g. super_admin).
+
+**Shared-bot mode**: tick **「允許代任意使用者操作」** when issuing the token
+(`allow_any_actor`). Then the bot may set `X-Acting-User` to any known user per
+request — use this only for a trusted bot that acts on behalf of many people.
 
 Restart Claude Code. The agent sees only the tools its token has scope for.
 
@@ -94,7 +101,7 @@ curl -s https://crm.cancerfree.io/api/mcp \
 
 - **Per-agent tokens** in `agent_tokens` (issued from `/admin/mcp-tokens`). Token compared by sha256 hash; checks not-disabled + not-expired.
 - **Scopes**: token only runs tools whose required scope it holds.
-- **`X-Acting-User` header**: resolves to a `public.users` row. Required for write tools (becomes `created_by`); optional for reads.
+- **`X-Acting-User` header**: resolves to a `public.users` row. Required for write tools (becomes `created_by`); optional for reads. **Default-bound to the token's assignee** — a mismatching header is rejected. Set `allow_any_actor` on the token to allow acting as any user (shared-bot mode).
 - **Legacy fallback**: `MCP_AGENT_TOKEN` env var → read-only scopes, no acting user, no write.
 - **Rate limit**: 120 requests/min per token.
 - Missing/invalid token → 401; missing scope → error; write without acting user → error.
