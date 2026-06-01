@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v6.8.6 — fix(newsletter): list 詳細頁狀態 filter 與統計卡分群對齊（2026-06-01）
+
+### 變更項目
+- `/admin/newsletter/lists/[id]` 頁的狀態 dropdown 跟上方統計卡用不同分群 → 使用者點「退信」filter 只顯示 `bounced`（178）但統計卡「退信」顯示 229（bounced + invalid），少 51 筆
+- 把 dropdown 簡化成跟統計卡 1:1 對齊：全部 / 訂閱中 / 已退訂 / **退信（含無效）** / **待處理（暫時失敗 / 信箱滿 / 擋件）**
+- Filter 邏輯也改成分群匹配（不是逐一狀態值匹配）
+- 移除細項選項（無效 / 暫時失敗 / 信箱滿 / 寄件擋 / 收件擋）— 個別狀態還是會在每筆 row 的 status badge 上顯示
+
 ## v6.8.5 — feat(newsletter): RSS feed 顯示完整網址 + 可點擊（2026-06-01）
 
 ### 變更項目

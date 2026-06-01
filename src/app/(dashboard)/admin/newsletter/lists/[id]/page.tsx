@@ -228,8 +228,16 @@ export default function ListDetailPage() {
         if (filterCountry !== '' && s.country_code !== filterCountry) return false
       }
       if (filterStatus !== 'all') {
-        if (filterStatus === 'active' && s.email_status !== null) return false
-        if (filterStatus !== 'active' && s.email_status !== filterStatus) return false
+        // Match the grouping used by the stats pills above (bouncedCount,
+        // pendingCount, etc.) so the filter dropdown 1:1 mirrors what the
+        // user sees in the cards.
+        const st = s.email_status
+        const isBouncedGroup = st === 'bounced' || st === 'invalid'
+        const isPendingGroup = st === 'deferred' || st === 'mailbox_full' || st === 'sender_blocked' || st === 'recipient_blocked'
+        if (filterStatus === 'active' && st !== null) return false
+        if (filterStatus === 'unsubscribed' && st !== 'unsubscribed') return false
+        if (filterStatus === 'bounced' && !isBouncedGroup) return false
+        if (filterStatus === 'pending' && !isPendingGroup) return false
       }
       return true
     })
@@ -442,12 +450,8 @@ export default function ListDetailPage() {
             <option value="all">全部狀態</option>
             <option value="active">訂閱中</option>
             <option value="unsubscribed">已退訂</option>
-            <option value="bounced">退信</option>
-            <option value="invalid">無效</option>
-            <option value="deferred">暫時失敗</option>
-            <option value="mailbox_full">信箱滿</option>
-            <option value="sender_blocked">寄件擋</option>
-            <option value="recipient_blocked">收件擋</option>
+            <option value="bounced">退信（含無效）</option>
+            <option value="pending">待處理（暫時失敗 / 信箱滿 / 擋件）</option>
           </select>
 
           <select
