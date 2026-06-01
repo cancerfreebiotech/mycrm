@@ -1,5 +1,37 @@
 # CHANGELOG
 
+## v7.0.0 — feat(mcp): MCP v2 — per-agent tokens + 4 個寫入工具 + 權限範圍 + 完整歸屬（2026-06-01）
+
+### 重點
+MCP 從「單一共享 token、只能讀」升級成「每個 agent 一把 token、可分權限、能寫 CRM、完整追蹤誰做了什麼」。
+
+### 變更項目
+- **Per-agent token 系統**：新表 `agent_tokens`（name / description / assigned_to / token_hash / scopes / expires_at / disabled）。取代 v1 單一 `MCP_AGENT_TOKEN` env var（env 仍保留當 read-only fallback）
+- **6 個權限範圍 (scopes)**：`read:contacts` / `read:newsletter` / `read:tags` / `write:contacts` / `write:notes` / `write:newsletter`。每個 tool 宣告需要的 scope，token 沒有就擋
+- **4 個新寫入工具**：
+  - `update_contact(id, patch)` — 白名單欄位（描述性 / 關係欄位可改，email / email_status / opt_out / 刪除 / 系統欄位禁止）
+  - `add_contact_note(contact_id, body, meeting_date?)`
+  - `add_to_newsletter_list(list_id, email, ...)`
+  - `tag_contact(contact_id, tag_id, add|remove)`
+- **動態身份 `X-Acting-User` header**：每次呼叫宣告「現在誰在用」，寫入時 `created_by` 掛在這人名下。寫入工具強制要這個 header；讀取工具可省
+- **完整歸屬追蹤**：4 張可寫表加 `via_mcp` 旗標、contacts 加 `last_updated_at/by/via_mcp`、`agent_actions` 加 `token_id` + `acting_as`
+- **Rate limit**：每 token 120 req/min（數 agent_actions 實作）
+- **新後台頁 `/admin/mcp-tokens`**（super_admin only）：發 token（含 scope 超過使用者權限的警告 + 明文只顯示一次）、列表、停用 / 啟用 / 刪除、連到該 token 的活動
+- **`/admin/mcp-activity` 強化**：加「Token / 身份」欄位 + 支援 `?token_id=` filter
+- SQL 紀錄 `supabase/mcp_v2_agent_tokens.sql`；設計文件 `docs/mcp-v2-plan.md`
+
+### 版本進位
+- v6.9.1 → v7.0.0（新 surface `/admin/mcp-tokens` 屬 MINOR，但 6.9 進 MINOR 會變兩位數 → 依規則帶動 MAJOR 歸零）
+
+### 安全強化（多 agent adversarial review 後修補）
+- **X-Acting-User 預設綁 assigned_to**：防止 token 把寫入偽造掛在他人（含 super_admin）名下；共用 bot 要明確開 `allow_any_actor`
+- env token 比較改 timing-safe、`search_contacts` escape 逗號防 PostgREST filter 注入、email regex 收緊、`update_contact` patch 加大小限制（防 DoS）、`add_to_newsletter_list`/`tag_contact` 補 row-level 歸屬
+- 兩個 race condition（rate-limit TOCTOU、停用後 in-flight）延 v2.1，正解需 atomic store
+
+### 部署需要的動作
+- v1 的 `MCP_AGENT_TOKEN` env 可留可不留（只影響 read fallback）
+- 實際用：進 `/admin/mcp-tokens` 發一把 token → agent 帶 `Authorization: Bearer <token>` + 寫入時加 `X-Acting-User: <email>`（預設必須等於 assignee）
+
 ## v6.9.1 — feat(mcp): admin 後台「MCP 活動紀錄」viewer（2026-06-01）
 
 ### 變更項目

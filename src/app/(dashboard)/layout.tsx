@@ -147,6 +147,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const superAdminItems: NavItem[] = isSuperAdmin ? [
     { href: '/admin/models', label: t('models'), icon: ShieldCheck },
     { href: '/admin/health', label: t('health'), icon: Activity },
+    { href: '/admin/mcp-tokens', label: 'MCP Tokens', icon: ShieldCheck },
     { href: '/admin/mcp-activity', label: 'MCP 活動', icon: Activity },
     { href: '/admin/feedback', label: t('feedbackManage'), icon: MessageSquarePlus },
   ] : []

@@ -1,0 +1,42 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient, createServiceClient } from '@/lib/supabase'
+
+// PATCH  /api/admin/mcp-tokens/[id]  — enable / disable a token
+//   Body: { disabled: boolean, reason?: string }
+// DELETE /api/admin/mcp-tokens/[id]  — permanently delete a token
+//
+// super_admin only.
+
+async function requireSuperAdmin() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user?.email) return null
+  const service = createServiceClient()
+  const { data: profile } = await service.from('users').select('id, role').eq('email', user.email).single()
+  if (profile?.role !== 'super_admin') return null
+  return { id: profile.id as string }
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await requireSuperAdmin()
+  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const { id } = await params
+  const body = await req.json().catch(() => ({})) as { disabled?: boolean; reason?: string }
+  const service = createServiceClient()
+  const patch = body.disabled
+    ? { disabled_at: new Date().toISOString(), disabled_reason: body.reason?.trim() || null }
+    : { disabled_at: null, disabled_reason: null }
+  const { error } = await service.from('agent_tokens').update(patch).eq('id', id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}
+
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await requireSuperAdmin()
+  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const { id } = await params
+  const service = createServiceClient()
+  const { error } = await service.from('agent_tokens').delete().eq('id', id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}

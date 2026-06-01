@@ -272,11 +272,38 @@ All open questions closed → plan is execution-ready.
 
 ---
 
+## Security review (2026-06-01, multi-agent workflow)
+
+6 attack lenses × adversarial verification. 10 raw findings, 9 confirmed.
+**Fixed before merge** (in `feat/mcp-v2`):
+
+| # | Sev | Issue | Fix |
+|---|---|---|---|
+| 1 | critical | X-Acting-User could attribute writes to any user (incl super_admin) | Default-bind to `assigned_to`; new `allow_any_actor` flag opts into shared-bot mode. Mismatched header → reject |
+| 2 | high | `add_to_newsletter_list` / `tag_contact` didn't record actor on the row | Added `created_by`/`added_by` columns; both tools now write actingAs |
+| 4 | med | env-token compared with `===` (timing attack) | `crypto.timingSafeEqual` |
+| 6 | med | `search_contacts` didn't escape commas (PostgREST `.or()` injection) | escape `,` too |
+| 7 | med | email regex accepted `a..b@`, `@-domain` | tighter regex + `..` guard + length cap |
+| 8 | med | `update_contact` patch unbounded (DoS via huge notes / 10k fields) | cap 50 fields, 20k chars/field |
+
+**Deferred to v2.1** (race conditions — proper fix needs atomic store / Redis):
+
+| # | Sev | Issue | Why deferred |
+|---|---|---|---|
+| 3 | high* | rate-limit TOCTOU race — concurrent burst can exceed 120/min | soft abuse control, not an auth boundary; bounded overrun (~+N concurrent). Proper fix = Upstash Redis atomic increment |
+| 9 | med | disabled token can finish an in-flight request | window = one in-flight request; proper fix = re-check disabled_at immediately before execute (extra query per call) |
+
+(*verifier rated high; practical impact bounded since it's a throttle not a gate)
+
+1 finding dismissed (X-Acting-User user-enumeration — no response differential, not exploitable).
+
 ## v2.1+ ideas (deferred)
 
 - MCP `resources/list` + `resources/read` — expose schema docs / tag list / newsletter list as resources
 - MCP `prompts/list` — canned prompts for common agent operations
 - SSE streaming for long queries (export tools)
+- Rate-limit atomic store (Upstash Redis) — fixes the TOCTOU race (review #3)
+- Re-check token disabled_at immediately before execute — fixes in-flight race (review #9)
 - OAuth 2.0 flow (replace shared header-based identity with real user auth)
 - Webhook (server → agent) for new contact / new note events
 - Per-token IP allowlist
