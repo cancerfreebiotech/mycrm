@@ -140,7 +140,9 @@ restriction.
 
 ### `update_contact` whitelist
 
-**OPEN QUESTION** — needs Po's final list. Proposed:
+**DECIDED 2026-06-01**: full list (option below). Agent may edit all
+descriptive/relationship fields; only identity/compliance/system fields stay
+forbidden.
 
 Allowed: `name`, `name_en`, `name_local`, `company`, `company_en`,
 `company_local`, `job_title`, `department`, `phone`, `mobile`,
@@ -209,7 +211,7 @@ CREATE POLICY agent_tokens_write ON public.agent_tokens FOR ALL    TO authentica
 - Assigned to (required — dropdown of `public.users` active)
 - Description (free-form textarea)
 - Scopes (checkbox group, 6 options)
-- Expiry: radio — 24h / 30d / 1y / never
+- Expiry: radio — 24h / 30d / 1y / never. **Default selected = never** (per the automation use case; expiry would silently break a long-running agent)
 - On submit: generate plaintext token, show **once** with copy button,
   then close
 
@@ -232,16 +234,14 @@ Add to `superAdminItems` in `(dashboard)/layout.tsx`:
 
 ## Rate limiting
 
-**OPEN QUESTION** — needs Po's decision on limits.
+**DECIDED 2026-06-01**: **120 requests/min per token** (1 every 0.5s). Higher
+than 60 because the real use case is automation that may loop over many rows
+(e.g. tag every contact added yesterday). Single limit, not per-scope.
 
-Proposed: per-token, X requests/min. Default `60/min` per token.
-
-Implementation options (smallest → biggest):
-1. Count `agent_actions WHERE token_id = X AND created_at > now() - 1 min` — simple, no extra infra, costs 1 query per call
-2. Upstash Redis via Vercel Marketplace — proper sliding window
-3. Vercel Edge Config + custom — overkill
-
-Recommend #1 for v2.0 (simple, good enough at our scale).
+Implementation: count `agent_actions WHERE token_id = X AND created_at > now() - 1 min`
+before executing the tool; if >= 120, return JSON-RPC error code -32002
+("Rate limit exceeded, retry in N seconds"). No extra infra — 1 query per call.
+(Upstash Redis sliding window is the v2.1 upgrade if this proves too coarse.)
 
 ---
 
@@ -258,13 +258,17 @@ Total estimate: **7-8 hours** across phases.
 
 ---
 
-## Open questions (decide before starting v2.0)
+## Open questions — RESOLVED 2026-06-01
 
-1. **`update_contact` whitelist** — confirm/edit the field list above
-2. **Rate limit** — 60/min per token OK? Different limits per scope?
-3. **Token expiry default** — 30d? 90d? `never`? (UI radio has all options;
-   this is the default selected one)
-4. **v2.1 ideas to defer** — see below
+1. ~~`update_contact` whitelist~~ → **full list** (all descriptive/relationship fields; identity/compliance/system forbidden)
+2. ~~Rate limit~~ → **120/min per token**, single limit, count-agent_actions impl
+3. ~~Token expiry default~~ → **never** (default-selected radio)
+
+Pre-flight note also updated: Po is **skipping the "bake v1 for a few days"
+step** — real use case is in v2, so we go straight to v2.0 implementation once
+ready. v1 read tools still shipped + token still needs setting in Vercel env.
+
+All open questions closed → plan is execution-ready.
 
 ---
 
@@ -282,6 +286,8 @@ Total estimate: **7-8 hours** across phases.
 
 ## Pre-flight before v2.0 work starts
 
-1. Ship v1 first (commit + push v6.9.0/v6.9.1, set `MCP_AGENT_TOKEN` in Vercel env, test read tools from a real Claude Code agent for at least a few days)
-2. Po answers the 4 Open Questions above
-3. Start v2.0a (DB + auth refactor) on a fresh branch
+1. ~~Ship v1~~ → DONE (committed + pushed as v6.9.0/v6.9.1, commit `a24de0b`). Still need to set `MCP_AGENT_TOKEN` in Vercel env for v1 read tools to work; v2 replaces this with `agent_tokens` table anyway.
+2. ~~"bake v1 for a few days"~~ → **SKIPPED** (Po: real use case is v2, no point testing v1 read-only in isolation)
+3. ~~Answer open questions~~ → DONE (see "Open questions — RESOLVED")
+4. **Next**: start v2.0a (DB migration + auth refactor). Recommend a fresh branch.
+5. After v2.0 build: run an adversarial security review (good fit for a multi-agent Workflow — token hashing, scope-bypass, update_contact whitelist injection, X-Acting-User spoofing impact).
