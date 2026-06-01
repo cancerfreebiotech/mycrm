@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v6.8.5 — feat(newsletter): RSS feed 顯示完整網址 + 可點擊（2026-06-01）
+
+### 變更項目
+- `/admin/newsletter/quick-send/[id]` 頁面底部的「📡 RSS feed: `/api/newsletter/feed.xml`」改成顯示完整網址（用 `window.location.origin` 拼）+ 變成可點擊 link，不用再自己腦補 domain
+
 ## v6.8.4 — fix(newsletter): logo 搬到 Supabase Storage（修「匯出圖片」logo 不見）（2026-05-31）
 
 ### 變更項目

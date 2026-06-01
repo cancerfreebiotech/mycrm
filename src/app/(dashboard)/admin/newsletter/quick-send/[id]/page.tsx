@@ -893,7 +893,7 @@ export default function QuickSendPage() {
 
             <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl p-4 text-xs text-gray-500 dark:text-gray-400 space-y-1">
               <p>⚠ 電子報透過 SendGrid 寄送。發送後不會計入聯絡人的「最後活動時間」（仍會寫互動紀錄）。</p>
-              <p>📡 RSS feed: <code className="text-gray-700 dark:text-gray-300">/api/newsletter/feed.xml</code></p>
+              <p>📡 RSS feed: <a href="/api/newsletter/feed.xml" target="_blank" className="text-blue-600 dark:text-blue-400 hover:underline font-mono break-all">{typeof window !== 'undefined' ? window.location.origin : 'https://crm.cancerfree.io'}/api/newsletter/feed.xml</a></p>
             </div>
           </div>
         </div>
