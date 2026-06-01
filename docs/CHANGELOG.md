@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## v6.9.1 — feat(mcp): admin 後台「MCP 活動紀錄」viewer（2026-06-01）
+
+### 變更項目
+- 新增 `/admin/mcp-activity` 後台頁面（super_admin 限定），列出 `agent_actions` 最近 100 筆 — 包含時間、工具名、成功/失敗、IP hash、參數 / 錯誤訊息（可展開看 JSON）
+- 上方 3 張統計卡：總計 / 成功 / 失敗
+- Filter：依工具名、依狀態（全部 / 成功 / 失敗）
+- Sidebar `superAdminItems` 加「MCP 活動」連結
+
+## v6.9.0 — feat(mcp): 新增 /api/mcp MCP server endpoint，外部 Claude agent 可查 CRM（2026-06-01）
+
+### 變更項目
+- 新增 `POST /api/mcp` Model Context Protocol JSON-RPC endpoint，外部 Claude agent / 其他 MCP client 接上後可以查 mycrm 資料
+- 5 個 read-only tools：
+  - `search_contacts(query, limit?)` — 多欄位 substring 搜聯絡人
+  - `get_contact(id)` — 完整聯絡人 + tags + 5 筆最近 interaction
+  - `list_newsletter_lists()` — 所有電子報名單 + 人數
+  - `search_subscribers_in_list(list_id, query?, limit?)` — 名單內訂閱者
+  - `list_tags()` — 所有 tag
+- Auth：`Authorization: Bearer <MCP_AGENT_TOKEN>`（單一共享 token，env var 設定）
+- 新表 `public.agent_actions` — 每次 tool call 寫一筆 audit log（工具名 / 參數 / 是否成功 / IP hash / 時間）。super_admin 可讀
+- 寫入工具 (`update_contact` / `add_note` / `add_to_newsletter_list`) 延後到 v2，v1 保守只開讀取
+- 文件 `docs/mcp-server.md`：完整 setup + Claude Code config 範例 + curl 範例
+
+### 部署需要的動作
+1. `openssl rand -hex 32` 產 token
+2. `vercel env add MCP_AGENT_TOKEN production` 加進 env
+3. Redeploy
+
 ## v6.8.6 — fix(newsletter): list 詳細頁狀態 filter 與統計卡分群對齊（2026-06-01）
 
 ### 變更項目
