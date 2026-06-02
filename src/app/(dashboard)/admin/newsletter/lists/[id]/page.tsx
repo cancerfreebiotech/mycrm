@@ -368,33 +368,37 @@ export default function ListDetailPage() {
   return (
     <PermissionGate feature="newsletter">
       <div className="p-6 max-w-5xl mx-auto">
-        <div className="flex items-center gap-3 mb-4">
-          <Link href="/admin/newsletter/lists" className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
-            <ArrowLeft size={18} />
-          </Link>
-          <Users size={22} className="text-blue-500" />
-          <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{list.name}</h1>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              <code className="font-mono">{list.key}</code>
-              {list.description && <> · {list.description}</>}
-            </p>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <Link href="/admin/newsletter/lists" className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 shrink-0 mt-1">
+              <ArrowLeft size={18} />
+            </Link>
+            <Users size={22} className="text-blue-500 shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 break-words">{list.name}</h1>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 break-all">
+                <code className="font-mono">{list.key}</code>
+                {list.description && <> · {list.description}</>}
+              </p>
+            </div>
           </div>
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg font-medium disabled:opacity-60"
-            title="從 SendGrid 同步退信/退訂狀態"
-          >
-            {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-            同步 SendGrid
-          </button>
-          <button
-            onClick={() => { setShowAdd(true); setAddTab('contact'); setContactSearch(''); setContactResults([]); setAddError(null); setDirectEmail('') }}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
-          >
-            <Plus size={14} /> 新增
-          </button>
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="flex items-center justify-center gap-1.5 min-h-[44px] px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg font-medium disabled:opacity-60"
+              title="從 SendGrid 同步退信/退訂狀態"
+            >
+              {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              <span className="whitespace-nowrap">同步 SendGrid</span>
+            </button>
+            <button
+              onClick={() => { setShowAdd(true); setAddTab('contact'); setContactSearch(''); setContactResults([]); setAddError(null); setDirectEmail('') }}
+              className="flex items-center justify-center gap-1.5 min-h-[44px] px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
+            >
+              <Plus size={14} /> 新增
+            </button>
+          </div>
         </div>
 
         {syncMsg && (

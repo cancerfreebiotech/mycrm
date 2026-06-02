@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v7.0.4 — fix(ui): 名單詳細頁 header 手機版標題與按鈕重疊（2026-06-02）
+
+### 變更項目
+- `/admin/newsletter/lists/[id]` header 原本 `flex items-center` 不換行，長名單名（如 2026-06-JP-Newsletter）在手機上換行撐高、跟「同步 SendGrid / 新增」按鈕重疊
+- 改成 `flex-col`（手機直向堆疊）→ `sm:flex-row`（桌機橫向）；標題區 `flex-1 min-w-0 break-words`、按鈕區 `shrink-0`，按鈕加 `min-h-[44px]`（觸控目標達標）
+
 ## v7.0.3 — fix(sendgrid): suppression 同步 upsert 撞重複 email 整批失敗（2026-06-02）
 
 ### 變更項目
