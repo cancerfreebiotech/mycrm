@@ -12,6 +12,14 @@ interface SgUnsubscribe { email: string; created: number }
 interface SgBlock { email: string; created: number; reason: string; status: string }
 interface SgSpamReport { email: string; created: number; ip?: string }
 
+/** Dedupe rows by `email` (keep last) — a single upsert can't touch the same
+ *  ON CONFLICT key twice, which SendGrid lists occasionally contain. */
+function dedupeByEmail<T extends { email: string }>(rows: T[]): T[] {
+  const m = new Map<string, T>()
+  for (const r of rows) m.set(r.email, r)
+  return [...m.values()]
+}
+
 /** Paginate through a SendGrid suppression endpoint and return all records */
 async function sgFetchAll<T>(path: string, apiKey: string, extraParams = ''): Promise<T[]> {
   const all: T[] = []
@@ -115,7 +123,7 @@ async function runImport() {
       if (blacklistRows.length > 0) {
         const { error } = await supabase
           .from('newsletter_blacklist')
-          .upsert(blacklistRows, { onConflict: 'email' })
+          .upsert(dedupeByEmail(blacklistRows), { onConflict: 'email' })
         if (error) throw new Error(error.message)
       }
 
@@ -154,7 +162,7 @@ async function runImport() {
       if (blacklistRows.length > 0) {
         const { error } = await supabase
           .from('newsletter_blacklist')
-          .upsert(blacklistRows, { onConflict: 'email' })
+          .upsert(dedupeByEmail(blacklistRows), { onConflict: 'email' })
         if (error) throw new Error(error.message)
       }
 
@@ -184,7 +192,7 @@ async function runImport() {
       }))
       const { error } = await supabase
         .from('newsletter_unsubscribes')
-        .upsert(rows, { onConflict: 'email' })
+        .upsert(dedupeByEmail(rows), { onConflict: 'email' })
       if (error) throw new Error(error.message)
 
       const emails = rows.map((r) => r.email)
@@ -223,7 +231,7 @@ async function runImport() {
       const contactEmails = new Set(((matchingContacts ?? []) as { email: string }[]).map((c) => c.email.toLowerCase().trim()))
       const blacklistRows = rows.filter((r) => !contactEmails.has(r.email))
       if (blacklistRows.length > 0) {
-        const { error } = await supabase.from('newsletter_blacklist').upsert(blacklistRows, { onConflict: 'email' })
+        const { error } = await supabase.from('newsletter_blacklist').upsert(dedupeByEmail(blacklistRows), { onConflict: 'email' })
         if (error) throw new Error(error.message)
       }
 
@@ -254,7 +262,7 @@ async function runImport() {
         reason: 'SendGrid spam report (recipient marked as spam)',
         unsubscribed_at: new Date(s.created * 1000).toISOString(),
       }))
-      const { error } = await supabase.from('newsletter_unsubscribes').upsert(unsubRows, { onConflict: 'email' })
+      const { error } = await supabase.from('newsletter_unsubscribes').upsert(dedupeByEmail(unsubRows), { onConflict: 'email' })
       if (error) throw new Error(error.message)
 
       const emailToInfo = new Map(spam.map((s) => [

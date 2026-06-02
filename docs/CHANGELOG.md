@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v7.0.3 — fix(sendgrid): suppression 同步 upsert 撞重複 email 整批失敗（2026-06-02）
+
+### 變更項目
+- SendGrid suppression 清單偶爾同一 email 出現兩次，`upsert(..., onConflict: 'email')` 一次不能對同個 key 動兩次 → 整批失敗（blocks 這次就因此 0 筆、報 "ON CONFLICT DO UPDATE command cannot affect row a second time"）
+- 所有 upsert（bounces / invalid / unsub / blocks / spam）前先 `dedupeByEmail` 去重
+
 ## v7.0.2 — fix(ui): 後台表格手機版被裁切看不到（2026-06-02）
 
 ### 變更項目
