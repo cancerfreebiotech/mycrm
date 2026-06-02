@@ -17,7 +17,7 @@ interface ListMeta {
   description: string | null
 }
 
-type EmailStatus = 'bounced' | 'invalid' | 'unsubscribed' | 'deferred' | 'mailbox_full' | 'sender_blocked' | 'recipient_blocked' | null
+type EmailStatus = 'bounced' | 'invalid' | 'unsubscribed' | 'deferred' | 'mailbox_full' | 'sender_blocked' | 'recipient_blocked' | 'spam_report' | null
 
 interface SubscriberRow {
   id: string
@@ -232,7 +232,7 @@ export default function ListDetailPage() {
         // pendingCount, etc.) so the filter dropdown 1:1 mirrors what the
         // user sees in the cards.
         const st = s.email_status
-        const isBouncedGroup = st === 'bounced' || st === 'invalid'
+        const isBouncedGroup = st === 'bounced' || st === 'invalid' || st === 'spam_report'
         const isPendingGroup = st === 'deferred' || st === 'mailbox_full' || st === 'sender_blocked' || st === 'recipient_blocked'
         if (filterStatus === 'active' && st !== null) return false
         if (filterStatus === 'unsubscribed' && st !== 'unsubscribed') return false
@@ -356,7 +356,7 @@ export default function ListDetailPage() {
 
   const linkedCount = subs.filter((s) => s.contact_id).length
   const unsubCount = subs.filter((s) => s.email_status === 'unsubscribed').length
-  const bouncedCount = subs.filter((s) => s.email_status === 'bounced' || s.email_status === 'invalid').length
+  const bouncedCount = subs.filter((s) => s.email_status === 'bounced' || s.email_status === 'invalid' || s.email_status === 'spam_report').length
   const pendingCount = subs.filter((s) =>
     s.email_status === 'deferred' || s.email_status === 'mailbox_full' ||
     s.email_status === 'sender_blocked' || s.email_status === 'recipient_blocked'
@@ -547,6 +547,8 @@ export default function ListDetailPage() {
                         <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400" title="寄件方認證/spam 問題">寄件擋</span>
                       ) : s.email_status === 'recipient_blocked' ? (
                         <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400" title="對方公司政策擋信">收件擋</span>
+                      ) : s.email_status === 'spam_report' ? (
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" title="收件人檢舉為垃圾信">垃圾檢舉</span>
                       ) : (
                         <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">訂閱中</span>
                       )}

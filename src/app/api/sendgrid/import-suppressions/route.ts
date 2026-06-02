@@ -9,6 +9,8 @@ const START_TIME = Math.floor(Date.now() / 1000) - 90 * 24 * 60 * 60
 interface SgBounce { email: string; created: number; reason: string; status: string }
 interface SgInvalid { email: string; created: number; error: string }
 interface SgUnsubscribe { email: string; created: number }
+interface SgBlock { email: string; created: number; reason: string; status: string }
+interface SgSpamReport { email: string; created: number; ip?: string }
 
 /** Paginate through a SendGrid suppression endpoint and return all records */
 async function sgFetchAll<T>(path: string, apiKey: string, extraParams = ''): Promise<T[]> {
@@ -89,7 +91,7 @@ async function runImport() {
   }
 
   const supabase = createServiceClient()
-  const result = { bounces: 0, invalidEmails: 0, unsubscribes: 0, logsCreated: 0, errors: [] as string[] }
+  const result = { bounces: 0, invalidEmails: 0, unsubscribes: 0, blocks: 0, spamReports: 0, logsCreated: 0, errors: [] as string[] }
 
   // 1. Hard bounces → blacklist + contacts + logs
   try {
@@ -202,7 +204,71 @@ async function runImport() {
     result.errors.push(`unsubscribes: ${e instanceof Error ? e.message : String(e)}`)
   }
 
-  const total = result.bounces + result.invalidEmails + result.unsubscribes
+  // 4. Blocks → recipient_blocked status + blacklist + logs
+  //    (receiving server rejected delivery; SendGrid suppresses until cleared)
+  try {
+    const blocks = await sgFetchAll<SgBlock>('/suppression/blocks', apiKey)
+    if (blocks.length > 0) {
+      const rows = blocks.map((b) => ({
+        email: b.email.toLowerCase().trim(),
+        status: 'recipient_blocked',
+        reason: `block: ${(b.reason ?? b.status ?? '').slice(0, 180)}`.slice(0, 200),
+      }))
+      const emails = rows.map((r) => r.email)
+
+      await supabase.from('contacts').update({ email_status: 'recipient_blocked' }).in('email', emails).is('deleted_at', null)
+
+      const { data: matchingContacts } = await supabase
+        .from('contacts').select('email').in('email', emails).is('deleted_at', null)
+      const contactEmails = new Set(((matchingContacts ?? []) as { email: string }[]).map((c) => c.email.toLowerCase().trim()))
+      const blacklistRows = rows.filter((r) => !contactEmails.has(r.email))
+      if (blacklistRows.length > 0) {
+        const { error } = await supabase.from('newsletter_blacklist').upsert(blacklistRows, { onConflict: 'email' })
+        if (error) throw new Error(error.message)
+      }
+
+      const emailToInfo = new Map(blocks.map((b) => [
+        b.email.toLowerCase().trim(),
+        { created: b.created, content: `SendGrid 被擋下：${(b.reason ?? b.status ?? '').slice(0, 200)}` },
+      ]))
+      result.logsCreated += await createSendGridLogs(supabase, emailToInfo, 'SendGrid 被擋下')
+      result.blocks = rows.length
+    }
+  } catch (e) {
+    result.errors.push(`blocks: ${e instanceof Error ? e.message : String(e)}`)
+  }
+
+  // 5. Spam reports → spam_report status + newsletter_unsubscribes + logs
+  //    A spam complaint is a hard "never email again" (legal), so we also write
+  //    it to newsletter_unsubscribes to guarantee send-time exclusion.
+  try {
+    const spam = await sgFetchAll<SgSpamReport>('/suppression/spam_reports', apiKey)
+    if (spam.length > 0) {
+      const emails = spam.map((s) => s.email.toLowerCase().trim())
+
+      await supabase.from('contacts').update({ email_status: 'spam_report' }).in('email', emails).is('deleted_at', null)
+
+      const unsubRows = spam.map((s) => ({
+        email: s.email.toLowerCase().trim(),
+        source: 'sendgrid_spam_report',
+        reason: 'SendGrid spam report (recipient marked as spam)',
+        unsubscribed_at: new Date(s.created * 1000).toISOString(),
+      }))
+      const { error } = await supabase.from('newsletter_unsubscribes').upsert(unsubRows, { onConflict: 'email' })
+      if (error) throw new Error(error.message)
+
+      const emailToInfo = new Map(spam.map((s) => [
+        s.email.toLowerCase().trim(),
+        { created: s.created, content: 'SendGrid 垃圾信檢舉：recipient marked as spam' },
+      ]))
+      result.logsCreated += await createSendGridLogs(supabase, emailToInfo, 'SendGrid 垃圾信檢舉')
+      result.spamReports = emails.length
+    }
+  } catch (e) {
+    result.errors.push(`spam_reports: ${e instanceof Error ? e.message : String(e)}`)
+  }
+
+  const total = result.bounces + result.invalidEmails + result.unsubscribes + result.blocks + result.spamReports
   return NextResponse.json({ ok: result.errors.length === 0, total, ...result })
 }
 

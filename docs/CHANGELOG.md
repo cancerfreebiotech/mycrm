@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## v7.0.1 — feat(newsletter): 開信 / 點擊追蹤 + suppression sync 補 blocks / spam（2026-06-02）
+
+### 變更項目
+**開信 / 點擊追蹤（之前完全沒接起來）**
+- 寄送電子報時，每個收件人建立 `newsletter_recipients` 列、把列 id 當 `X-Recipient-Id` 傳給 SendGrid、並強制開啟 open/click tracking
+- SendGrid Event Webhook（早已設定指向 `/api/sendgrid/webhook`、open/click 已開）收到事件後寫回 `opened_at` / `clicked_at`
+- `/admin/newsletter/campaigns` 列表「成效」欄顯示每封：📤 寄出 · 👁 開信(率) · 🔗 點擊
+- 新 SECURITY DEFINER 函式 `get_campaign_engagement()` 給前端拿聚合數字（`newsletter_recipients` 有 RLS、前端不能直接讀）
+- ⚠️ 只對「修好之後寄的」電子報有效；過去寄的沒帶 recipient id，SendGrid 開信事件對不到，無法回填
+
+**Suppression 同步補兩類**
+- `/api/sendgrid/import-suppressions` 加 `/suppression/blocks`（→ `recipient_blocked`）+ `/suppression/spam_reports`（→ 新 status `spam_report` + 寫進 `newsletter_unsubscribes` 確保停寄）
+- list 詳細頁認得 `spam_report`（歸「退信」群、status badge 顯示「垃圾檢舉」）
+
+### 版本
+- v7.0.0 → v7.0.1（PATCH — 都在既有頁面加東西、後端同步擴充，無新頁面）
+
 ## v7.0.0 — feat(mcp): MCP v2 — per-agent tokens + 4 個寫入工具 + 權限範圍 + 完整歸屬（2026-06-01）
 
 ### 重點

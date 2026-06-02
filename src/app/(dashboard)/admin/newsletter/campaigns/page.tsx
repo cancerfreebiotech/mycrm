@@ -18,6 +18,9 @@ interface CampaignRow {
   published_at: string | null
   created_at: string
   slug: string | null
+  opened?: number
+  clicked?: number
+  recipients?: number
 }
 
 export default function CampaignsIndexPage() {
@@ -91,8 +94,21 @@ export default function CampaignsIndexPage() {
         .select('id, title, subject, status, sent_at, sent_count, total_recipients, published_at, created_at, slug')
         .order('created_at', { ascending: false })
         .limit(50)
-      setRows((data ?? []) as CampaignRow[])
+      const baseRows = (data ?? []) as CampaignRow[]
+      setRows(baseRows)
       setLoading(false)
+      // Merge in open/click engagement for sent campaigns (one RPC call)
+      const sentIds = baseRows.filter((r) => r.sent_at).map((r) => r.id)
+      if (sentIds.length > 0) {
+        const { data: eng } = await supabase.rpc('get_campaign_engagement', { p_campaign_ids: sentIds })
+        if (eng) {
+          const byId = new Map((eng as { campaign_id: string; recipients: number; opened: number; clicked: number }[]).map((e) => [e.campaign_id, e]))
+          setRows((prev) => prev.map((r) => {
+            const e = byId.get(r.id)
+            return e ? { ...r, recipients: e.recipients, opened: e.opened, clicked: e.clicked } : r
+          }))
+        }
+      }
     })()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -153,6 +169,7 @@ export default function CampaignsIndexPage() {
                   <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">標題</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 hidden sm:table-cell">主旨</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">狀態</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 hidden sm:table-cell">成效</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 hidden md:table-cell">建立時間</th>
                   <th className="px-4 py-3" />
                 </tr>
@@ -208,6 +225,23 @@ export default function CampaignsIndexPage() {
                           </span>
                         )}
                       </div>
+                    </td>
+                    <td className="px-4 py-3 hidden sm:table-cell text-xs">
+                      {r.sent_at && r.opened !== undefined ? (
+                        <div className="flex flex-col gap-0.5 text-gray-600 dark:text-gray-400">
+                          <span title="寄出 / 開信 / 點擊">
+                            📤 {r.recipients ?? r.sent_count ?? 0}
+                            {' · '}
+                            <span className="text-green-700 dark:text-green-400">👁 {r.opened}{r.recipients ? ` (${Math.round((r.opened / r.recipients) * 100)}%)` : ''}</span>
+                            {' · '}
+                            <span className="text-blue-700 dark:text-blue-400">🔗 {r.clicked}</span>
+                          </span>
+                        </div>
+                      ) : r.sent_at ? (
+                        <span className="text-gray-400">寄出 {r.sent_count ?? 0}</span>
+                      ) : (
+                        <span className="text-gray-300 dark:text-gray-600">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-500 dark:text-gray-400 hidden md:table-cell text-xs">
                       {new Date(r.created_at).toLocaleDateString('zh-TW')}

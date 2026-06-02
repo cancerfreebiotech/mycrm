@@ -191,10 +191,38 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.cancerfree.io'
   for (let i = 0; i < recipients.length; i += CHUNK) {
     const slice = recipients.slice(i, i + CHUNK)
+
+    // Create a newsletter_recipients row per recipient BEFORE sending so we can
+    // pass its id as X-Recipient-Id (SendGrid echoes custom_args back on open/
+    // click events → the webhook attributes them to this row). Per-chunk so a
+    // mid-loop timeout doesn't leave rows for chunks that never sent.
+    const recipientIdByEmail = new Map<string, string>()
+    if (!body.testOnly) {
+      const recipientRows = slice.map((r) => ({
+        campaign_id: campaignId,
+        contact_id: r.contact_id,
+        email: r.email,
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+      }))
+      const { data: inserted, error: recErr } = await service
+        .from('newsletter_recipients')
+        .insert(recipientRows)
+        .select('id, email')
+      if (recErr) {
+        errors.push(`chunk ${i} recipient rows: ${recErr.message}`)
+      } else {
+        for (const row of inserted ?? []) {
+          recipientIdByEmail.set((row.email as string).toLowerCase().trim(), row.id as string)
+        }
+      }
+    }
+
     const personalizations = slice.map((r) => {
       const name = [r.first_name, r.last_name].filter(Boolean).join(' ').trim()
       const token = signUnsubToken(r.email, campaignId)
       const unsubUrl = `${baseUrl}/unsubscribe?token=${token}`
+      const rid = recipientIdByEmail.get(r.email.toLowerCase().trim())
       return {
         to: [name ? { email: r.email, name } : { email: r.email }],
         // SendGrid per-personalization substitutions: keys must match exactly
@@ -204,6 +232,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           '{{{unsubscribe}}}': unsubUrl,
           '{{{unsubscribe_preferences}}}': unsubUrl,
         },
+        // X-Recipient-Id is echoed back on open/click webhook events for
+        // per-recipient attribution. Omitted for test sends.
+        ...(rid ? { custom_args: { 'X-Recipient-Id': rid } } : {}),
       }
     })
     const payload = {
@@ -211,6 +242,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       subject: campaign.subject,
       content: [{ type: 'text/html', value: campaign.content_html }],
       personalizations,
+      // Force open + click tracking on so SendGrid emits the events the
+      // webhook records (independent of account-level defaults).
+      tracking_settings: {
+        open_tracking: { enable: true },
+        click_tracking: { enable: true, enable_text: false },
+      },
       // Best-effort preview text via SendGrid custom_args; also set subject summary
       ...(campaign.preview_text ? { headers: { 'X-Preview-Text': campaign.preview_text } } : {}),
     }
