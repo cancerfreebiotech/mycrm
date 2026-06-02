@@ -162,8 +162,8 @@ export default function CampaignsIndexPage() {
         ) : rows.length === 0 ? (
           <div className="text-center py-12 text-gray-400">目前沒有電子報</div>
         ) : (
-          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
                   <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">標題</th>

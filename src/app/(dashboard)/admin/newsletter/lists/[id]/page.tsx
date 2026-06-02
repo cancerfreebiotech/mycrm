@@ -487,7 +487,7 @@ export default function ListDetailPage() {
         </div>
 
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
                 <th className={thClass} onClick={() => toggleSort('email')}>

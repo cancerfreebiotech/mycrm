@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v7.0.2 — fix(ui): 後台表格手機版被裁切看不到（2026-06-02）
+
+### 變更項目
+- `/admin/newsletter/campaigns` 與 `/admin/mcp-activity` 的表格容器只有 `overflow-hidden`、沒有 `overflow-x-auto` → 手機上超出畫面的欄位被裁掉、無法橫向捲動（違反 CLAUDE.md「表格手機版可橫向捲動」）。補上 `overflow-x-auto`
+- 4 個後台表格（campaigns / mcp-activity / mcp-tokens / lists 詳細）的 `<table>` 加 `min-w`，避免 `w-full` 在窄螢幕把欄位壓扁糊在一起；現在會保持可讀寬度並橫向捲動
+
 ## v7.0.1 — feat(newsletter): 開信 / 點擊追蹤 + suppression sync 補 blocks / spam（2026-06-02）
 
 ### 變更項目

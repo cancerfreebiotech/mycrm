@@ -128,7 +128,7 @@ export default function McpTokensPage() {
         <div className="text-center py-12 text-gray-400">還沒有任何 token</div>
       ) : (
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[760px]">
             <thead className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
               <tr>
                 <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400">名稱 / 用途</th>
