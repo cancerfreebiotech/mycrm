@@ -591,6 +591,16 @@ function PendingCard({
                       <RefreshCw size={14} />
                       {t('actionMergeReplaceTo', { name: mergeTargetName ?? '' })}
                     </button>
+                    <a
+                      href={`/contacts/${mergeTargetId}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
+                      title={t('actionViewContact')}
+                    >
+                      <ExternalLink size={14} />
+                      {t('actionViewContact')}
+                    </a>
                   </>
                 )}
                 <button
@@ -689,16 +699,26 @@ function PendingCard({
               {pickerResults.length > 0 && (
                 <ul className="divide-y divide-gray-200 dark:divide-gray-700 max-h-60 overflow-y-auto">
                   {pickerResults.map((c) => (
-                    <li key={c.id}>
+                    <li key={c.id} className="flex items-center">
                       <button
                         onClick={() => onMergeManual(c.id, pickerMode)}
                         disabled={busy}
-                        className="w-full text-left px-2 py-1.5 text-sm hover:bg-white dark:hover:bg-gray-900 disabled:opacity-50 transition-colors"
+                        className="flex-1 min-w-0 text-left px-2 py-1.5 text-sm hover:bg-white dark:hover:bg-gray-900 disabled:opacity-50 transition-colors"
                       >
                         <span className="font-medium text-gray-900 dark:text-gray-100">{c.name ?? c.name_en ?? '—'}</span>
                         {c.company && <span className="text-gray-500 dark:text-gray-400 ml-2">{c.company}</span>}
                         {c.email && <span className="text-gray-400 dark:text-gray-500 ml-2 text-xs">{c.email}</span>}
                       </button>
+                      <a
+                        href={`/contacts/${c.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="shrink-0 p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+                        title={t('actionViewContact')}
+                      >
+                        <ExternalLink size={14} />
+                      </a>
                     </li>
                   ))}
                 </ul>
