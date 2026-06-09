@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## v7.0.5 — fix(newsletter): 寄送 interaction_logs 整批失敗（6 月日文電子報 0 筆紀錄）（2026-06-06）
+
+### 根本原因
+- 6 月日文電子報寄出 923 封但 0 筆 interaction_log（中文 2313 筆正常）
+- `interaction_logs` 的 per-row trigger `update_contact_last_activity` 在寫 log 後會 `UPDATE contacts`，該 UPDATE 會重新檢查 `contacts_has_name`（`COALESCE(name,name_en,name_local) IS NOT NULL`，NOT VALID）
+- 日文名單裡有 1 個「只掃到公司、沒人名」的聯絡人（Konsaru Tengu，3 名欄全空）→ trigger 的 UPDATE 違反約束 → 整批 923 列 insert 被 rollback
+- send route 把這個錯誤吞掉（只放進 HTTP 回應、沒 console、沒持久化），加上 runtime log 過期，所以一直查不到
+
+### 變更項目
+- **修資料**：3 個全空名字的聯絡人（都是 camcard 只掃到公司的）`name` 補成公司名 → 通過約束
+- **補回紀錄**：日文 campaign 的 923 筆 interaction_logs 已從名單成員重建（內容 / 時間 / send_method 與正常寄送一致）
+- **強化 send route**：log insert 改 200 列小批次（一列出錯只影響該批、不再整批全失）、失敗時 `console.error`（進 runtime log）、補 `export const maxDuration = 300`
+
 ## v7.0.4 — fix(ui): 名單詳細頁 header 手機版標題與按鈕重疊（2026-06-02）
 
 ### 變更項目

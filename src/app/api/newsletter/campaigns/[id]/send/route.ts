@@ -282,10 +282,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             campaign_id: campaignId,
             send_method: 'newsletter' as const,
           }))
-          const { error: logErr } = await service.from('interaction_logs').insert(chunkLogs)
-          if (logErr) {
-            // Log but don't abort — emails were sent, the log gap is recoverable
-            errors.push(`chunk ${i} log write: ${logErr.message}`)
+          // Insert logs in small sub-batches. A single failing row (e.g. the
+          // contacts.last_activity trigger re-validating a contact that
+          // violates contacts_has_name) rejects its whole INSERT statement —
+          // sub-batching limits the blast radius to ~LOG_BATCH rows instead of
+          // wiping the entire chunk's logs (this is what silently lost all 923
+          // logs on the 6/1 JP send). Failures are console.error'd so they show
+          // up in runtime logs, not just swallowed in the HTTP response.
+          const LOG_BATCH = 200
+          for (let j = 0; j < chunkLogs.length; j += LOG_BATCH) {
+            const logSlice = chunkLogs.slice(j, j + LOG_BATCH)
+            const { error: logErr } = await service.from('interaction_logs').insert(logSlice)
+            if (logErr) {
+              const msg = `chunk ${i} log write [${j}-${j + logSlice.length}]: ${logErr.message}`
+              errors.push(msg)
+              console.error('[newsletter send]', msg)
+            }
           }
         }
       }
@@ -317,3 +329,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     testOnly: !!body.testOnly,
   })
 }
+
+// Large lists (2000+ recipients) + per-chunk SendGrid calls + log inserts can
+// run well past the default. Allow up to 5 minutes (Vercel Pro/Enterprise).
+export const maxDuration = 300
