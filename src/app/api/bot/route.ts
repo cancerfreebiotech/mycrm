@@ -949,7 +949,7 @@ async function handlePhoto(
     // Build buttons: when dup detected, offer merge/replace options.
     // 換工作 case (mergeTargetIsBounced): surface the replace button FIRST so
     // user one-click updates the dead email instead of stacking another orphan.
-    const cardButtons: Array<Array<{ text: string; callback_data: string }>> = []
+    const cardButtons: Array<Array<{ text: string; callback_data?: string; url?: string }>> = []
     if (mergeTargetId && mergeTargetName && mergeTargetIsBounced) {
       cardButtons.push([
         { text: m.btnUpdateEmail(mergeTargetName), callback_data: `replace_${pending.id}` },
@@ -967,6 +967,12 @@ async function handlePhoto(
           { text: m.btnReplaceJob(mergeTargetName), callback_data: `replace_${pending.id}` },
         ])
       }
+      // URL button → open the existing contact so the user can review before
+      // deciding which merge action to take. Telegram requires an absolute URL.
+      const baseUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.cancerfree.io'
+      cardButtons.push([
+        { text: m.btnViewExisting(mergeTargetName), url: `${baseUrl}/contacts/${mergeTargetId}` },
+      ])
     }
     cardButtons.push([{ text: m.btnNotSave, callback_data: `cancel_${pending.id}` }])
 

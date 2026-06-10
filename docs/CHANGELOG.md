@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v7.0.7 — feat(bot): 名片重複偵測卡片加「查看既有聯絡人」連結（2026-06-10）
+
+### 變更項目
+- Telegram bot 拍名片偵測到 email/姓名已存在時，重複卡片（Create new / Add to / Update / Discard）多一個 **🔗 查看「{name}」** URL 按鈕 → 直接開既有聯絡人頁面，先判斷再決定要建新 / 合併 / 換工作
+- 三語（zh-TW / en / ja）新增 `btnViewExisting`
+
 ## v7.0.6 — feat(pending): 待辨識頁的合併建議加「查看這筆 ↗」開新頁連結（2026-06-06）
 
 ### 變更項目

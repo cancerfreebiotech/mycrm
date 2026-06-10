@@ -338,6 +338,7 @@ export interface BotMessages {
   btnMergeInto: (name: string) => string
   btnReplaceJob: (name: string) => string
   btnUpdateEmail: (name: string) => string
+  btnViewExisting: (name: string) => string
   btnSkipNoCard: string
   btnSkipDirectSave: string
   btnSkipNoNeed: string
@@ -742,6 +743,7 @@ const zh: BotMessages = {
   btnNotSave: '❌ 不存檔',
   btnMergeInto: (name) => `📌 加到「${name}」`,
   btnReplaceJob: (name) => `🔄 更新「${name}」（換工作）`,
+  btnViewExisting: (name) => `🔗 查看「${name}」`,
   btnUpdateEmail: (name) => `🔧 更新「${name}」email（換工作）`,
   btnSkipNoCard: '⏭ 跳過，不需要名片',
   btnSkipDirectSave: '⏭ 跳過，直接存入',
@@ -1141,6 +1143,7 @@ const en: BotMessages = {
   btnNotSave: '❌ Discard',
   btnMergeInto: (name) => `📌 Add to "${name}"`,
   btnReplaceJob: (name) => `🔄 Update "${name}" (job change)`,
+  btnViewExisting: (name) => `🔗 View "${name}"`,
   btnUpdateEmail: (name) => `🔧 Update "${name}" email (job change)`,
   btnSkipNoCard: '⏭ Skip, no card needed',
   btnSkipDirectSave: '⏭ Skip, save as-is',
@@ -1540,6 +1543,7 @@ const ja: BotMessages = {
   btnNotSave: '❌ 保存しない',
   btnMergeInto: (name) => `📌 「${name}」に追加`,
   btnReplaceJob: (name) => `🔄 「${name}」を更新（転職）`,
+  btnViewExisting: (name) => `🔗 「${name}」を見る`,
   btnUpdateEmail: (name) => `🔧 「${name}」のメールを更新（転職）`,
   btnSkipNoCard: '⏭ スキップ、名刺は不要',
   btnSkipDirectSave: '⏭ スキップしてそのまま保存',
