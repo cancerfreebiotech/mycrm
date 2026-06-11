@@ -17,6 +17,8 @@
 
 此專案已有部分功能上線（v0.1），以下檔案已存在且運作中，**Task 清單中未提及者請勿重寫**：
 
+> **產品化方向（v7.0.7 起）**：本 PRD 末尾新增四個章節，規劃將 myCRM 從「cancerfree.io 內部單租戶系統」轉為「可賣給其他新創的多租戶 SaaS 產品」，並新增相簿 AI 人臉辨識、Social Briefing 與 AI Chatbot。見「四十四、產品化缺口盤點」「四十五、v8.0 SaaS 多租戶化」「四十七、v7.1 相簿人臉辨識」「四十九、v7.2 Social Briefing + AI Chatbot」。
+
 | 檔案 | 狀態 | 說明 |
 |------|------|------|
 | `src/app/api/bot/route.ts` | 已實作，需修改 | Bot webhook，目前查 authorized_users，需改查 users |
@@ -4173,3 +4175,457 @@ Claude Code 讀取後可：
 - [ ] **Task 168** `[新增]` — 新增 `/feedback` 回饋表單頁（類型、標題、描述、截圖上傳、Bug 無截圖確認提示）；Sidebar 新增「回饋」入口
 - [ ] **Task 169** `[新增]` — 新增 `/admin/feedback` 管理頁（列表、詳情、狀態更新）；Sidebar admin 區塊新增「回饋管理」
 - [ ] **Task 170** `[修改]` — i18n 三份語言檔新增 v2.4 相關 key（mfa.*、feedback.*、contacts.exportNoPermission）
+
+---
+
+## 四十四、產品化缺口盤點 — 「賣給其他新創」要補的洞
+
+> **背景**：myCRM 至 v7.0.7 已是成熟系統，但所有設計都假設「只有 cancerfree.io 一間公司」。要變成可賣給其他新創的 SaaS 產品，下列缺口必須先補。本章為動機盤點，對應解法見「四十五、v8.0」。
+
+### 44.1 缺口清單（依嚴重度）
+
+| # | 缺口 | 嚴重度 | 現況 |
+|---|------|--------|------|
+| 1 | **完全無多租戶概念** | 🔴 致命 | 所有資料表全域共享，無 `organizations` / `org_id`。第二間公司的資料無處可放、也無法隔離。 |
+| 2 | **API 100% 用 service role 繞過 RLS** | 🔴 致命 | 約 81 個 API route 用 `createServiceClient()`，RLS 對 API 路徑完全無效。租戶隔離主戰場在「API 層」而非 RLS — 任一 route 漏掉 `.eq('org_id')` 就跨租戶外洩。 |
+| 3 | **RLS = 登入即看全部** | 🟠 高 | `contacts` 等 policy 為 `USING(true)` / `WITH CHECK(true)`；`is_super_admin()`、`has_feature()` 用 `auth.jwt()->>'email'` 比對。設計前提是「登入＝可信員工，全員看到全部」。 |
+| 4 | **唯一網域硬綁定** | 🟠 高 | `auth/callback` 強制 email 結尾為 `ALLOWED_EMAIL_DOMAIN`（預設 `cancerfree.io`）；Azure AD 為單一 tenant。外部公司員工無法登入。 |
+| 5 | **約 23–26 處 hardcode 公司資訊** | 🟠 高 | `cancerfree.io`、`bcc.cancerfree.io`、`crm.cancerfree.io`、`pohan.chen@cancerfree.io`（reply-to / fallback super admin）、newsletter AI prompt 內的公司名、FB/LinkedIn/website/logo URL。 |
+| 6 | **零計費 / 訂閱 / onboarding** | 🟠 高 | 無付費、方案、用量限制、試用、自助註冊流程。 |
+| 7 | **Storage 無租戶隔離** | 🟡 中 | `cards` bucket 為 public，路徑 `cards/{contactId}_...` 無 org 前綴；猜到路徑即可讀任意租戶名片。 |
+| 8 | **Bot / MCP token 無 org 綁定** | 🟡 中 | Telegram/Teams bot、`agent_tokens` 都無 org 概念，掃名片或 agent 操作會寫進錯 org。 |
+
+### 44.2 既有歷史地雷（多租戶改造時必須沿用，不可「順手修正」）
+
+- **`auth.users.id ≠ public.users.id`**：全系統靠 **email** 比對使用者（`/api/me`、`is_super_admin()`、`has_feature()`）。多租戶設計必須沿用 email → user 查找，不可改用 id，否則既有資料對不上。
+- **Telegram/Teams 反查**：bot 靠 `users.telegram_id` / `teams_user_id` 反查 user — 這是 bot 綁 org 的天然掛勾點。
+
+### 44.3 既有可重用的好基礎
+
+- 權限系統（`role` + `granted_features` + `has_feature()` RLS helper）可擴展為 per-org。
+- i18n 三語已完整、Supabase 原生支援 pgvector 與 RLS。
+- 非同步任務模式成熟（`pending-ocr-worker.ts` 的 claim / unstick / retry）。
+- MCP v2（`agent_tokens` + scopes + `agent_actions` audit）、Portkey/Gemini、SendGrid、Hunter、Microsoft Graph 都已整合。
+
+---
+
+## 四十五、v8.0 — SaaS 多租戶化（功能規格）
+
+> **目標**：在不中斷現有 cancerfree.io 單租戶服務的前提下，逐步把系統改為多租戶 SaaS。採 **Shared DB + `org_id` + RLS（單一 Supabase project）** 模型。
+
+### 45.1 租戶模型選擇
+
+| 方案 | 結論 | 理由 |
+|------|------|------|
+| **Shared DB + `org_id`（採用）** | ✅ | 既有單租戶資料直接 backfill 成一個 default org，現有功能零中斷；一次 migration 服務所有租戶；super_admin 跨租戶後台天然可行；與「service role + API 層過濾」現況最契合。 |
+| DB-per-tenant | ❌ | 每個租戶要 provision 整個 Supabase project（Auth/Storage/env/webhook），早期 <50 客戶純屬運維災難，跨租戶聚合幾乎不可能。 |
+| Schema-per-tenant | ❌ | PostgREST/Supabase 下 service-role client 無法乾淨 per-request 切 schema；每加一欄要跑 N 個 schema。 |
+
+> 日後若有大客戶要求物理隔離，可在 shared 架構上對「該 org」單獨升級為 DB-per-tenant（org → connection string 映射），架構不衝突。
+
+### 45.2 資料層
+
+```sql
+-- 租戶主表
+create table public.organizations (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  slug        text unique not null,           -- 用於 URL / bot org_code
+  plan_tier   text not null default 'free',   -- free|starter|pro|enterprise
+  status      text not null default 'active', -- active|suspended|trialing|canceled
+  settings    jsonb not null default '{}',    -- 取代 hardcode：reply_to, bcc_domain, app_domain, allowed_email_domain, company_name
+  branding    jsonb not null default '{}',    -- logo_url, primary_color, app_name, social URLs
+  created_at  timestamptz not null default now()
+);
+
+-- user ↔ org 多對多 + 角色 + 功能授權（granted_features 從 users 搬到此處 → per-org）
+create table public.organization_members (
+  id               uuid primary key default gen_random_uuid(),
+  org_id           uuid not null references public.organizations(id) on delete cascade,
+  user_id          uuid not null references public.users(id) on delete cascade,
+  role             text not null default 'member',  -- owner|admin|member
+  granted_features text[] not null default '{}',
+  status           text not null default 'active',  -- active|invited|removed
+  invited_email    text,
+  created_at       timestamptz not null default now(),
+  unique (org_id, user_id)
+);
+create index idx_org_members_user on public.organization_members(user_id);
+create index idx_org_members_org  on public.organization_members(org_id);
+
+-- 邀請（email 受邀但尚未有帳號）
+create table public.organization_invites (
+  id          uuid primary key default gen_random_uuid(),
+  org_id      uuid not null references public.organizations(id) on delete cascade,
+  email       text not null,
+  role        text not null default 'member',
+  token       text unique not null,
+  expires_at  timestamptz not null,
+  accepted_at timestamptz,
+  created_at  timestamptz not null default now()
+);
+```
+
+**業務表加 `org_id`**（NOT NULL + FK + 複合索引，`org_id` 為 leftmost）：
+`contacts、contact_cards、contact_photos、contact_tags、tags、tasks、task_assignees、interaction_logs、email_templates、template_attachments、prompts、user_prompts、pending_contacts、camcard_pending、duplicate_pairs、failed_scans、feedback、agent_tokens、agent_actions、report_schedules、bot_sessions、telegram_dedup` 及整個 `newsletter_*` 家族。
+
+**保持全域（平台共用字典，不加 org_id）**：`countries、ai_endpoints、ai_models、gemini_models、medical_departments、docs_content、system_settings、users`（身分本體）。
+
+**所有 `UNIQUE(x)` 改 `UNIQUE(org_id, x)`**（如 newsletter email 去重、tag name 去重），否則跨租戶撞鍵。
+
+`users.role='super_admin'` 改為**平台級**（你做跨租戶營運後台），與 org 內的 owner/admin/member 脫鉤。
+
+### 45.3 Backfill migration 鐵律（零停機）
+
+```
+1. 業務表先加 nullable org_id
+2. 部署「會寫 org_id」的新程式碼
+3. backfill：建 default org（id=00000000-…001 = CancerFree），現有 users 全加入為 member、搬 granted_features，
+   每張業務表 UPDATE … SET org_id = default org
+4. 全部回填且新寫入皆帶 org_id 後，才 ALTER … SET NOT NULL + 加 DEFAULT
+```
+
+> 順序顛倒（先 NOT NULL）會擋住線上正在跑的舊版寫入。
+
+### 45.4 隔離雙層
+
+**主防線 — API 層強制過濾**（因為 service role 繞過 RLS）：
+
+- 新增 `src/lib/orgContext.ts` 的 `getOrgContext()`：用 `auth.getUser()` 取登入 email → 查 `users`（沿用 email 慣例）→ 讀 `active_org_id` cookie → 對 `organization_members` 驗 membership（防偽造 cookie）→ 回 `{ userId, email, orgId, orgRole, grantedFeatures }`。**所有 service-role route 第一行強制呼叫**。
+- 提供 `orgScopedClient(ctx)` 薄 wrapper：對 `.from(table)` 自動注入 `.eq('org_id', ctx.orgId)` 與 insert default，讓「忘記過濾」從預設不安全變預設安全。
+- CI lint：禁止業務表用裸 `createServiceClient()` 而不經 `getOrgContext`。
+
+**第二層 — RLS 重寫**（縱深防禦 + 支援未來前端直連）：
+
+```sql
+create or replace function public.current_org_id()
+returns uuid language sql stable set search_path = public, pg_temp as $$
+  select nullif(auth.jwt() -> 'app_metadata' ->> 'org_id', '')::uuid
+$$;
+
+-- contacts：USING(true) → org 隔離（其餘業務表同理）
+drop policy "contacts_read" on public.contacts;
+create policy "contacts_read" on public.contacts for select to authenticated
+  using (org_id = current_org_id());
+create policy "contacts_insert" on public.contacts for insert to authenticated
+  with check (org_id = current_org_id());
+create policy "contacts_update" on public.contacts for update to authenticated
+  using (org_id = current_org_id()) with check (org_id = current_org_id());
+```
+
+- Supabase Auth Hook `custom_access_token_hook`：讀 `active_org_id` cookie → 驗 membership → 把 `org_id` 寫入 JWT `app_metadata`，讓 `current_org_id()` 零查詢。
+- `has_feature()` 改查 `organization_members.granted_features`（用 `current_org_id()`）。
+- 切 org 時 refresh token 使新 claim 生效（避免 stale）；敏感操作仍由 `getOrgContext()` 即時驗 membership，不純信 claim。
+
+### 45.5 認證 / Onboarding
+
+1. 移除 `auth/callback` 的網域強制（`email.endsWith(ALLOWED_DOMAIN)` 整段刪）。
+2. 登入後分流：已是 member → 設 `active_org_id` cookie 進 app；有未過期 invite → 引導加入；都沒有 → `/onboarding` 建立新 org（填 name/slug、自己成為 owner、開 free trial）。
+3. Org switcher（header）：列出該 user 所有 active membership，切換寫 cookie + refresh token。
+4. **Hardcode → DB**：26 處搬到 `organizations.settings` / `branding`（reply_to、bcc_domain、app_domain、newsletter 公司名、FB/LinkedIn/website/logo URL、super admin fallback 改查 org owner）。各 route 經 `ctx.orgId` 載入 settings 取代常數。
+5. Azure AD 改 multi-tenant app，或加開放 OAuth / email+password（賣給其他公司不能綁你的 Azure tenant）。MFA 強制邏輯保留不動。
+
+### 45.6 計費（Stripe）
+
+```sql
+create table public.subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null unique references public.organizations(id) on delete cascade,
+  stripe_customer_id text, stripe_subscription_id text,
+  plan_tier text not null default 'free',
+  status text not null default 'trialing',  -- trialing|active|past_due|canceled
+  current_period_end timestamptz,
+  created_at timestamptz not null default now()
+);
+create table public.plan_limits (
+  plan_tier text primary key,
+  max_contacts int, max_emails_month int, max_ai_calls_month int, max_seats int  -- NULL = unlimited
+);
+create table public.usage_counters (
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  period text not null,   -- '2026-06'
+  metric text not null,   -- emails|ai_calls|contacts
+  count  bigint not null default 0,
+  primary key (org_id, period, metric)
+);
+```
+
+- **選 Stripe Billing（Checkout + Customer Portal + Webhook）** 而非 Vercel Marketplace billing：要賣給外部客戶、用自己的結帳流程更靈活。`/api/stripe/webhook` 同步 subscription 狀態。
+- `enforceQuota(ctx, metric)` helper：在 contacts insert / email send / AI 呼叫前檢查 `usage_counters` vs `plan_limits`，超額回 402 + upgrade prompt。月度用 period key 自然分桶、無需重置。
+
+### 45.7 Bot 多租戶
+
+- `bot_sessions` 加 `org_id`；綁定流程 `/start <org_code>`（org_code = `organizations.slug` 或一次性 `bot_link_token`），後續該 telegram_id 操作都用此 org_id。
+- 未綁 org 的訊息一律拒絕（防污染 default org）；多 org user 用 `/switchorg <org_code>`。
+- `agent_tokens` 加 `org_id`，`/api/mcp` 驗 token 時注入。
+
+### 45.8 Storage 隔離
+
+1. 上傳路徑加 `{org_id}/` 前綴（cards / camcard / template-attachments / feedback 同規則）。
+2. bucket 轉 private + signed URL：`getPublicUrl()` 改 `createSignedUrl(path, ttl)`；DB 不再存永久 public URL，改存既有 `storage_path` 欄、讀取時即時簽名（遷移期雙寫）。
+3. Storage RLS：policy 用路徑第一段比對 org membership（縱深防禦）。
+
+### 45.9 風險清單
+
+| # | 風險 | 嚴重度 | 對策 |
+|---|------|--------|------|
+| 1 | service role 漏 `.eq(org_id)` → 跨租戶外洩 | 致命 | `getOrgContext` 強制 + `orgScopedClient` 預設安全 + CI lint；RLS 第二層 |
+| 2 | JWT org_id claim stale | 高 | 敏感操作即時驗 membership；切 org refresh token |
+| 3 | backfill 前就 SET NOT NULL → 擋線上寫入 | 高 | 嚴守 nullable→部署→backfill→NOT NULL |
+| 4 | per-org unique 未改 → 撞鍵 / 資料混 | 高 | 所有 UNIQUE 改帶 org_id |
+| 5 | bucket 轉 private 使舊 public URL 失效 | 中 | 用 storage_path 即時簽名、遷移期雙寫 |
+| 6 | bot 未綁 org → 污染 default org | 中 | 未綁一律拒絕 |
+| 7 | 誤用 auth.users.id 比對 | 中 | 一律 email 查 user |
+| 8 | Azure AD 單租戶 | 中 | 改 multi-tenant 或加開放 OAuth |
+| 9 | MCP token 無 org | 高 | token 加 org_id 並注入 |
+
+---
+
+## 四十六、v8.0 開發任務清單
+
+> 分階段 roadmap，每階段結束時系統仍可正常運作（單租戶不中斷）。
+
+**Phase 0 — 基礎設施（無行為改變）**
+- [ ] **Task 171** `[新增]` — Migration：建 `organizations` / `organization_members` / `organization_invites` 表 + 索引
+- [ ] **Task 172** `[新增]` — Migration：建 default org（CancerFree）、現有 users 全加入為 member、搬移 `granted_features`
+- [ ] **Task 173** `[修改]` — Migration：所有業務表加 **nullable** `org_id` + 複合索引（leftmost org_id），backfill = default org
+- [ ] **Task 174** `[修改]` — Migration：所有 `UNIQUE(x)` 改 `UNIQUE(org_id, x)`
+- [ ] **Task 175** `[新增]` — `src/lib/orgContext.ts`：`getOrgContext()`、`orgScopedClient()`（寫好但尚未強制套用）
+
+**Phase 1 — API 層 org 注入（隔離主防線）**
+- [ ] **Task 176** `[新增]` — Supabase Auth Hook `custom_access_token_hook` 注入 org_id claim；`active_org_id` cookie 機制
+- [ ] **Task 177** `[修改]` — 逐批改 81 個 route 導入 `getOrgContext()` + `.eq('org_id')` + insert 帶 org_id（優先 contacts / newsletter / tasks 等高敏感）
+- [ ] **Task 178** `[新增]` — CI lint 規則：禁止業務表用裸 `createServiceClient()` 而不經 `getOrgContext`
+- [ ] **Task 179** `[修改]` — bot 加 org 綁定（`bot_sessions.org_id`、`/start <org_code>`、未綁拒絕）；`agent_tokens` 加 org_id 並於 `/api/mcp` 注入
+
+**Phase 2 — 收緊 + RLS / Storage**
+- [ ] **Task 180** `[修改]` — 業務表 `org_id` SET NOT NULL + DEFAULT
+- [ ] **Task 181** `[修改]` — `rls_security.sql` 重寫：`current_org_id()` / `is_org_member()`、policy `USING(true)` → `org_id = current_org_id()`、`has_feature()` 改查 member
+- [ ] **Task 182** `[修改]` — Storage：上傳路徑加 `{org_id}/` 前綴、bucket 轉 private、改 signed URL（存 storage_path 即時簽名）、加 storage RLS
+
+**Phase 3 — Onboarding / Auth 開放**
+- [ ] **Task 183** `[修改]` — 移除 `auth/callback` 網域強制；登入後分流（member / invite / 新建 org）
+- [ ] **Task 184** `[新增]` — `/onboarding` 建立 org 流程；邀請流程（`organization_invites` + 一次性連結）；header org switcher
+- [ ] **Task 185** `[修改]` — 26 處 hardcode 搬到 `organizations.settings` / `branding`，各 route 從 org 載入
+- [ ] **Task 186** `[修改]` — Azure AD 改 multi-tenant 或加開放 OAuth / email+password
+
+**Phase 4 — 計費 / Quota**
+- [ ] **Task 187** `[新增]` — Migration：`subscriptions` / `plan_limits` / `usage_counters` 表
+- [ ] **Task 188** `[新增]` — Stripe Checkout + Customer Portal + `/api/stripe/webhook`
+- [ ] **Task 189** `[新增]` — `enforceQuota()` 接 contacts insert / email send / AI 呼叫入口
+- [ ] **Task 190** `[新增]` — 平台級 super_admin 跨租戶營運後台
+
+---
+
+## 四十七、v7.1 — 相簿照片多對多 + AI 人臉辨識（功能規格）
+
+> **目標**：相簿一張照片可對應多位聯絡人，並用 AI 自動偵測人臉、跨照片比對建議「這張臉像哪位聯絡人」。現況 `contact_photos.contact_id` 為一對一，且無任何人臉辨識。
+
+### 47.1 資料模型（一對一 → 多對多）
+
+```sql
+-- 單表同時承載「手動標記」與「AI 偵測框/連結」；contact_id 可為 NULL（偵測到臉但未指認）
+create table public.photo_faces (
+  id           uuid primary key default gen_random_uuid(),
+  photo_id     uuid not null references public.contact_photos(id) on delete cascade,
+  contact_id   uuid references public.contacts(id) on delete cascade,  -- NULL = 未指認
+  bbox_x real, bbox_y real, bbox_w real, bbox_h real,   -- 正規化 0~1，與解析度無關
+  source       text not null default 'manual'            -- manual|ai_detected
+               check (source in ('manual','ai_detected')),
+  status       text not null default 'confirmed'         -- confirmed|suggested|rejected
+               check (status in ('confirmed','suggested','rejected')),
+  suggested_contact_id uuid references public.contacts(id) on delete set null,
+  confidence   real,                                     -- AI 相似度（手動為 NULL）
+  created_by   uuid references auth.users(id),
+  created_at   timestamptz not null default now(),
+  constraint photo_faces_unique_manual unique (photo_id, contact_id)
+);
+create index idx_photo_faces_photo on public.photo_faces(photo_id);
+create index idx_photo_faces_contact on public.photo_faces(contact_id);
+```
+
+```sql
+-- 人臉特徵（生物辨識資料，獨立表，僅 service_role 可讀）
+create extension if not exists vector;
+create table public.face_embeddings (
+  id uuid primary key default gen_random_uuid(),
+  face_id uuid not null references public.photo_faces(id) on delete cascade,
+  contact_id uuid references public.contacts(id) on delete cascade,
+  embedding vector(128) not null,    -- @vladmandic/face-api descriptor = 128 維
+  model_tag text not null,           -- 模型換版用
+  created_at timestamptz not null default now()
+);
+create index idx_face_embeddings_vec on public.face_embeddings
+  using ivfflat (embedding vector_cosine_ops) with (lists = 100);
+-- RLS：REVOKE ALL FROM anon, authenticated；只有 service role（API route）能存取
+```
+
+「這張臉像哪位聯絡人」比對：
+```sql
+select contact_id, 1 - (embedding <=> $1) as similarity
+from face_embeddings where contact_id is not null
+order by embedding <=> $1 limit 5;   -- similarity > 閾值（建議 0.6 起，需實測校準）視為建議
+```
+
+### 47.2 Migration
+
+- backfill：既有每筆 `contact_photos` → 一筆 `photo_faces`（`manual` / `confirmed` / 無 bbox）。
+- 上傳路徑過渡期雙寫（建照片同時建一筆 photo_face），驗證後 `ALTER TABLE contact_photos DROP COLUMN contact_id`。
+- **cascade 語意改變**：原一對一刪 contact 會連帶刪光照片；多對多後刪 contact 只刪 `photo_faces` 連結、**不刪共享照片**。需定義孤兒照片策略（無任何 face 連結的照片 → 保留在「未歸類」或清理）。
+
+### 47.3 技術選型
+
+| 工作 | 方案 | 位置 |
+|------|------|------|
+| 人臉框 bbox 偵測 | Gemini（既有 Portkey 管線，回 JSON bbox 陣列），零新依賴 | 可在 API route / worker |
+| embedding + 跨照片比對 | `@vladmandic/face-api`（128 維 descriptor）+ pgvector | **Supabase Edge Function 或背景 worker**，不放 Vercel 主 API route（避免 tfjs binary / 冷啟撐爆 function） |
+
+排除 AWS Rekognition / Azure Face：把生物辨識資料外送第三方，對「要賣給其他新創」合規負擔最重。本方案資料留自家 Supabase。
+
+### 47.4 合規（生物辨識 — GDPR Art.9 / 美國 BIPA）
+
+- 啟用人臉辨識時跳**一次性 consent modal** 並記錄同意（BIPA 要件）。
+- 可刪除：刪 contact 時 `face_embeddings.contact_id ON DELETE CASCADE` 清向量；提供「清除所有人臉特徵」管理操作 + 保留期 cron（N 天未確認自動清）。
+- `face_embeddings` 僅 service_role 可讀；資料不出境。
+- 對外文件標示「人臉辨識資料留存於客戶自己的資料庫、可隨時刪除」。
+
+### 47.5 UI / UX（遵 CLAUDE.md：dark mode 強制、mobile-first、i18n 三語、Toast 規則、觸控 ≥44px）
+
+- 相簿頁 `photos/page.tsx` 從「按 contact_id 分組」重構為**以照片為主體的網格 + 多人角標**（顯示框到 N 人）；「依聯絡人」篩選保留（query `photo_faces.contact_id`）。
+- 新元件 `PhotoFaceTagger.tsx`：lightbox 上以正規化 bbox 疊框；手動標記（拖框 → 聯絡人搜尋下拉 → 建立 `photo_faces`，手機點按建框 + 拖拉 handle ≥44px）；AI suggested 框用**虛線 + amber** + 接受/拒絕按鈕（≥44px，接受 → status=confirmed 並寫 contact_id；拒絕 → rejected）。
+- contact 詳情頁照片查詢改 join `photo_faces`（找出所有框到此人的照片）；上傳後同步建一筆 confirmed face。
+- 顏色用語意 class（confirmed `border-blue-500` / suggested `border-amber-500`），不 hardcode hex。Toast：標記成功 success、接受/拒絕 info、4xx 顯示翻譯後 error、5xx 通用錯誤。
+- i18n：三語 `photos` namespace 同步新增 key（`tagFace`、`addTag`、`selectContact`、`acceptSuggestion`、`rejectSuggestion`、`facesInPhoto`、`removeTag`、`aiSuggested` …）。
+
+### 47.6 API（kebab-case）
+
+- 改 `api/photos`（GET 回每張照片的 `faces[]`：contact、bbox、status）。
+- 新 `api/photo-faces`（POST 手動新增標記）、`api/photo-faces/[id]`（PATCH 接受/拒絕、DELETE）。
+- 新 `api/face-detect`（POST 觸發 AI 偵測，feature-gated）、`api/face-suggest`（POST pgvector 最近鄰建議）。
+- `src/lib/imageProcessor.ts` 加 `cropFace(buffer, bbox)`（sharp `.extract()` 依正規化 bbox 裁切）；新 `src/lib/faceDetect.ts`（`detectFacesWithGemini` / `embedFace` / `findSimilarContacts`）。
+
+---
+
+## 四十八、v7.1 開發任務清單
+
+**Phase 1 — 多對多 + 手動標記（無 AI）**
+- [ ] **Task 191** `[新增]` — Migration：`photo_faces` 表 + 索引 + RLS；backfill 既有 `contact_photos`
+- [ ] **Task 192** `[修改]` — 上傳路徑（bot、contact 詳情頁）雙寫：insert 照片同步 insert 一筆 confirmed photo_face
+- [ ] **Task 193** `[修改]` — `api/photos` GET 改 join `photo_faces`，回每張照片 `faces[]`
+- [ ] **Task 194** `[修改]` — 重構 `photos/page.tsx`：移除按 contact 分組，改照片主體網格 + 多人角標
+- [ ] **Task 195** `[新增]` — `PhotoFaceTagger.tsx`：lightbox 疊框、拖框建立、聯絡人搜尋、刪除標記（含手機觸控）
+- [ ] **Task 196** `[新增]` — `api/photo-faces`（POST）、`api/photo-faces/[id]`（PATCH/DELETE）
+- [ ] **Task 197** `[修改]` — contact 詳情頁照片查詢改 join `photo_faces`
+- [ ] **Task 198** `[修改]` — i18n 三語 `photos` namespace 新增 key
+- [ ] **Task 199** `[修改]` — Migration 收尾：`DROP COLUMN contact_photos.contact_id` + 孤兒照片策略
+
+**Phase 2 — AI 人臉辨識（合規 + 自動建議）**
+- [ ] **Task 200** `[新增]` — `face_recognition` consent modal + 同意紀錄
+- [ ] **Task 201** `[新增]` — Migration：`create extension vector`、`face_embeddings` 表 + ivfflat 索引 + 僅 service_role RLS
+- [ ] **Task 202** `[新增]` — `src/lib/faceDetect.ts`：Gemini bbox 偵測 + face-api embedding（Edge Function / 背景 worker）+ pgvector 相似搜尋
+- [ ] **Task 203** `[修改]` — `imageProcessor.ts` 加 `cropFace()`
+- [ ] **Task 204** `[新增]` — `api/face-detect`（觸發偵測）、`api/face-suggest`（最近鄰建議）
+- [ ] **Task 205** `[新增]` — 背景流程：上傳後排程偵測 → 寫 `photo_faces`（ai_detected/suggested）+ `face_embeddings`；前端 polling/realtime 顯示
+- [ ] **Task 206** `[修改]` — `PhotoFaceTagger.tsx` 擴充 suggested 框（虛線+amber）+ 接受/拒絕 + Toast
+- [ ] **Task 207** `[新增]` — 合規操作：「清除所有人臉特徵」管理動作 + embedding 保留期清理 cron
+- [ ] **Task 208** `[修改]` — similarity 閾值校準、`model_tag` 版本管理
+
+---
+
+## 四十九、v7.2 — Social Briefing + AI Chatbot（功能規格）
+
+> **目標**：(A) 對聯絡人產生「這個人 + 他公司」最新動態 briefing（含「下週二要跟某某人開會 → 自動整理」）；(B) 整合 AI chatbot 成為 AI-enabled CRM。
+
+### 49.1 (A) Social Briefing 架構
+
+```
+觸發：聯絡人頁按鈕 / 自然語言「下週二跟 X 開會」/ 會議前自動 cron
+   ↓ POST /api/social-briefing/request → 寫 contact_briefings(status=pending)（即時回「已排程」）
+   ↓ [非同步] cron /api/cron/process-pending-briefings（*/2，maxDuration 300，每批少量）
+   ↓ social-briefing-worker.ts：claim → enrich → LLM 整理 → 寫回 + interaction_logs(type='briefing')
+   ↓ 聯絡人頁/chatbot 顯示 result_md；pre_meeting 情境選配 Graph sendMail reminder
+```
+
+```sql
+create table public.contact_briefings (
+  id uuid primary key default gen_random_uuid(),
+  contact_id uuid not null references public.contacts(id) on delete cascade,
+  status  text not null default 'pending',   -- pending|processing|done|failed
+  trigger text not null default 'manual',     -- manual|nl_command|pre_meeting
+  meeting_at timestamptz,
+  result_md text,
+  sources jsonb default '[]'::jsonb,          -- [{title,url,kind,fetched_at}]，kind 標來源類型
+  model_used text, error_message text,
+  retry_count int not null default 0,
+  created_by uuid not null references public.users(id),
+  created_at timestamptz not null default now(),
+  processed_at timestamptz
+);
+create index on public.contact_briefings (status, created_at);
+create index on public.contact_briefings (meeting_at) where status = 'pending';
+```
+
+非同步 worker `src/lib/social-briefing-worker.ts` **複用 `pending-ocr-worker.ts`** 三件事：樂觀 claim（防重複）、stuck 自我修復（processing >10 分鐘 reset）、retry（達 MAX_RETRY 設 failed）。
+
+### 49.2 資料源（OSINT + 合規混合，依決策）
+
+**預設管線（合規，產品對外用）**：
+- `src/lib/web-search.ts`（Tavily 或 Brave）查「{name} {company}」「{company} news/funding」。
+- 既有 `hunter.ts`（email/公司 enrichment）。
+- 既有 `fetch-url-context.ts` 抓官方頁面文字（已截斷 + 逾時 + 吞錯）。
+- LLM 整理成結構化 briefing markdown + `sources[]`（每筆標 `kind`：web_search / official_site / hunter / news），只整理「公開、可引用」資訊。
+
+**OSINT 管線（feature flag、預設關閉、限知情自用）**：
+- sherlock / maigret / social-analyzer 跑**獨立 Python worker 容器**（Fly.io / Railway / 自架），Vercel 透過 `contact_briefings` queue 表呼叫（Vercel serverless 跑不動 Python CLI）。
+- ⚠️ **PRD 明載限制**：這些工具直接掃描社群平台、違反多數平台 ToS，產出個資彙整踩 GDPR / 台個資法；會被平台封 IP 影響穩定性。**不可預設賣給外部客戶**，僅限 owner 知情自用、且須單獨開啟。對外產品定位以合規管線為準。
+
+### 49.3 觸發點
+
+- 聯絡人頁按鈕（`contacts/[id]/page.tsx`）→ `/api/social-briefing/request`。
+- 自然語言：既有 `parseMeetingCommand`（bot `handleMeet` / chatbot）建會議後，把 attendee 解析成 contact，insert `contact_briefings(trigger='nl_command', meeting_at=...)`。
+- 會議前自動：cron 掃 `meeting_at` 落在未來 24h 且未 briefing 者，自動建 pending；done 後若 user 有 `provider_token` 用 `getValidProviderToken` + `sendMail` 寄會議前 reminder。
+
+### 49.4 (B) AI Chatbot 架構
+
+- **後端**：`@anthropic-ai/sdk`（devDep → dep）+ Claude `claude-opus-4-8` + adaptive thinking + **串流**（Route Handler 回 `ReadableStream`）+ 手動 tool-use loop。Gemini 留給既有 OCR / email 等單次結構化任務。
+- **複用 MCP 工具 in-process**：把 `mcp/route.ts` 的工具實作（`searchContacts` / `getContact` / `updateContact` / `addContactNote` …、`CONTACT_WRITABLE_FIELDS`、`executeTool`、`TOOLS`）抽到 `src/lib/agent-tools.ts`（唯一真相），MCP route 與 `api/ai-chat` 共用；新增 `request_social_briefing` 工具（chatbot 可實際排 briefing）。
+- **權限**：web session `auth.getUser()` → actingAs（身分來自可信 session 非 header，無偽冒）；service client 執行；寫入工具強制 acting user + `CONTACT_WRITABLE_FIELDS` 白名單 + `agent_actions` audit（`source='chatbot'`）+ 破壞性操作前端確認。
+- **UI**：全域 slide-over 抽屜（掛 `(dashboard)/layout.tsx`，任何頁右下浮鈕開啟，聯絡人頁可帶當前 contact_id）+ `/ai-assistant` 全頁，共用 `<AiAssistantChat>`。
+- 不引入 Vercel AI SDK（已有 Anthropic SDK，後端串流用 Route Handler 即可，多一層抽象無淨好處）。
+
+### 49.5 API（kebab-case）與可重用元件
+
+- 新 `api/social-briefing/request`（POST）、`api/social-briefing/[id]`（GET 輪詢）、`api/cron/process-pending-briefings`（GET，`CRON_SECRET`）、`api/ai-chat`（POST 串流）。`vercel.json` 加 `{ "path": "/api/cron/process-pending-briefings", "schedule": "*/2 * * * *" }`。
+- 重用：`createServiceClient` / `createClient`、`interaction_logs` insert 模式、`pending-ocr-worker.ts` 全套、`hunter/cron` 的 cron 骨架、`fetch-url-context.ts`、`graph.ts`（calendar/mail）、`parseMeetingCommand`、prompt 分層（新增 `social_briefing` PromptKey 支援 user/org 覆寫）。
+
+---
+
+## 五十、v7.2 開發任務清單
+
+**Phase 0 — 共用基礎**
+- [ ] **Task 209** `[修改]` — 把 MCP 工具實作抽到 `src/lib/agent-tools.ts`，`mcp/route.ts` 改 import（行為不變，回歸測試）
+- [ ] **Task 210** `[修改]` — `@anthropic-ai/sdk` devDependencies → dependencies；加 `ANTHROPIC_API_KEY` 環境變數
+
+**Phase 1 — Social Briefing 後端**
+- [ ] **Task 211** `[新增]` — Migration：`contact_briefings` 表 + 索引；`interaction_logs` 接受 `type='briefing'`
+- [ ] **Task 212** `[新增]` — `src/lib/web-search.ts`（Tavily/Brave，逾時 + 吞錯）
+- [ ] **Task 213** `[新增]` — `src/lib/social-briefing-worker.ts`（複用 OCR worker：claim / unstick / retry）
+- [ ] **Task 214** `[新增]` — `api/social-briefing/request`（POST）+ `api/social-briefing/[id]`（GET）
+- [ ] **Task 215** `[新增]` — `api/cron/process-pending-briefings` + `vercel.json` cron
+- [ ] **Task 216** `[新增]` — `social_briefing` prompt + PromptKey（user/org 可覆寫）
+- [ ] **Task 217** `[新增]` — （選用，預設關閉）OSINT Python worker 容器 + queue 串接，feature flag 控制，明標僅知情自用
+
+**Phase 2 — Social Briefing 觸發點 + UI**
+- [ ] **Task 218** `[修改]` — 聯絡人頁「產生 Briefing」按鈕 + 結果顯示（marked）+ 輪詢狀態
+- [ ] **Task 219** `[修改]` — bot `handleMeet` / chatbot「下週要開會」→ 自動排 briefing（trigger='nl_command'）
+- [ ] **Task 220** `[新增]` — 會議前自動：cron 掃 24h 內 meeting_at 建 pending；done 後選配 Graph `sendMail` reminder
+
+**Phase 3 — AI Chatbot**
+- [ ] **Task 221** `[新增]` — `api/ai-chat`：Claude `claude-opus-4-8` + adaptive thinking + 串流 + 手動 tool loop（工具來自 `agent-tools.ts`，含 `request_social_briefing`）
+- [ ] **Task 222** `[新增]` — web session → actingAs；寫入工具強制 acting user + 白名單 + `agent_actions` audit（source='chatbot'）
+- [ ] **Task 223** `[新增]` — `<AiAssistantChat>` 元件 + 全域抽屜（掛 `(dashboard)/layout.tsx`）+ `/ai-assistant` 全頁 + i18n 三語
+- [ ] **Task 224** `[修改]` — 破壞性操作前端確認步驟
+
+**Phase 4 — 收尾**
+- [ ] **Task 225** `[新增]` — 觀測：briefing 失敗率、search API 用量/成本上限（仿 Hunter `remainingBuffer`）
+- [ ] **Task 226** `[修改]` — 文件：更新 `docs/mcp-v2-plan.md`（工具抽離）+ 新增 briefing/chatbot 設計文件

@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v7.0.8 — docs(prd): SaaS 多租戶化 + 相簿人臉辨識 + Social Briefing/AI Chatbot 規格（2026-06-11）
+
+### 變更項目
+- `docs/PRD.md` 新增 7 個章節（四十四～五十），規劃將 myCRM 從單租戶轉為可賣給其他新創的多租戶 SaaS，並新增兩個功能：
+  - **產品化缺口盤點**：多租戶缺口、API 全用 service role 繞過 RLS、約 23–26 處 hardcode、零計費
+  - **v8.0 SaaS 多租戶化**：Shared DB + `org_id` + RLS、`getOrgContext`/`orgScopedClient` 雙層隔離、Stripe 計費、Phase 0–4 roadmap + 風險清單
+  - **v7.1 相簿照片多對多 + AI 人臉辨識**：`photo_faces` 多對多、`face_embeddings`（pgvector）跨照片比對、生物辨識合規（GDPR Art.9 / BIPA）
+  - **v7.2 Social Briefing + AI Chatbot**：OSINT + 合規混合資料源、複用 MCP 工具的 Claude chatbot
+- 純文件變更，無程式碼改動
+
 ## v7.0.7 — feat(bot): 名片重複偵測卡片加「查看既有聯絡人」連結（2026-06-10）
 
 ### 變更項目
