@@ -584,7 +584,7 @@ async function processPersonalPhoto(
         .from('cards').upload(filename, compressed, { contentType: 'image/jpeg', upsert: false })
       if (uploadError) throw new Error(uploadError.message)
       const { data: publicUrlData } = supabase.storage.from('cards').getPublicUrl(filename)
-      await supabase.from('contact_photos').insert({
+      const { data: photoRow } = await supabase.from('contact_photos').insert({
         contact_id: contactId,
         photo_url: publicUrlData.publicUrl,
         storage_path: filename,
@@ -593,7 +593,16 @@ async function processPersonalPhoto(
         longitude: exif.longitude ?? null,
         location_name: exif.locationName ?? null,
         note: (note && fileIds.length === 1) ? note : null,
-      })
+      }).select('id').single()
+      // 多對多：同步建立一筆已確認的人臉標記（photo ↔ contact）
+      if (photoRow) {
+        await supabase.from('photo_faces').insert({
+          photo_id: photoRow.id,
+          contact_id: contactId,
+          source: 'manual',
+          status: 'confirmed',
+        })
+      }
       uploaded++
     }
 

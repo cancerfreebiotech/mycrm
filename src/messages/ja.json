@@ -778,7 +778,18 @@
     "lbDate": "撮影日",
     "lbLocation": "場所",
     "lbNote": "メモ",
-    "lbUploaded": "{date}にアップロード"
+    "lbUploaded": "{date}にアップロード",
+    "peopleInPhoto": "写真の人物（{n}）",
+    "noPeople": "まだタグ付けされていません",
+    "addPerson": "タグを追加",
+    "searchContact": "連絡先を検索…",
+    "cancelTag": "キャンセル",
+    "removeTag": "タグを削除",
+    "alreadyTagged": "この人物はすでにこの写真にタグ付けされています",
+    "aiSuggested": "AI 提案",
+    "acceptSuggestion": "承認",
+    "rejectSuggestion": "却下",
+    "namesPlus": "{names} 他{n}名"
   },
   "linkedin": {
     "import": "LinkedInからインポート",

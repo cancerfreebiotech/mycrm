@@ -778,7 +778,18 @@
     "lbDate": "Date Taken",
     "lbLocation": "Location",
     "lbNote": "Note",
-    "lbUploaded": "Uploaded {date}"
+    "lbUploaded": "Uploaded {date}",
+    "peopleInPhoto": "People in photo ({n})",
+    "noPeople": "No one tagged yet",
+    "addPerson": "Add tag",
+    "searchContact": "Search contacts…",
+    "cancelTag": "Cancel",
+    "removeTag": "Remove tag",
+    "alreadyTagged": "This person is already tagged in this photo",
+    "aiSuggested": "AI suggestions",
+    "acceptSuggestion": "Accept",
+    "rejectSuggestion": "Reject",
+    "namesPlus": "{names} +{n} more"
   },
   "linkedin": {
     "import": "Import from LinkedIn",

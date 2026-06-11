@@ -778,7 +778,18 @@
     "lbDate": "拍攝日期",
     "lbLocation": "地點",
     "lbNote": "附註",
-    "lbUploaded": "{date} 上傳"
+    "lbUploaded": "{date} 上傳",
+    "peopleInPhoto": "照片中的人（{n}）",
+    "noPeople": "尚未標記任何人",
+    "addPerson": "新增標記",
+    "searchContact": "搜尋聯絡人…",
+    "cancelTag": "取消",
+    "removeTag": "移除標記",
+    "alreadyTagged": "此人已標記在這張照片",
+    "aiSuggested": "AI 建議",
+    "acceptSuggestion": "接受",
+    "rejectSuggestion": "拒絕",
+    "namesPlus": "{names} 等 {n} 人"
   },
   "linkedin": {
     "import": "LinkedIn 截圖匯入",

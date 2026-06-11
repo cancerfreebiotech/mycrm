@@ -419,7 +419,8 @@ export default function ContactDetailPage() {
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('contact_cards').select('id, card_img_url, card_img_back_url, label, created_at').eq('contact_id', id).order('created_at', { ascending: true }),
       supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),
-      supabase.from('contact_photos').select('id, photo_url, storage_path, taken_at, latitude, longitude, location_name, note, created_at').eq('contact_id', id).order('created_at', { ascending: false }),
+      // 一張照片可對應多人：取此聯絡人被「確認」框到的所有照片（透過 photo_faces）
+      supabase.from('photo_faces').select('contact_photos!inner(id, photo_url, storage_path, taken_at, latitude, longitude, location_name, note, created_at)').eq('contact_id', id).eq('status', 'confirmed'),
     ])
     setContact(c as unknown as Contact)
 
@@ -447,7 +448,11 @@ export default function ContactDetailPage() {
     setHasMoreLogs(initialLogs.length === LOG_PAGE)
     setAllTags(tags ?? [])
     setContactCards(cards ?? [])
-    setContactPhotos((photos as unknown as ContactPhoto[]) ?? [])
+    const photoRows = ((photos as unknown as { contact_photos: ContactPhoto | null }[]) ?? [])
+      .map((r) => r.contact_photos)
+      .filter((p): p is ContactPhoto => p != null)
+      .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+    setContactPhotos(photoRows)
     setAllCountries(countries ?? [])
 
     // Fetch SendGrid email tracking events for this contact (grouped by campaign)
@@ -801,7 +806,7 @@ export default function ContactDetailPage() {
         if (uploadErr) throw uploadErr
         const { data: urlData } = supabase.storage.from('cards').getPublicUrl(filename)
 
-        await supabase.from('contact_photos').insert({
+        const { data: photoRow } = await supabase.from('contact_photos').insert({
           contact_id: id,
           photo_url: urlData.publicUrl,
           storage_path: filename,
@@ -809,7 +814,16 @@ export default function ContactDetailPage() {
           latitude,
           longitude,
           location_name: locationName,
-        })
+        }).select('id').single()
+        // 多對多：同步建立一筆已確認的人臉標記（photo ↔ contact）
+        if (photoRow) {
+          await supabase.from('photo_faces').insert({
+            photo_id: photoRow.id,
+            contact_id: id,
+            source: 'manual',
+            status: 'confirmed',
+          })
+        }
       }
       load()
     } catch (err) {

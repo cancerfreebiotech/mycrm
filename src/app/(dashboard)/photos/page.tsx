@@ -1,9 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import Link from 'next/link'
 import { useTranslations } from 'next-intl'
-import { Search, X, ZoomIn, ZoomOut, Maximize2, MapPin, Calendar, StickyNote } from 'lucide-react'
+import { Search, X, ZoomIn, ZoomOut, Maximize2, MapPin, Calendar, StickyNote, Users } from 'lucide-react'
+import PhotoFaceTagger, { type PhotoFace } from '@/components/PhotoFaceTagger'
 
 interface PhotoRow {
   id: string
@@ -14,17 +14,14 @@ interface PhotoRow {
   latitude: number | null
   longitude: number | null
   created_at: string
-  contact_id: string | null
-  contact_name: string | null
-}
-
-interface ContactGroup {
-  contact_id: string | null
-  contact_name: string | null
-  photos: PhotoRow[]
+  faces: PhotoFace[]
 }
 
 type SortMode = 'created_at' | 'taken_at' | 'name'
+
+function confirmedNames(p: PhotoRow): string[] {
+  return p.faces.filter((f) => f.status === 'confirmed' && f.contact_name).map((f) => f.contact_name as string)
+}
 
 export default function PhotosPage() {
   const t = useTranslations('photos')
@@ -34,12 +31,14 @@ export default function PhotosPage() {
   const [loading, setLoading] = useState(true)
   const [keyword, setKeyword] = useState('')
   const [sort, setSort] = useState<SortMode>('created_at')
-  const [lightbox, setLightbox] = useState<PhotoRow | null>(null)
+  const [lightboxId, setLightboxId] = useState<string | null>(null)
   const [lbScale, setLbScale] = useState(1)
   const [lbOffset, setLbOffset] = useState({ x: 0, y: 0 })
   const lbDragRef = useRef(false)
   const lbStartRef = useRef({ x: 0, y: 0 })
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const lightbox = photos.find((p) => p.id === lightboxId) ?? null
 
   const fetchPhotos = useCallback(async (q: string, s: SortMode) => {
     setLoading(true)
@@ -56,6 +55,9 @@ export default function PhotosPage() {
     }
   }, [])
 
+  // 標記變更後重新載入（lightbox 以 id 追蹤，會自動反映最新 faces）
+  const reload = useCallback(() => fetchPhotos(keyword, sort), [fetchPhotos, keyword, sort])
+
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => fetchPhotos(keyword, sort), 300)
@@ -68,23 +70,10 @@ export default function PhotosPage() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  // Group photos by contact
-  const groups: ContactGroup[] = []
-  const seen = new Map<string | null, ContactGroup>()
-  for (const p of photos) {
-    const key = p.contact_id ?? '__none__'
-    if (!seen.has(key)) {
-      const g: ContactGroup = { contact_id: p.contact_id, contact_name: p.contact_name, photos: [] }
-      seen.set(key, g)
-      groups.push(g)
-    }
-    seen.get(key)!.photos.push(p)
-  }
-
   function openLightbox(photo: PhotoRow) {
-    setLightbox(photo); setLbScale(1); setLbOffset({ x: 0, y: 0 })
+    setLightboxId(photo.id); setLbScale(1); setLbOffset({ x: 0, y: 0 })
   }
-  function closeLightbox() { setLightbox(null) }
+  function closeLightbox() { setLightboxId(null) }
   function lbZoom(delta: number) { setLbScale(s => Math.min(5, Math.max(0.5, s + delta))) }
   function lbReset() { setLbScale(1); setLbOffset({ x: 0, y: 0 }) }
   function lbOnWheel(e: React.WheelEvent) { e.preventDefault(); lbZoom(e.deltaY < 0 ? 0.2 : -0.2) }
@@ -118,7 +107,7 @@ export default function PhotosPage() {
           value={keyword}
           onChange={e => setKeyword(e.target.value)}
           placeholder={t('search')}
-          className="w-full pl-9 pr-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          className="w-full pl-9 pr-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
         />
         {keyword && (
           <button onClick={() => setKeyword('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -149,7 +138,7 @@ export default function PhotosPage() {
         })}
       </div>
 
-      {/* Content */}
+      {/* Content — 以照片為主體的網格（一張照片可含多人） */}
       {loading ? (
         <div className="flex items-center justify-center py-20 text-gray-400">{tc('loading')}</div>
       ) : photos.length === 0 ? (
@@ -159,41 +148,37 @@ export default function PhotosPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {groups.map(group => {
-            const cover = group.photos[0]
+          {photos.map(photo => {
+            const names = confirmedNames(photo)
             return (
-              <div key={group.contact_id ?? '__none__'} className="group cursor-pointer" onClick={() => openLightbox(cover)}>
+              <div key={photo.id} className="group cursor-pointer" onClick={() => openLightbox(photo)}>
                 <div className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={cover.photo_url}
-                    alt={group.contact_name ?? t('noPhotos')}
+                    src={photo.photo_url}
+                    alt={names[0] ?? t('noPhotos')}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                   />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
                     <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
                   </div>
-                  {group.photos.length > 1 && (
-                    <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs rounded-full px-2 py-0.5">
-                      +{group.photos.length - 1}
+                  {names.length > 0 && (
+                    <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs rounded-full px-2 py-0.5 flex items-center gap-1">
+                      <Users size={11} /> {names.length}
                     </div>
                   )}
                 </div>
                 <div className="mt-1.5 px-0.5">
-                  {group.contact_id ? (
-                    <Link
-                      href={`/contacts/${group.contact_id}`}
-                      className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline truncate block"
-                      onClick={e => e.stopPropagation()}
-                    >
-                      {group.contact_name ?? t('unknownContact')}
-                    </Link>
+                  {names.length > 0 ? (
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
+                      {names.length <= 2 ? names.join('、') : t('namesPlus', { names: names.slice(0, 2).join('、'), n: names.length - 2 })}
+                    </p>
                   ) : (
                     <span className="text-sm text-gray-400 truncate block">{t('unassigned')}</span>
                   )}
-                  {cover.taken_at && (
+                  {photo.taken_at && (
                     <p className="text-xs text-gray-400 truncate">
-                      {new Date(cover.taken_at).toLocaleDateString('zh-TW')}
+                      {new Date(photo.taken_at).toLocaleDateString('zh-TW')}
                     </p>
                   )}
                 </div>
@@ -237,7 +222,7 @@ export default function PhotosPage() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={lightbox.photo_url}
-                alt={lightbox.contact_name ?? t('noPhotos')}
+                alt={confirmedNames(lightbox)[0] ?? t('noPhotos')}
                 className="max-h-[85vh] max-w-[75vw] rounded-lg object-contain"
                 draggable={false}
               />
@@ -245,17 +230,17 @@ export default function PhotosPage() {
           </div>
 
           {/* Side panel */}
-          <div className="w-64 shrink-0 bg-gray-900/95 border-l border-white/10 flex flex-col p-5 gap-4 overflow-y-auto" onClick={e => e.stopPropagation()}>
-            {lightbox.contact_name && lightbox.contact_id && (
-              <div>
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{t('lbContact')}</p>
-                <Link href={`/contacts/${lightbox.contact_id}`} className="text-blue-400 hover:text-blue-300 font-medium text-sm" onClick={closeLightbox}>
-                  {lightbox.contact_name}
-                </Link>
-              </div>
-            )}
+          <div className="w-72 shrink-0 bg-gray-900/95 border-l border-white/10 flex flex-col p-5 gap-4 overflow-y-auto" onClick={e => e.stopPropagation()}>
+            {/* 照片中的人（多對多 + 標記） */}
+            <PhotoFaceTagger
+              photoId={lightbox.id}
+              faces={lightbox.faces}
+              onChanged={reload}
+              onNavigate={closeLightbox}
+            />
+
             {lightbox.taken_at && (
-              <div className="flex items-start gap-2">
+              <div className="flex items-start gap-2 pt-2 border-t border-white/10">
                 <Calendar size={14} className="text-gray-500 mt-0.5 shrink-0" />
                 <div>
                   <p className="text-xs text-gray-500 uppercase tracking-wide mb-0.5">{t('lbDate')}</p>
