@@ -800,6 +800,18 @@
     "sources": "情報源",
     "failed": "生成に失敗しました"
   },
+  "assistant": {
+    "title": "AI アシスタント",
+    "open": "AI アシスタントを開く",
+    "close": "閉じる",
+    "send": "送信",
+    "thinking": "考え中…",
+    "error": "アシスタントでエラーが発生しました。後でもう一度お試しください。",
+    "empty": "（返信なし）",
+    "inputPlaceholder": "連絡先について何でも聞いてください…",
+    "placeholderTitle": "AI アシスタント",
+    "placeholderHint": "例：「台大の連絡先を検索」「来週ワンさんと会うので近況を教えて」「この人を重要にマーク」"
+  },
   "linkedin": {
     "import": "LinkedInからインポート",
     "parsed": "LinkedIn データ解析完了",

@@ -800,6 +800,18 @@
     "sources": "資料來源",
     "failed": "產生失敗"
   },
+  "assistant": {
+    "title": "AI 助理",
+    "open": "開啟 AI 助理",
+    "close": "關閉",
+    "send": "送出",
+    "thinking": "思考中…",
+    "error": "助理發生錯誤，請稍後再試",
+    "empty": "（沒有回覆）",
+    "inputPlaceholder": "問我任何關於聯絡人的事…",
+    "placeholderTitle": "AI 助理",
+    "placeholderHint": "例如：「搜尋台大的聯絡人」「我下週要跟王先生開會，幫我了解他的近況」「把這個人標記為重要」"
+  },
   "linkedin": {
     "import": "LinkedIn 截圖匯入",
     "parsed": "已解析 LinkedIn 資料",

@@ -800,6 +800,18 @@
     "sources": "Sources",
     "failed": "Generation failed"
   },
+  "assistant": {
+    "title": "AI Assistant",
+    "open": "Open AI assistant",
+    "close": "Close",
+    "send": "Send",
+    "thinking": "Thinking…",
+    "error": "The assistant ran into an error. Please try again.",
+    "empty": "(no reply)",
+    "inputPlaceholder": "Ask me anything about your contacts…",
+    "placeholderTitle": "AI Assistant",
+    "placeholderHint": "e.g. \"Search contacts at NTU\", \"I'm meeting Mr. Wang next week — brief me\", \"Mark this person as important\""
+  },
   "linkedin": {
     "import": "Import from LinkedIn",
     "parsed": "LinkedIn data parsed",

@@ -8,6 +8,7 @@ import { useTheme } from 'next-themes'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { SUPPORTED_LOCALES, type Locale } from '@/i18n/config'
+import AiAssistantDrawer from '@/components/AiAssistantDrawer'
 
 const LOCALE_LABELS: Record<Locale, string> = {
   'zh-TW': '繁中',
@@ -324,6 +325,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Content */}
         <main className="flex-1 overflow-auto p-4 sm:p-6">{children}</main>
       </div>
+
+      {/* 全域 AI 助理抽屜 */}
+      <AiAssistantDrawer />
     </div>
   )
 }
