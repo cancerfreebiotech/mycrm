@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v7.2.0 — feat: Social Briefing + AI 助理（2026-06-13）
+
+### 變更項目
+- **會議前 Briefing**：聯絡人頁新增「產生 Briefing」，用 AI 搜尋這個人與公司的最新公開動態，整理成摘要 + 來源連結（適合開會前快速了解對方）。非同步產生、可重新產生。
+- **AI 助理（AI-enabled CRM）**：右下角新增 AI 助理浮動按鈕（所有頁面可用）+ 獨立 `/ai-assistant` 頁。可用自然語言查詢/更新聯絡人、加筆記、管理名單與標籤、排程 briefing——例如「搜尋台大的聯絡人」「我下週要跟王先生開會，幫我了解他近況」。
+- 介面三語（zh-TW / en / ja）。
+
+### 技術
+- 用既有 Gemini 技術棧：briefing 走 Google Search grounding；chatbot 走 Gemini function calling，複用 MCP 的 CRM 工具（抽到 `src/lib/agent-tools.ts` 共用）。
+- 新增 `contact_briefings` 表 + 背景 worker + cron；chatbot 寫入操作沿用 `agent_actions` 稽核。
+- AI 回覆以 marked + DOMPurify 安全渲染。
+
 ## v7.1.0 — feat(photos): 相簿照片支援一張對多人標記（2026-06-11）
 
 ### 變更項目
