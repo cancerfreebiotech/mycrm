@@ -791,6 +791,15 @@
     "rejectSuggestion": "拒絕",
     "namesPlus": "{names} 等 {n} 人"
   },
+  "briefing": {
+    "title": "會議前 Briefing",
+    "generate": "產生 Briefing",
+    "regenerate": "重新產生",
+    "intro": "整理這位聯絡人與其公司的最新公開動態（會議前必備）。",
+    "generating": "整理中…正在搜尋最新動態",
+    "sources": "資料來源",
+    "failed": "產生失敗"
+  },
   "linkedin": {
     "import": "LinkedIn 截圖匯入",
     "parsed": "已解析 LinkedIn 資料",

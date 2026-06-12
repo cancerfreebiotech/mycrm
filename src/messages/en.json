@@ -791,6 +791,15 @@
     "rejectSuggestion": "Reject",
     "namesPlus": "{names} +{n} more"
   },
+  "briefing": {
+    "title": "Pre-meeting briefing",
+    "generate": "Generate briefing",
+    "regenerate": "Regenerate",
+    "intro": "Summarize the latest public news about this contact and their company before your meeting.",
+    "generating": "Working… searching for the latest updates",
+    "sources": "Sources",
+    "failed": "Generation failed"
+  },
   "linkedin": {
     "import": "Import from LinkedIn",
     "parsed": "LinkedIn data parsed",

@@ -8,6 +8,7 @@ import { sendMail } from '@/lib/graph'
 import { ArrowLeft, ImageIcon, Mail, X, Pencil, Loader2, Plus, Upload, Trash2, Copy, Check, Sparkles, Paperclip, ZoomIn, ZoomOut, Maximize2, ChevronDown, Merge, Search, RotateCw } from 'lucide-react'
 import Image from 'next/image'
 import TipTapEditor from '@/components/TipTapEditor'
+import ContactBriefing from '@/components/ContactBriefing'
 
 interface Tag { id: string; name: string }
 interface Country { code: string; name_zh: string; emoji: string }
@@ -1698,6 +1699,9 @@ export default function ContactDetailPage() {
           <input ref={photoFilesRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />
         </div>
       </div>
+
+      {/* Pre-meeting Social Briefing */}
+      <ContactBriefing contactId={id} />
 
       {/* Interaction Logs */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6">

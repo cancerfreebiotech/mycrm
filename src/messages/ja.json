@@ -791,6 +791,15 @@
     "rejectSuggestion": "却下",
     "namesPlus": "{names} 他{n}名"
   },
+  "briefing": {
+    "title": "会議前ブリーフィング",
+    "generate": "ブリーフィング生成",
+    "regenerate": "再生成",
+    "intro": "会議前に、この連絡先と会社の最新の公開動向をまとめます。",
+    "generating": "作成中…最新情報を検索しています",
+    "sources": "情報源",
+    "failed": "生成に失敗しました"
+  },
   "linkedin": {
     "import": "LinkedInからインポート",
     "parsed": "LinkedIn データ解析完了",
