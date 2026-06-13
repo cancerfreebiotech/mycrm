@@ -26,7 +26,9 @@ export default function AdminFeedbackPage() {
   const supabase = createBrowserSupabaseClient()
 
   const [items, setItems] = useState<FeedbackItem[]>([])
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
 
@@ -35,17 +37,45 @@ export default function AdminFeedbackPage() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
-    const { data } = await supabase
+    const { data, error: loadError } = await supabase
       .from('feedback')
       .select('id, type, title, description, screenshot_url, created_at, status, users(display_name, email)')
       .order('created_at', { ascending: false })
-    setItems((data ?? []) as unknown as FeedbackItem[])
+    if (loadError) {
+      setError(tc('error'))
+      setLoading(false)
+      return
+    }
+    const list = (data ?? []) as unknown as FeedbackItem[]
+    setItems(list)
+
+    // 截圖存於 private bucket，需簽短效 URL 才能顯示。
+    const paths = list.map(i => i.screenshot_url).filter((p): p is string => !!p)
+    if (paths.length) {
+      const { data: signed } = await supabase.storage.from('feedback').createSignedUrls(paths, 3600)
+      if (signed) {
+        const map: Record<string, string> = {}
+        signed.forEach(s => { if (s.path && s.signedUrl) map[s.path] = s.signedUrl })
+        setSignedUrls(map)
+      }
+    }
     setLoading(false)
   }
 
   async function handleStatusChange(id: string, status: FeedbackStatus) {
     setUpdatingId(id)
-    await supabase.from('feedback').update({ status }).eq('id', id)
+    setError(null)
+    const { error: updateError } = await supabase
+      .from('feedback')
+      .update({ status })
+      .eq('id', id)
+      .select('id')
+      .single()
+    if (updateError) {
+      setError(tc('error'))
+      setUpdatingId(null)
+      return
+    }
     setItems(prev => prev.map(i => i.id === id ? { ...i, status } : i))
     setUpdatingId(null)
   }
@@ -73,6 +103,12 @@ export default function AdminFeedbackPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('manage')}</h1>
         <span className="text-sm text-gray-400 ml-2">{tc('total', { count: items.length })}</span>
       </div>
+
+      {error && (
+        <p className="mb-4 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg px-4 py-2">
+          {error}
+        </p>
+      )}
 
       {items.length === 0 ? (
         <p className="text-sm text-gray-400">{t('noFeedback')}</p>
@@ -113,19 +149,19 @@ export default function AdminFeedbackPage() {
                 <div className="px-5 pb-5 border-t border-gray-100 dark:border-gray-800 pt-4 space-y-4">
                   <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{item.description}</p>
 
-                  {item.screenshot_url && (
+                  {item.screenshot_url && signedUrls[item.screenshot_url] && (
                     <div>
                       <a
-                        href={item.screenshot_url}
+                        href={signedUrls[item.screenshot_url]}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline mb-2"
                       >
-                        <ExternalLink size={12} /> 查看截圖
+                        <ExternalLink size={12} /> {t('viewScreenshot')}
                       </a>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={item.screenshot_url}
+                        src={signedUrls[item.screenshot_url]}
                         alt="screenshot"
                         className="max-h-60 rounded-lg border border-gray-200 dark:border-gray-700"
                       />

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
+import DOMPurify from 'dompurify'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Pencil, Trash2, Plus, X, Upload, Paperclip, Loader2, Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
@@ -261,7 +262,7 @@ export default function AdminTemplatesPage() {
                       ? (
                         <div
                           className="prose prose-sm dark:prose-invert max-w-none"
-                          dangerouslySetInnerHTML={{ __html: tpl.body_content }}
+                          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(tpl.body_content) }}
                         />
                       )
                       : <div className="text-xs text-gray-400 italic">—</div>}

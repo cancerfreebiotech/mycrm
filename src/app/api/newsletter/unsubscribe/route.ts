@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { createHmac } from 'crypto'
+import { emailTokenSecret } from '@/lib/emailTokenSecret'
 
 function verifyToken(token: string): { email: string; campaignId: string } | null {
   try {
     const [headerB64, payloadB64, sig] = token.split('.')
     if (!headerB64 || !payloadB64 || !sig) return null
-    const secret = process.env.NEXTAUTH_SECRET ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
+    const secret = emailTokenSecret()
     const expected = createHmac('sha256', secret).update(`${headerB64}.${payloadB64}`).digest('base64url')
     if (sig !== expected) return null
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString())

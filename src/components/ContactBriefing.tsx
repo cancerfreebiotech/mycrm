@@ -21,9 +21,13 @@ interface Briefing {
 // 非同步：POST 排程 → 輪詢 GET 直到 done/failed。
 export default function ContactBriefing({ contactId }: { contactId: string }) {
   const t = useTranslations('briefing')
+  const tc = useTranslations('common')
   const [briefing, setBriefing] = useState<Briefing | null>(null)
   const [starting, setStarting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // 輪詢連續失敗次數，達上限即停止輪詢並顯示錯誤
+  const pollFailRef = useRef(0)
 
   const clearPoll = () => { if (pollRef.current) clearTimeout(pollRef.current) }
   useEffect(() => () => clearPoll(), [])
@@ -33,16 +37,27 @@ export default function ContactBriefing({ contactId }: { contactId: string }) {
     pollRef.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/social-briefing/${id}`)
-        if (!res.ok) return
+        if (!res.ok) throw new Error('poll failed')
         const data: Briefing = await res.json()
+        pollFailRef.current = 0
         setBriefing(data)
         if (data.status === 'pending' || data.status === 'processing') poll(id)
-      } catch { /* keep last state */ }
+      } catch {
+        // 連續失敗達 3 次則停止輪詢並顯示錯誤
+        pollFailRef.current += 1
+        if (pollFailRef.current >= 3) {
+          setError(tc('error'))
+        } else {
+          poll(id)
+        }
+      }
     }, 3000)
-  }, [])
+  }, [tc])
 
   async function generate() {
     setStarting(true)
+    setError(null)
+    pollFailRef.current = 0
     clearPoll()
     try {
       const res = await fetch('/api/social-briefing/request', {
@@ -50,11 +65,16 @@ export default function ContactBriefing({ contactId }: { contactId: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contact_id: contactId }),
       })
-      const data = await res.json()
-      if (res.ok && data.id) {
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.id) {
         setBriefing({ id: data.id, status: 'pending', result_md: null, sources: null, model_used: null, error_message: null, created_at: new Date().toISOString() })
         poll(data.id)
+      } else {
+        // 4xx 顯示 API 回傳的 error，5xx 顯示通用訊息
+        setError(res.status >= 500 ? tc('error') : (data?.error ?? tc('error')))
       }
+    } catch {
+      setError(tc('error'))
     } finally {
       setStarting(false)
     }
@@ -81,7 +101,11 @@ export default function ContactBriefing({ contactId }: { contactId: string }) {
         </button>
       </div>
 
-      {!briefing && <p className="text-sm text-gray-500 dark:text-gray-400">{t('intro')}</p>}
+      {!briefing && !error && <p className="text-sm text-gray-500 dark:text-gray-400">{t('intro')}</p>}
+
+      {error && (
+        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+      )}
 
       {inProgress && (
         <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">

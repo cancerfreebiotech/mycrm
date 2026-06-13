@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import TipTapEditor from '@/components/TipTapEditor'
+import DOMPurify from 'dompurify'
 import { ArrowLeft, Send, Loader2, Users, AlertCircle, X, Sparkles, FileText, Eye, ChevronDown, Paperclip } from 'lucide-react'
 
 interface Recipient {
@@ -652,7 +653,7 @@ export default function EmailComposePage() {
             </div>
             <div
               className="prose prose-sm dark:prose-invert max-w-none px-4 py-3 min-h-[120px] bg-white dark:bg-gray-900"
-              dangerouslySetInnerHTML={{ __html: substituteVariables(bodyHtml, previewContact).replace(/<p><\/p>/g, '<p><br></p>') }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(substituteVariables(bodyHtml, previewContact).replace(/<p><\/p>/g, '<p><br></p>')) }}
             />
           </div>
         )}

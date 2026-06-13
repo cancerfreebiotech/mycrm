@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { PermissionGate } from '@/components/PermissionGate'
 import { Loader2, Sparkles, Plus, X, ImageIcon, ArrowLeft, Wand2, CheckCircle2, AlertTriangle, Link as LinkIcon } from 'lucide-react'
@@ -27,6 +28,7 @@ function defaultPeriod(): string {
 
 export default function AiComposePage() {
   const router = useRouter()
+  const t = useTranslations('newsletter')
   const supabase = createBrowserSupabaseClient()
   const [period, setPeriod] = useState(defaultPeriod())
   const [intro, setIntro] = useState('')
@@ -61,11 +63,11 @@ export default function AiComposePage() {
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) {
-      setBanner({ kind: 'err', msg: '只支援圖片檔' })
+      setBanner({ kind: 'err', msg: t('aiErrorImageOnly') })
       return
     }
     if (file.size > 10 * 1024 * 1024) {
-      setBanner({ kind: 'err', msg: '圖片超過 10 MB' })
+      setBanner({ kind: 'err', msg: t('aiErrorImageTooLarge') })
       return
     }
     setUploadingIdx(storyIdx)
@@ -84,9 +86,9 @@ export default function AiComposePage() {
       if (upErr) throw upErr
       const { data: pub } = supabase.storage.from('newsletter-assets').getPublicUrl(path)
       updateStory(storyIdx, { image_url: pub.publicUrl })
-      setBanner({ kind: 'ok', msg: `✓ 已上傳圖片：${safe}` })
+      setBanner({ kind: 'ok', msg: t('aiImageUploaded', { name: safe }) })
     } catch (e) {
-      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : '圖片上傳失敗' })
+      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : t('aiErrorImageUploadFailed') })
     } finally {
       setUploadingIdx(null)
       const input = imageInputs.current[storyIdx]
@@ -96,7 +98,7 @@ export default function AiComposePage() {
 
   async function generate() {
     if (stories.some((s) => !s.title_zh.trim() || !s.outline_zh.trim())) {
-      setBanner({ kind: 'err', msg: '每段故事都需要標題和大綱' })
+      setBanner({ kind: 'err', msg: t('aiErrorStoryRequired') })
       return
     }
     setGenerating(true)
@@ -118,19 +120,19 @@ export default function AiComposePage() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? '生成失敗')
+      if (!res.ok) throw new Error(data.error ?? t('aiErrorGenerateFailed'))
 
       const results = data.results as { lang: string; id: string; error?: string }[]
       const zhResult = results.find((r) => r.lang === 'zh-TW')
       const failed = results.filter((r) => r.error)
       if (failed.length > 0) {
-        setBanner({ kind: 'err', msg: `部分語言失敗: ${failed.map((f) => `${f.lang}: ${f.error}`).join(', ')}` })
+        setBanner({ kind: 'err', msg: t('aiErrorPartialFailed', { detail: failed.map((f) => `${f.lang}: ${f.error}`).join(', ') }) })
       }
       if (zhResult?.id) {
         router.push(`/admin/newsletter/quick-send/${zhResult.id}`)
       }
     } catch (e) {
-      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : '生成失敗' })
+      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : t('aiErrorGenerateFailed') })
     } finally { setGenerating(false) }
   }
 
@@ -143,9 +145,9 @@ export default function AiComposePage() {
           </Link>
           <Wand2 size={22} className="text-purple-500" />
           <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">AI 輔助撰寫電子報</h1>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t('aiPageTitle')}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-              中文輸入每段故事大綱 → AI 以過往語氣生成 → 可自動翻譯英日版 → 跳到 quick-send 編輯
+              {t('aiPageDesc')}
             </p>
           </div>
         </div>
@@ -164,7 +166,7 @@ export default function AiComposePage() {
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4 mb-6">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">期別 (YYYY-MM)</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">{t('aiPeriodLabel')}</label>
               <input
                 type="text"
                 value={period}
@@ -177,20 +179,20 @@ export default function AiComposePage() {
             <div className="flex items-end">
               <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700 dark:text-gray-300">
                 <input type="checkbox" checked={translate} onChange={(e) => setTranslate(e.target.checked)} />
-                自動翻譯英文 + 日文版
+                {t('aiTranslateLabel')}
               </label>
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">開場介紹（中文，可空）</label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">{t('aiIntroLabel')}</label>
             <textarea
               value={intro}
               onChange={(e) => setIntro(e.target.value)}
               rows={3}
-              placeholder="本月重點會議活動..."
+              placeholder={t('aiIntroPlaceholder')}
               className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
             />
-            <p className="text-xs text-gray-400 mt-1">AI 會改寫成正式段落。留空則用預設提示。</p>
+            <p className="text-xs text-gray-400 mt-1">{t('aiIntroHint')}</p>
           </div>
         </div>
 
@@ -200,39 +202,39 @@ export default function AiComposePage() {
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                   <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-xs font-bold mr-2">{i + 1}</span>
-                  故事段落
+                  {t('aiStorySection')}
                 </h3>
                 {stories.length > 1 && (
-                  <button onClick={() => removeStory(i)} className="text-gray-400 hover:text-red-500" title="移除"><X size={16} /></button>
+                  <button onClick={() => removeStory(i)} className="text-gray-400 hover:text-red-500" title={t('aiRemove')}><X size={16} /></button>
                 )}
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">標題（中文）*</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">{t('aiStoryTitleLabel')}</label>
                 <input
                   type="text"
                   value={s.title_zh}
                   onChange={(e) => updateStory(i, { title_zh: e.target.value })}
-                  placeholder="例：AACR Annual Meeting 2026"
+                  placeholder={t('aiStoryTitlePlaceholder')}
                   className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">大綱 / 重點（中文，條列或完整句皆可）*</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">{t('aiOutlineLabel')}</label>
                 <textarea
                   value={s.outline_zh}
                   onChange={(e) => updateStory(i, { outline_zh: e.target.value })}
                   rows={5}
-                  placeholder="- 4/17-22 在聖地牙哥舉行&#10;- 團隊海報發表：XXX&#10;- 展會重點：..."
+                  placeholder={t('aiOutlinePlaceholder')}
                   className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none font-mono"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">圖片（可選）</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">{t('aiImageLabel')}</label>
                 {s.image_url ? (
                   <div className="flex items-center gap-2">
                     <img src={s.image_url} alt="" className="h-16 w-auto rounded border border-gray-200 dark:border-gray-700" />
                     <span className="text-xs text-gray-500 truncate flex-1">{s.image_url.split('/').pop()}</span>
-                    <button onClick={() => updateStory(i, { image_url: '' })} className="text-xs text-red-500 hover:underline">移除</button>
+                    <button onClick={() => updateStory(i, { image_url: '' })} className="text-xs text-red-500 hover:underline">{t('aiRemove')}</button>
                   </div>
                 ) : (
                   <button
@@ -241,7 +243,7 @@ export default function AiComposePage() {
                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
                   >
                     {uploadingIdx === i ? <Loader2 size={12} className="animate-spin" /> : <ImageIcon size={12} />}
-                    上傳圖片
+                    {t('aiUploadImage')}
                   </button>
                 )}
                 <input
@@ -254,9 +256,9 @@ export default function AiComposePage() {
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-medium text-gray-500">相關連結（可選）</label>
+                  <label className="text-xs font-medium text-gray-500">{t('aiLinksLabel')}</label>
                   <button onClick={() => addLink(i)} className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline">
-                    <Plus size={11} /> 新增連結
+                    <Plus size={11} /> {t('aiAddLink')}
                   </button>
                 </div>
                 {s.links.map((l, li) => (
@@ -266,7 +268,7 @@ export default function AiComposePage() {
                       type="text"
                       value={l.label}
                       onChange={(e) => updateLink(i, li, { label: e.target.value })}
-                      placeholder="標籤（如：官網）"
+                      placeholder={t('aiLinkLabelPlaceholder')}
                       className="text-xs px-2 py-1 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 w-32"
                     />
                     <input
@@ -286,13 +288,13 @@ export default function AiComposePage() {
             onClick={addStory}
             className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl text-sm text-gray-500 dark:text-gray-400 hover:border-purple-400 hover:text-purple-600 dark:hover:text-purple-400"
           >
-            <Plus size={14} /> 新增段落
+            <Plus size={14} /> {t('aiAddStory')}
           </button>
         </div>
 
         <div className="flex items-center justify-between">
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            {translate ? `將生成 3 份草稿（中/英/日），可能需 30-60 秒` : '只生成中文草稿'}
+            {translate ? t('aiGenerateHintMulti') : t('aiGenerateHintZhOnly')}
           </p>
           <button
             onClick={generate}
@@ -300,7 +302,7 @@ export default function AiComposePage() {
             className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 font-medium"
           >
             {generating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            {generating ? '生成中...' : 'AI 生成電子報'}
+            {generating ? t('aiGenerating') : t('aiGenerateButton')}
           </button>
         </div>
       </div>

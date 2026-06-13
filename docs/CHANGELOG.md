@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## v7.2.1 — fix: 系統 review 修復（安全性 / 資料一致性 / i18n）（2026-06-13）
+
+### 安全性
+- **退訂 / opt-out token 不再用公開的 `NEXT_PUBLIC_SUPABASE_ANON_KEY` 當 HMAC fallback 密鑰**：改用後端專屬 `NEXTAUTH_SECRET`，缺值即拒絕簽章（新增 `src/lib/emailTokenSecret.ts`，套用於 email-optout / unsubscribe / campaign send）。
+- **回報表單截圖改為私有**：`feedback` storage bucket 轉 private，讀取限本人或 super admin（signed URL），避免截圖中的聯絡人個資被公開 URL 外洩。
+- 公開電子報檢視頁、模板/編輯器預覽、email compose 預覽的 HTML 一律經 DOMPurify sanitize。
+
+### 修復
+- **回報表單無法送出**：`feedback.created_by` 的 FK 與 RLS 原本要求不同 id（auth vs public），互斥導致每筆送出都被擋。FK 對齊至 `public.users`、前端送 `profile.id`。
+- **合併聯絡人**：補搬 `photo_faces`，避免照片標記在合併後被 CASCADE 刪除。
+- **軟刪除聯絡人**：相簿不再顯示已刪除聯絡人的標記。
+- **照片上傳**：雙寫第二步失敗時改為報錯，不再產生孤兒照片。
+- **AI 助理**：自然語言排程 briefing 修正 `created_by`（FK 一致）；工具呼叫達上限時回明確訊息而非空白；錯誤泡泡不再污染後續對話。
+- **管理回報頁**：狀態更新與載入失敗時顯示錯誤、不再假裝成功。
+
+### 其他
+- 清除多處 debug `console.log`（含會印出 webhook body / email 清單者）。
+- 回報表單：未登入導回登入頁、物件 URL 釋放、觸控目標 ≥44px。
+- 後台多頁（newsletter 名單/草稿/快寄/活動、MCP token/活動、camcard、email-recovery、退訂頁等）約 390 個寫死字串改走 i18n，三語同步。
+
 ## v7.2.0 — feat: Social Briefing + AI 助理（2026-06-13）
 
 ### 變更項目

@@ -77,6 +77,19 @@ export async function POST(
   // 3. Move contact_photos from source to keep
   await supabase.from('contact_photos').update({ contact_id: keepId }).eq('contact_id', sourceId)
 
+  // 3b. Move photo_faces (v7.1 多人標記) from source to keep.
+  //     UNIQUE(photo_id, contact_id)：先刪掉同一張照片已標記 keep 的 source 列避免衝突，再搬其餘。
+  {
+    const { data: keepFaces } = await supabase
+      .from('photo_faces').select('photo_id').eq('contact_id', keepId)
+    const keepPhotoIds = (keepFaces ?? []).map(f => f.photo_id)
+    if (keepPhotoIds.length > 0) {
+      await supabase.from('photo_faces').delete()
+        .eq('contact_id', sourceId).in('photo_id', keepPhotoIds)
+    }
+    await supabase.from('photo_faces').update({ contact_id: keepId }).eq('contact_id', sourceId)
+  }
+
   // 4. Move interaction_logs from source to keep
   await supabase.from('interaction_logs').update({ contact_id: keepId }).eq('contact_id', sourceId)
 

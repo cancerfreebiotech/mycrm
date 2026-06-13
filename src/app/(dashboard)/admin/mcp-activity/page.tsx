@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { Activity, Loader2, RefreshCw, CheckCircle2, XCircle } from 'lucide-react'
 
@@ -31,6 +32,7 @@ export default function McpActivityPage() {
 }
 
 function McpActivityInner() {
+  const t = useTranslations('mcpActivity')
   const router = useRouter()
   const searchParams = useSearchParams()
   const tokenIdParam = searchParams.get('token_id')
@@ -99,8 +101,13 @@ function McpActivityInner() {
       <div className="flex items-center gap-3 mb-6">
         <Activity size={22} className="text-blue-500" />
         <div className="flex-1">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">MCP 活動紀錄</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">外部 agent 透過 <code className="text-xs font-mono">/api/mcp</code> 呼叫的所有 tool 紀錄（最近 {PAGE_SIZE} 筆）</p>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+            {t.rich('description', {
+              count: PAGE_SIZE,
+              code: (chunks) => <code className="text-xs font-mono">{chunks}</code>,
+            })}
+          </p>
         </div>
         <button
           onClick={load}
@@ -108,21 +115,21 @@ function McpActivityInner() {
           className="flex items-center gap-1.5 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg font-medium disabled:opacity-60"
         >
           {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-          重新整理
+          {t('refresh')}
         </button>
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-4">
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-          <div className="text-xs text-gray-500 dark:text-gray-400">總計</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">{t('statTotal')}</div>
           <div className="text-xl font-bold text-gray-900 dark:text-gray-100">{totals.total}</div>
         </div>
         <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-3">
-          <div className="text-xs text-green-700 dark:text-green-400">成功</div>
+          <div className="text-xs text-green-700 dark:text-green-400">{t('statSuccess')}</div>
           <div className="text-xl font-bold text-green-700 dark:text-green-400">{totals.ok}</div>
         </div>
         <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-3">
-          <div className="text-xs text-red-700 dark:text-red-400">失敗</div>
+          <div className="text-xs text-red-700 dark:text-red-400">{t('statFail')}</div>
           <div className="text-xl font-bold text-red-700 dark:text-red-400">{totals.fail}</div>
         </div>
       </div>
@@ -133,36 +140,36 @@ function McpActivityInner() {
           onChange={(e) => setToolFilter(e.target.value)}
           className="text-sm px-2 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200"
         >
-          <option value="all">全部工具</option>
-          {toolNames.map((t) => <option key={t} value={t}>{t}</option>)}
+          <option value="all">{t('filterAllTools')}</option>
+          {toolNames.map((name) => <option key={name} value={name}>{name}</option>)}
         </select>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as 'all' | 'ok' | 'fail')}
           className="text-sm px-2 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200"
         >
-          <option value="all">全部狀態</option>
-          <option value="ok">只看成功</option>
-          <option value="fail">只看失敗</option>
+          <option value="all">{t('filterAllStatus')}</option>
+          <option value="ok">{t('filterOnlySuccess')}</option>
+          <option value="fail">{t('filterOnlyFail')}</option>
         </select>
       </div>
 
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-400" /></div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-12 text-gray-400">沒有紀錄</div>
+        <div className="text-center py-12 text-gray-400">{t('empty')}</div>
       ) : (
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden overflow-x-auto">
           <table className="w-full text-sm min-w-[680px]">
             <thead className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
               <tr>
-                <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">時間</th>
-                <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400">工具</th>
-                <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400">狀態</th>
-                <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400 hidden lg:table-cell">Token</th>
-                <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400 hidden lg:table-cell">身份</th>
-                <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400 hidden md:table-cell">IP hash</th>
-                <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400">參數 / 錯誤</th>
+                <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">{t('colTime')}</th>
+                <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400">{t('colTool')}</th>
+                <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400">{t('colStatus')}</th>
+                <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400 hidden lg:table-cell">{t('colToken')}</th>
+                <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400 hidden lg:table-cell">{t('colActor')}</th>
+                <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400 hidden md:table-cell">{t('colIpHash')}</th>
+                <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400">{t('colArgsError')}</th>
               </tr>
             </thead>
             <tbody>
@@ -189,7 +196,7 @@ function McpActivityInner() {
                         onClick={() => setExpanded(isExpanded ? null : r.id)}
                         className="text-blue-600 dark:text-blue-400 hover:underline"
                       >
-                        {isExpanded ? '收起' : '展開'}
+                        {isExpanded ? t('collapse') : t('expand')}
                       </button>
                       {isExpanded && (
                         <div className="mt-2 space-y-1">

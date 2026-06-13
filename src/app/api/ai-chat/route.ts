@@ -48,15 +48,17 @@ async function auditChat(toolName: string, args: unknown, succeeded: boolean, er
   } catch { /* never let logging break the call */ }
 }
 
-// chatbot 端工具執行：request_social_briefing 自己處理，其餘委派共用 executeTool
-async function executeChatTool(name: string, args: Record<string, unknown>, actingAs: string): Promise<unknown> {
+// chatbot 端工具執行：request_social_briefing 自己處理，其餘委派共用 executeTool。
+// authUserId = auth.users.id：contact_briefings.created_by 的 FK 指向 auth.users，
+// 不可用 actingAs（那是 public.users.id，與 FK 不符會 insert 失敗）。
+async function executeChatTool(name: string, args: Record<string, unknown>, actingAs: string, authUserId: string): Promise<unknown> {
   if (name === 'request_social_briefing') {
     const contactId = args.contact_id as string | undefined
     if (!contactId) throw new Error('contact_id required')
     const service = createServiceClient()
     const { data, error } = await service
       .from('contact_briefings')
-      .insert({ contact_id: contactId, trigger: 'nl_command', created_by: actingAs })
+      .insert({ contact_id: contactId, trigger: 'nl_command', created_by: authUserId })
       .select('id')
       .single()
     if (error) throw new Error(error.message)
@@ -118,7 +120,7 @@ export async function POST(req: NextRequest) {
         let ok = true
         let errMsg: string | null = null
         try {
-          out = await executeChatTool(call.name, (call.args ?? {}) as Record<string, unknown>, acting.id)
+          out = await executeChatTool(call.name, (call.args ?? {}) as Record<string, unknown>, acting.id, user.id)
         } catch (e) {
           ok = false
           errMsg = e instanceof Error ? e.message : String(e)
@@ -130,7 +132,22 @@ export async function POST(req: NextRequest) {
       result = await chat.sendMessage(responses)
     }
 
-    const reply = result.response.text()
+    // 跑滿 MAX_TOOL_ROUNDS 後若模型仍想呼叫工具，response 可能只含 functionCall、無文字，
+    // 直接 .text() 會丟錯或回空字串 → 回一個明確訊息而非讓使用者看到空白。
+    const pending = result.response.functionCalls()
+    if (pending && pending.length > 0) {
+      return NextResponse.json({
+        reply: '這個請求需要的操作步驟太多，已達上限。請把需求拆小一點或更明確一些再試一次。',
+        tools_used: toolsUsed,
+      })
+    }
+
+    let reply: string
+    try {
+      reply = result.response.text()
+    } catch {
+      reply = '抱歉，這次沒有產生有效回覆，請再試一次。'
+    }
     return NextResponse.json({ reply, tools_used: toolsUsed })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

@@ -18,11 +18,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  console.log('[pending-ocr-cron] start')
   const supabase = createServiceClient()
   try {
     const result = await processPendingBatchAcrossUsers(supabase)
-    console.log('[pending-ocr-cron] done', result)
     return NextResponse.json({ ok: true, ...result })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

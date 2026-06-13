@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
@@ -24,18 +24,26 @@ export default function FeedbackPage() {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null
     setScreenshot(file)
-    if (file) {
-      const url = URL.createObjectURL(file)
-      setScreenshotPreview(url)
-    } else {
-      setScreenshotPreview(null)
-    }
+    setScreenshotPreview(prev => {
+      if (prev) URL.revokeObjectURL(prev)
+      return file ? URL.createObjectURL(file) : null
+    })
   }
 
   function removeScreenshot() {
     setScreenshot(null)
-    setScreenshotPreview(null)
+    setScreenshotPreview(prev => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
   }
+
+  // Release the object URL when the component unmounts.
+  useEffect(() => {
+    return () => {
+      if (screenshotPreview) URL.revokeObjectURL(screenshotPreview)
+    }
+  }, [screenshotPreview])
 
   async function handleSubmit() {
     if (!title.trim() || !description.trim()) return
@@ -48,9 +56,14 @@ export default function FeedbackPage() {
     setError(null)
 
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setSubmitting(false); return }
+    if (!user) { router.push('/login'); return }
 
-    let screenshotUrl: string | null = null
+    // feedback.created_by 的 FK 與 RLS 都以 public.users.id 為準（非 auth id）。
+    const { data: profile } = await supabase.from('users').select('id').eq('email', user.email!).single()
+    if (!profile) { setError(tc('error')); setSubmitting(false); return }
+
+    // 截圖存於 private bucket，欄位存儲存路徑，讀取時再簽短效 URL。
+    let screenshotPath: string | null = null
 
     if (screenshot) {
       const ext = screenshot.name.split('.').pop() ?? 'png'
@@ -65,16 +78,15 @@ export default function FeedbackPage() {
         return
       }
 
-      const { data: urlData } = supabase.storage.from('feedback').getPublicUrl(path)
-      screenshotUrl = urlData.publicUrl
+      screenshotPath = path
     }
 
     const { error: insertError } = await supabase.from('feedback').insert({
       type,
       title: title.trim(),
       description: description.trim(),
-      screenshot_url: screenshotUrl,
-      created_by: user.id,
+      screenshot_url: screenshotPath,
+      created_by: profile.id,
     })
 
     if (insertError) {
@@ -121,7 +133,7 @@ export default function FeedbackPage() {
               <button
                 key={v}
                 onClick={() => setType(v)}
-                className={`flex-1 py-2 text-sm rounded-lg border transition-colors ${
+                className={`flex-1 min-h-[44px] py-2 text-sm rounded-lg border transition-colors ${
                   type === v
                     ? 'bg-blue-600 border-blue-600 text-white font-medium'
                     : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
@@ -168,9 +180,10 @@ export default function FeedbackPage() {
               <img src={screenshotPreview} alt="screenshot" className="max-h-40 rounded-lg border border-gray-200 dark:border-gray-700" />
               <button
                 onClick={removeScreenshot}
-                className="absolute -top-2 -right-2 bg-white dark:bg-gray-800 rounded-full p-0.5 shadow border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-red-500 transition-colors"
+                aria-label={t('removeScreenshot')}
+                className="absolute -top-3 -right-3 flex items-center justify-center w-11 h-11 bg-white dark:bg-gray-800 rounded-full shadow border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-red-500 transition-colors"
               >
-                <X size={14} />
+                <X size={16} />
               </button>
             </div>
           ) : (

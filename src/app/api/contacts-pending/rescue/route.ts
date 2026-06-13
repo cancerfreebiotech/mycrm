@@ -46,9 +46,7 @@ export async function POST() {
 
   after(async () => {
     const sb = createServiceClient()
-    console.log('[rescue] starting for', { userId, count })
-    const result = await processPendingForUser(sb, userId, telegramId)
-    console.log('[rescue] done', result)
+    await processPendingForUser(sb, userId, telegramId)
   })
 
   return NextResponse.json({ ok: true, queued: count })

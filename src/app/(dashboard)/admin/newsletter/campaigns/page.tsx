@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
@@ -24,6 +25,7 @@ interface CampaignRow {
 }
 
 export default function CampaignsIndexPage() {
+  const t = useTranslations('campaignsIndex')
   const supabase = createBrowserSupabaseClient()
   const router = useRouter()
   const [rows, setRows] = useState<CampaignRow[]>([])
@@ -41,13 +43,13 @@ export default function CampaignsIndexPage() {
       const res = await fetch('/api/newsletter/campaigns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: '未命名電子報' }),
+        body: JSON.stringify({ title: t('defaultTitle') }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? '建立失敗')
+      if (!res.ok) throw new Error(data.error ?? t('createFailed'))
       router.push(`/admin/newsletter/quick-send/${data.id}`)
     } catch (e) {
-      alert(e instanceof Error ? e.message : '建立失敗')
+      alert(e instanceof Error ? e.message : t('createFailed'))
     } finally { setCreating(false) }
   }
 
@@ -69,10 +71,10 @@ export default function CampaignsIndexPage() {
   }
 
   async function deleteCampaign(id: string, title: string | null) {
-    if (!confirm(`確定要刪除「${title ?? '未命名'}」？此操作無法復原。`)) return
+    if (!confirm(t('confirmDelete', { title: title ?? t('untitled') }))) return
     const res = await fetch(`/api/newsletter/campaigns/${id}`, { method: 'DELETE' })
     if (res.ok) setRows((prev) => prev.filter((r) => r.id !== id))
-    else alert((await res.json()).error ?? '刪除失敗')
+    else alert((await res.json()).error ?? t('deleteFailed'))
   }
 
   async function duplicate(id: string) {
@@ -80,10 +82,10 @@ export default function CampaignsIndexPage() {
     try {
       const res = await fetch(`/api/newsletter/campaigns/${id}/duplicate`, { method: 'POST' })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? '複製失敗')
+      if (!res.ok) throw new Error(data.error ?? t('duplicateFailed'))
       router.push(`/admin/newsletter/quick-send/${data.id}`)
     } catch (e) {
-      alert(e instanceof Error ? e.message : '複製失敗')
+      alert(e instanceof Error ? e.message : t('duplicateFailed'))
     } finally { setDuplicatingId(null) }
   }
 
@@ -120,31 +122,31 @@ export default function CampaignsIndexPage() {
           <div className="flex items-center gap-3">
             <Mail size={22} className="text-blue-500" />
             <div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">電子報</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">管理電子報草稿、寄送、發布到 RSS</p>
+              <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{t('subtitle')}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <a href="/admin/newsletter/draft" className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-              Story 草稿管理 →
+              {t('storyDraftLink')}
             </a>
             <a href="/admin/newsletter/lists" className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-              收件名單管理 →
+              {t('listsLink')}
             </a>
             <Link
               href="/admin/newsletter/import"
               className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700"
-              title="從 Claude.ai newsletter-composer skill 匯入 zip"
+              title={t('skillImportTooltip')}
             >
               <Package size={14} />
-              Skill 匯入
+              {t('skillImport')}
             </Link>
             <Link
               href="/admin/newsletter/ai-compose"
               className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700"
             >
               <Wand2 size={14} />
-              AI 撰寫
+              {t('aiCompose')}
             </Link>
             <button
               onClick={createBlank}
@@ -152,7 +154,7 @@ export default function CampaignsIndexPage() {
               className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
             >
               {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-              空白新增
+              {t('createBlank')}
             </button>
           </div>
         </div>
@@ -160,17 +162,17 @@ export default function CampaignsIndexPage() {
         {loading ? (
           <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-gray-400" /></div>
         ) : rows.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">目前沒有電子報</div>
+          <div className="text-center py-12 text-gray-400">{t('empty')}</div>
         ) : (
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden overflow-x-auto">
             <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">標題</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 hidden sm:table-cell">主旨</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">狀態</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 hidden sm:table-cell">成效</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 hidden md:table-cell">建立時間</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">{t('colTitle')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 hidden sm:table-cell">{t('colSubject')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">{t('colStatus')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 hidden sm:table-cell">{t('colEngagement')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 hidden md:table-cell">{t('colCreatedAt')}</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
@@ -193,12 +195,12 @@ export default function CampaignsIndexPage() {
                       ) : (
                         <div className="flex items-center gap-1.5 group">
                           <Link href={`/admin/newsletter/quick-send/${r.id}`} className="font-medium text-blue-600 dark:text-blue-400 hover:underline">
-                            {r.title ?? '(未命名)'}
+                            {r.title ?? t('untitledParen')}
                           </Link>
                           <button
                             onClick={() => { setEditingId(r.id); setEditingTitle(r.title ?? ''); setTimeout(() => titleInputRef.current?.select(), 0) }}
                             className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-opacity"
-                            title="編輯標題"
+                            title={t('editTitle')}
                           >
                             <Pencil size={12} />
                           </button>
@@ -221,7 +223,7 @@ export default function CampaignsIndexPage() {
                         </span>
                         {r.published_at && (
                           <span className="inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 w-fit">
-                            <Rss size={10} /> 已發布
+                            <Rss size={10} /> {t('published')}
                           </span>
                         )}
                       </div>
@@ -229,7 +231,7 @@ export default function CampaignsIndexPage() {
                     <td className="px-4 py-3 hidden sm:table-cell text-xs">
                       {r.sent_at && r.opened !== undefined ? (
                         <div className="flex flex-col gap-0.5 text-gray-600 dark:text-gray-400">
-                          <span title="寄出 / 開信 / 點擊">
+                          <span title={t('engagementTooltip')}>
                             📤 {r.recipients ?? r.sent_count ?? 0}
                             {' · '}
                             <span className="text-green-700 dark:text-green-400">👁 {r.opened}{r.recipients ? ` (${Math.round((r.opened / r.recipients) * 100)}%)` : ''}</span>
@@ -238,7 +240,7 @@ export default function CampaignsIndexPage() {
                           </span>
                         </div>
                       ) : r.sent_at ? (
-                        <span className="text-gray-400">寄出 {r.sent_count ?? 0}</span>
+                        <span className="text-gray-400">{t('sentCount', { count: r.sent_count ?? 0 })}</span>
                       ) : (
                         <span className="text-gray-300 dark:text-gray-600">—</span>
                       )}
@@ -251,7 +253,7 @@ export default function CampaignsIndexPage() {
                         <button
                           onClick={() => duplicate(r.id)}
                           disabled={duplicatingId === r.id}
-                          title="複製成新草稿"
+                          title={t('duplicateTooltip')}
                           className="text-xs px-2 py-1 border border-gray-200 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50"
                         >
                           {duplicatingId === r.id ? <Loader2 size={12} className="animate-spin" /> : <Copy size={12} />}
@@ -260,11 +262,11 @@ export default function CampaignsIndexPage() {
                           href={`/admin/newsletter/quick-send/${r.id}`}
                           className="text-xs px-3 py-1 border border-gray-200 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
                         >
-                          開啟
+                          {t('open')}
                         </Link>
                         <button
                           onClick={() => deleteCampaign(r.id, r.title)}
-                          title="刪除"
+                          title={t('delete')}
                           className="text-xs px-2 py-1 border border-red-200 dark:border-red-800 rounded hover:bg-red-50 dark:hover:bg-red-950/30 text-red-500 dark:text-red-400"
                         >
                           <Trash2 size={12} />

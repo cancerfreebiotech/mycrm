@@ -27,13 +27,5 @@ export async function GET(req: NextRequest) {
     remainingBuffer: 5,
   })
 
-  console.log('[hunter-cron]', {
-    total: result.total,
-    found: result.found,
-    skipped: result.skipped,
-    skipReason: result.skipReason,
-    creditsLeft: result.creditsLeft,
-  })
-
   return NextResponse.json(result)
 }

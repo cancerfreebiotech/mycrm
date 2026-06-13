@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useMemo } from 'react'
+import { useTranslations } from 'next-intl'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
@@ -33,6 +34,7 @@ interface List {
 }
 
 export default function QuickSendPage() {
+  const t = useTranslations('newsletterQuickSend')
   const params = useParams<{ id: string }>()
   const router = useRouter()
   const id = params.id
@@ -204,12 +206,12 @@ export default function QuickSendPage() {
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) {
-      setBanner({ kind: 'err', msg: '只支援圖片檔' })
+      setBanner({ kind: 'err', msg: t('errImageOnly') })
       if (imageInputRef.current) imageInputRef.current.value = ''
       return
     }
     if (file.size > 10 * 1024 * 1024) {
-      setBanner({ kind: 'err', msg: '圖片超過 10 MB 上限' })
+      setBanner({ kind: 'err', msg: t('errImageTooLarge') })
       if (imageInputRef.current) imageInputRef.current.value = ''
       return
     }
@@ -237,7 +239,7 @@ export default function QuickSendPage() {
       // In inline mode: insert at current caret position inside the iframe
       if (viewMode === 'inline') {
         inlineEditorRef.current?.insertImage(pub.publicUrl)
-        setBanner({ kind: 'ok', msg: `已上傳並插入：${safeName}` })
+        setBanner({ kind: 'ok', msg: t('uploadInserted', { name: safeName }) })
         return
       }
 
@@ -257,9 +259,9 @@ export default function QuickSendPage() {
       } else {
         setContentHtml(contentHtml + imgTag)
       }
-      setBanner({ kind: 'ok', msg: `已上傳並插入：${safeName}` })
+      setBanner({ kind: 'ok', msg: t('uploadInserted', { name: safeName }) })
     } catch (e) {
-      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : '圖片上傳失敗' })
+      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : t('errImageUploadFailed') })
     } finally {
       setUploadingImage(false)
       if (imageInputRef.current) imageInputRef.current.value = ''
@@ -281,48 +283,51 @@ export default function QuickSendPage() {
         body: JSON.stringify({ subject, preview_text: previewText, list_ids: listIds, content_html: htmlToSave }),
       })
       if (!res.ok) throw new Error((await res.json()).error ?? 'save failed')
-      setBanner({ kind: 'ok', msg: '已儲存' })
+      setBanner({ kind: 'ok', msg: t('saved') })
       setCampaign((prev) => prev ? { ...prev, subject, preview_text: previewText, list_ids: listIds, content_html: htmlToSave } : prev)
       if (contentHtmlOverride !== undefined) setContentHtml(contentHtmlOverride)
     } catch (e) {
-      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : '儲存失敗' })
+      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : t('errSaveFailed') })
     } finally { setSaving(false) }
   }
 
   async function sendReal() {
     const selectedCount = lists.filter((l) => listIds.includes(l.id)).reduce((sum, l) => sum + l.eligibleCount, 0)
-    if (!confirm(`確定要寄送這份電子報給 ${selectedCount} 位訂閱者？（此操作無法復原）`)) return
+    if (!confirm(t('confirmSend', { count: selectedCount }))) return
     setSending(true)
     setBanner(null)
     try {
       await save() // ensure latest subject/list_ids persisted first
       const res = await fetch(`/api/newsletter/campaigns/${id}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? '寄送失敗')
+      if (!res.ok) throw new Error(data.error ?? t('errSendFailed'))
       const invalidNote = data.invalidEmails?.length
-        ? `；跳過 ${data.invalidEmails.length} 個格式錯誤 email：${data.invalidEmails.slice(0, 3).join(', ')}${data.invalidEmails.length > 3 ? '...' : ''}`
+        ? t('invalidEmailsNote', {
+            count: data.invalidEmails.length,
+            emails: `${data.invalidEmails.slice(0, 3).join(', ')}${data.invalidEmails.length > 3 ? '...' : ''}`,
+          })
         : ''
       if (data.errors?.length) {
         const firstErr = String(data.errors[0]).slice(0, 300)
         setBanner({
           kind: data.sent > 0 ? 'ok' : 'err',
-          msg: `已寄出：${data.sent}/${data.total}（${data.errors.length} 個 chunk 失敗）— 第一筆錯誤：${firstErr}${invalidNote}`,
+          msg: t('sentWithErrors', { sent: data.sent, total: data.total, errors: data.errors.length, firstErr }) + invalidNote,
         })
         console.error('[newsletter send errors]', data.errors)
         if (data.invalidEmails?.length) console.warn('[newsletter invalid emails]', data.invalidEmails)
       } else {
-        setBanner({ kind: 'ok', msg: `已寄出：${data.sent}/${data.total}${invalidNote}` })
+        setBanner({ kind: 'ok', msg: t('sentOk', { sent: data.sent, total: data.total }) + invalidNote })
       }
       // Reload campaign to reflect sent state
       const c = await fetch(`/api/newsletter/campaigns/${id}`).then((r) => r.json())
       setCampaign(c)
     } catch (e) {
-      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : '寄送失敗' })
+      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : t('errSendFailed') })
     } finally { setSending(false) }
   }
 
   async function sendTest() {
-    if (!testEmail.trim()) { setBanner({ kind: 'err', msg: '請輸入測試信箱' }); return }
+    if (!testEmail.trim()) { setBanner({ kind: 'err', msg: t('errNoTestEmail') }); return }
     setSendingTest(true)
     setBanner(null)
     try {
@@ -333,16 +338,16 @@ export default function QuickSendPage() {
         body: JSON.stringify({ testOnly: true, testEmail: testEmail.trim() }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? '測試寄送失敗')
-      setBanner({ kind: 'ok', msg: `測試信已寄到 ${testEmail}` })
+      if (!res.ok) throw new Error(data.error ?? t('errTestSendFailed'))
+      setBanner({ kind: 'ok', msg: t('testSent', { email: testEmail }) })
     } catch (e) {
-      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : '測試寄送失敗' })
+      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : t('errTestSendFailed') })
     } finally { setSendingTest(false) }
   }
 
   async function togglePublish() {
     const willPublish = !campaign?.published_at
-    if (!confirm(willPublish ? '發布到 RSS feed？Substack 會在下次 poll 時抓取並產生草稿' : '取消發布到 RSS？')) return
+    if (!confirm(willPublish ? t('confirmPublish') : t('confirmUnpublish'))) return
     setPublishing(true)
     try {
       const res = await fetch(`/api/newsletter/campaigns/${id}/publish`, {
@@ -351,11 +356,11 @@ export default function QuickSendPage() {
         body: JSON.stringify({ published: willPublish }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? '發布失敗')
+      if (!res.ok) throw new Error(data.error ?? t('errPublishFailed'))
       setCampaign((prev) => prev ? { ...prev, published_at: data.published_at } : prev)
-      setBanner({ kind: 'ok', msg: willPublish ? `已發布到 RSS（${window.location.origin}/api/newsletter/feed.xml）` : '已取消發布' })
+      setBanner({ kind: 'ok', msg: willPublish ? t('publishedToRss', { url: `${window.location.origin}/api/newsletter/feed.xml` }) : t('unpublished') })
     } catch (e) {
-      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : '發布失敗' })
+      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : t('errPublishFailed') })
     } finally { setPublishing(false) }
   }
 
@@ -423,7 +428,7 @@ export default function QuickSendPage() {
       const blob: Blob | null = await new Promise((resolve) =>
         canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.85),
       )
-      if (!blob) throw new Error('canvas → blob 失敗')
+      if (!blob) throw new Error(t('errCanvasBlobFailed'))
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -432,9 +437,9 @@ export default function QuickSendPage() {
       a.click()
       a.remove()
       setTimeout(() => URL.revokeObjectURL(url), 1000)
-      setBanner({ kind: 'ok', msg: `已匯出 ${(blob.size / 1024 / 1024).toFixed(1)} MB 圖片` })
+      setBanner({ kind: 'ok', msg: t('imageExported', { size: (blob.size / 1024 / 1024).toFixed(1) }) })
     } catch (e) {
-      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : '匯出圖片失敗' })
+      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : t('errImageExportFailed') })
     } finally {
       if (host && host.parentNode) host.parentNode.removeChild(host)
       setExportingImage(false)
@@ -448,7 +453,7 @@ export default function QuickSendPage() {
     // Using a new window keeps anchors as real hyperlinks in the PDF.
     const w = window.open('', '_blank', 'width=800,height=1000,menubar=no,toolbar=no')
     if (!w) {
-      setBanner({ kind: 'err', msg: '瀏覽器阻擋了彈出視窗，請允許後再試' })
+      setBanner({ kind: 'err', msg: t('errPopupBlocked') })
       return
     }
     // Inject our preferred PDF filename as <title> BEFORE writing the doc —
@@ -497,7 +502,7 @@ export default function QuickSendPage() {
   }
 
   if (!campaign) {
-    return <div className="p-8 text-center text-gray-400">找不到電子報</div>
+    return <div className="p-8 text-center text-gray-400">{t('notFound')}</div>
   }
 
   const totalSelected = lists.filter((l) => listIds.includes(l.id)).reduce((sum, l) => sum + l.eligibleCount, 0)
@@ -514,8 +519,8 @@ export default function QuickSendPage() {
           <div>
             <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{campaign.title ?? 'Newsletter'}</h1>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              {campaign.sent_at ? `已寄出 ${campaign.sent_count ?? 0} 份` : '尚未寄送'}
-              {campaign.published_at ? ` · 已發布到 RSS` : ' · 未發布'}
+              {campaign.sent_at ? t('headerSentCount', { count: campaign.sent_count ?? 0 }) : t('headerNotSent')}
+              {campaign.published_at ? ` · ${t('headerPublished')}` : ` · ${t('headerNotPublished')}`}
             </p>
           </div>
         </div>
@@ -536,7 +541,7 @@ export default function QuickSendPage() {
           <div className="space-y-4">
             <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-3">
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">主旨</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">{t('subjectLabel')}</label>
                 <input
                   type="text"
                   value={subject}
@@ -545,7 +550,7 @@ export default function QuickSendPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">預覽文字（收件匣第二行）</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">{t('previewTextLabel')}</label>
                 <input
                   type="text"
                   value={previewText}
@@ -555,23 +560,23 @@ export default function QuickSendPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">
-                  LINE / 群組宣傳短文
-                  <span className="text-gray-400 ml-1">— 可貼到 LINE / Slack</span>
+                  {t('promoLabel')}
+                  <span className="text-gray-400 ml-1">{t('promoLabelHint')}</span>
                 </label>
                 <textarea
                   value={promoText}
                   onChange={(e) => setPromoText(e.target.value)}
                   rows={3}
-                  placeholder="（由 Claude.ai newsletter-composer skill 自動產出，或手動填寫）"
+                  placeholder={t('promoPlaceholder')}
                   className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
                 <div className="flex justify-end gap-2 mt-1">
                   <button
                     onClick={() => { setPromoBatch({ 'zh-TW': '', 'en': '', 'ja': '' }); setPromoBatchOpen(true) }}
                     className="text-xs px-2 py-1 rounded-lg border border-purple-300 dark:border-purple-700 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30"
-                    title="一次貼三種語言、套用到 3 個同期 campaign（zh/en/ja）"
+                    title={t('promoBatchTitle')}
                   >
-                    三語批次匯入
+                    {t('promoBatchImport')}
                   </button>
                   {promoText && (
                     <button
@@ -584,7 +589,7 @@ export default function QuickSendPage() {
                       }}
                       className="text-xs px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
-                      {promoCopied ? '✓ 已複製' : '複製'}
+                      {promoCopied ? t('copied') : t('copy')}
                     </button>
                   )}
                   <button
@@ -598,16 +603,16 @@ export default function QuickSendPage() {
                         })
                         if (!res.ok) {
                           const data = await res.json()
-                          setBanner({ kind: 'err', msg: data.error ?? '儲存失敗' })
+                          setBanner({ kind: 'err', msg: data.error ?? t('errSaveFailed') })
                         } else {
-                          setBanner({ kind: 'ok', msg: '宣傳短文已儲存' })
+                          setBanner({ kind: 'ok', msg: t('promoSaved') })
                         }
                       } finally { setSavingPromo(false) }
                     }}
                     disabled={savingPromo}
                     className="text-xs px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
                   >
-                    {savingPromo ? '儲存中…' : '儲存'}
+                    {savingPromo ? t('saving') : t('save')}
                   </button>
                 </div>
               </div>
@@ -618,43 +623,43 @@ export default function QuickSendPage() {
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
                 >
                   {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                  儲存草稿
+                  {t('saveDraft')}
                 </button>
                 <button
                   onClick={exportPdf}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                 >
                   <FileDown size={14} />
-                  匯出 PDF
+                  {t('exportPdf')}
                 </button>
                 <button
                   onClick={exportImage}
                   disabled={exportingImage}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
-                  title="把整封 newsletter 渲染成一張長圖（不分頁）"
+                  title={t('exportImageTitle')}
                 >
                   {exportingImage ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />}
-                  匯出圖片
+                  {t('exportImage')}
                 </button>
                 <button
                   onClick={async () => {
                     if (!campaign?.published_at) {
-                      setBanner({ kind: 'err', msg: '請先發布到 RSS 才會有公開連結' })
+                      setBanner({ kind: 'err', msg: t('errPublishFirst') })
                       return
                     }
                     const slug = campaign.slug ?? campaign.id
                     const url = `${window.location.origin}/newsletter/view/${slug}`
                     try {
                       await navigator.clipboard.writeText(url)
-                      setBanner({ kind: 'ok', msg: `已複製連結 → 貼到 Substack「Import from URL」` })
+                      setBanner({ kind: 'ok', msg: t('linkCopied') })
                     } catch {
-                      setBanner({ kind: 'err', msg: `複製失敗，連結：${url}` })
+                      setBanner({ kind: 'err', msg: t('copyLinkFailed', { url }) })
                     }
                   }}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-                  title={campaign?.published_at ? '複製公開連結，貼到 Substack 的 Import from URL' : '請先發布到 RSS 才會有公開連結'}
+                  title={campaign?.published_at ? t('substackLinkTitle') : t('errPublishFirst')}
                 >
-                  🔗 Substack 連結
+                  🔗 {t('substackLink')}
                 </button>
                 <button
                   onClick={async () => {
@@ -694,15 +699,15 @@ export default function QuickSendPage() {
                         // Fallback for browsers without ClipboardItem
                         await navigator.clipboard.writeText(html)
                       }
-                      setBanner({ kind: 'ok', msg: '已複製內文 → 直接貼到 Substack 編輯器（會自動渲染成格式化內容）' })
+                      setBanner({ kind: 'ok', msg: t('contentCopied') })
                     } catch (e) {
-                      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : '複製失敗' })
+                      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : t('copyFailed') })
                     }
                   }}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-                  title="抽掉 logo / 社群圖示 / 退訂連結，複製為「rich text」可直接貼到 Substack 編輯器"
+                  title={t('copyContentTitle')}
                 >
-                  📋 複製內文
+                  📋 {t('copyContent')}
                 </button>
               </div>
             </div>
@@ -714,30 +719,30 @@ export default function QuickSendPage() {
                   <button
                     onClick={() => setViewMode('preview')}
                     className={`flex items-center gap-1 px-2.5 py-1 text-xs ${viewMode === 'preview' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                    title="只看渲染後預覽"
+                    title={t('tabPreviewTitle')}
                   >
-                    <Eye size={12} /> 預覽
+                    <Eye size={12} /> {t('tabPreview')}
                   </button>
                   <button
                     onClick={() => setViewMode('inline')}
                     className={`flex items-center gap-1 px-2.5 py-1 text-xs border-l border-gray-200 dark:border-gray-700 ${viewMode === 'inline' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                    title="直接在渲染後的版型上點選文字編輯，不會破壞 HTML 結構"
+                    title={t('tabInlineTitle')}
                   >
-                    <Pencil size={12} /> Inline 編輯
+                    <Pencil size={12} /> {t('tabInline')}
                   </button>
                   <button
                     onClick={() => setViewMode('edit')}
                     className={`flex items-center gap-1 px-2.5 py-1 text-xs border-l border-gray-200 dark:border-gray-700 ${viewMode === 'edit' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                    title="只看 HTML 原始碼"
+                    title={t('tabHtmlTitle')}
                   >
                     <Code size={12} /> HTML
                   </button>
                   <button
                     onClick={() => setViewMode('split')}
                     className={`flex items-center gap-1 px-2.5 py-1 text-xs border-l border-gray-200 dark:border-gray-700 ${viewMode === 'split' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                    title="左 HTML + 右即時預覽"
+                    title={t('tabSplitTitle')}
                   >
-                    <Columns size={12} /> 分割
+                    <Columns size={12} /> {t('tabSplit')}
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
@@ -746,10 +751,10 @@ export default function QuickSendPage() {
                       onClick={() => imageInputRef.current?.click()}
                       disabled={uploadingImage}
                       className="flex items-center gap-1 px-2 py-1 text-xs border border-gray-200 dark:border-gray-700 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
-                      title="上傳圖片到 newsletter-assets 並在游標位置插入 <img>"
+                      title={t('insertImageTitle')}
                     >
                       {uploadingImage ? <Loader2 size={11} className="animate-spin" /> : <ImageIcon size={11} />}
-                      插入圖片
+                      {t('insertImage')}
                     </button>
                   )}
                   <input
@@ -809,8 +814,8 @@ export default function QuickSendPage() {
           <div className="space-y-4">
             <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">收件名單</h2>
-                <Link href="/admin/newsletter/lists" className="text-xs text-gray-400 hover:text-blue-500">管理 →</Link>
+                <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('recipientsTitle')}</h2>
+                <Link href="/admin/newsletter/lists" className="text-xs text-gray-400 hover:text-blue-500">{t('manageLists')}</Link>
               </div>
               <div className="space-y-2">
                 {lists.map((l) => (
@@ -826,24 +831,24 @@ export default function QuickSendPage() {
                     <Link
                       href={`/admin/newsletter/lists/${l.id}`}
                       className="text-xs text-gray-400 hover:text-blue-500 hover:underline"
-                      title="檢視名單成員（可寄送 / 總數）"
+                      title={t('viewListMembersTitle')}
                     >
-                      {l.eligibleCount}{l.memberCount !== l.eligibleCount && <span className="text-gray-400"> / {l.memberCount}</span>} 人 →
+                      {l.eligibleCount}{l.memberCount !== l.eligibleCount && <span className="text-gray-400"> / {l.memberCount}</span>} {t('peopleArrow')}
                     </Link>
                   </div>
                 ))}
               </div>
               <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 text-sm">
-                <span className="text-gray-500">可寄送：</span>
-                <span className="font-medium text-gray-900 dark:text-gray-100">{totalSelected} 人</span>
+                <span className="text-gray-500">{t('eligibleLabel')}</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">{t('peopleCount', { count: totalSelected })}</span>
                 {totalSuppressed > 0 && (
-                  <span className="text-xs text-gray-400 ml-2">（排除退信/退訂 {totalSuppressed} 人）</span>
+                  <span className="text-xs text-gray-400 ml-2">{t('suppressedNote', { count: totalSuppressed })}</span>
                 )}
               </div>
             </div>
 
             <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-3">
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">測試寄送</h2>
+              <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('testSendTitle')}</h2>
               <div className="flex gap-2">
                 <input
                   type="email"
@@ -858,7 +863,7 @@ export default function QuickSendPage() {
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 disabled:opacity-50"
                 >
                   {sendingTest ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                  測試寄送
+                  {t('testSendButton')}
                 </button>
               </div>
             </div>
@@ -870,7 +875,7 @@ export default function QuickSendPage() {
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
               >
                 {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                正式寄送 ({totalSelected} 人)
+                {t('sendRealButton', { count: totalSelected })}
               </button>
               <button
                 onClick={togglePublish}
@@ -882,18 +887,18 @@ export default function QuickSendPage() {
                 }`}
               >
                 {publishing ? <Loader2 size={14} className="animate-spin" /> : <Rss size={14} />}
-                {campaign.published_at ? '取消發布 RSS' : '發布到 RSS（Substack 會抓草稿）'}
+                {campaign.published_at ? t('unpublishRss') : t('publishRss')}
               </button>
               {campaign.published_at && (
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  已發布：{new Date(campaign.published_at).toLocaleString('zh-TW')}
+                  {t('publishedAt', { date: new Date(campaign.published_at).toLocaleString('zh-TW') })}
                 </p>
               )}
             </div>
 
             <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl p-4 text-xs text-gray-500 dark:text-gray-400 space-y-1">
-              <p>⚠ 電子報透過 SendGrid 寄送。發送後不會計入聯絡人的「最後活動時間」（仍會寫互動紀錄）。</p>
-              <p>📡 RSS feed: <a href="/api/newsletter/feed.xml" target="_blank" className="text-blue-600 dark:text-blue-400 hover:underline font-mono break-all">{typeof window !== 'undefined' ? window.location.origin : 'https://crm.cancerfree.io'}/api/newsletter/feed.xml</a></p>
+              <p>{t('sendgridNote')}</p>
+              <p>{t('rssFeedLabel')} <a href="/api/newsletter/feed.xml" target="_blank" className="text-blue-600 dark:text-blue-400 hover:underline font-mono break-all">{typeof window !== 'undefined' ? window.location.origin : 'https://crm.cancerfree.io'}/api/newsletter/feed.xml</a></p>
             </div>
           </div>
         </div>
@@ -902,7 +907,7 @@ export default function QuickSendPage() {
           onClick={() => router.back()}
           className="mt-6 text-sm text-gray-500 hover:text-gray-700"
         >
-          ← 返回
+          {t('back')}
         </button>
       </div>
 
@@ -911,11 +916,11 @@ export default function QuickSendPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !promoBatchSaving && setPromoBatchOpen(false)}>
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-2xl mx-4 p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">三語批次匯入 LINE 短文</h2>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('promoBatchModalTitle')}</h2>
               <button onClick={() => !promoBatchSaving && setPromoBatchOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">×</button>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-              貼上 3 種語言的短文，會同時套用到本期 zh / en / ja 三個 campaign。可只填部分（空的不會覆蓋）。
+              {t('promoBatchModalDesc')}
             </p>
             <div className="space-y-3">
               {(['zh-TW', 'en', 'ja'] as const).map((lang) => (
@@ -925,7 +930,7 @@ export default function QuickSendPage() {
                     value={promoBatch[lang]}
                     onChange={(e) => setPromoBatch((prev) => ({ ...prev, [lang]: e.target.value }))}
                     rows={3}
-                    placeholder={lang === 'zh-TW' ? '繁中短文...' : lang === 'en' ? 'English promo text...' : '日本語の短文...'}
+                    placeholder={lang === 'zh-TW' ? t('promoBatchPlaceholderZh') : lang === 'en' ? t('promoBatchPlaceholderEn') : t('promoBatchPlaceholderJa')}
                     className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
                   />
                 </div>
@@ -937,7 +942,7 @@ export default function QuickSendPage() {
                 disabled={promoBatchSaving}
                 className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
               >
-                取消
+                {t('cancel')}
               </button>
               <button
                 onClick={async () => {
@@ -950,11 +955,11 @@ export default function QuickSendPage() {
                     })
                     const data = await res.json()
                     if (!res.ok) {
-                      setBanner({ kind: 'err', msg: data.error ?? '批次匯入失敗' })
+                      setBanner({ kind: 'err', msg: data.error ?? t('errPromoBatchFailed') })
                       return
                     }
                     const updated = (data.results as { lang: string; updated: boolean }[]).filter((r) => r.updated).length
-                    setBanner({ kind: 'ok', msg: `三語批次匯入成功（${updated} 個 campaign 更新）` })
+                    setBanner({ kind: 'ok', msg: t('promoBatchSuccess', { count: updated }) })
                     // Update local promo if current campaign was one of the updated
                     const currentLangPromo = promoBatch['zh-TW'] && (campaign?.slug?.includes('-zh-tw-')) ? promoBatch['zh-TW']
                       : promoBatch['en'] && (campaign?.slug?.includes('-en-')) ? promoBatch['en']
@@ -963,14 +968,14 @@ export default function QuickSendPage() {
                     if (currentLangPromo) setPromoText(currentLangPromo)
                     setPromoBatchOpen(false)
                   } catch (e) {
-                    setBanner({ kind: 'err', msg: e instanceof Error ? e.message : '批次匯入失敗' })
+                    setBanner({ kind: 'err', msg: e instanceof Error ? e.message : t('errPromoBatchFailed') })
                   } finally { setPromoBatchSaving(false) }
                 }}
                 disabled={promoBatchSaving}
                 className="flex items-center gap-1.5 px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
               >
                 {promoBatchSaving ? <Loader2 size={14} className="animate-spin" /> : null}
-                匯入並儲存
+                {t('promoBatchSubmit')}
               </button>
             </div>
           </div>

@@ -352,6 +352,15 @@ DROP POLICY IF EXISTS "feedback_authenticated_select" ON storage.objects;
 DROP POLICY IF EXISTS "feedback_authenticated_delete" ON storage.objects;
 CREATE POLICY "feedback_authenticated_delete" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'feedback');
 -- feedback bucket INSERT policy already exists (auth users can upload own feedback screenshots)
+-- feedback 截圖含 CRM 個資 → bucket 轉 private，截圖讀取限本人（路徑前綴 = 自己的 auth uid）或 super_admin。
+-- 前端改存「儲存路徑」並以 createSignedUrl 取短效連結，不再用 public URL。
+UPDATE storage.buckets SET public = false WHERE id = 'feedback';
+CREATE POLICY "feedback_authenticated_select" ON storage.objects
+  FOR SELECT TO authenticated
+  USING (
+    bucket_id = 'feedback'
+    AND (split_part(name, '/', 1) = auth.uid()::text OR public.is_super_admin())
+  );
 
 -- ============================================================
 -- 10. 手動：到 Supabase Dashboard → Authentication → Policies →

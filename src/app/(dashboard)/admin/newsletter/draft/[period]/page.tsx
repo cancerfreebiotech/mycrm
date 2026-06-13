@@ -96,7 +96,7 @@ function Inner() {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ period, ...patch }),
     })
-    if (!r.ok) alert((await r.json()).error ?? '儲存失敗')
+    if (!r.ok) alert((await r.json()).error ?? t('errorSaveFailed'))
   }
 
   async function createDraft(section: Section, fields: { title: string; content: string; event_date: string }) {
@@ -105,7 +105,7 @@ function Inner() {
       body: JSON.stringify({ period, section, title: fields.title, content: fields.content || null, event_date: fields.event_date || null, created_via: 'web' }),
     })
     if (r.ok) { setComposing(null); await load() }
-    else alert((await r.json()).error ?? '建立失敗')
+    else alert((await r.json()).error ?? t('errorCreateFailed'))
   }
 
   async function updateDraft(id: string, patch: Partial<Draft>) {
@@ -113,11 +113,11 @@ function Inner() {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
     })
     if (r.ok) await load()
-    else alert((await r.json()).error ?? '更新失敗')
+    else alert((await r.json()).error ?? t('errorUpdateFailed'))
   }
 
   async function deleteDraft(id: string, title: string | null) {
-    if (!confirm(`確定刪除「${title ?? '未命名'}」?`)) return
+    if (!confirm(t('confirmDeleteStory', { title: title ?? t('untitled') }))) return
     const r = await fetch(`/api/newsletter/drafts/${id}`, { method: 'DELETE' })
     if (r.ok) await load()
   }
@@ -129,7 +129,7 @@ function Inner() {
       const j = await r.json()
       setDrafts((prev) => prev.map((d) => d.id === id ? { ...d, photo_urls: j.photo_urls } : d))
       if (editing?.id === id) setEditing({ ...editing, photo_urls: j.photo_urls })
-    } else alert((await r.json()).error ?? '上傳失敗')
+    } else alert((await r.json()).error ?? t('errorUploadFailed'))
   }
 
   async function removePhoto(id: string, url: string) {
@@ -153,13 +153,13 @@ function Inner() {
         body: JSON.stringify({ period, action: 'preview', force }),
       })
       const j = await r.json()
-      if (!r.ok) { alert(j.error ?? 'AI 編寫失敗'); return }
+      if (!r.ok) { alert(j.error ?? t('errorAiComposeFailed')); return }
       setAiPreview({ ...j.preview, story_count: j.story_count, from_cache: !!j.from_cache })
     } finally { setAiBusy(false) }
   }
 
   async function aiCommit() {
-    if (!confirm(`確定建立 3 個 draft campaigns（zh/en/ja）？\n建立後 ${aiPreview?.story_count ?? 0} 個 stories 會標為 used`)) return
+    if (!confirm(t('confirmAiCommit', { count: aiPreview?.story_count ?? 0 }))) return
     setAiBusy(true)
     try {
       const r = await fetch('/api/newsletter/compose-from-drafts', {
@@ -167,7 +167,7 @@ function Inner() {
         body: JSON.stringify({ period, action: 'commit' }),
       })
       const j = await r.json()
-      if (!r.ok) { alert(j.error ?? '建立失敗'); return }
+      if (!r.ok) { alert(j.error ?? t('errorCreateFailed')); return }
       setAiPreview(null)
       router.push('/admin/newsletter/campaigns')
     } finally { setAiBusy(false) }
@@ -203,14 +203,14 @@ function Inner() {
               <button
                 onClick={commitPeriod}
                 disabled={!/^\d{4}-(0[1-9]|1[0-2])$/.test(periodInput.trim()) || periodInput.trim() === period}
-                title="跳到此期"
+                title={t('jumpToPeriod')}
                 className="p-2 rounded text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30 disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <Check size={20} />
               </button>
               <button
                 onClick={() => { setEditingPeriod(false); setPeriodInput(period) }}
-                title="取消"
+                title={tc('cancel')}
                 className="p-2 rounded text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
               >
                 <X size={20} />
@@ -219,7 +219,7 @@ function Inner() {
           ) : (
             <h1
               onClick={() => { setPeriodInput(period); setEditingPeriod(true) }}
-              title="點擊修改期數"
+              title={t('clickToEditPeriod')}
               className="text-2xl font-bold text-gray-900 dark:text-gray-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 px-2 py-1 rounded"
             >
               {t('draftTitle', { period })}
@@ -305,6 +305,8 @@ function AiPreviewModal({ preview, busy, onClose, onCommit, onRegenerate }: {
   onCommit: () => void
   onRegenerate: () => void
 }) {
+  const t = useTranslations('newsletter')
+  const tc = useTranslations('common')
   const [tab, setTab] = useState<'zh-TW' | 'en' | 'ja'>('zh-TW')
   const current = preview[tab]
   return (
@@ -313,8 +315,8 @@ function AiPreviewModal({ preview, busy, onClose, onCommit, onRegenerate }: {
         className="bg-white dark:bg-gray-900 rounded-lg max-w-5xl w-full p-6 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex justify-between items-center mb-3">
           <h3 className="font-semibold text-gray-900 dark:text-gray-100">
-            🤖 AI 編寫預覽（{preview.story_count} stories）
-            {preview.from_cache && <span className="ml-2 text-xs font-normal text-gray-500">· 取自快取（按右下「重新生成」可重跑 AI）</span>}
+            {t('aiPreviewTitle', { count: preview.story_count })}
+            {preview.from_cache && <span className="ml-2 text-xs font-normal text-gray-500">{t('aiPreviewFromCache')}</span>}
           </h3>
           <button onClick={onClose}><X size={18} /></button>
         </div>
@@ -327,24 +329,24 @@ function AiPreviewModal({ preview, busy, onClose, onCommit, onRegenerate }: {
           ))}
         </div>
         <div className="flex-1 overflow-y-auto space-y-3">
-          <div className="text-xs text-gray-500">Subject</div>
+          <div className="text-xs text-gray-500">{t('subjectLabel')}</div>
           <div className="font-medium text-gray-900 dark:text-gray-100">{current.subject}</div>
-          <div className="text-xs text-gray-500 mt-3">Promo text</div>
+          <div className="text-xs text-gray-500 mt-3">{t('promoTextLabel')}</div>
           <div className="text-sm bg-gray-50 dark:bg-gray-800 p-2 rounded">{current.promo}</div>
-          <div className="text-xs text-gray-500 mt-3">HTML 預覽</div>
+          <div className="text-xs text-gray-500 mt-3">{t('htmlPreview')}</div>
           <iframe srcDoc={current.html} className="w-full h-[55vh] border border-gray-200 dark:border-gray-700 rounded bg-white" />
         </div>
         <div className="flex justify-between gap-2 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
           <button onClick={onRegenerate} disabled={busy}
             className="flex items-center gap-1 px-4 py-2 text-sm border border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-300 rounded hover:bg-purple-50 dark:hover:bg-purple-950/30 disabled:opacity-50">
-            {busy ? <Loader2 size={14} className="animate-spin" /> : '🔄'} 重新生成
+            {busy ? <Loader2 size={14} className="animate-spin" /> : '🔄'} {t('regenerate')}
           </button>
           <div className="flex gap-2">
             <button onClick={onClose}
-              className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded">取消</button>
+              className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded">{tc('cancel')}</button>
             <button onClick={onCommit} disabled={busy}
               className="px-4 py-2 text-sm bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50">
-              {busy ? '建立中…' : '建立 3 個 draft campaigns'}
+              {busy ? t('creating') : t('createDraftCampaigns')}
             </button>
           </div>
         </div>
@@ -360,13 +362,15 @@ function HighlightSection({ draft, onAdd, onEdit, onDelete }: {
   onEdit: () => void
   onDelete: () => void
 }) {
+  const t = useTranslations('newsletter')
+  const tc = useTranslations('common')
   if (!draft) {
     return (
       <button
         onClick={onAdd}
         className="w-full mb-6 flex items-center justify-center gap-2 p-4 border-2 border-dashed border-amber-300 dark:border-amber-800 rounded-lg text-sm text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors"
       >
-        <Plus size={18} /> 📌 新增本期重點（會出現在電子報最上方，跟 story 一樣可放標題 / 圖片 / 連結 / 內文）
+        <Plus size={18} /> {t('addHighlightCta')}
       </button>
     )
   }
@@ -374,21 +378,21 @@ function HighlightSection({ draft, onAdd, onEdit, onDelete }: {
     <div className="mb-6 bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-800 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-amber-800 dark:text-amber-300 text-sm">
-          📌 本期重點 highlight
-          <span className="ml-2 text-xs font-normal text-amber-600 dark:text-amber-400">（出現在電子報最上方）</span>
+          {t('highlightSection')}
+          <span className="ml-2 text-xs font-normal text-amber-600 dark:text-amber-400">{t('highlightSectionHint')}</span>
         </h2>
         <div className="flex items-center gap-1">
-          <button onClick={onEdit} title="編輯" className="p-1 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/40 rounded">
+          <button onClick={onEdit} title={tc('edit')} className="p-1 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/40 rounded">
             <Pencil size={14} />
           </button>
-          <button onClick={onDelete} title="刪除" className="p-1 text-amber-700 dark:text-amber-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-amber-100 dark:hover:bg-amber-950/40 rounded">
+          <button onClick={onDelete} title={tc('delete')} className="p-1 text-amber-700 dark:text-amber-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-amber-100 dark:hover:bg-amber-950/40 rounded">
             <Trash2 size={14} />
           </button>
         </div>
       </div>
       <div onClick={onEdit} className="cursor-pointer bg-white dark:bg-gray-800 rounded p-3 border border-amber-100 dark:border-amber-900 hover:border-amber-400 dark:hover:border-amber-700">
         <div className="font-medium text-gray-900 dark:text-gray-100 mb-1">
-          {draft.title ?? <span className="text-gray-400">(無標題)</span>}
+          {draft.title ?? <span className="text-gray-400">{t('noTitle')}</span>}
         </div>
         {draft.content && (
           <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-3 whitespace-pre-wrap">{draft.content}</p>
@@ -425,6 +429,8 @@ function Column({ section, label, defaultLabel, labelValue, onRename, drafts, on
   onEdit: (d: Draft) => void
   onDelete: (id: string, title: string | null) => void
 }) {
+  const t = useTranslations('newsletter')
+  const tc = useTranslations('common')
   const [editing, setEditing] = useState(false)
   const [draftInput, setDraftInput] = useState(labelValue)
   function commit() {
@@ -448,13 +454,13 @@ function Column({ section, label, defaultLabel, labelValue, onRename, drafts, on
               placeholder={defaultLabel}
               className="flex-1 px-2 py-1 text-sm border border-blue-400 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <button onClick={commit} title="儲存" className="p-1 text-green-600 hover:text-green-700"><Check size={14} /></button>
-            <button onClick={() => { setEditing(false); setDraftInput(labelValue) }} title="取消" className="p-1 text-gray-400 hover:text-gray-600"><X size={14} /></button>
+            <button onClick={commit} title={tc('save')} className="p-1 text-green-600 hover:text-green-700"><Check size={14} /></button>
+            <button onClick={() => { setEditing(false); setDraftInput(labelValue) }} title={tc('cancel')} className="p-1 text-gray-400 hover:text-gray-600"><X size={14} /></button>
           </div>
         ) : (
           <h2
             onClick={() => { setDraftInput(labelValue); setEditing(true) }}
-            title="點擊重新命名（清空則回復預設）"
+            title={t('clickToRename')}
             className="font-semibold text-gray-800 dark:text-gray-200 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 px-2 py-1 rounded -ml-2 inline-flex items-center gap-1"
           >
             {section === 'last_month' ? '📜' : '🔮'} {label}
@@ -469,14 +475,14 @@ function Column({ section, label, defaultLabel, labelValue, onRename, drafts, on
             className="bg-white dark:bg-gray-800 rounded p-3 border border-gray-200 dark:border-gray-700 cursor-pointer hover:border-blue-400 dark:hover:border-blue-500">
             <div className="flex justify-between items-start gap-2">
               <div className="font-medium text-gray-900 dark:text-gray-100 truncate flex-1">
-                {d.title ?? <span className="text-gray-400">(無標題)</span>}
+                {d.title ?? <span className="text-gray-400">{t('noTitle')}</span>}
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <button onClick={(e) => { e.stopPropagation(); onEdit(d) }}
-                  title="編輯標題與內容"
+                  title={t('editTitleContent')}
                   className="text-gray-400 hover:text-blue-500"><Pencil size={14} /></button>
                 <button onClick={(e) => { e.stopPropagation(); onDelete(d.id, d.title) }}
-                  title="刪除"
+                  title={tc('delete')}
                   className="text-gray-400 hover:text-red-500"><Trash2 size={14} /></button>
               </div>
             </div>
@@ -509,7 +515,7 @@ function Column({ section, label, defaultLabel, labelValue, onRename, drafts, on
         ))}
         <button onClick={onAdd}
           className="w-full flex items-center justify-center gap-1 p-3 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded text-sm text-gray-600 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500">
-          <Plus size={16} /> 新增 Story
+          <Plus size={16} /> {t('addStory')}
         </button>
       </div>
     </div>
@@ -521,6 +527,8 @@ function ComposeModal({ section, period, onCancel, onSubmit }: {
   onCancel: () => void
   onSubmit: (fields: { title: string; content: string; event_date: string }) => void
 }) {
+  const t = useTranslations('newsletter')
+  const tc = useTranslations('common')
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [eventDate, setEventDate] = useState('')
@@ -530,24 +538,24 @@ function ComposeModal({ section, period, onCancel, onSubmit }: {
         className="bg-white dark:bg-gray-900 rounded-lg max-w-2xl w-full p-6">
         <div className="flex justify-between items-center mb-4">
           <h3 className="font-semibold text-gray-900 dark:text-gray-100">
-            新增 Story · {period} · {section === 'last_month' ? '上月回顧' : section === 'next_month' ? '下月預告' : '📌 本期重點'}
+            {t('addStory')} · {period} · {section === 'last_month' ? t('sectionLastMonth') : section === 'next_month' ? t('sectionNextMonth') : t('sectionHighlight')}
           </h3>
           <button onClick={onCancel}><X size={18} /></button>
         </div>
         <div className="space-y-3">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="標題（例：AACR Taiwan Night）"
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t('titlePlaceholder')}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
-          <input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} placeholder="事件日期"
+          <input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} placeholder={t('eventDateLabel')}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
-          <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="內容（之後可以再加照片）" rows={6}
+          <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder={t('contentWithPhotoPlaceholder')} rows={6}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
         </div>
         <div className="flex justify-end gap-2 mt-4">
           <button onClick={onCancel}
-            className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded">取消</button>
+            className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded">{tc('cancel')}</button>
           <button onClick={() => title.trim() && onSubmit({ title: title.trim(), content: content.trim(), event_date: eventDate })}
             disabled={!title.trim()}
-            className="px-4 py-2 text-sm bg-blue-500 text-white rounded disabled:opacity-50">新增</button>
+            className="px-4 py-2 text-sm bg-blue-500 text-white rounded disabled:opacity-50">{tc('add')}</button>
         </div>
       </div>
     </div>
@@ -561,6 +569,8 @@ function EditModal({ draft, period: _period, onClose, onSave, onUploadPhoto, onR
   onUploadPhoto: (file: File) => Promise<void>
   onRemovePhoto: (url: string) => Promise<void>
 }) {
+  const t = useTranslations('newsletter')
+  const tc = useTranslations('common')
   const [title, setTitle] = useState(draft.title ?? '')
   const [content, setContent] = useState(draft.content ?? '')
   const [eventDate, setEventDate] = useState(draft.event_date ?? '')
@@ -587,49 +597,49 @@ function EditModal({ draft, period: _period, onClose, onSave, onUploadPhoto, onR
       <div onClick={(e) => e.stopPropagation()}
         className="bg-white dark:bg-gray-900 rounded-lg max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100">編輯 Story</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('editStory')}</h3>
           <button onClick={onClose}><X size={18} /></button>
         </div>
         {used && (
           <div className="mb-3 p-2 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded text-sm">
-            此 story 已被用於 campaign，不建議再修改
+            {t('usedStoryWarning')}
           </div>
         )}
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-gray-500 dark:text-gray-400">標題</label>
+            <label className="text-xs text-gray-500 dark:text-gray-400">{t('titleLabel')}</label>
             <input value={title} onChange={(e) => setTitle(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="text-xs text-gray-500 dark:text-gray-400">期數</label>
+              <label className="text-xs text-gray-500 dark:text-gray-400">{t('periodLabel')}</label>
               <input value={draftPeriod} onChange={(e) => setDraftPeriod(e.target.value)} placeholder="YYYY-MM"
                 pattern="^\d{4}-\d{2}$"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
             </div>
             <div>
-              <label className="text-xs text-gray-500 dark:text-gray-400">段落</label>
+              <label className="text-xs text-gray-500 dark:text-gray-400">{t('sectionLabel')}</label>
               <select value={section} onChange={(e) => setSection(e.target.value as Section)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-                <option value="last_month">📜 上月回顧</option>
-                <option value="next_month">🔮 下月預告</option>
-                <option value="highlight">📌 本期重點</option>
+                <option value="last_month">{t('sectionLastMonth')}</option>
+                <option value="next_month">{t('sectionNextMonth')}</option>
+                <option value="highlight">{t('sectionHighlight')}</option>
               </select>
             </div>
             <div>
-              <label className="text-xs text-gray-500 dark:text-gray-400">事件日期</label>
+              <label className="text-xs text-gray-500 dark:text-gray-400">{t('eventDateLabel')}</label>
               <input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
             </div>
           </div>
           <div>
-            <label className="text-xs text-gray-500 dark:text-gray-400">內容</label>
+            <label className="text-xs text-gray-500 dark:text-gray-400">{t('contentLabel')}</label>
             <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={8}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
           </div>
           <div>
-            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">照片 ({draft.photo_urls.length})</label>
+            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">{t('photosLabel', { count: draft.photo_urls.length })}</label>
             <div className="grid grid-cols-4 gap-2">
               {draft.photo_urls.map((u) => (
                 <div key={u} className="relative group">
@@ -650,10 +660,10 @@ function EditModal({ draft, period: _period, onClose, onSave, onUploadPhoto, onR
         </div>
         <div className="flex justify-end gap-2 mt-4">
           <button onClick={onClose}
-            className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded">取消</button>
+            className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded">{tc('cancel')}</button>
           <button onClick={save} disabled={saving}
             className="px-4 py-2 text-sm bg-blue-500 text-white rounded disabled:opacity-50">
-            {saving ? '...' : '儲存'}
+            {saving ? '...' : tc('save')}
           </button>
         </div>
       </div>

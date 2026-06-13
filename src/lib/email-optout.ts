@@ -1,6 +1,7 @@
 import { createHmac } from 'crypto'
+import { emailTokenSecret } from './emailTokenSecret'
 
-const SECRET = () => process.env.NEXTAUTH_SECRET ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
+const SECRET = emailTokenSecret
 
 interface OptOutPayload {
   email: string

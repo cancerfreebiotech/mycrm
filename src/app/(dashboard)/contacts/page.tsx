@@ -536,7 +536,7 @@ export default function ContactsPage() {
               onClick={() => setBatchModalOpen(true)}
               className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600"
             >
-              <Check size={14} /> 批次編輯（{selectedIds.size}）
+              <Check size={14} /> {t('batchEditButton', { count: selectedIds.size })}
             </button>
           )}
           {canNewsletter && (selectedIds.size > 0 || hasFilter) && emailTargets.length > 0 && (
@@ -565,13 +565,13 @@ export default function ContactsPage() {
                   className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                   onClick={() => setAddDropOpen(false)}
                 >
-                  <Plus size={14} /> 新增聯絡人
+                  <Plus size={14} /> {t('addContact')}
                 </Link>
                 <button
                   className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 w-full text-left"
                   onClick={() => liInputRef.current?.click()}
                 >
-                  <Linkedin size={14} className="text-blue-600" /> LinkedIn 截圖
+                  <Linkedin size={14} className="text-blue-600" /> {t('linkedinScreenshot')}
                 </button>
               </div>
             )}
@@ -970,7 +970,7 @@ export default function ContactsPage() {
           <button
             onClick={() => setColumnsDropdownOpen((v) => !v)}
             className="flex items-center gap-2 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-            title="顯示/隱藏欄位"
+            title={t('toggleColumns')}
           >
             <SlidersHorizontal size={14} />
           </button>
@@ -1346,7 +1346,7 @@ export default function ContactsPage() {
               <div>
                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('company')}</label>
                 <input type="text" value={batchForm.company} onChange={(e) => setBatchForm((p) => ({ ...p, company: e.target.value }))}
-                  placeholder="公司名（空白 = 不修改）"
+                  placeholder={t('batchCompanyPlaceholder')}
                   className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -1354,7 +1354,7 @@ export default function ContactsPage() {
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('countryFilter')}</label>
                   <select value={batchForm.country_code} onChange={(e) => setBatchForm((p) => ({ ...p, country_code: e.target.value }))}
                     className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">— 不修改 —</option>
+                    <option value="">{t('batchKeepUnchanged')}</option>
                     {allCountries.map((c) => (
                       <option key={c.code} value={c.code}>{c.emoji} {c.name_zh}</option>
                     ))}
@@ -1364,7 +1364,7 @@ export default function ContactsPage() {
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('languageFilter')}</label>
                   <select value={batchForm.language} onChange={(e) => setBatchForm((p) => ({ ...p, language: e.target.value }))}
                     className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">— 不修改 —</option>
+                    <option value="">{t('batchKeepUnchanged')}</option>
                     <option value="chinese">{t('languageChinese')}</option>
                     <option value="english">English</option>
                     <option value="japanese">{t('languageJapanese')}</option>
@@ -1372,7 +1372,7 @@ export default function ContactsPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Tags（加入，不移除現有）</label>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('batchTagsLabel')}</label>
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {allTags.map((tag) => {
                     const selected = batchForm._tag_ids.includes(tag.id)

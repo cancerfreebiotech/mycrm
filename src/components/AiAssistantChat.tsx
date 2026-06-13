@@ -6,7 +6,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { Send, Loader2, Sparkles } from 'lucide-react'
 
-interface ChatMessage { role: 'user' | 'model'; content: string }
+interface ChatMessage { role: 'user' | 'model'; content: string; isError?: boolean }
 
 function renderMarkdown(md: string): string {
   return DOMPurify.sanitize(marked.parse(md, { async: false }) as string)
@@ -36,13 +36,17 @@ export default function AiAssistantChat({ className = '' }: { className?: string
       const res = await fetch('/api/ai-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: next }),
+        // 過濾錯誤泡泡，避免把 ⚠️ 訊息當對話歷史送回後端污染上下文
+        body: JSON.stringify({ messages: next.filter((m) => !m.isError) }),
       })
       const data = await res.json()
-      const reply = res.ok ? (data.reply || t('empty')) : `⚠️ ${data.error || t('error')}`
-      setMessages([...next, { role: 'model', content: reply }])
+      if (res.ok) {
+        setMessages([...next, { role: 'model', content: data.reply || t('empty') }])
+      } else {
+        setMessages([...next, { role: 'model', content: `⚠️ ${data.error || t('error')}`, isError: true }])
+      }
     } catch {
-      setMessages([...next, { role: 'model', content: `⚠️ ${t('error')}` }])
+      setMessages([...next, { role: 'model', content: `⚠️ ${t('error')}`, isError: true }])
     } finally {
       setLoading(false)
     }

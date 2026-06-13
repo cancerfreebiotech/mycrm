@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { createHmac } from 'crypto'
+import { emailTokenSecret } from '@/lib/emailTokenSecret'
 
 const SG_SEND_URL = 'https://api.sendgrid.com/v3/mail/send'
 
@@ -11,7 +12,7 @@ function signUnsubToken(email: string, campaignId: string): string {
   const payload = Buffer.from(
     JSON.stringify({ email, campaignId, exp: Math.floor(Date.now() / 1000) + 365 * 24 * 3600 })
   ).toString('base64url')
-  const secret = process.env.NEXTAUTH_SECRET ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
+  const secret = emailTokenSecret()
   const sig = createHmac('sha256', secret).update(`${header}.${payload}`).digest('base64url')
   return `${header}.${payload}.${sig}`
 }

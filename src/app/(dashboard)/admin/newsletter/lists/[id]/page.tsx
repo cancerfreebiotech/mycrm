@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useTranslations } from 'next-intl'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
@@ -53,6 +54,7 @@ function SortIcon({ col, active, dir }: { col: SortCol; active: SortCol; dir: So
 }
 
 export default function ListDetailPage() {
+  const t = useTranslations('newsletterLists')
   const params = useParams<{ id: string }>()
   const id = params.id
   const supabase = createBrowserSupabaseClient()
@@ -280,7 +282,7 @@ export default function ListDetailPage() {
   }, [filtered, sortCol, sortDir])
 
   async function handleAdd(contact: ContactResult) {
-    if (!contact.email) { setAddError('此聯絡人沒有 email'); return }
+    if (!contact.email) { setAddError(t('contactNoEmail')); return }
     setAddingId(contact.id)
     setAddError(null)
     const res = await fetch('/api/newsletter/list-members', {
@@ -289,7 +291,7 @@ export default function ListDetailPage() {
       body: JSON.stringify({ list_id: id, contact_id: contact.id }),
     })
     const json = await res.json()
-    if (!res.ok) { setAddError(json.error ?? '新增失敗'); setAddingId(null); return }
+    if (!res.ok) { setAddError(json.error ?? t('addFailed')); setAddingId(null); return }
     setAddingId(null)
     setShowAdd(false)
     setContactSearch('')
@@ -310,7 +312,7 @@ export default function ListDetailPage() {
       body: JSON.stringify({ list_id: id, email }),
     })
     const json = await res.json()
-    if (!res.ok) { setAddError(json.error ?? '新增失敗'); setAddingEmail(false); return }
+    if (!res.ok) { setAddError(json.error ?? t('addFailed')); setAddingEmail(false); return }
     setAddingEmail(false)
     setDirectEmail('')
     setAddError(null)
@@ -319,7 +321,7 @@ export default function ListDetailPage() {
   }
 
   async function handleDelete(subscriberId: string) {
-    if (!confirm('確定要將此人從名單移除？')) return
+    if (!confirm(t('confirmRemove'))) return
     setDeletingId(subscriberId)
     await fetch('/api/newsletter/list-members', {
       method: 'DELETE',
@@ -336,11 +338,11 @@ export default function ListDetailPage() {
     try {
       const res = await fetch('/api/sendgrid/import-suppressions', { method: 'POST' })
       const json = await res.json()
-      if (!res.ok) { setSyncMsg(`同步失敗：${json.error ?? res.statusText}`); return }
-      setSyncMsg(`同步完成：退信 ${json.bounces ?? 0} / 無效 ${json.invalidEmails ?? 0} / 退訂 ${json.unsubscribes ?? 0}`)
+      if (!res.ok) { setSyncMsg(t('syncFailed', { error: json.error ?? res.statusText })); return }
+      setSyncMsg(t('syncDone', { bounces: json.bounces ?? 0, invalid: json.invalidEmails ?? 0, unsubscribes: json.unsubscribes ?? 0 }))
       await loadList()
     } catch (e) {
-      setSyncMsg(`同步失敗：${e instanceof Error ? e.message : String(e)}`)
+      setSyncMsg(t('syncFailed', { error: e instanceof Error ? e.message : String(e) }))
     } finally {
       setSyncing(false)
       setTimeout(() => setSyncMsg(null), 6000)
@@ -351,7 +353,7 @@ export default function ListDetailPage() {
     return <div className="flex justify-center py-20"><Loader2 size={24} className="animate-spin text-gray-400" /></div>
   }
   if (!list) {
-    return <div className="p-8 text-center text-gray-400">找不到名單</div>
+    return <div className="p-8 text-center text-gray-400">{t('notFound')}</div>
   }
 
   const linkedCount = subs.filter((s) => s.contact_id).length
@@ -387,16 +389,16 @@ export default function ListDetailPage() {
               onClick={handleSync}
               disabled={syncing}
               className="flex items-center justify-center gap-1.5 min-h-[44px] px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg font-medium disabled:opacity-60"
-              title="從 SendGrid 同步退信/退訂狀態"
+              title={t('syncTitle')}
             >
               {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-              <span className="whitespace-nowrap">同步 SendGrid</span>
+              <span className="whitespace-nowrap">{t('syncButton')}</span>
             </button>
             <button
               onClick={() => { setShowAdd(true); setAddTab('contact'); setContactSearch(''); setContactResults([]); setAddError(null); setDirectEmail('') }}
               className="flex items-center justify-center gap-1.5 min-h-[44px] px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
             >
-              <Plus size={14} /> 新增
+              <Plus size={14} /> {t('add')}
             </button>
           </div>
         </div>
@@ -409,27 +411,27 @@ export default function ListDetailPage() {
 
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
-            <div className="text-xs text-gray-500 dark:text-gray-400">總訂閱者</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{t('statTotal')}</div>
             <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{subs.length}</div>
           </div>
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
-            <div className="text-xs text-gray-500 dark:text-gray-400">已連結聯絡人</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{t('statLinked')}</div>
             <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{linkedCount}</div>
           </div>
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
-            <div className="text-xs text-gray-500 dark:text-gray-400">可寄送</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{t('statSendable')}</div>
             <div className="text-2xl font-bold text-green-600 dark:text-green-400">{activeCount}</div>
           </div>
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
-            <div className="text-xs text-gray-500 dark:text-gray-400">退信 / 無效</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{t('statBounced')}</div>
             <div className="text-2xl font-bold text-red-600 dark:text-red-400">{bouncedCount}</div>
           </div>
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
-            <div className="text-xs text-gray-500 dark:text-gray-400">待處理</div>
-            <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400" title="暫時錯誤 / 信箱滿 / 寄件方問題 / 收件方擋信">{pendingCount}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{t('statPending')}</div>
+            <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400" title={t('statPendingTitle')}>{pendingCount}</div>
           </div>
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
-            <div className="text-xs text-gray-500 dark:text-gray-400">已退訂</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{t('statUnsubscribed')}</div>
             <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{unsubCount}</div>
           </div>
         </div>
@@ -440,7 +442,7 @@ export default function ListDetailPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜尋 email、姓名、聯絡人名..."
+            placeholder={t('searchPlaceholder')}
             className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -451,11 +453,11 @@ export default function ListDetailPage() {
             onChange={(e) => setFilterStatus(e.target.value)}
             className="text-sm px-2 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="all">全部狀態</option>
-            <option value="active">訂閱中</option>
-            <option value="unsubscribed">已退訂</option>
-            <option value="bounced">退信（含無效）</option>
-            <option value="pending">待處理（暫時失敗 / 信箱滿 / 擋件）</option>
+            <option value="all">{t('filterStatusAll')}</option>
+            <option value="active">{t('statusActive')}</option>
+            <option value="unsubscribed">{t('statusUnsubscribed')}</option>
+            <option value="bounced">{t('filterStatusBounced')}</option>
+            <option value="pending">{t('filterStatusPending')}</option>
           </select>
 
           <select
@@ -463,11 +465,11 @@ export default function ListDetailPage() {
             onChange={(e) => setFilterCountry(e.target.value)}
             className="text-sm px-2 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="all">全部國家</option>
+            <option value="all">{t('filterCountryAll')}</option>
             {countryOptions.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
-            <option value="">（未填）</option>
+            <option value="">{t('filterCountryEmpty')}</option>
           </select>
 
           <select
@@ -475,9 +477,9 @@ export default function ListDetailPage() {
             onChange={(e) => setFilterLinked(e.target.value)}
             className="text-sm px-2 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="all">全部連結</option>
-            <option value="linked">已連結聯絡人</option>
-            <option value="unlinked">未連結</option>
+            <option value="all">{t('filterLinkedAll')}</option>
+            <option value="linked">{t('filterLinkedLinked')}</option>
+            <option value="unlinked">{t('filterLinkedUnlinked')}</option>
           </select>
 
           {(filterStatus !== 'all' || filterCountry !== 'all' || filterLinked !== 'all' || search) && (
@@ -485,7 +487,7 @@ export default function ListDetailPage() {
               onClick={() => { setFilterStatus('all'); setFilterCountry('all'); setFilterLinked('all'); setSearch('') }}
               className="flex items-center gap-1 text-sm px-2 py-1.5 rounded-lg text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
             >
-              <X size={13} /> 清除篩選
+              <X size={13} /> {t('clearFilters')}
             </button>
           )}
         </div>
@@ -498,23 +500,23 @@ export default function ListDetailPage() {
                   Email <SortIcon col="email" active={sortCol} dir={sortDir} />
                 </th>
                 <th className={thClass} onClick={() => toggleSort('contact')}>
-                  CRM 聯絡人 <SortIcon col="contact" active={sortCol} dir={sortDir} />
+                  {t('colContact')} <SortIcon col="contact" active={sortCol} dir={sortDir} />
                 </th>
                 <th className={`${thClass} hidden md:table-cell`} onClick={() => toggleSort('country')}>
-                  國家 <SortIcon col="country" active={sortCol} dir={sortDir} />
+                  {t('colCountry')} <SortIcon col="country" active={sortCol} dir={sortDir} />
                 </th>
                 <th className={`${thClass} hidden md:table-cell`} onClick={() => toggleSort('added_at')}>
-                  加入時間 <SortIcon col="added_at" active={sortCol} dir={sortDir} />
+                  {t('colAddedAt')} <SortIcon col="added_at" active={sortCol} dir={sortDir} />
                 </th>
                 <th className={thClass} onClick={() => toggleSort('status')}>
-                  狀態 <SortIcon col="status" active={sortCol} dir={sortDir} />
+                  {t('colStatus')} <SortIcon col="status" active={sortCol} dir={sortDir} />
                 </th>
                 <th className="px-4 py-3 w-10" />
               </tr>
             </thead>
             <tbody>
               {sorted.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">{search ? '無符合搜尋結果' : '名單目前沒有訂閱者'}</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">{search ? t('noSearchResults') : t('emptyList')}</td></tr>
               ) : sorted.map((s) => {
                 return (
                   <tr key={s.id} className="border-b border-gray-100 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/30">
@@ -522,7 +524,7 @@ export default function ListDetailPage() {
                     <td className="px-4 py-3">
                       {s.contact_id ? (
                         <Link href={`/contacts/${s.contact_id}`} className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline">
-                          <LinkIcon size={11} /> {s.contact_name || '已連結'}
+                          <LinkIcon size={11} /> {s.contact_name || t('linked')}
                         </Link>
                       ) : (
                         <span className="text-gray-400">—</span>
@@ -538,23 +540,23 @@ export default function ListDetailPage() {
                     </td>
                     <td className="px-4 py-3">
                       {s.email_status === 'bounced' ? (
-                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">退信</span>
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">{t('badgeBounced')}</span>
                       ) : s.email_status === 'invalid' ? (
-                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">無效</span>
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">{t('badgeInvalid')}</span>
                       ) : s.email_status === 'unsubscribed' ? (
-                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400">已退訂</span>
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400">{t('statusUnsubscribed')}</span>
                       ) : s.email_status === 'deferred' ? (
-                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400" title="網路或對方伺服器暫時錯誤">暫時失敗</span>
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400" title={t('badgeDeferredTitle')}>{t('badgeDeferred')}</span>
                       ) : s.email_status === 'mailbox_full' ? (
-                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400" title="對方信箱已滿">信箱滿</span>
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400" title={t('badgeMailboxFullTitle')}>{t('badgeMailboxFull')}</span>
                       ) : s.email_status === 'sender_blocked' ? (
-                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400" title="寄件方認證/spam 問題">寄件擋</span>
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400" title={t('badgeSenderBlockedTitle')}>{t('badgeSenderBlocked')}</span>
                       ) : s.email_status === 'recipient_blocked' ? (
-                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400" title="對方公司政策擋信">收件擋</span>
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400" title={t('badgeRecipientBlockedTitle')}>{t('badgeRecipientBlocked')}</span>
                       ) : s.email_status === 'spam_report' ? (
-                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" title="收件人檢舉為垃圾信">垃圾檢舉</span>
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" title={t('badgeSpamReportTitle')}>{t('badgeSpamReport')}</span>
                       ) : (
-                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">訂閱中</span>
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">{t('statusActive')}</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -562,7 +564,7 @@ export default function ListDetailPage() {
                         onClick={() => handleDelete(s.id)}
                         disabled={deletingId === s.id}
                         className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40"
-                        title="從名單移除"
+                        title={t('removeTitle')}
                       >
                         {deletingId === s.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                       </button>
@@ -574,7 +576,7 @@ export default function ListDetailPage() {
           </table>
         </div>
 
-        <p className="text-xs text-gray-400 mt-3">顯示 {sorted.length} / {subs.length} 筆</p>
+        <p className="text-xs text-gray-400 mt-3">{t('showingCount', { shown: sorted.length, total: subs.length })}</p>
       </div>
 
       {/* Add Modal */}
@@ -582,7 +584,7 @@ export default function ListDetailPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800">
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100">新增到名單</h2>
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('addModalTitle')}</h2>
               <button
                 onClick={() => setShowAdd(false)}
                 className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500"
@@ -601,7 +603,7 @@ export default function ListDetailPage() {
                     : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                 }`}
               >
-                搜尋聯絡人
+                {t('tabSearchContact')}
               </button>
               <button
                 onClick={() => { setAddTab('email'); setAddError(null) }}
@@ -611,7 +613,7 @@ export default function ListDetailPage() {
                     : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                 }`}
               >
-                直接輸入 Email
+                {t('tabDirectEmail')}
               </button>
             </div>
 
@@ -629,7 +631,7 @@ export default function ListDetailPage() {
                       type="text"
                       value={contactSearch}
                       onChange={(e) => setContactSearch(e.target.value)}
-                      placeholder="搜尋聯絡人姓名或 email..."
+                      placeholder={t('contactSearchPlaceholder')}
                       className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -637,11 +639,11 @@ export default function ListDetailPage() {
                     {contactLoading ? (
                       <div className="flex justify-center py-8"><Loader2 size={18} className="animate-spin text-gray-400" /></div>
                     ) : contactSearch.trim() === '' ? (
-                      <p className="py-8 text-center text-sm text-gray-400">輸入姓名或 email 搜尋</p>
+                      <p className="py-8 text-center text-sm text-gray-400">{t('contactSearchHint')}</p>
                     ) : contactResults.length === 0 ? (
-                      <p className="py-8 text-center text-sm text-gray-400">找不到符合的聯絡人</p>
+                      <p className="py-8 text-center text-sm text-gray-400">{t('contactNoResults')}</p>
                     ) : contactResults.map((c) => {
-                      const displayName = c.name || c.name_en || c.name_local || '（無名）'
+                      const displayName = c.name || c.name_en || c.name_local || t('noName')
                       const alreadyIn = subs.some((s) => s.contact_id === c.id)
                       return (
                         <button
@@ -653,17 +655,17 @@ export default function ListDetailPage() {
                           <div className="min-w-0">
                             <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{displayName}</div>
                             <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                              {c.email ?? <span className="text-red-400">無 email</span>}
+                              {c.email ?? <span className="text-red-400">{t('noEmail')}</span>}
                               {c.company && ` · ${c.company}`}
                             </div>
                           </div>
                           <div className="shrink-0 text-xs">
                             {alreadyIn ? (
-                              <span className="text-gray-400">已在名單</span>
+                              <span className="text-gray-400">{t('alreadyInList')}</span>
                             ) : addingId === c.id ? (
                               <Loader2 size={14} className="animate-spin text-blue-500" />
                             ) : (
-                              <span className="text-blue-600 dark:text-blue-400">新增</span>
+                              <span className="text-blue-600 dark:text-blue-400">{t('add')}</span>
                             )}
                           </div>
                         </button>
@@ -675,7 +677,7 @@ export default function ListDetailPage() {
                 <form onSubmit={handleAddEmail} className="flex flex-col gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                      Email 地址
+                      {t('emailAddressLabel')}
                     </label>
                     <input
                       autoFocus
@@ -686,7 +688,7 @@ export default function ListDetailPage() {
                       required
                       className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                    <p className="mt-1.5 text-xs text-gray-400">若此 email 已有訂閱者紀錄將直接加入名單，否則自動建立新訂閱者。</p>
+                    <p className="mt-1.5 text-xs text-gray-400">{t('directEmailHint')}</p>
                   </div>
                   <button
                     type="submit"
@@ -694,7 +696,7 @@ export default function ListDetailPage() {
                     className="flex items-center justify-center gap-2 w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg"
                   >
                     {addingEmail ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                    加入名單
+                    {t('addToList')}
                   </button>
                 </form>
               )}

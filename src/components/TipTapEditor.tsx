@@ -10,6 +10,7 @@ import TextAlign from '@tiptap/extension-text-align'
 import HorizontalRule from '@tiptap/extension-horizontal-rule'
 import { useState, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
+import DOMPurify from 'dompurify'
 import {
   Bold, Italic, UnderlineIcon, Link2, Image as ImageIcon,
   List, ListOrdered, Minus, AlignLeft, AlignCenter, AlignRight,
@@ -286,7 +287,7 @@ export default function TipTapEditor({
       {preview ? (
         <div
           className="prose prose-sm dark:prose-invert max-w-none px-4 py-3 min-h-[280px]"
-          dangerouslySetInnerHTML={{ __html: previewHtml }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewHtml) }}
         />
       ) : (
         <EditorContent editor={editor} />

@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import DOMPurify from 'isomorphic-dompurify'
 import { createServiceClient } from '@/lib/supabase'
 
 // Public page for a published newsletter campaign.
@@ -34,6 +35,9 @@ export default async function NewsletterViewPage({ params }: { params: Promise<{
 
   if (!data) notFound()
 
+  // 渲染前先 sanitize DB 來的 HTML，避免儲存型 XSS
+  const clean = DOMPurify.sanitize((data.content_html as string) ?? '')
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 py-8">
       <div className="max-w-[640px] mx-auto bg-white dark:bg-gray-900 rounded-xl shadow-sm overflow-hidden">
@@ -45,7 +49,7 @@ export default async function NewsletterViewPage({ params }: { params: Promise<{
         </div>
         <div
           className="newsletter-body"
-          dangerouslySetInnerHTML={{ __html: (data.content_html as string) ?? '' }}
+          dangerouslySetInnerHTML={{ __html: clean }}
         />
       </div>
     </div>

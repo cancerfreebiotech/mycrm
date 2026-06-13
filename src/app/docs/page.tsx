@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useTheme } from 'next-themes'
 import { Sun, Moon, ArrowLeft, Globe, ChevronRight } from 'lucide-react'
 import { marked, Renderer } from 'marked'
+import DOMPurify from 'dompurify'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { LOCALE_COOKIE, SUPPORTED_LOCALES } from '@/i18n/config'
 
@@ -152,8 +153,9 @@ export default function DocsPage() {
       setToc(tocItems)
       marked.use({ renderer: buildMarkdownRenderer() })
       const parsed = marked.parse(content)
-      if (typeof parsed === 'string') setHtml(parsed)
-      else parsed.then(setHtml)
+      // 渲染前先 sanitize，避免 XSS（dangerouslySetInnerHTML）
+      if (typeof parsed === 'string') setHtml(DOMPurify.sanitize(parsed))
+      else parsed.then((p) => setHtml(DOMPurify.sanitize(p)))
     } else {
       setHtml('')
       setToc([])

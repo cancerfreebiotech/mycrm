@@ -226,9 +226,9 @@ export default function CamcardPage() {
   }
 
   async function bulkAssign(label: string | null) {
-    if (selectedCards.size === 0) { alert('請先勾選要更改的名片'); return }
-    const niceLabel = label ?? '（取消指派）'
-    if (!confirm(`將 ${selectedCards.size} 張名片的審核人改為「${niceLabel}」？`)) return
+    if (selectedCards.size === 0) { alert(t('assignSelectFirst')); return }
+    const niceLabel = label ?? t('assignUnassignLabel')
+    if (!confirm(t('assignConfirm', { count: selectedCards.size, label: niceLabel }))) return
     setBulkAssigning(true)
     try {
       const res = await fetch('/api/camcard/assignees', {
@@ -237,11 +237,11 @@ export default function CamcardPage() {
         body: JSON.stringify({ ids: [...selectedCards], assignee_label: label }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? '更新失敗')
+      if (!res.ok) throw new Error(data.error ?? t('updateFailed'))
       await fetchPending(page)
       await reloadAssignees()
     } catch (e) {
-      alert(e instanceof Error ? e.message : '更新失敗')
+      alert(e instanceof Error ? e.message : t('updateFailed'))
     } finally { setBulkAssigning(false) }
   }
 
@@ -564,7 +564,7 @@ export default function CamcardPage() {
             <div className="flex items-center gap-2 flex-wrap">
               <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{name}</p>
               {card.assignee_label && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-medium" title="審核人">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-medium" title={t('assigneeLabel')}>
                   👤 {card.assignee_label}
                 </span>
               )}
@@ -801,18 +801,18 @@ export default function CamcardPage() {
 
         {/* Assignee / 審核人 */}
         <div className="flex items-center gap-1.5">
-          <label className="text-xs text-gray-400 shrink-0">審核人</label>
+          <label className="text-xs text-gray-400 shrink-0">{t('assigneeLabel')}</label>
           <div className="relative">
             <select
               value={assigneeFilter}
               onChange={(e) => setAssigneeFilter(e.target.value)}
               className="appearance-none pl-2 pr-6 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
-              <option value="">全部</option>
+              <option value="">{t('assigneeAll')}</option>
               {assigneeOptions.map((a) => (
                 <option key={a.label} value={a.label}>{a.label} ({a.count})</option>
               ))}
-              {unassignedCount > 0 && <option value="__unassigned__">（未指派） ({unassignedCount})</option>}
+              {unassignedCount > 0 && <option value="__unassigned__">{t('assigneeUnassignedOption', { count: unassignedCount })}</option>}
             </select>
             <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
@@ -906,12 +906,12 @@ export default function CamcardPage() {
       {!loading && groups.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 mb-4 px-3 py-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40">
           <CalendarCheck size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
-          <span className="text-xs text-amber-700 dark:text-amber-400 font-medium shrink-0">批次設定 Met at</span>
+          <span className="text-xs text-amber-700 dark:text-amber-400 font-medium shrink-0">{t('batchMetAtTitle')}</span>
           <input
             type="text"
             value={batchMetAt}
             onChange={(e) => setBatchMetAt(e.target.value)}
-            placeholder="活動 / 地點名稱"
+            placeholder={t('batchMetAtPlaceholder')}
             className="text-sm px-2 py-1 border border-amber-200 dark:border-amber-700 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-400 min-w-40"
           />
           <input
@@ -926,7 +926,7 @@ export default function CamcardPage() {
             className="flex items-center gap-1.5 px-3 py-1 text-xs bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded font-medium"
           >
             {applyingBatch ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-            套用到全部 {groups.reduce((n, g) => n + g.cards.length, 0)} 筆
+            {t('batchApplyAll', { count: groups.reduce((n, g) => n + g.cards.length, 0) })}
           </button>
         </div>
       )}
@@ -941,7 +941,7 @@ export default function CamcardPage() {
           <FolderInput size={36} className="text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 font-medium">{t('emptyPending')}</p>
           <p className="text-gray-300 text-sm mt-1">
-            使用 <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">scripts/camcard-import/import.ts</code> 匯入名片後，在此審查
+            {t.rich('emptyPendingHint', { code: (chunks) => <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">{chunks}</code> })}
           </p>
         </div>
       ) : (
@@ -962,10 +962,10 @@ export default function CamcardPage() {
                   <div className="flex items-center gap-2">
                     {isCollapsed ? <ChevronRight size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                     <span className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{group.company}</span>
-                    <span className="text-xs text-gray-400">{group.cards.length} 張</span>
+                    <span className="text-xs text-gray-400">{t('groupCardCount', { count: group.cards.length })}</span>
                     {dupCount > 0 && (
                       <span className="text-xs bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400 px-2 py-0.5 rounded-full">
-                        ⚠️ {dupCount} 筆重複
+                        {t('groupDupCount', { count: dupCount })}
                       </span>
                     )}
                   </div>
@@ -976,7 +976,7 @@ export default function CamcardPage() {
                       className="flex items-center gap-1.5 px-3 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
                     >
                       {isBatchLoading ? <Loader2 size={12} className="animate-spin" /> : <CheckSquare size={12} />}
-                      批次新增（{noDupCards.length}）
+                      {t('groupBatchAdd', { count: noDupCards.length })}
                     </button>
                   )}
                 </div>
@@ -1022,7 +1022,7 @@ export default function CamcardPage() {
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                <Pencil size={16} /> 編輯名片資料
+                <Pencil size={16} /> {t('editCardTitle')}
               </h2>
               <button onClick={() => setEditCard(null)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
             </div>
@@ -1046,8 +1046,8 @@ export default function CamcardPage() {
                   ['website', t('fieldWebsite')],
                   ['linkedin_url', 'LinkedIn'],
                   ['facebook_url', 'Facebook'],
-                  ['met_at', '活動 / 地點'],
-                  ['met_date', '認識日期'],
+                  ['met_at', t('fieldMetAtLabel')],
+                  ['met_date', t('fieldMetDateLabel')],
                 ] as [string, string][]).map(([key, label]) => (
                   <div key={key}>
                     <label className="block text-xs text-gray-400 mb-1">{label}</label>
@@ -1155,7 +1155,7 @@ export default function CamcardPage() {
                     target="_blank"
                     className="inline-flex items-center gap-1 text-xs text-blue-500 hover:underline mt-1"
                   >
-                    <ExternalLink size={10} /> {t('view')}聯絡人
+                    <ExternalLink size={10} /> {t('viewContact')}
                   </Link>
                 </div>
               )}
@@ -1199,7 +1199,7 @@ export default function CamcardPage() {
           {bulkConfirming && bulkProgress ? (
             <>
               <Loader2 size={16} className="animate-spin shrink-0" />
-              <span className="text-sm font-medium whitespace-nowrap">確認中… {bulkProgress.done} / {bulkProgress.total}</span>
+              <span className="text-sm font-medium whitespace-nowrap">{t('bulkProgress', { done: bulkProgress.done, total: bulkProgress.total })}</span>
               <div className="w-28 bg-gray-700 dark:bg-gray-300 rounded-full h-1.5 overflow-hidden">
                 <div
                   className="bg-green-400 h-full rounded-full transition-all duration-300"
@@ -1219,15 +1219,15 @@ export default function CamcardPage() {
               </button>
               <button
                 onClick={async () => {
-                  const label = prompt('指派審核人（輸入名字，如 PO / Eva / Tom；留空 = 取消指派）', 'PO')
+                  const label = prompt(t('assignPrompt'), 'PO')
                   if (label === null) return
                   await bulkAssign(label.trim() || null)
                 }}
                 disabled={bulkAssigning}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 disabled:opacity-50 font-medium whitespace-nowrap"
-                title="批次指派審核人"
+                title={t('assignBulkTitle')}
               >
-                {bulkAssigning ? <Loader2 size={13} className="animate-spin" /> : <>👤</>} 指派審核人
+                {bulkAssigning ? <Loader2 size={13} className="animate-spin" /> : <>👤</>} {t('assignAction')}
               </button>
               <button
                 onClick={() => setSelectedCards(new Set())}

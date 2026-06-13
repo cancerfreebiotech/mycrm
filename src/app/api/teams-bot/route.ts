@@ -96,7 +96,6 @@ async function resolveAadEmail(aadObjectId: string): Promise<string | null> {
       return null
     }
     const userData = await userRes.json()
-    console.log('[teams-bot] resolveAadEmail result:', userData.mail ?? userData.userPrincipalName)
     return (userData.mail ?? userData.userPrincipalName ?? null) as string | null
   } catch (e) {
     console.error('[teams-bot] resolveAadEmail exception:', e)
@@ -114,7 +113,6 @@ async function sendToTeams(serviceUrl: string, conversationId: string, text: str
   const url = replyToId
     ? `${base}/v3/conversations/${conversationId}/activities/${replyToId}`
     : `${base}/v3/conversations/${conversationId}/activities`
-  console.log('[teams-bot] sendToTeams →', url)
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -124,8 +122,6 @@ async function sendToTeams(serviceUrl: string, conversationId: string, text: str
     if (!res.ok) {
       const body = await res.text()
       console.error('[teams-bot] sendToTeams failed:', res.status, body)
-    } else {
-      console.log('[teams-bot] sendToTeams ok:', res.status)
     }
   } catch (e) {
     console.error('[teams-bot] sendToTeams exception:', e)
@@ -162,7 +158,6 @@ async function linkUser(
 
   // Check if this email is a registered CRM user (case-insensitive)
   const emailLower = email.toLowerCase()
-  console.log('[teams-bot] linkUser resolved email:', emailLower)
   const { data } = await supabase.from('users').select('email').ilike('email', emailLower).single()
   if (!data) {
     console.error('[teams-bot] linkUser: email not found in users table:', emailLower)
@@ -174,13 +169,11 @@ async function linkUser(
     .update({ teams_user_id: aadId, teams_conversation_id: conversationId, teams_service_url: serviceUrl })
     .eq('email', data.email)
 
-  console.log('[teams-bot] linkUser: linked', data.email, '←', aadId)
   return data.email
 }
 
 export async function POST(req: NextRequest) {
   const authOk = await verifyTeamsRequest(req)
-  console.log('[teams-bot] auth ok:', authOk)
   if (!authOk) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -192,17 +185,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
-  console.log('[teams-bot] RAW body:', JSON.stringify(body))
-
   const activityType = (body.type as string) ?? ''
-  const activityName = (body.name as string) ?? ''
   const serviceUrl = (body.serviceUrl as string) ?? ''
   const conversationId = ((body.conversation as Record<string, string>)?.id) ?? ''
   const from = body.from as Record<string, string> | undefined
   const aadId = from?.aadObjectId ?? ''
   const supabase = createServiceClient()
-
-  console.log('[teams-bot]', { activityType, activityName, aadId: aadId || '(none)', conversationId: conversationId.slice(0, 20) })
 
   // ── conversationUpdate: user added/messaged the bot for the first time ───
   if (activityType === 'conversationUpdate') {
@@ -220,7 +208,6 @@ export async function POST(req: NextRequest) {
   // ── invoke: Adaptive Card button press ───────────────────────────────────
   if (activityType === 'invoke') {
     const value = body.value as Record<string, unknown> | undefined
-    console.log('[teams-bot] invoke value:', JSON.stringify(value))
 
     // Format 1: Action.Submit data directly → value = { action: "task_done", task_id: "..." }
     // Format 2: adaptiveCard/action invoke → value = { action: { type, data: { action, task_id } } }
@@ -242,7 +229,6 @@ export async function POST(req: NextRequest) {
       // Flat format: { action: undefined, task_id: "..." } shouldn't happen, but handle direct data
       task_id = value.task_id as string
     }
-    console.log('[teams-bot] invoke parsed: action=%s task_id=%s', action ?? '(none)', task_id ?? '(none)')
 
     if (action === 'task_done' && task_id) {
       // 1. Look up by aadObjectId
@@ -253,16 +239,12 @@ export async function POST(req: NextRequest) {
       // 2. Fallback: look up by conversationId (aadObjectId may be absent in invoke activities)
       if (!userRow && conversationId) {
         userRow = (await supabase.from('users').select('email').eq('teams_conversation_id', conversationId).single()).data
-        if (userRow) console.log('[teams-bot] task_done: found user via conversationId:', userRow.email)
       }
-
-      console.log('[teams-bot] task_done: aadId=%s userRow=%s task_id=%s', aadId, userRow?.email ?? 'null', task_id)
 
       // 3. Last resort: try auto-link via Graph
       if (!userRow && aadId && conversationId && serviceUrl) {
         const email = await linkUser(supabase, aadId, conversationId, serviceUrl)
         if (email) userRow = { email }
-        console.log('[teams-bot] task_done: auto-linked email=%s', email ?? 'null')
       }
 
       if (userRow?.email) {
@@ -279,7 +261,6 @@ export async function POST(req: NextRequest) {
           }
           return NextResponse.json({ type: 'invokeResponse', value: { status: 200 } })
         }
-        console.log('[teams-bot] task_done: updated task %s as done by %s', task_id, userRow.email)
         // Send visible confirmation message (invokeResponse alone is not visible in Teams)
         if (conversationId && serviceUrl) {
           const title = taskRow?.title ?? ''

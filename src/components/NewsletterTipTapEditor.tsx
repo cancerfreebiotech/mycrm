@@ -8,6 +8,7 @@ import TextAlign from '@tiptap/extension-text-align'
 import Underline from '@tiptap/extension-underline'
 import Placeholder from '@tiptap/extension-placeholder'
 import { useEffect, useCallback } from 'react'
+import { useTranslations } from 'next-intl'
 import {
   Bold, Italic, Underline as UnderlineIcon,
   Link2, List, ListOrdered, Minus, ImageIcon,
@@ -33,6 +34,7 @@ export function NewsletterTipTapEditor({
   onClearPendingImage,
   onImageInsertClick,
 }: Props) {
+  const t = useTranslations('newsletterEditor')
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -40,7 +42,7 @@ export function NewsletterTipTapEditor({
       LinkExtension.configure({ openOnClick: false }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Underline,
-      Placeholder.configure({ placeholder: '開始撰寫電子報內容...' }),
+      Placeholder.configure({ placeholder: t('placeholder') }),
     ],
     content: initialValue,
     onUpdate({ editor }) {
@@ -58,11 +60,11 @@ export function NewsletterTipTapEditor({
   const handleSetLink = useCallback(() => {
     if (!editor) return
     const prev = editor.getAttributes('link').href as string | undefined
-    const url = window.prompt('連結網址', prev ?? 'https://')
+    const url = window.prompt(t('linkPrompt'), prev ?? 'https://')
     if (url === null) return
     if (!url) { editor.chain().focus().unsetLink().run(); return }
     editor.chain().focus().setLink({ href: url }).run()
-  }, [editor])
+  }, [editor, t])
 
   if (!editor) return null
 
@@ -77,13 +79,13 @@ export function NewsletterTipTapEditor({
     <div className="flex flex-col">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 bg-gray-50 dark:bg-gray-800/80 border-b border-gray-200 dark:border-gray-700">
-        <button onClick={() => editor.chain().focus().toggleBold().run()} className={btn(editor.isActive('bold'))} title="粗體 (Ctrl+B)">
+        <button onClick={() => editor.chain().focus().toggleBold().run()} className={btn(editor.isActive('bold'))} title={t('bold')}>
           <Bold size={14} />
         </button>
-        <button onClick={() => editor.chain().focus().toggleItalic().run()} className={btn(editor.isActive('italic'))} title="斜體 (Ctrl+I)">
+        <button onClick={() => editor.chain().focus().toggleItalic().run()} className={btn(editor.isActive('italic'))} title={t('italic')}>
           <Italic size={14} />
         </button>
-        <button onClick={() => editor.chain().focus().toggleUnderline().run()} className={btn(editor.isActive('underline'))} title="底線 (Ctrl+U)">
+        <button onClick={() => editor.chain().focus().toggleUnderline().run()} className={btn(editor.isActive('underline'))} title={t('underline')}>
           <UnderlineIcon size={14} />
         </button>
         <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1 shrink-0" />
@@ -92,37 +94,37 @@ export function NewsletterTipTapEditor({
             key={level}
             onClick={() => editor.chain().focus().toggleHeading({ level }).run()}
             className={`${btn(editor.isActive('heading', { level }))} text-xs font-bold px-2`}
-            title={`標題 ${level}`}
+            title={t('heading', { level })}
           >
             H{level}
           </button>
         ))}
         <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1 shrink-0" />
-        <button onClick={() => editor.chain().focus().toggleBulletList().run()} className={btn(editor.isActive('bulletList'))} title="項目符號">
+        <button onClick={() => editor.chain().focus().toggleBulletList().run()} className={btn(editor.isActive('bulletList'))} title={t('bulletList')}>
           <List size={14} />
         </button>
-        <button onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btn(editor.isActive('orderedList'))} title="編號清單">
+        <button onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btn(editor.isActive('orderedList'))} title={t('orderedList')}>
           <ListOrdered size={14} />
         </button>
         <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1 shrink-0" />
-        <button onClick={() => editor.chain().focus().setTextAlign('left').run()} className={btn(editor.isActive({ textAlign: 'left' }))} title="靠左">
+        <button onClick={() => editor.chain().focus().setTextAlign('left').run()} className={btn(editor.isActive({ textAlign: 'left' }))} title={t('alignLeft')}>
           <AlignLeft size={14} />
         </button>
-        <button onClick={() => editor.chain().focus().setTextAlign('center').run()} className={btn(editor.isActive({ textAlign: 'center' }))} title="置中">
+        <button onClick={() => editor.chain().focus().setTextAlign('center').run()} className={btn(editor.isActive({ textAlign: 'center' }))} title={t('alignCenter')}>
           <AlignCenter size={14} />
         </button>
-        <button onClick={() => editor.chain().focus().setTextAlign('right').run()} className={btn(editor.isActive({ textAlign: 'right' }))} title="靠右">
+        <button onClick={() => editor.chain().focus().setTextAlign('right').run()} className={btn(editor.isActive({ textAlign: 'right' }))} title={t('alignRight')}>
           <AlignRight size={14} />
         </button>
         <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1 shrink-0" />
-        <button onClick={handleSetLink} className={btn(editor.isActive('link'))} title="插入連結">
+        <button onClick={handleSetLink} className={btn(editor.isActive('link'))} title={t('insertLink')}>
           <Link2 size={14} />
         </button>
-        <button onClick={() => editor.chain().focus().setHorizontalRule().run()} className={btn(false)} title="分隔線">
+        <button onClick={() => editor.chain().focus().setHorizontalRule().run()} className={btn(false)} title={t('horizontalRule')}>
           <Minus size={14} />
         </button>
         {onImageInsertClick && (
-          <button onClick={onImageInsertClick} className={btn(false)} title="插入圖片">
+          <button onClick={onImageInsertClick} className={btn(false)} title={t('insertImage')}>
             <ImageIcon size={14} />
           </button>
         )}

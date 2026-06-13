@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { ArrowLeft, Loader2, MailX, Mail, Check, AlertCircle } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
@@ -30,6 +31,7 @@ interface ApiResponse {
 }
 
 export default function EmailRecoveryPage() {
+  const t = useTranslations('emailRecovery')
   const [data, setData] = useState<ApiResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -45,12 +47,12 @@ export default function EmailRecoveryPage() {
       const res = await fetch('/api/admin/email-recovery')
       const body = await res.json()
       if (!res.ok) {
-        setError(body.error ?? '載入失敗')
+        setError(body.error ?? t('loadFailed'))
         return
       }
       setData(body as ApiResponse)
     } catch (e) {
-      setError(e instanceof Error ? e.message : '載入失敗')
+      setError(e instanceof Error ? e.message : t('loadFailed'))
     } finally {
       setLoading(false)
     }
@@ -59,7 +61,7 @@ export default function EmailRecoveryPage() {
   useEffect(() => { load() }, [])
 
   async function applyReplace(badId: string, newEmail: string, mergeFromId?: string) {
-    if (!confirm(`確認把 ${newEmail} 設為新 email？舊 email 會寫進 notes，bounced 狀態會清除。`)) return
+    if (!confirm(t('confirmReplace', { newEmail }))) return
     setApplying(badId)
     try {
       const res = await fetch('/api/admin/email-recovery/apply', {
@@ -73,7 +75,7 @@ export default function EmailRecoveryPage() {
       })
       const body = await res.json()
       if (!res.ok) {
-        alert(`失敗：${body.error ?? '未知錯誤'}`)
+        alert(t('applyFailed', { error: body.error ?? t('unknownError') }))
         return
       }
       setAppliedIds((prev) => new Set(prev).add(badId))
@@ -98,9 +100,9 @@ export default function EmailRecoveryPage() {
           </Link>
           <MailX size={22} className="text-amber-600" />
           <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Email 復活</h1>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-              退信 / 無效 email 的聯絡人，找出可能的「換工作後」新名片，一鍵替換 email
+              {t('subtitle')}
             </p>
           </div>
         </div>
@@ -115,11 +117,11 @@ export default function EmailRecoveryPage() {
           <>
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">總壞 email 聯絡人</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('statTotalBad')}</div>
                 <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{data.total}</div>
               </div>
               <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">有候選新名片</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('statWithCandidates')}</div>
                 <div className="text-2xl font-bold text-green-600 dark:text-green-400">{data.with_candidates}</div>
               </div>
             </div>
@@ -133,7 +135,7 @@ export default function EmailRecoveryPage() {
                     : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
                 }`}
               >
-                只看有候選
+                {t('filterWithCandidates')}
               </button>
               <button
                 onClick={() => setFilterMode('all')}
@@ -143,12 +145,12 @@ export default function EmailRecoveryPage() {
                     : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
                 }`}
               >
-                全部 ({data.total})
+                {t('filterAll', { count: data.total })}
               </button>
             </div>
 
             {visible.length === 0 ? (
-              <p className="text-center text-gray-400 dark:text-gray-500 py-12 text-sm">沒有資料</p>
+              <p className="text-center text-gray-400 dark:text-gray-500 py-12 text-sm">{t('empty')}</p>
             ) : (
               <div className="space-y-4">
                 {visible.map((row) => {
@@ -170,7 +172,7 @@ export default function EmailRecoveryPage() {
                             href={`/contacts/${row.bad.id}`}
                             className="text-base font-semibold text-gray-900 dark:text-gray-100 hover:underline"
                           >
-                            {row.bad.name ?? '(無姓名)'}
+                            {row.bad.name ?? t('noName')}
                           </Link>
                           {row.bad.company && (
                             <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">{row.bad.company}</span>
@@ -178,7 +180,7 @@ export default function EmailRecoveryPage() {
                         </div>
                         {applied && (
                           <div className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
-                            <Check size={16} /> 已替換
+                            <Check size={16} /> {t('replaced')}
                           </div>
                         )}
                       </div>
@@ -186,7 +188,7 @@ export default function EmailRecoveryPage() {
                       <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-3">
                         <div className="flex items-center gap-2 text-sm">
                           <Mail size={14} className="text-amber-600 dark:text-amber-400" />
-                          <span className="font-mono text-amber-900 dark:text-amber-200">{row.bad.email ?? '(無 email)'}</span>
+                          <span className="font-mono text-amber-900 dark:text-amber-200">{row.bad.email ?? t('noEmail')}</span>
                           <span className="px-2 py-0.5 text-xs rounded-full bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200">
                             {row.bad.email_status}
                           </span>
@@ -200,7 +202,7 @@ export default function EmailRecoveryPage() {
 
                       {row.candidates.length > 0 && (
                         <div className="space-y-2 mb-3">
-                          <div className="text-xs font-medium text-gray-500 dark:text-gray-400">同名候選聯絡人（新建立）：</div>
+                          <div className="text-xs font-medium text-gray-500 dark:text-gray-400">{t('candidatesHeading')}</div>
                           {row.candidates.map((c) => (
                             <div
                               key={c.id}
@@ -208,13 +210,13 @@ export default function EmailRecoveryPage() {
                             >
                               <div className="text-sm">
                                 <Link href={`/contacts/${c.id}`} className="font-medium text-gray-900 dark:text-gray-100 hover:underline">
-                                  {c.name ?? '(無姓名)'}
+                                  {c.name ?? t('noName')}
                                 </Link>
                                 {c.company && <span className="text-gray-500 dark:text-gray-400 ml-2">{c.company}</span>}
                                 <div className="font-mono text-green-700 dark:text-green-400 mt-1">{c.email}</div>
                                 {c.created_at && (
                                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                    建立於 {new Date(c.created_at).toLocaleDateString('zh-TW')}
+                                    {t('createdOn', { date: new Date(c.created_at).toLocaleDateString('zh-TW') })}
                                   </div>
                                 )}
                               </div>
@@ -224,7 +226,7 @@ export default function EmailRecoveryPage() {
                                 className="px-3 py-1.5 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                               >
                                 {isApplying ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
-                                用此 email 替換 + 軟刪新聯絡人
+                                {t('replaceWithThisEmail')}
                               </button>
                             </div>
                           ))}
@@ -233,7 +235,7 @@ export default function EmailRecoveryPage() {
 
                       {!applied && (
                         <div className="flex items-center gap-2 pt-3 border-t border-gray-200 dark:border-gray-800">
-                          <span className="text-xs text-gray-500 dark:text-gray-400">或手動輸入 email：</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">{t('manualInputLabel')}</span>
                           <input
                             type="email"
                             value={customDraft}
@@ -246,7 +248,7 @@ export default function EmailRecoveryPage() {
                             onClick={() => applyReplace(row.bad.id, customDraft.trim())}
                             className="px-3 py-1 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            替換
+                            {t('replace')}
                           </button>
                         </div>
                       )}
@@ -261,7 +263,7 @@ export default function EmailRecoveryPage() {
                 onClick={load}
                 className="mt-6 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
               >
-                重新載入（已替換 {appliedIds.size} 筆）
+                {t('reloadWithCount', { count: appliedIds.size })}
               </button>
             )}
           </>

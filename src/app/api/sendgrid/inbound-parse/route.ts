@@ -128,16 +128,6 @@ export async function POST(req: NextRequest) {
   const hasBccInRecipients = allRecipients.some((a) => isBccInbox(a.email))
   const orgRecipient = allRecipients.find((a) => isOrgAddress(a.email))
 
-  console.log('[inbound-parse] received', {
-    from: fromAddr.email,
-    to: toList.map(a => a.email),
-    cc: ccList.map(a => a.email),
-    subject: parsed.subject,
-    hasOrgFrom,
-    hasBccInRecipients,
-    orgRecipient: orgRecipient?.email ?? null,
-  })
-
   if (!hasOrgFrom && !(hasBccInRecipients && orgRecipient)) {
     console.error('[inbound-parse] rejected: sender not in org', fromAddr.email)
     return NextResponse.json(
@@ -211,7 +201,6 @@ export async function POST(req: NextRequest) {
     console.warn('[inbound-parse] skipped: no external counterparties found', { from: fromAddr.email, subject: parsed.subject })
     return NextResponse.json({ ok: true, skipped: 'no external party' })
   }
-  console.log('[inbound-parse] counterparties:', counterparties.map(a => a.email))
 
   const bodyText = parsed.text ?? ''
   const bodyClean = stripQuotedReply(bodyText) || bodyText
@@ -268,7 +257,6 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  console.log('[inbound-parse] done', { direction, contacts: created.length, created_new: newContacts.length })
   return NextResponse.json({
     ok: true,
     direction,

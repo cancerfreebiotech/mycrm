@@ -37,6 +37,7 @@ export default function PhotoFaceTagger({
   onNavigate?: () => void
 }) {
   const t = useTranslations('photos')
+  const tCommon = useTranslations('common')
   const [adding, setAdding] = useState(false)
   const [q, setQ] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
@@ -94,11 +95,18 @@ export default function PhotoFaceTagger({
   async function resolveSuggestion(faceId: string, action: 'accept' | 'reject') {
     setBusy(true)
     try {
-      await fetch(`/api/photo-faces/${faceId}`, {
+      const res = await fetch(`/api/photo-faces/${faceId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
       })
+      if (!res.ok) {
+        // 失敗時提示使用者（例如建議已被別人接受 → already_tagged 409），不靜默吞掉
+        const d = await res.json().catch(() => ({}))
+        if (d.error === 'already_tagged') alert(t('alreadyTagged'))
+        else alert(tCommon('error'))
+        return
+      }
       onChanged()
     } finally {
       setBusy(false)

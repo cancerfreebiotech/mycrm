@@ -28,9 +28,14 @@ export async function GET(req: NextRequest) {
   const sort: 'created_at' | 'taken_at' | 'name' =
     sortParam === 'taken_at' || sortParam === 'name' ? sortParam : 'created_at'
 
+  // 相簿在前端以單一網格呈現，且 name 排序/搜尋於 JS 端跨全集進行，故此處載入全集。
+  // 為避免無上限的全表載入，設一個防禦性上限並回報是否被截斷，而非靜默丟資料。
+  const MAX_PHOTOS = 1000
+
   let query = service
     .from('contact_photos')
-    .select('id, photo_url, storage_path, note, taken_at, location_name, latitude, longitude, created_at')
+    .select('id, photo_url, storage_path, note, taken_at, location_name, latitude, longitude, created_at', { count: 'exact' })
+    .limit(MAX_PHOTOS)
 
   if (sort === 'taken_at') {
     query = query
@@ -41,20 +46,23 @@ export async function GET(req: NextRequest) {
     query = query.order('created_at', { ascending: false })
   }
 
-  const { data: photoRows, error } = await query
+  const { data: photoRows, error, count } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const truncated = (count ?? 0) > MAX_PHOTOS
 
   // 一張照片可對應多位聯絡人 → 從 photo_faces 取每張照片框到的人（排除已拒絕的建議）。
   // contact_id 與 suggested_contact_id 都指向 contacts，故用 contacts:contact_id 明確指定 FK 以消歧義。
   const { data: faceRows, error: faceErr } = await service
     .from('photo_faces')
-    .select('id, photo_id, contact_id, status, source, confidence, bbox_x, bbox_y, bbox_w, bbox_h, contacts:contact_id(id, name, name_en)')
+    .select('id, photo_id, contact_id, status, source, confidence, bbox_x, bbox_y, bbox_w, bbox_h, contacts:contact_id(id, name, name_en, deleted_at)')
     .neq('status', 'rejected')
   if (faceErr) return NextResponse.json({ error: faceErr.message }, { status: 500 })
 
   const facesByPhoto = new Map<string, PhotoFace[]>()
   for (const f of faceRows ?? []) {
-    const contact = (Array.isArray(f.contacts) ? f.contacts[0] : f.contacts) as FaceContactRow | null
+    const contact = (Array.isArray(f.contacts) ? f.contacts[0] : f.contacts) as (FaceContactRow & { deleted_at: string | null }) | null
+    // 聯絡人為軟刪除（deleted_at），其標記不應再出現在相簿。
+    if (contact?.deleted_at) continue
     const arr = facesByPhoto.get(f.photo_id) ?? []
     arr.push({
       id: f.id,
@@ -113,5 +121,5 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  return NextResponse.json({ photos, total: photos.length })
+  return NextResponse.json({ photos, total: photos.length, totalStored: count ?? photos.length, truncated })
 }

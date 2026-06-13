@@ -584,7 +584,7 @@ async function processPersonalPhoto(
         .from('cards').upload(filename, compressed, { contentType: 'image/jpeg', upsert: false })
       if (uploadError) throw new Error(uploadError.message)
       const { data: publicUrlData } = supabase.storage.from('cards').getPublicUrl(filename)
-      const { data: photoRow } = await supabase.from('contact_photos').insert({
+      const { data: photoRow, error: photoErr } = await supabase.from('contact_photos').insert({
         contact_id: contactId,
         photo_url: publicUrlData.publicUrl,
         storage_path: filename,
@@ -594,15 +594,15 @@ async function processPersonalPhoto(
         location_name: exif.locationName ?? null,
         note: (note && fileIds.length === 1) ? note : null,
       }).select('id').single()
+      if (photoErr || !photoRow) throw new Error(photoErr?.message ?? 'photo insert failed')
       // 多對多：同步建立一筆已確認的人臉標記（photo ↔ contact）
-      if (photoRow) {
-        await supabase.from('photo_faces').insert({
-          photo_id: photoRow.id,
-          contact_id: contactId,
-          source: 'manual',
-          status: 'confirmed',
-        })
-      }
+      const { error: faceErr } = await supabase.from('photo_faces').insert({
+        photo_id: photoRow.id,
+        contact_id: contactId,
+        source: 'manual',
+        status: 'confirmed',
+      })
+      if (faceErr) throw new Error(faceErr.message)
       uploaded++
     }
 
@@ -1184,12 +1184,10 @@ async function handleMet(
   const supabase = createServiceClient()
   const nowIso = new Date().toISOString()
 
-  console.log('[bot] handleMet called:', { chatId, count, description })
   await sendMessage(chatId, m.aiAnalyzing)
   let parsed
   try {
     parsed = await parseMetCommand(description, nowIso, user.ai_model_id)
-    console.log('[bot] parseMetCommand result:', parsed)
   } catch (e) {
     console.error('[bot] parseMetCommand error:', e)
     await sendMessage(chatId, m.aiParseFailed)
@@ -1658,7 +1656,6 @@ async function handleText(
 
   // ── /met (must be before /meet to avoid /m catching /met) ─────────────────
   const metMatch = cmd.match(/^\/met\s+(\d+)\s+([\s\S]+)/)
-  console.log('[bot] /met check:', { cmd: cmd.slice(0, 60), matched: !!metMatch })
   if (metMatch) {
     const count = Math.min(parseInt(metMatch[1], 10), 20)
     await handleMet(chatId, user, count, metMatch[2].trim(), m)

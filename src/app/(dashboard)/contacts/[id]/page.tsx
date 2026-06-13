@@ -656,11 +656,11 @@ export default function ContactDetailPage() {
   // Comprehensive unsuppress: clears contacts.email_status + global blocklist
   // + per-list subscriber unsubscribed_at (3 places, audited).
   async function clearUnsubscribe() {
-    if (!confirm('確認清除這個聯絡人的退訂/退信狀態？\n\n會清掉：\n- contact 的 email 狀態 badge\n- 全域退訂名單 (newsletter_unsubscribes)\n- 訂閱者 unsubscribed_at\n\n下次寄送會把這個 email 算進去。')) return
+    if (!confirm(t('clearUnsubscribeConfirm'))) return
     const res = await fetch(`/api/contacts/${id}/clear-unsubscribe`, { method: 'POST' })
     const body = await res.json()
     if (!res.ok) {
-      alert(body.error ?? '清除失敗')
+      alert(body.error ?? t('clearUnsubscribeFailed'))
       return
     }
     load()
@@ -807,7 +807,7 @@ export default function ContactDetailPage() {
         if (uploadErr) throw uploadErr
         const { data: urlData } = supabase.storage.from('cards').getPublicUrl(filename)
 
-        const { data: photoRow } = await supabase.from('contact_photos').insert({
+        const { data: photoRow, error: photoErr } = await supabase.from('contact_photos').insert({
           contact_id: id,
           photo_url: urlData.publicUrl,
           storage_path: filename,
@@ -816,19 +816,20 @@ export default function ContactDetailPage() {
           longitude,
           location_name: locationName,
         }).select('id').single()
+        if (photoErr || !photoRow) throw photoErr ?? new Error('photo insert failed')
         // 多對多：同步建立一筆已確認的人臉標記（photo ↔ contact）
-        if (photoRow) {
-          await supabase.from('photo_faces').insert({
-            photo_id: photoRow.id,
-            contact_id: id,
-            source: 'manual',
-            status: 'confirmed',
-          })
-        }
+        const { error: faceErr } = await supabase.from('photo_faces').insert({
+          photo_id: photoRow.id,
+          contact_id: id,
+          source: 'manual',
+          status: 'confirmed',
+        })
+        if (faceErr) throw faceErr
       }
       load()
     } catch (err) {
       console.error('Photo upload error:', err)
+      alert(err instanceof Error ? err.message : t('uploadFailed'))
     } finally {
       setPhotoSaving(false)
       setPhotoExifPreview(null)
@@ -1411,7 +1412,7 @@ export default function ContactDetailPage() {
             onClick={() => { setMergeSearchOpen(true); setMergeQuery(''); setMergeResults([]); setMergeTarget(null) }}
             className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
           >
-            <Merge size={14} /> 合併聯絡人
+            <Merge size={14} /> {t('mergeContact')}
           </button>
           {canDelete && (
             <button
@@ -1562,12 +1563,12 @@ export default function ContactDetailPage() {
                   onClick={handleCardOcr}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
-                  <Sparkles size={14} /> OCR 辨識
+                  <Sparkles size={14} /> {t('ocrRecognize')}
                 </button>
               )}
               {cardOcring && (
                 <span className="flex items-center gap-1.5 text-sm text-blue-500 px-1">
-                  <Loader2 size={14} className="animate-spin" /> 辨識中...
+                  <Loader2 size={14} className="animate-spin" /> {t('ocrRecognizing')}
                 </span>
               )}
               {cardOcrDiff !== null && (
@@ -1577,14 +1578,14 @@ export default function ContactDetailPage() {
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                 >
                   {cardSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                  確認儲存
+                  {t('confirmSave')}
                 </button>
               )}
               <button
                 onClick={cancelCardUpload}
                 className="px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
               >
-                取消
+                {tc('cancel')}
               </button>
             </div>
           </div>
@@ -1752,7 +1753,7 @@ export default function ContactDetailPage() {
             <button
               onClick={clearUnsubscribe}
               className="text-xs px-2 py-1 rounded border border-current opacity-60 hover:opacity-100 shrink-0"
-              title="清除 contact email 狀態 + 全域退訂表 + 訂閱者 unsubscribed_at"
+              title={t('clearStatusBadgeTitle')}
             >
               {t('clearStatusBadge')}
             </button>
@@ -1815,7 +1816,7 @@ export default function ContactDetailPage() {
                   <div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-white dark:border-gray-900" />
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className={`text-xs px-2 py-0.5 rounded ${TYPE_COLOR[logDisplayType(log)] ?? TYPE_COLOR.note}`}>
-                      {logDisplayType(log) === 'newsletter' ? '電子報' : t(`logTypes.${log.type as 'note' | 'meeting' | 'email' | 'system'}`)}
+                      {logDisplayType(log) === 'newsletter' ? t('logTypeNewsletter') : t(`logTypes.${log.type as 'note' | 'meeting' | 'email' | 'system'}`)}
                     </span>
                     {log.meeting_date && <span className="text-xs text-gray-500 dark:text-gray-400">📅 {log.meeting_date}{log.meeting_time ? ` ${log.meeting_time.slice(0, 5)}` : ''}</span>}
                     {log.meeting_location && <span className="text-xs text-gray-500 dark:text-gray-400">📍 {log.meeting_location}</span>}
@@ -1825,22 +1826,22 @@ export default function ContactDetailPage() {
                       return (
                         <>
                           {s.delivered && !s.opened && !s.clicked && !s.bounced && (
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400" title="已寄達但尚未開啟">✉ 已寄達</span>
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400" title={t('trackDeliveredTitle')}>✉ {t('trackDelivered')}</span>
                           )}
                           {s.opened && !s.clicked && (
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400" title={`開啟時間：${s.openedAt ? new Date(s.openedAt).toLocaleString('zh-TW') : ''}`}>👁 已開啟</span>
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400" title={t('trackOpenedTitle', { time: s.openedAt ? new Date(s.openedAt).toLocaleString('zh-TW') : '' })}>👁 {t('trackOpened')}</span>
                           )}
                           {s.clicked && (
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400" title={`點擊時間：${s.clickedAt ? new Date(s.clickedAt).toLocaleString('zh-TW') : ''}`}>🖱 已點擊</span>
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400" title={t('trackClickedTitle', { time: s.clickedAt ? new Date(s.clickedAt).toLocaleString('zh-TW') : '' })}>🖱 {t('trackClicked')}</span>
                           )}
                           {s.bounced && (
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400" title="退信或 dropped">⚠ 彈信</span>
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400" title={t('trackBouncedTitle')}>⚠ {t('trackBounced')}</span>
                           )}
                           {s.spam && (
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400" title="被標示為垃圾信">🚫 垃圾信</span>
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400" title={t('trackSpamTitle')}>🚫 {t('trackSpam')}</span>
                           )}
                           {s.unsubscribed && (
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400" title="此收件人已退訂">取消訂閱</span>
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400" title={t('trackUnsubTitle')}>{t('trackUnsub')}</span>
                           )}
                         </>
                       )
@@ -2480,7 +2481,7 @@ export default function ContactDetailPage() {
                 className="flex items-center gap-2 px-4 py-2 text-sm bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
               >
                 {mergeSaving ? <Loader2 size={14} className="animate-spin" /> : <Merge size={14} />}
-                確認合併
+                {t('mergeConfirm')}
               </button>
             </div>
           </div>
