@@ -4617,7 +4617,7 @@ create index on public.contact_briefings (meeting_at) where status = 'pending';
 > **狀態（2026-06-14）**：已上線 v7.2.0，但用 **Gemini 棧取代 Anthropic/Tavily**（見第四十九章實作現況）。
 > - ✅ 已完成：Task 209（抽 agent-tools）、211（contact_briefings）、213（worker）、214（request/[id]）、215（cron）、218（Briefing 按鈕 + UI）、221（ai-chat tool loop）、222（actingAs + audit）、223（抽屜 + /ai-assistant + i18n）。
 > - 🔄 改用 Gemini 故**不適用**：Task 210（Anthropic SDK/金鑰）、212（Tavily/Brave web-search.ts）。
-> - ⏳ 未做：Task 216（social_briefing PromptKey 覆寫）、217（OSINT worker）、219（bot 自動 briefing）、220（會議前 cron + reminder）、225（觀測/用量上限）、226（設計文件）。
+> - ⏳ 未做：Task 216（social_briefing PromptKey 覆寫）、217（OSINT worker）、219（bot `/met` 自動 briefing）、220（會議前 cron + reminder；`pre_meeting` trigger 值已在 request route 預留，但無自動掃描 meeting_at 的 cron）、224（chatbot 破壞性操作前端確認步驟）、225（觀測/用量上限）、226（設計文件）。
 
 **Phase 0 — 共用基礎**
 - [ ] **Task 209** `[修改]` — 把 MCP 工具實作抽到 `src/lib/agent-tools.ts`，`mcp/route.ts` 改 import（行為不變，回歸測試）
