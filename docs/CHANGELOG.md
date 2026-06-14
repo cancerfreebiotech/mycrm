@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v7.2.2 — docs(prd): PRD 對齊實際上線狀態（2026-06-14）
+
+### 變更項目
+- PRD 第四十七~五十章補上「實作現況」：
+  - **v7.1**：Phase 1（相簿多對多 + 手動標記）已上線 v7.1.0；**Phase 2（AI 人臉辨識）暫停**（face-api 推論撞 Supabase Edge 160s 上限、不可行,僅資料層備妥,未來改 worker 容器）。
+  - **v7.2**：已上線 v7.2.0,但**改用既有 Gemini 棧**（chatbot = Gemini function calling 非串流;briefing = Gemini Google Search grounding）取代原規劃的 Anthropic Claude / Tavily/Brave;標記未實作項（OSINT worker、bot 自動 briefing、會議前 cron）。
+- 純文件變更,無程式碼或 schema 異動。
+
 ## v7.2.1 — fix: 系統 review 修復（安全性 / 資料一致性 / i18n）（2026-06-13）
 
 ### 安全性
