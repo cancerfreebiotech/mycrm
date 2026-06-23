@@ -311,16 +311,19 @@ export default function SettingsPage() {
     }
 
     setSaving(true)
-    const [{ error: err }] = await Promise.all([
-      supabase
-        .from('users')
-        .update({
-          telegram_id: parsed,
-          ai_model_id: selectedModelId || null,
+    // Self-service preferences go through a service-role API: the `users` RLS update policy
+    // is super-admin-only, so a direct client update would silently save nothing for members.
+    const [res] = await Promise.all([
+      fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telegramId: parsed,
+          aiModelId: selectedModelId || null,
           theme: theme ?? 'light',
           locale,
-        })
-        .eq('email', email),
+        }),
+      }),
       fetch('/api/set-locale', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -329,13 +332,16 @@ export default function SettingsPage() {
     ])
 
     setSaving(false)
-    if (err) {
-      setError(err.message)
-    } else {
-      setSaved(true)
-      setTimeout(() => setSaved(false), 3000)
-      router.refresh()
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      if (data.error === 'telegram_id_taken') setError(t('telegramIdTaken'))
+      else if (typeof data.error === 'string' && data.error.includes('positive integer')) setError(t('telegramIdNumeric'))
+      else setError(t('saveFailed'))
+      return
     }
+    setSaved(true)
+    setTimeout(() => setSaved(false), 3000)
+    router.refresh()
   }
 
   if (loading) return <div className="text-sm text-gray-400">{tc('loading')}</div>

@@ -667,6 +667,8 @@
     "saving": "保存中...",
     "addFailed": "追加に失敗しました",
     "telegramIdNumeric": "Telegram IDは数値である必要があります",
+    "telegramIdTaken": "この Telegram ID は他のメンバーに既に登録されています",
+    "saveFailed": "保存に失敗しました。後でもう一度お試しください",
     "telegramIdPlaceholder": "例：123456789",
     "remove": "削除",
     "resetToDefault": "組織のデフォルトに戻す",

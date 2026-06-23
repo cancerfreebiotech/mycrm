@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v7.2.4 — fix(settings): 成員無法儲存 Telegram ID（RLS 靜默失敗）（2026-06-23）
+
+### 變更項目
+- **修正一般成員在「設定」頁無法儲存 Telegram ID／AI 模型偏好**：`users` 表的 RLS 更新政策是 super-admin only，前端直接 `update` 對成員比對到 0 列卻不報錯，導致畫面顯示「已儲存」但實際沒寫入（`telegram_id`、`ai_model_id` 都受影響）。
+- 設定頁改走新的 **service-role API `POST /api/profile`**（只更新本人那一列、欄位白名單，不可變更 `role`／`email`／`granted_features`），並在實際寫入成功後才顯示「已儲存」。
+- Telegram ID 已被其他成員綁定（UNIQUE 衝突）時顯示明確錯誤訊息（繁中／English／日本語三語）。
+
 ## v7.2.3 — docs(prd): 對照表補正 Task 224（2026-06-14）
 
 ### 變更項目

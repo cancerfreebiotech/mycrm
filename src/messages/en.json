@@ -667,6 +667,8 @@
     "saving": "Saving...",
     "addFailed": "Add failed",
     "telegramIdNumeric": "Telegram ID must be numeric",
+    "telegramIdTaken": "This Telegram ID is already linked to another member",
+    "saveFailed": "Save failed, please try again",
     "telegramIdPlaceholder": "e.g. 123456789",
     "remove": "Remove",
     "resetToDefault": "Reset to org default",

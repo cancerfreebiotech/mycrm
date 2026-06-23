@@ -667,6 +667,8 @@
     "saving": "儲存中...",
     "addFailed": "新增失敗",
     "telegramIdNumeric": "Telegram ID 必須為數字",
+    "telegramIdTaken": "此 Telegram ID 已被其他成員綁定",
+    "saveFailed": "儲存失敗，請稍後再試",
     "telegramIdPlaceholder": "例：123456789",
     "remove": "移除",
     "resetToDefault": "還原為組織預設",
