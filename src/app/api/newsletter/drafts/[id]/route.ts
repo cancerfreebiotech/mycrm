@@ -21,7 +21,7 @@ async function authorize() {
 // DELETE /api/newsletter/drafts/[id]   — soft-delete (status='deleted')
 
 const EDITABLE = new Set([
-  'title', 'content', 'event_date', 'photo_urls', 'links',
+  'title', 'content', 'event_date', 'event_date_end', 'photo_urls', 'links',
   'period', 'section', 'position', 'status',
 ])
 
@@ -37,6 +37,11 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'no editable fields supplied' }, { status: 400 })
+  }
+
+  // Drop an end date that precedes the start (when both are supplied together)
+  if (typeof patch.event_date_end === 'string' && typeof patch.event_date === 'string' && patch.event_date_end < patch.event_date) {
+    patch.event_date_end = null
   }
 
   // Don't allow moving 'used' drafts (already became campaigns) unless super_admin

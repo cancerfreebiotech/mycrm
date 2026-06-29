@@ -71,6 +71,7 @@ interface DraftRow {
   title: string | null
   content: string | null
   event_date: string | null
+  event_date_end: string | null
   photo_urls: string[]
   links: Array<{ url: string; label?: string }>
   position: number
@@ -162,12 +163,12 @@ export async function POST(req: NextRequest) {
   // ── action='preview' ────────────────────────────────────────────────────
   const { data: drafts, error } = await service
     .from('newsletter_drafts')
-    .select('id, section, title, content, event_date, photo_urls, links, position')
+    .select('id, section, title, content, event_date, event_date_end, photo_urls, links, position')
     .eq('period', period)
     .in('status', ['draft', 'approved'])
     .order('section')
-    .order('event_date', { nullsFirst: false })
     .order('position')
+    .order('event_date', { nullsFirst: false })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!drafts || drafts.length === 0) {
     return NextResponse.json({ error: 'No drafts for this period' }, { status: 400 })
@@ -236,7 +237,10 @@ export async function POST(req: NextRequest) {
         ? `【連結內容參考（自動抓取）】\n${linkContext}\n\n【原始素材】\n${d.content!}`
         : d.content!
 
-      const zh = await refineProseZh({ title: d.title!, content: enrichedContent, event_date: d.event_date })
+      const dateLabel = d.event_date_end && d.event_date && d.event_date_end > d.event_date
+        ? `${d.event_date} – ${d.event_date_end}`
+        : d.event_date
+      const zh = await refineProseZh({ title: d.title!, content: enrichedContent, event_date: dateLabel })
       const [en, ja] = await Promise.all([
         translateStory(zh, 'en'),
         translateStory(zh, 'ja'),

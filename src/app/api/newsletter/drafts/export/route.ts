@@ -31,12 +31,12 @@ export async function GET(req: NextRequest) {
   const service = createServiceClient()
   const { data, error } = await service
     .from('newsletter_drafts')
-    .select('id, section, title, content, event_date, photo_urls, links, position')
+    .select('id, section, title, content, event_date, event_date_end, photo_urls, links, position')
     .eq('period', period)
     .in('status', ['draft', 'approved'])
     .order('section')
-    .order('event_date', { nullsFirst: false })
     .order('position')
+    .order('event_date', { nullsFirst: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

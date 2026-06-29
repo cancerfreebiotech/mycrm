@@ -4,7 +4,13 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { PermissionGate } from '@/components/PermissionGate'
-import { Loader2, Plus, Trash2, X, Calendar, ChevronLeft, ChevronRight, Pencil, Download, Wand2, Check } from 'lucide-react'
+import { Loader2, Plus, Trash2, X, Calendar, ChevronLeft, ChevronRight, Pencil, Download, Wand2, Check, GripVertical } from 'lucide-react'
+import {
+  DndContext, closestCorners, PointerSensor, TouchSensor, KeyboardSensor,
+  useSensor, useSensors, useDroppable, type DragEndEvent,
+} from '@dnd-kit/core'
+import { SortableContext, useSortable, verticalListSortingStrategy, sortableKeyboardCoordinates, arrayMove } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 type Section = 'last_month' | 'next_month' | 'highlight'
 
@@ -23,6 +29,7 @@ interface Draft {
   title: string | null
   content: string | null
   event_date: string | null
+  event_date_end: string | null
   photo_urls: string[]
   links: Array<{ url: string; label?: string }>
   position: number
@@ -99,10 +106,10 @@ function Inner() {
     if (!r.ok) alert((await r.json()).error ?? t('errorSaveFailed'))
   }
 
-  async function createDraft(section: Section, fields: { title: string; content: string; event_date: string }) {
+  async function createDraft(section: Section, fields: { title: string; content: string; event_date: string; event_date_end: string }) {
     const r = await fetch('/api/newsletter/drafts', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ period, section, title: fields.title, content: fields.content || null, event_date: fields.event_date || null, created_via: 'web' }),
+      body: JSON.stringify({ period, section, title: fields.title, content: fields.content || null, event_date: fields.event_date || null, event_date_end: fields.event_date_end || null, created_via: 'web' }),
     })
     if (r.ok) { setComposing(null); await load() }
     else alert((await r.json()).error ?? t('errorCreateFailed'))
@@ -171,6 +178,83 @@ function Inner() {
       setAiPreview(null)
       router.push('/admin/newsletter/campaigns')
     } finally { setAiBusy(false) }
+  }
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  // Drag to reorder within a section, move between sections, or drop into 本期重點 (highlight).
+  async function handleDragEnd(e: DragEndEvent) {
+    const { active, over } = e
+    if (!over) return
+    const activeId = String(active.id)
+    const overId = String(over.id)
+    if (activeId === overId) return
+
+    const activeDraft = drafts.find((d) => d.id === activeId)
+    if (!activeDraft) return
+
+    const containers: Section[] = ['highlight', 'last_month', 'next_month']
+    const isContainer = containers.includes(overId as Section)
+    const targetSection: Section = isContainer
+      ? (overId as Section)
+      : (drafts.find((d) => d.id === overId)?.section ?? activeDraft.section)
+
+    const bySection: Record<Section, Draft[]> = {
+      highlight: drafts.filter((d) => d.section === 'highlight'),
+      last_month: drafts.filter((d) => d.section === 'last_month'),
+      next_month: drafts.filter((d) => d.section === 'next_month'),
+    }
+    const srcSection = activeDraft.section
+
+    if (srcSection === targetSection) {
+      // reorder within the same column — arrayMove keeps drop direction correct
+      const list = bySection[srcSection]
+      const oldIndex = list.findIndex((d) => d.id === activeId)
+      let newIndex = isContainer ? list.length - 1 : list.findIndex((d) => d.id === overId)
+      if (newIndex < 0) newIndex = list.length - 1
+      bySection[srcSection] = arrayMove(list, oldIndex, newIndex)
+    } else {
+      // move across columns: remove from source, insert before the hovered card (or append)
+      bySection[srcSection] = bySection[srcSection].filter((d) => d.id !== activeId)
+      let insertIndex = isContainer ? bySection[targetSection].length : bySection[targetSection].findIndex((d) => d.id === overId)
+      if (insertIndex < 0) insertIndex = bySection[targetSection].length
+
+      // 本期重點 holds a single story — demote any existing one back to 上月回顧
+      if (targetSection === 'highlight' && bySection.highlight.length > 0) {
+        bySection.last_month = [...bySection.last_month, ...bySection.highlight.map((d) => ({ ...d, section: 'last_month' as Section }))]
+        bySection.highlight = []
+        insertIndex = 0
+      }
+
+      bySection[targetSection] = [
+        ...bySection[targetSection].slice(0, insertIndex),
+        { ...activeDraft, section: targetSection },
+        ...bySection[targetSection].slice(insertIndex),
+      ]
+    }
+
+    // rebuild flat list with fresh positions; collect the rows that actually changed
+    const rebuilt: Draft[] = []
+    const changed: Array<{ id: string; section: Section; position: number }> = []
+    ;(containers).forEach((sec) => {
+      bySection[sec].forEach((d, i) => {
+        rebuilt.push({ ...d, section: sec, position: i })
+        const orig = drafts.find((o) => o.id === d.id)
+        if (!orig || orig.section !== sec || orig.position !== i) changed.push({ id: d.id, section: sec, position: i })
+      })
+    })
+    if (changed.length === 0) return
+
+    setDrafts(rebuilt) // optimistic
+    const r = await fetch('/api/newsletter/drafts/reorder', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ period, items: changed }),
+    })
+    if (!r.ok) { alert(t('errorSaveFailed')); await load() }
   }
 
   const highlightDraft = drafts.find((d) => d.section === 'highlight') ?? null
@@ -245,13 +329,13 @@ function Inner() {
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-400" /></div>
       ) : (
-        <>
+        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
           {/* Period highlight — optional story rendered at top of every generated newsletter */}
           <HighlightSection
             draft={highlightDraft}
             onAdd={() => setComposing({ section: 'highlight' })}
-            onEdit={() => highlightDraft && setEditing(highlightDraft)}
-            onDelete={() => highlightDraft && deleteDraft(highlightDraft.id, highlightDraft.title)}
+            onEdit={setEditing}
+            onDelete={deleteDraft}
           />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Column section="last_month"
@@ -269,7 +353,7 @@ function Inner() {
               drafts={nextMonth}
               onAdd={() => setComposing({ section: 'next_month' })} onEdit={setEditing} onDelete={deleteDraft} />
           </div>
-        </>
+        </DndContext>
       )}
 
       {/* Compose new */}
@@ -359,60 +443,34 @@ function AiPreviewModal({ preview, busy, onClose, onCommit, onRegenerate }: {
 function HighlightSection({ draft, onAdd, onEdit, onDelete }: {
   draft: Draft | null
   onAdd: () => void
-  onEdit: () => void
-  onDelete: () => void
+  onEdit: (d: Draft) => void
+  onDelete: (id: string, title: string | null) => void
 }) {
   const t = useTranslations('newsletter')
-  const tc = useTranslations('common')
-  if (!draft) {
-    return (
-      <button
-        onClick={onAdd}
-        className="w-full mb-6 flex items-center justify-center gap-2 p-4 border-2 border-dashed border-amber-300 dark:border-amber-800 rounded-lg text-sm text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors"
-      >
-        <Plus size={18} /> {t('addHighlightCta')}
-      </button>
-    )
-  }
+  const { setNodeRef, isOver } = useDroppable({ id: 'highlight' })
   return (
-    <div className="mb-6 bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-800 rounded-lg p-4">
+    <div
+      ref={setNodeRef}
+      className={`mb-6 bg-amber-50 dark:bg-amber-950/20 border rounded-lg p-4 transition-colors ${isOver ? 'border-amber-500 ring-2 ring-amber-400' : 'border-amber-300 dark:border-amber-800'}`}
+    >
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-amber-800 dark:text-amber-300 text-sm">
           {t('highlightSection')}
           <span className="ml-2 text-xs font-normal text-amber-600 dark:text-amber-400">{t('highlightSectionHint')}</span>
         </h2>
-        <div className="flex items-center gap-1">
-          <button onClick={onEdit} title={tc('edit')} className="p-1 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/40 rounded">
-            <Pencil size={14} />
-          </button>
-          <button onClick={onDelete} title={tc('delete')} className="p-1 text-amber-700 dark:text-amber-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-amber-100 dark:hover:bg-amber-950/40 rounded">
-            <Trash2 size={14} />
-          </button>
-        </div>
       </div>
-      <div onClick={onEdit} className="cursor-pointer bg-white dark:bg-gray-800 rounded p-3 border border-amber-100 dark:border-amber-900 hover:border-amber-400 dark:hover:border-amber-700">
-        <div className="font-medium text-gray-900 dark:text-gray-100 mb-1">
-          {draft.title ?? <span className="text-gray-400">{t('noTitle')}</span>}
-        </div>
-        {draft.content && (
-          <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-3 whitespace-pre-wrap">{draft.content}</p>
+      <SortableContext items={draft ? [draft.id] : []} strategy={verticalListSortingStrategy}>
+        {draft ? (
+          <SortableCard draft={draft} onEdit={onEdit} onDelete={onDelete} />
+        ) : (
+          <button
+            onClick={onAdd}
+            className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-amber-300 dark:border-amber-800 rounded-lg text-sm text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/30 transition-colors"
+          >
+            <Plus size={18} /> {t('addHighlightCta')}
+          </button>
         )}
-        <div className="flex items-center gap-3 mt-2">
-          {draft.photo_urls.length > 0 && (
-            <div className="flex gap-1">
-              {draft.photo_urls.slice(0, 3).map((u) => (
-                <img key={u} src={u} alt="" className="w-12 h-12 object-cover rounded" />
-              ))}
-              {draft.photo_urls.length > 3 && (
-                <div className="w-12 h-12 rounded bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs">+{draft.photo_urls.length - 3}</div>
-              )}
-            </div>
-          )}
-          {draft.links.length > 0 && (
-            <div className="text-xs text-blue-600 dark:text-blue-400 truncate">🔗 {draft.links[0].label ?? draft.links[0].url}</div>
-          )}
-        </div>
-      </div>
+      </SortableContext>
     </div>
   )
 }
@@ -433,12 +491,14 @@ function Column({ section, label, defaultLabel, labelValue, onRename, drafts, on
   const tc = useTranslations('common')
   const [editing, setEditing] = useState(false)
   const [draftInput, setDraftInput] = useState(labelValue)
+  const { setNodeRef, isOver } = useDroppable({ id: section })
   function commit() {
     onRename(draftInput.trim())
     setEditing(false)
   }
   return (
-    <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+    <div ref={setNodeRef}
+      className={`bg-gray-50 dark:bg-gray-900 rounded-lg p-4 transition-colors ${isOver ? 'ring-2 ring-blue-400' : ''}`}>
       <div className="flex items-center justify-between mb-3 group">
         {editing ? (
           <div className="flex items-center gap-1 flex-1">
@@ -469,54 +529,80 @@ function Column({ section, label, defaultLabel, labelValue, onRename, drafts, on
           </h2>
         )}
       </div>
-      <div className="space-y-3">
-        {drafts.map((d) => (
-          <div key={d.id} onClick={() => onEdit(d)}
-            className="bg-white dark:bg-gray-800 rounded p-3 border border-gray-200 dark:border-gray-700 cursor-pointer hover:border-blue-400 dark:hover:border-blue-500">
-            <div className="flex justify-between items-start gap-2">
-              <div className="font-medium text-gray-900 dark:text-gray-100 truncate flex-1">
-                {d.title ?? <span className="text-gray-400">{t('noTitle')}</span>}
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <button onClick={(e) => { e.stopPropagation(); onEdit(d) }}
-                  title={t('editTitleContent')}
-                  className="text-gray-400 hover:text-blue-500"><Pencil size={14} /></button>
-                <button onClick={(e) => { e.stopPropagation(); onDelete(d.id, d.title) }}
-                  title={tc('delete')}
-                  className="text-gray-400 hover:text-red-500"><Trash2 size={14} /></button>
-              </div>
-            </div>
-            {d.event_date && (
-              <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
-                <Calendar size={12} /> {d.event_date}
-              </div>
-            )}
-            {d.content && (
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-2">{d.content}</p>
-            )}
-            {d.photo_urls.length > 0 && (
-              <div className="flex gap-1 mt-2">
-                {d.photo_urls.slice(0, 4).map((u) => (
-                  <img key={u} src={u} alt="" className="w-12 h-12 object-cover rounded" />
-                ))}
-                {d.photo_urls.length > 4 && (
-                  <div className="w-12 h-12 rounded bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs">
-                    +{d.photo_urls.length - 4}
-                  </div>
-                )}
-              </div>
-            )}
-            <div className="text-xs text-gray-400 mt-2 flex items-center gap-2">
-              <span>{d.creator?.display_name ?? d.creator?.email ?? '?'}</span>
-              <span>·</span>
-              <span>{d.created_via === 'telegram' ? '📱' : '💻'}</span>
-            </div>
-          </div>
-        ))}
-        <button onClick={onAdd}
-          className="w-full flex items-center justify-center gap-1 p-3 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded text-sm text-gray-600 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500">
-          <Plus size={16} /> {t('addStory')}
+      <SortableContext items={drafts.map((d) => d.id)} strategy={verticalListSortingStrategy}>
+        <div className="space-y-3">
+          {drafts.map((d) => (
+            <SortableCard key={d.id} draft={d} onEdit={onEdit} onDelete={onDelete} />
+          ))}
+          <button onClick={onAdd}
+            className="w-full flex items-center justify-center gap-1 p-3 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded text-sm text-gray-600 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500">
+            <Plus size={16} /> {t('addStory')}
+          </button>
+        </div>
+      </SortableContext>
+    </div>
+  )
+}
+
+function SortableCard({ draft, onEdit, onDelete }: {
+  draft: Draft
+  onEdit: (d: Draft) => void
+  onDelete: (id: string, title: string | null) => void
+}) {
+  const t = useTranslations('newsletter')
+  const tc = useTranslations('common')
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: draft.id })
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }
+  return (
+    <div ref={setNodeRef} style={style}
+      className="bg-white dark:bg-gray-800 rounded p-3 border border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500">
+      <div className="flex justify-between items-start gap-2">
+        <button
+          type="button"
+          {...attributes} {...listeners}
+          title={t('dragToReorder')} aria-label={t('dragToReorder')}
+          className="touch-none cursor-grab active:cursor-grabbing p-1 -ml-1 mt-0.5 text-gray-300 hover:text-gray-500 shrink-0"
+        >
+          <GripVertical size={16} />
         </button>
+        <div onClick={() => onEdit(draft)} className="flex-1 min-w-0 cursor-pointer">
+          <div className="font-medium text-gray-900 dark:text-gray-100 truncate">
+            {draft.title ?? <span className="text-gray-400">{t('noTitle')}</span>}
+          </div>
+          {draft.event_date && (
+            <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+              <Calendar size={12} /> {draft.event_date}{draft.event_date_end && draft.event_date_end > draft.event_date ? ` – ${draft.event_date_end}` : ''}
+            </div>
+          )}
+          {draft.content && (
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-2">{draft.content}</p>
+          )}
+          {draft.photo_urls.length > 0 && (
+            <div className="flex gap-1 mt-2">
+              {draft.photo_urls.slice(0, 4).map((u) => (
+                <img key={u} src={u} alt="" className="w-12 h-12 object-cover rounded" />
+              ))}
+              {draft.photo_urls.length > 4 && (
+                <div className="w-12 h-12 rounded bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs">
+                  +{draft.photo_urls.length - 4}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="text-xs text-gray-400 mt-2 flex items-center gap-2">
+            <span>{draft.creator?.display_name ?? draft.creator?.email ?? '?'}</span>
+            <span>·</span>
+            <span>{draft.created_via === 'telegram' ? '📱' : '💻'}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button onClick={(e) => { e.stopPropagation(); onEdit(draft) }}
+            title={t('editTitleContent')}
+            className="text-gray-400 hover:text-blue-500"><Pencil size={14} /></button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete(draft.id, draft.title) }}
+            title={tc('delete')}
+            className="text-gray-400 hover:text-red-500"><Trash2 size={14} /></button>
+        </div>
       </div>
     </div>
   )
@@ -525,13 +611,14 @@ function Column({ section, label, defaultLabel, labelValue, onRename, drafts, on
 function ComposeModal({ section, period, onCancel, onSubmit }: {
   section: Section; period: string
   onCancel: () => void
-  onSubmit: (fields: { title: string; content: string; event_date: string }) => void
+  onSubmit: (fields: { title: string; content: string; event_date: string; event_date_end: string }) => void
 }) {
   const t = useTranslations('newsletter')
   const tc = useTranslations('common')
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [eventDate, setEventDate] = useState('')
+  const [eventDateEnd, setEventDateEnd] = useState('')
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onCancel}>
       <div onClick={(e) => e.stopPropagation()}
@@ -545,15 +632,25 @@ function ComposeModal({ section, period, onCancel, onSubmit }: {
         <div className="space-y-3">
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t('titlePlaceholder')}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
-          <input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} placeholder={t('eventDateLabel')}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500 dark:text-gray-400">{t('eventDateLabel')}</label>
+              <input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 dark:text-gray-400">{t('eventDateEndLabel')}</label>
+              <input type="date" value={eventDateEnd} min={eventDate || undefined} onChange={(e) => setEventDateEnd(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
+            </div>
+          </div>
           <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder={t('contentWithPhotoPlaceholder')} rows={6}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
         </div>
         <div className="flex justify-end gap-2 mt-4">
           <button onClick={onCancel}
             className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded">{tc('cancel')}</button>
-          <button onClick={() => title.trim() && onSubmit({ title: title.trim(), content: content.trim(), event_date: eventDate })}
+          <button onClick={() => title.trim() && onSubmit({ title: title.trim(), content: content.trim(), event_date: eventDate, event_date_end: eventDateEnd })}
             disabled={!title.trim()}
             className="px-4 py-2 text-sm bg-blue-500 text-white rounded disabled:opacity-50">{tc('add')}</button>
         </div>
@@ -574,6 +671,7 @@ function EditModal({ draft, period: _period, onClose, onSave, onUploadPhoto, onR
   const [title, setTitle] = useState(draft.title ?? '')
   const [content, setContent] = useState(draft.content ?? '')
   const [eventDate, setEventDate] = useState(draft.event_date ?? '')
+  const [eventDateEnd, setEventDateEnd] = useState(draft.event_date_end ?? '')
   const [section, setSection] = useState<Section>(draft.section)
   const [draftPeriod, setDraftPeriod] = useState(draft.period)
   const [saving, setSaving] = useState(false)
@@ -586,6 +684,7 @@ function EditModal({ draft, period: _period, onClose, onSave, onUploadPhoto, onR
       title: title.trim() || null,
       content: content.trim() || null,
       event_date: eventDate || null,
+      event_date_end: eventDateEnd || null,
       section,
       period: draftPeriod,
     })
@@ -611,7 +710,7 @@ function EditModal({ draft, period: _period, onClose, onSave, onUploadPhoto, onR
             <input value={title} onChange={(e) => setTitle(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-gray-500 dark:text-gray-400">{t('periodLabel')}</label>
               <input value={draftPeriod} onChange={(e) => setDraftPeriod(e.target.value)} placeholder="YYYY-MM"
@@ -630,6 +729,11 @@ function EditModal({ draft, period: _period, onClose, onSave, onUploadPhoto, onR
             <div>
               <label className="text-xs text-gray-500 dark:text-gray-400">{t('eventDateLabel')}</label>
               <input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 dark:text-gray-400">{t('eventDateEndLabel')}</label>
+              <input type="date" value={eventDateEnd} min={eventDate || undefined} onChange={(e) => setEventDateEnd(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
             </div>
           </div>

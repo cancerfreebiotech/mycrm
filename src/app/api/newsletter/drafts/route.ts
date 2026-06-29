@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
     title?: string
     content?: string
     event_date?: string
+    event_date_end?: string
     photo_urls?: string[]
     links?: Array<{ url: string; label?: string }>
     created_via?: 'telegram' | 'web'
@@ -80,6 +81,10 @@ export async function POST(req: NextRequest) {
     .limit(1)
   const nextPos = (existing?.[0]?.position ?? -1) + 1
 
+  // Drop an end date that precedes the start (UI guards this, but enforce server-side too)
+  const eventDateEnd = body.event_date_end && body.event_date && body.event_date_end < body.event_date
+    ? null : (body.event_date_end ?? null)
+
   const { data, error } = await service
     .from('newsletter_drafts')
     .insert({
@@ -88,6 +93,7 @@ export async function POST(req: NextRequest) {
       title: body.title ?? null,
       content: body.content ?? null,
       event_date: body.event_date ?? null,
+      event_date_end: eventDateEnd,
       photo_urls: body.photo_urls ?? [],
       links: body.links ?? [],
       created_by: auth.userId,
