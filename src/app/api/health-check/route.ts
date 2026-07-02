@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import Portkey from 'portkey-ai'
 import { createServiceClient } from '@/lib/supabase'
 
 export interface ServiceStatus {
@@ -33,6 +34,32 @@ async function checkGemini(): Promise<ServiceStatus> {
     return { name: 'Gemini', status: 'ok', latencyMs: Date.now() - start }
   } catch (e) {
     return { name: 'Gemini', status: 'error', latencyMs: Date.now() - start, detail: String(e) }
+  }
+}
+
+// Live call through the Portkey config — exercises the virtual-key
+// loadbalance/failover path. A bad/expired virtual key surfaces here as an error,
+// which is exactly the failure that previously went undetected. This is the
+// primary path for card OCR and newsletter AI, so it's worth an active ping.
+async function checkPortkey(): Promise<ServiceStatus> {
+  const apiKey = process.env.PORTKEY_API_KEY
+  const config = process.env.PORTKEY_CONFIG_ID
+  if (!apiKey || !config) {
+    return { name: 'Portkey', status: 'unconfigured', detail: 'PORTKEY_API_KEY / PORTKEY_CONFIG_ID not set' }
+  }
+  const start = Date.now()
+  const model = process.env.NEWSLETTER_MODEL_TRANSLATE ?? 'gemini-3.1-flash-lite'
+  try {
+    const portkey = new Portkey({ apiKey, config, timeout: 12_000 })
+    const result = await portkey.chat.completions.create({
+      model,
+      messages: [{ role: 'user', content: 'ping' }],
+      max_tokens: 8,
+    })
+    if (!result.choices?.[0]) throw new Error('empty response from Portkey')
+    return { name: 'Portkey', status: 'ok', latencyMs: Date.now() - start, detail: `config OK · model ${model}` }
+  } catch (e) {
+    return { name: 'Portkey', status: 'error', latencyMs: Date.now() - start, detail: String(e instanceof Error ? e.message : e) }
   }
 }
 
@@ -107,9 +134,10 @@ async function checkTeamsBot(): Promise<ServiceStatus> {
 }
 
 export async function GET() {
-  const [supabase, gemini, telegram, sendgrid, teams] = await Promise.allSettled([
+  const [supabase, gemini, portkey, telegram, sendgrid, teams] = await Promise.allSettled([
     checkSupabase(),
     checkGemini(),
+    checkPortkey(),
     checkTelegram(),
     checkSendGrid(),
     checkTeamsBot(),
@@ -120,7 +148,7 @@ export async function GET() {
     return { name: 'unknown', status: 'error', detail: String(r.reason) }
   }
 
-  const services = [supabase, gemini, telegram, sendgrid, teams].map(unwrap)
+  const services = [supabase, gemini, portkey, telegram, sendgrid, teams].map(unwrap)
   const allOk = services.every((s) => s.status !== 'error')
 
   return NextResponse.json({ ok: allOk, checkedAt: new Date().toISOString(), services })

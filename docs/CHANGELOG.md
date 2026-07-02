@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v7.2.7 — feat(health): 健康檢查加入 Portkey 主動檢測（2026-07-03）
+
+### 變更項目
+- `/api/health-check` 新增 **Portkey 主動檢測**：以最小 prompt 實際打一次 Portkey config(走 loadbalance／failover 路徑),失效或過期的 virtual key 會直接在管理員健康頁顯示為異常 —— 補上先前「Portkey 金鑰失效卻無人察覺」的監測缺口。管理員健康頁動態渲染,會自動出現 Portkey 一項。
+- 純內部監測,無使用者可見行為變更。
+
 ## v7.2.6 — fix(newsletter/ai): AI 產出韌性修復 + 電子報草稿使用說明（2026-06-30）
 
 ### 修復
