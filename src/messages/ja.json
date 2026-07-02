@@ -1334,6 +1334,7 @@
     "sectionNextMonth": "🔮 今月の予告",
     "sectionHighlight": "📌 今号のハイライト",
     "dragToReorder": "ドラッグで並べ替え",
+    "aiSkippedNotice": "⚠️ 本文がないため {count} 件が除外されました（本文を追加して再生成してください）",
     "titlePlaceholder": "タイトル（例：AACR Taiwan Night）",
     "eventDateLabel": "イベント日",
     "eventDateEndLabel": "終了日（任意）",

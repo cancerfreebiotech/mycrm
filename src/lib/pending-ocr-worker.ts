@@ -255,7 +255,7 @@ export async function processPendingBatchAcrossUsers(
     .lt('created_at', stuckCutoff)
     .select('id')
   const unstuck = (stuckRows ?? []).length
-  if (unstuck > 0) console.log('[pending-ocr-cron] unstuck', unstuck, 'rows from processing → pending')
+  if (unstuck > 0) console.warn('[pending-ocr-cron] unstuck', unstuck, 'rows from processing → pending')
 
   // Cron-mode: pick stale pending rows (>2 min old) across all users, group by user
   const cutoffIso = new Date(Date.now() - 2 * 60 * 1000).toISOString()

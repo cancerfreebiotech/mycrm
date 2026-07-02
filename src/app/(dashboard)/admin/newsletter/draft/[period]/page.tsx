@@ -20,6 +20,7 @@ interface AiPreviewData {
   ja: { html: string; subject: string; promo: string }
   story_count: number
   from_cache?: boolean
+  skipped?: Array<{ title: string | null; section: string }>
 }
 
 interface Draft {
@@ -159,9 +160,15 @@ function Inner() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ period, action: 'preview', force }),
       })
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}))
+        alert(j.error ?? t('errorAiComposeFailed'))
+        return
+      }
       const j = await r.json()
-      if (!r.ok) { alert(j.error ?? t('errorAiComposeFailed')); return }
-      setAiPreview({ ...j.preview, story_count: j.story_count, from_cache: !!j.from_cache })
+      setAiPreview({ ...j.preview, story_count: j.story_count, from_cache: !!j.from_cache, skipped: j.skipped ?? [] })
+    } catch {
+      alert(t('errorAiComposeFailed'))
     } finally { setAiBusy(false) }
   }
 
@@ -177,6 +184,8 @@ function Inner() {
       if (!r.ok) { alert(j.error ?? t('errorCreateFailed')); return }
       setAiPreview(null)
       router.push('/admin/newsletter/campaigns')
+    } catch {
+      alert(t('errorCreateFailed'))
     } finally { setAiBusy(false) }
   }
 
@@ -404,6 +413,12 @@ function AiPreviewModal({ preview, busy, onClose, onCommit, onRegenerate }: {
           </h3>
           <button onClick={onClose}><X size={18} /></button>
         </div>
+        {preview.skipped && preview.skipped.length > 0 && (
+          <div className="mb-3 text-sm bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded px-3 py-2">
+            {t('aiSkippedNotice', { count: preview.skipped.length })}
+            <span className="text-amber-700 dark:text-amber-400">：{preview.skipped.map((s) => s.title || '—').join('、')}</span>
+          </div>
+        )}
         <div className="flex gap-2 mb-3 border-b border-gray-200 dark:border-gray-700">
           {(['zh-TW', 'en', 'ja'] as const).map((l) => (
             <button key={l} onClick={() => setTab(l)}

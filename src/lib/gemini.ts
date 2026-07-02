@@ -47,18 +47,48 @@ type MessageContent =
   | string
   | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>
 
+// Direct-Gemini fallback model — a known-good model used elsewhere in the app on
+// GEMINI_API_KEY (ai-chat, briefing). Used only when Portkey is unavailable.
+const DIRECT_FALLBACK_MODEL = 'gemini-2.5-flash'
+
+// Convert the OpenAI-style content used with Portkey into Gemini SDK parts, so a
+// failed Portkey call can be retried directly against Google.
+function toGeminiParts(content: MessageContent): Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> {
+  if (typeof content === 'string') return [{ text: content }]
+  return content.map((p) => {
+    if ('text' in p) return { text: p.text }
+    const m = /^data:([^;]+);base64,(.*)$/s.exec(p.image_url.url)
+    return m ? { inlineData: { mimeType: m[1], data: m[2] } } : { text: '' }
+  })
+}
+
+async function geminiDirectGenerate(content: MessageContent): Promise<string> {
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+  const model = genAI.getGenerativeModel({ model: DIRECT_FALLBACK_MODEL })
+  const result = await model.generateContent(toGeminiParts(content))
+  return (result.response.text() ?? '').trim()
+}
+
 async function portkeyGenerate(
   modelId: string,
   content: MessageContent
 ): Promise<string> {
-  const portkey = makePortkey()
-  const result = await portkey.chat.completions.create({
-    model: modelId,
-    messages: [{ role: 'user', content }],
-  })
-  const raw = result.choices?.[0]?.message?.content
-  const text = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw.map((p) => ('text' in p ? p.text : '')).join('') : ''
-  return text.trim()
+  try {
+    const portkey = makePortkey()
+    const result = await portkey.chat.completions.create({
+      model: modelId,
+      messages: [{ role: 'user', content }],
+    })
+    const raw = result.choices?.[0]?.message?.content
+    const text = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw.map((p) => ('text' in p ? p.text : '')).join('') : ''
+    return text.trim()
+  } catch (err) {
+    // Portkey unavailable (401 invalid key, network, misconfig). Fall back to a
+    // direct Gemini call so core flows (card OCR, parsing) survive a Portkey outage.
+    if (!process.env.GEMINI_API_KEY) throw err
+    console.error('[portkeyGenerate] Portkey failed, using direct Gemini fallback:', err instanceof Error ? err.message : String(err))
+    return geminiDirectGenerate(content)
+  }
 }
 
 function stripJsonFence(text: string): string {

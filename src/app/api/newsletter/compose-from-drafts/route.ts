@@ -28,9 +28,9 @@ import { fetchUrlContext } from '@/lib/fetch-url-context'
 // committed content would diverge from what the user previewed.
 
 const SECTION_LABELS = {
-  'zh-TW': { last: '上月回顧', next: '下月預告' },
-  en: { last: 'Last Month', next: 'Next Month' },
-  ja: { last: '先月の振り返り', next: '来月の予告' },
+  'zh-TW': { last: '上月回顧', next: '本月預告' },
+  en: { last: 'Last Month', next: 'This Month' },
+  ja: { last: '先月の振り返り', next: '今月の予告' },
 }
 
 const MONTH_LABEL = {
@@ -176,6 +176,12 @@ export async function POST(req: NextRequest) {
 
   // Filter out drafts missing title/content
   const valid = (drafts as DraftRow[]).filter((d) => d.title && d.content)
+  // Drafts with a title but no content are dropped (the model has nothing to write
+  // from). Report them so the UI can tell the user which stories were left out,
+  // instead of a section silently going missing.
+  const skipped = (drafts as DraftRow[])
+    .filter((d) => !(d.title && d.content))
+    .map((d) => ({ title: d.title, section: d.section }))
   if (valid.length === 0) {
     return NextResponse.json({ error: 'No drafts have both title and content yet' }, { status: 400 })
   }
@@ -219,6 +225,7 @@ export async function POST(req: NextRequest) {
           story_count: cached.story_ids.length,
           from_cache: true,
           cached_at: existingCache.created_at,
+          skipped,
         })
       }
     }
@@ -337,5 +344,8 @@ export async function POST(req: NextRequest) {
     preview: { 'zh-TW': zh, en, ja },
     story_count: trilingual.length,
     story_titles: trilingual.map((s) => ({ zh: s.zh.title, en: s.en.title, ja: s.ja.title })),
+    skipped,
   })
 }
+
+export const maxDuration = 300

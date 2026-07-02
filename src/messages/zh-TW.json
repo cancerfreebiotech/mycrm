@@ -1334,6 +1334,7 @@
     "sectionNextMonth": "🔮 本月預告",
     "sectionHighlight": "📌 本期重點",
     "dragToReorder": "拖曳調整順序",
+    "aiSkippedNotice": "⚠️ 有 {count} 則素材因缺少內文未被納入(補上內文後重新生成即可)",
     "titlePlaceholder": "標題（例：AACR Taiwan Night）",
     "eventDateLabel": "事件日期",
     "eventDateEndLabel": "結束日期（選填）",

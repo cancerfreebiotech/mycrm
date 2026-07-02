@@ -14,6 +14,7 @@
 * [筆記與互動紀錄](features/notes.md)
 * [報表](features/reports.md)
 * [個人設定](features/settings.md)
+* [電子報素材](features/newsletter.md)
 
 ## Telegram Bot
 

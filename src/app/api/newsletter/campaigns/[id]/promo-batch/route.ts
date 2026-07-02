@@ -86,3 +86,5 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   return NextResponse.json({ ok: true, period, stamp, results })
 }
+
+export const maxDuration = 300

@@ -1334,6 +1334,7 @@
     "sectionNextMonth": "🔮 This month preview",
     "sectionHighlight": "📌 This issue's highlight",
     "dragToReorder": "Drag to reorder",
+    "aiSkippedNotice": "⚠️ {count} item(s) left out — no content yet (add content and regenerate)",
     "titlePlaceholder": "Title (e.g. AACR Taiwan Night)",
     "eventDateLabel": "Event date",
     "eventDateEndLabel": "End date (optional)",
