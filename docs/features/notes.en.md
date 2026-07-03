@@ -13,9 +13,12 @@ nav_order: 4
 Path: `/notes`
 
 Search all interaction records, supporting:
-- **Keyword**: Matches record content
-- **Date range**: Start date / End date
-- **Type filter**: Note / Meeting / Email / System
+- **Keyword**: Matches record content and email subject
+- **Date range**: Start date / End date (defaults to the last 30 days)
+- **Type filter**: Note / Meeting / Email / Newsletter (**System** records are never shown on this page)
+  - Newsletter = email sent via a newsletter blast (SendGrid campaign)
+- **Creator filter**: Filter by the record's creator (sender)
+- **Sort**: Toggle between "Newest first / Oldest first"
 - **Pagination**: 20 per page
 
 ---

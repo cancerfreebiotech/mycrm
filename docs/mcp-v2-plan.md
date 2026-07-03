@@ -1,7 +1,7 @@
 # mycrm MCP Server — v2.0 Plan
 
-**Status**: Locked design, not yet implemented.
-**Last updated**: 2026-06-01
+**Status**: ✅ Implemented — shipped in v7.0.0. All phases below are done; see `docs/mcp-server.md` for the current user-facing setup guide.
+**Last updated**: 2026-07-03
 **Depends on**: v1 (shipped in v6.9.0 + v6.9.1 — `/api/mcp` with 5 read tools, `agent_actions` audit log, `/admin/mcp-activity` viewer)
 
 This doc captures the v2.0 design after iterating with Po. Open the
@@ -247,12 +247,12 @@ before executing the tool; if >= 120, return JSON-RPC error code -32002
 
 ## Implementation phases
 
-| Phase | Scope | Est. effort |
-|---|---|---|
-| **v2.0a — DB + auth core** | Schema migration, `agent_tokens` CRUD API, auth flow refactor (token + X-Acting-User), v1 fallback | 2 hr |
-| **v2.0b — Write tools** | 4 tools + scope checks + `via_mcp` writes | 2 hr |
-| **v2.0c — Admin UIs** | `/admin/mcp-tokens` create/list/disable + activity viewer attribution columns | 2-3 hr |
-| **v2.0d — Rate limit + polish** | Per-token rate limit, audit log filters, docs update | 1 hr |
+| Phase | Scope | Est. effort | Status |
+|---|---|---|---|
+| **v2.0a — DB + auth core** | Schema migration, `agent_tokens` CRUD API, auth flow refactor (token + X-Acting-User), v1 fallback | 2 hr | ✅ Done |
+| **v2.0b — Write tools** | 4 tools + scope checks + `via_mcp` writes | 2 hr | ✅ Done |
+| **v2.0c — Admin UIs** | `/admin/mcp-tokens` create/list/disable + activity viewer attribution columns | 2-3 hr | ✅ Done |
+| **v2.0d — Rate limit + polish** | Per-token rate limit, audit log filters, docs update | 1 hr | ✅ Done |
 
 Total estimate: **7-8 hours** across phases.
 
@@ -316,5 +316,5 @@ All open questions closed → plan is execution-ready.
 1. ~~Ship v1~~ → DONE (committed + pushed as v6.9.0/v6.9.1, commit `a24de0b`). Still need to set `MCP_AGENT_TOKEN` in Vercel env for v1 read tools to work; v2 replaces this with `agent_tokens` table anyway.
 2. ~~"bake v1 for a few days"~~ → **SKIPPED** (Po: real use case is v2, no point testing v1 read-only in isolation)
 3. ~~Answer open questions~~ → DONE (see "Open questions — RESOLVED")
-4. **Next**: start v2.0a (DB migration + auth refactor). Recommend a fresh branch.
-5. After v2.0 build: run an adversarial security review (good fit for a multi-agent Workflow — token hashing, scope-bypass, update_contact whitelist injection, X-Acting-User spoofing impact).
+4. ~~Start v2.0a (DB migration + auth refactor)~~ → DONE
+5. ~~Run an adversarial security review after v2.0 build~~ → DONE (see "Security review" above)

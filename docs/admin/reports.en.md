@@ -4,41 +4,42 @@ parent: Admin
 nav_order: 4
 ---
 
-# Report Management (Admin)
+# Report Management
 
-Path: `/admin/reports` (visible to super_admin only)
+Path: `/admin/reports`
+
+Access: **Every member** can open the Reports page, generate reports on demand, and manage the schedules they created. `super_admin` additionally sees an "Owner" column and can view everyone's schedules.
 
 For full feature details, see [Features → Reports](../features/reports.md).
 
 ---
 
-## Admin-Specific Notes
+## Generate a Report Now
 
-### Gmail OAuth Management
+1. Choose the report date range (from / to).
+2. Optionally apply filters: tags, interaction type (meeting / note / email), creator, country.
+3. Click "Generate" → the interaction logs are previewed as a sortable table below.
+4. Or click "Download Excel" → download the `.xlsx` file directly.
 
-- Only one Gmail account needs to be authorized per Supabase project
-- When the token expires (usually after 1 hour), the system automatically refreshes it using the refresh token
-- To switch Gmail accounts, simply click "Link Gmail" to re-authorize
+---
 
-### Edge Function Scheduled Execution
+## Scheduled Reports
 
-Report scheduling is executed by the `send-report` Edge Function, which must be triggered via pg_cron or an external scheduler.
+Click "Add Schedule" to open the setup form:
 
-To configure pg_cron for automatic triggering (run once in the Supabase SQL Editor):
+| Field | Description |
+|-------|-------------|
+| Schedule Name | An identifying name for the schedule |
+| Frequency | Weekly / Monthly / Custom (Cron expression) |
+| Date Range (days) | Number of recent days each send should cover |
+| Recipients | A comma-separated list of email addresses |
 
-```sql
--- Check active schedules every hour
-SELECT cron.schedule('send-report-hourly', '0 * * * *',
-  $$SELECT net.http_post(
-    url := 'https://<project>.supabase.co/functions/v1/send-report',
-    headers := '{"Authorization": "Bearer <anon_key>", "Content-Type": "application/json"}',
-    body := '{}'
-  )$$
-);
-```
+Each schedule can be enabled/disabled, edited, or deleted. The "Last Run" column shows the time and result of the most recent automatic send (✅ success / ⚠️ failure).
 
-> The Edge Function internally determines which schedules need to run at the current time; it does not send reports every hour.
+---
 
-### Manual Trigger
+## How Scheduled Sending Works
 
-On the Reports page, click "Generate Now" → "Send via Gmail" to manually trigger a send.
+Scheduled sending is handled by **backend automation**: the system checks every hour, and any schedule that is due is automatically emailed to that schedule's recipient list, with the "Last Run" status updated.
+
+No manual trigger is required, and **no external mail account needs to be linked**.

@@ -9,19 +9,23 @@ nav_order: 2
 | Command | Alias | Description |
 |---------|-------|-------------|
 | `/help` | `/h` | Show all available commands |
+| `/lang [zh\|en\|ja]` | — | Switch the Bot reply language (Chinese / English / Japanese) |
 | `/search [keyword]` | `/s` | Search contacts (fuzzy match on name/Email) |
 | `/note [name]` | `/n` | Add an interaction note for a contact |
 | `/visit [name]` | `/v` | Add a visit record for a contact |
 | `/a [name]` | — | Add a business card photo (OCR) for a contact; creates new contact if not found |
 | `/p [name]` | — | Add a group photo for a contact |
+| `/li` | `/linkedin` | Send a LinkedIn profile screenshot; AI parses it into a contact |
 | `/news` | — | Accumulate newsletter material (requires `newsletter` permission) |
-| `/b` | `/batch` | Enter batch mode: shoot many cards in a row, OCR runs in background |
+| `/b [description]` | `/batch` | Enter batch mode: shoot many cards in a row, OCR runs in background; add a description of where you met to tag the whole batch |
 | `/done` | — | End batch mode and queue OCR |
 | `/cancel` | — | Abort current mode |
 | `/email [keyword]` | `/e` | Send Email from contact details |
 | `/work [description]` | `/w` | AI parses natural language to create a task |
 | `/tasks` | `/t` | List your pending tasks |
 | `/user` | `/u` | List all organization members |
+| `/ai` | — | Show the AI model you are currently using |
+| `/stop` | — | (Super Admin) Enable maintenance mode; type `/stop off` to disable |
 
 ---
 
@@ -154,6 +158,20 @@ Organization page at `/admin/newsletter/draft/{period}` — multi-user accumulat
 
 ---
 
+### `/li` / `/linkedin` — Create Contact from LinkedIn Screenshot
+
+```
+/li or /linkedin
+→ Bot: Please send a LinkedIn profile screenshot
+→ Send screenshot
+→ AI parses name / job title / company / Email / LinkedIn URL
+→ ✅ Confirm add / ❌ Cancel
+```
+
+If the image cannot be recognized as a LinkedIn screenshot, the Bot prompts you to resend.
+
+---
+
 ### `/email` — Send Email
 
 ```
@@ -199,6 +217,30 @@ Shows all members' names, Emails, and Telegram IDs (available to all members).
 
 ---
 
+### `/lang` — Switch Bot Language
+
+```
+/lang zh   → 繁體中文
+/lang en   → English
+/lang ja   → 日本語
+```
+
+Only affects the Bot's reply language; the setting is saved to your account.
+
+---
+
+### `/ai` — Show Current AI Model
+
+Shows the name and source of the AI model you are currently using; when unset, the system default model (gemini-2.5-flash) is used.
+
+---
+
+### `/stop` — Maintenance Mode (Super Admin only)
+
+`/stop` enables maintenance mode and all users see a maintenance notice; `/stop off` disables it and returns to normal. Available to Super Admin only.
+
+---
+
 ## Sending a Business Card (No Command Needed)
 
 Send a photo directly in the Bot conversation:
@@ -215,3 +257,47 @@ Send a photo directly in the Bot conversation:
 ```
 
 If the recognition result is incorrect, you can edit it in the Web after saving.
+
+### When an Existing Contact Is Detected (same email)
+
+The Bot shows two extra buttons:
+
+| Button | Behavior | When to use |
+|---|---|---|
+| 📌 Add to "X" | **Keep old data**: fill empty fields with new values; write conflicting fields to the interaction log (no overwrite) | Same company, met again, add a new card to an existing contact |
+| 🔄 Update "X" (job change) | **Overwrite with new data**: write new values to conflicting fields, **write old values to the interaction log for history** | The person changed job / company and you want the latest info |
+| ✅ Save as new anyway | Force-create (two separate contacts) | Same name, different person |
+| ❌ Discard | Cancel | Shot by mistake / not needed |
+
+---
+
+## Batch Photos (`/b` + `/done`)
+
+Best when you have many cards to process at once (just back from a meeting, a stack of cards). The flow differs from single-card synchronous OCR: **the Bot accepts each photo immediately and does not OCR on the spot**, so you can shoot many in a row without waiting; it notifies you once background OCR finishes, and you review them together under "Pending Cards" (`/contacts/pending`) on the web.
+
+```
+/b
+→ Bot: 📦 Entered batch mode
+[shot #1] → Bot: 📥 Received card 1
+[shot #2] → Bot: 📥 Received card 2
+...
+/done
+→ Bot: ✅ N cards queued for OCR, you'll be notified when done
+(recognizing in background…)
+→ Bot: ✅ Recognized N/M cards, go review → /contacts/pending
+```
+
+**Batch with description (`/b description`)**: append a sentence describing where you met these people after `/b`, and AI parses "where met / date / referrer" and applies it automatically to **every** card in the batch, saving you from filling each one in.
+
+```
+/b Met at BioJapan in Tokyo last week
+→ Bot: 🤖 Parsing "where met"...
+→ Bot: 📦 Entered batch mode (this batch will be auto-tagged: 📍 BioJapan / 📅 2026-06-25)
+[shot #1] → Bot: 📥 Received card 1
+...
+/done
+```
+
+To exit midway: `/cancel`. Photos already received are **not deleted** — they stay in the pending area and can be confirmed or deleted on the web.
+
+Cards that fail recognition (no name detected) are automatically moved to "My Failed Scans" (`/contacts/failed-scans`), where you can view the original image or delete it; to retry, take and upload the photo again.

@@ -22,7 +22,9 @@ Path: `/contacts`
 
 ### Export
 
-Click "Export Excel" or "Export CSV" to download the current filtered results (not limited by pagination).
+Click the "Excel" or "CSV" button to download the current filtered results (not limited by pagination).
+
+> **Export permission required**: Only **super_admin** or members granted the "Export Contacts (`export_contacts`)" permission can use this. Without permission the buttons are disabled, and hovering shows "Contact admin to request export permission".
 
 ---
 
@@ -65,6 +67,55 @@ Upload up to **50** business card photos at once:
 
 ---
 
+## Pending Cards
+
+Path: `/contacts/pending`
+
+Cards uploaded via the Telegram Bot **batch mode (`/b`)** land here for review after AI recognition finishes — they do not become contacts directly. The page auto-refreshes items still being recognized every 5 seconds.
+
+### Filters
+
+- **Status**: All / Recognizing / Recognized / Failed
+- **Uploader**: When there are multiple uploaders, filter by uploader
+
+### Actions per card
+
+**Recognizing**: Shows recognition progress; wait for it to finish.
+
+**Recognized**: You can edit fields inline (name, company, title, email, phone, country), importance (H / M / L), language, tags, and "where/when met (Met at)", then choose:
+
+| Action | Description |
+|--------|-------------|
+| **Save** | Save as a new contact |
+| **Merge to X** | When a likely duplicate is detected, merge into the existing contact (choose "fill blanks" or "replace") |
+| **Merge to existing…** | Manually search and pick the contact to merge into |
+| **Delete** | Delete this pending card |
+| **View image** | Open the original card image |
+
+> For recognized cards, use the "Batch set Met at" bar at the top to apply the same where/when-met to all recognized items at once.
+
+**Failed**: Shows the error reason and offers "**Retry OCR**" to resubmit for AI recognition.
+
+### Retry stuck recognitions
+
+If cards of yours are stuck in "Recognizing" for a long time, a "**Retry stuck OCR**" button appears at the top right; click it to re-queue the stuck items for recognition.
+
+---
+
+## Failed Scans
+
+Path: `/contacts/failed-scans`
+
+Card images uploaded via the Bot that the AI **could not recognize at all (not even a name)** end up here. This page only shows the failed images **you** uploaded.
+
+- Displays all failed images with their upload time in a thumbnail grid
+- Click an image or "View image" to enlarge it
+- Delete one at a time, or select (including "Select all") and use "Delete selected" to bulk delete
+
+> To recognize it again, re-shoot or re-upload the card via the Telegram Bot.
+
+---
+
 ## Contact Details
 
 Path: `/contacts/[id]`
@@ -102,6 +153,16 @@ Click the "Send Email" button to open the enhanced email Modal:
 - **Temporary Attachments**: Upload attachments for this send only (max 5MB per file); not saved to the template
 
 Sent via Microsoft Graph (Outlook). An Email interaction record is automatically written and the contact floats to the top of the "last activity" sort (see next section).
+
+### Pre-meeting Briefing
+
+The "Pre-meeting briefing" block on the detail page lets you ask AI to summarize the latest public news about this contact and their company, as a reference before a visit or meeting:
+
+- After you click "Generate briefing", the system processes it in the background **asynchronously** (usually within a minute; you can leave the page during this)
+- When done, the result appears in the same block, along with verifiable source links
+- Once generated, the button changes to "Regenerate"
+
+> See [Pre-meeting Briefing](social-briefing.md) for details. This summary is **not** written to the interaction log.
 
 ---
 

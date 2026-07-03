@@ -15,6 +15,8 @@ interface Schedule {
   is_active: boolean
   created_at: string
   owner_id?: string
+  last_run_at?: string | null
+  last_status?: string | null
 }
 
 interface Tag { id: string; name: string }
@@ -493,7 +495,7 @@ export default function ReportsPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
-                  {[t('colScheduleName'), t('colFrequency'), t('colRecipients'), ...(isSuperAdmin ? [t('colOwner')] : []), t('colStatus'), ''].map((h, i) => (
+                  {[t('colScheduleName'), t('colFrequency'), t('colRecipients'), ...(isSuperAdmin ? [t('colOwner')] : []), t('colStatus'), t('colLastRun'), ''].map((h, i) => (
                     <th key={i} className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{h}</th>
                   ))}
                 </tr>
@@ -518,6 +520,16 @@ export default function ReportsPage() {
                       >
                         {s.is_active ? t('enabled') : t('disabled')}
                       </button>
+                    </td>
+                    <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                      {s.last_run_at ? (
+                        <span title={s.last_status ?? ''}>
+                          {s.last_status === 'ok' ? '✅' : '⚠️'}{' '}
+                          {new Date(s.last_run_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 dark:text-gray-500">{t('lastRunNever')}</span>
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex gap-2">

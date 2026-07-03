@@ -1,10 +1,13 @@
 ---
 title: Supabase Migration Plan — Free → Pro org
-status: ready
+status: completed
 updated: 2026-05-05
 ---
 
 # Supabase Migration Plan — Free → 既有 Pro org
+
+> ✅ **已完成（2026-05-13）**：Production 已搬到新 project `gaxjgcztzfxokesiraai`，
+> 舊 project `zaqzqcvsckripotuujep` 已棄用停用。以下內容保留作為遷移過程紀錄。
 
 > 把 myCRM 從個人 Free org 遷移到你另一個帳號的 Pro org 下當第二個 project。
 > 省 ~$10-15/月，並立刻獲得每日備份 + PITR。

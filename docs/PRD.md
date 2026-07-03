@@ -13,7 +13,9 @@
 
 ---
 
-## 現況說明（v0.1 已實作）
+## 現況說明（歷史快照：v0.1 時點）
+
+> **注意（更新於 2026-07）**：本節為 v0.1 規劃當下的歷史快照，僅供追溯專案起始狀態，內容不再維護。專案現已來到 **v7.2.x**，本節列為「全新新增，現在不存在」的檔案早已全部完成並上線。目前實際的功能與版本狀態，請參閱 [CHANGELOG.md](CHANGELOG.md)。
 
 此專案已有部分功能上線（v0.1），以下檔案已存在且運作中，**Task 清單中未提及者請勿重寫**：
 
@@ -56,7 +58,7 @@
 |------|------|
 | 專案名稱 | myCRM |
 | 核心功能 | 透過 Telegram Bot 拍攝名片，自動 OCR 辨識後存入組織共享 CRM，並提供 Web 管理介面 |
-| 技術棧 | Next.js 14 (App Router, TypeScript) + Supabase + Telegram Bot + Gemini |
+| 技術棧 | Next.js 16 (App Router, TypeScript) + Supabase + Telegram Bot + Gemini |
 | 部署平台 | Vercel (前端 + API) + Supabase (DB + Storage) |
 
 ---
@@ -64,7 +66,7 @@
 ## 二、技術棧規格
 
 ### Frontend / Backend
-- **Framework**：Next.js 14，使用 App Router、TypeScript、ESLint、Tailwind CSS、`src/` 目錄結構
+- **Framework**：Next.js 16，使用 App Router、TypeScript、ESLint、Tailwind CSS、`src/` 目錄結構
 - **RWD**：所有頁面必須 mobile friendly，使用 Tailwind responsive prefix（sm / md / lg）
 - **UI 元件**：Tailwind CSS（優先），可選用 shadcn/ui
 

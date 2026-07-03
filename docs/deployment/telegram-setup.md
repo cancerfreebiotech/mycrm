@@ -18,25 +18,36 @@ nav_order: 2
 
 ## 步驟 2：設定環境變數
 
-將 Token 填入 Vercel 環境變數：
+將 Token 與兩個密鑰填入 Vercel 環境變數：
 
 ```
 TELEGRAM_BOT_TOKEN=<你的 token>
+TELEGRAM_WEBHOOK_SECRET=<自訂的隨機字串>
+ADMIN_SECRET=<自訂的隨機字串>
 ```
+
+- `TELEGRAM_WEBHOOK_SECRET`：Bot 用來驗證每筆更新的密鑰。
+- `ADMIN_SECRET`：保護註冊 Webhook 管理端點的密鑰。
+
+兩者請各自使用夠長的隨機字串。
 
 ---
 
 ## 步驟 3：設定 Webhook
 
-部署完成後，執行以下指令設定 Webhook（一次性）：
+部署完成後，於瀏覽器開啟以下網址註冊 Webhook（一次性）：
 
-```bash
-curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://mycrm.vercel.app/api/bot"
+```
+https://<APP_URL>/api/admin/set-webhook?secret=<ADMIN_SECRET>
 ```
 
-成功回應：
+此端點會以 `TELEGRAM_WEBHOOK_SECRET` 作為 Webhook 的 secret token 註冊，讓 Bot 只接受帶有正確密鑰的更新。
+
+> ⚠️ 請勿改用 `curl .../setWebhook?url=...` 手動註冊：這樣註冊的 Webhook 缺少 secret token，Bot 會因為找不到 `x-telegram-bot-api-secret-token` 標頭而回傳 403，導致所有訊息被拒絕。
+
+成功回應（節錄）：
 ```json
-{"ok":true,"result":true,"description":"Webhook was set"}
+{"setWebhook":{"ok":true,"result":true,"description":"Webhook was set"},"webhookUrl":"https://mycrm.vercel.app/api/bot"}
 ```
 
 ---

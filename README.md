@@ -2,7 +2,7 @@
 
 A lightweight CRM built for `@cancerfree.io`. Snap a business card in Telegram → AI reads it → one tap to save → manage everything on the web.
 
-> Current version: **v6.0.3**
+> Current version: **v7.2.8**
 
 ---
 
@@ -11,8 +11,11 @@ A lightweight CRM built for `@cancerfree.io`. Snap a business card in Telegram �
 - **Telegram Bot** — Send one or more card photos; AI combines them, extracts contact info, and shows a confirm button.
 - **Web Dashboard** — Full-featured contact management with search, tag filters, interaction logs, and export.
 - **Multi-photo OCR** — Upload up to 6 card images at once (front + back, etc.); AI merges all into one result.
+- **Batch Scan & Pending Queue** — Bot batch mode (`/b`) lets you send many cards in a row; they're queued for background OCR, then you review, edit, merge, or skip each result in the pending queue before it's saved.
 - **AI OCR** — Pluggable AI backend via admin panel (Endpoint + Model two-tier). Defaults to Google Gemini.
 - **Email** — Send from the contact page via Microsoft Graph. Supports templates (with attachments), AI-generated content, editable To field, and one-off temp attachments.
+- **Bulk Email (SendGrid)** — Compose and send campaigns to large recipient lists via SendGrid, with delivery / open / bounce tracking through webhooks and suppression handling. Per-contact mail still sends via Microsoft Graph.
+- **Newsletter** — Build subscriber lists (from contacts or CSV import), collect material through the Bot (`/news`), reorder drafts by drag, AI-compose issues, and send or schedule campaigns; also publishes an RSS feed and handles one-click unsubscribe.
 - **Task Management** — Create self-reminders or assign tasks to teammates; assistants can mark tasks done.
 - **Countries** — Admin-managed country list (ISO 3166-1 α-2 with multilingual names and flag emoji); contacts link to a country.
 - **Reports** — Generate Excel reports for contacts and interaction logs (incl. visit time/location); schedule recurring email delivery via Gmail OAuth.
@@ -26,6 +29,11 @@ A lightweight CRM built for `@cancerfree.io`. Snap a business card in Telegram �
 - **Export Permissions** — Contact export is gated by `export_contacts` in `granted_features`; admins grant per-user from `/admin/users`.
 - **Feedback** — Users submit bug reports or feature requests (with optional screenshot) from the sidebar. Admins triage via `/admin/feedback`.
 - **Teams Bot (Dr.Ave)** — Microsoft Teams bot for task assignment, deadline reminders, and CRM notifications. Package: `DrAve-Bot.zip`.
+- **Photo Albums & Face Tagging** — Shared photo album for companion photos; tag multiple people in a single photo and link each face to a contact (v7.1).
+- **AI Assistant** — In-app chat assistant that can search your CRM and answer questions about contacts and activity (v7.2).
+- **Social Briefing** — From a contact's page, generate an AI briefing that summarizes public context about the person or company before a meeting (v7.2).
+- **Email Enrichment (Hunter.io)** — Automatically discover and verify missing contact emails; managed from the admin Health page.
+- **MCP Server** — Exposes CRM data to AI agents over the Model Context Protocol; admins issue scoped access tokens and monitor usage.
 - **i18n** — UI fully translated in 繁中 / English / 日本語; locale saved in cookie.
 - **Responsive Sidebar** — Mobile hamburger drawer; tablet icon-only with hover expand; desktop full width.
 - **Light / Dark Theme** — Toggle in the header; preference saved in DB.
@@ -58,6 +66,11 @@ A lightweight CRM built for `@cancerfree.io`. Snap a business card in Telegram �
 | `/contacts/[id]` | Contact detail — info, cards, logs, send mail |
 | `/contacts/new` | New contact — form + multi-photo OCR |
 | `/contacts/batch-upload` | Batch card scan (up to 20 images) |
+| `/contacts/pending` | Pending-OCR review queue (batch scans awaiting confirmation) |
+| `/photos` | Shared photo album with multi-person face tagging |
+| `/ai-assistant` | AI chat assistant |
+| `/email/compose` | Compose a bulk email |
+| `/email/campaigns` | Bulk email campaign list & delivery stats |
 | `/notes` | Full-text note/log search |
 | `/tasks` | Task management |
 | `/feedback` | Submit bug report or feature request |
@@ -71,9 +84,16 @@ A lightweight CRM built for `@cancerfree.io`. Snap a business card in Telegram �
 | `/admin/templates` | Email template management |
 | `/admin/reports` | Report generation + scheduled delivery |
 | `/admin/countries` | Country list management |
+| `/admin/newsletter/lists` | Newsletter subscriber lists |
+| `/admin/newsletter/campaigns` | Newsletter campaigns |
+| `/admin/newsletter/draft` | Newsletter drafts (Bot `/news` material) |
+| `/admin/health` | System health + Hunter.io email enrichment |
+| `/admin/mcp-tokens` | MCP access token management |
+| `/admin/mcp-activity` | MCP usage activity |
 | `/admin/trash` | Soft-deleted contacts (super_admin only) |
 | `/admin/feedback` | Feedback triage (super_admin only) |
 | `/api/bot` | Telegram webhook |
+| `/api/mcp` | MCP server endpoint for AI agents |
 
 ---
 
@@ -176,9 +196,26 @@ curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<your-domain>/a
 ### Telegram Bot
 
 1. Bind your Telegram ID in **Personal Settings** on the web.
-2. Send one or more business card photos to the bot.
-3. Bot replies with extracted info and a **Save** button.
-4. Use `/note` / `/n` to log meeting notes, `/visit` / `/v` for guided visit records, `/search` to look up contacts, `/email` to send mail.
+2. Send one or more business card photos to the bot — it OCRs them and replies with a **Save** button.
+3. Scanning many cards? Use `/b` (batch mode), keep sending photos, then `/done` to queue them for background OCR and review the results in the pending queue.
+
+Common commands (see [`docs/bot/commands.md`](docs/bot/commands.md) for the full list):
+
+| Command | What it does |
+|---|---|
+| `/help` (`/h`) | Show all available commands |
+| `/search <keyword>` (`/s`) | Look up contacts by name / email |
+| `/note <name>` (`/n`) | Log an interaction note |
+| `/visit <name>` (`/v`) | Add a guided visit record |
+| `/a <name>` | Add a card photo to a contact (OCR); creates it if not found |
+| `/p <name>` | Add a companion photo to a contact |
+| `/li` | Add a contact from a LinkedIn screenshot |
+| `/email` (`/e`) | Send mail from a contact |
+| `/tasks` (`/t`) | List your open tasks |
+| `/news` | Collect newsletter material |
+| `/user` (`/u`) | List organization members |
+| `/ai` | Show your current AI model |
+| `/lang <zh\|en\|ja>` | Change the bot's language |
 
 ### Teams Bot (Dr.Ave)
 

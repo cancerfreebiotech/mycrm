@@ -18,25 +18,36 @@ nav_order: 2
 
 ## ステップ 2：環境変数の設定
 
-トークンを Vercel の環境変数に入力します：
+トークンと 2 つのシークレットを Vercel の環境変数に入力します：
 
 ```
 TELEGRAM_BOT_TOKEN=<あなたのトークン>
+TELEGRAM_WEBHOOK_SECRET=<任意のランダムな文字列>
+ADMIN_SECRET=<任意のランダムな文字列>
 ```
+
+- `TELEGRAM_WEBHOOK_SECRET`：Bot が各更新を検証するために使用するシークレット。
+- `ADMIN_SECRET`：Webhook を登録する管理用エンドポイントを保護するシークレット。
+
+それぞれ十分に長いランダムな文字列を使用してください。
 
 ---
 
 ## ステップ 3：Webhook の設定
 
-デプロイが完了したら、以下のコマンドを実行して Webhook を設定します（一度だけ）：
+デプロイが完了したら、ブラウザで以下の URL を開いて Webhook を登録します（一度だけ）：
 
-```bash
-curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://mycrm.vercel.app/api/bot"
+```
+https://<APP_URL>/api/admin/set-webhook?secret=<ADMIN_SECRET>
 ```
 
-成功時のレスポンス：
+このエンドポイントは `TELEGRAM_WEBHOOK_SECRET` を Webhook の secret token として登録するため、Bot は正しいシークレット付きの更新のみを受け付けます。
+
+> ⚠️ `curl .../setWebhook?url=...` で手動登録しないでください：その方法で登録した Webhook には secret token がなく、`x-telegram-bot-api-secret-token` ヘッダーが見つからないため Bot が 403 を返し、すべてのメッセージが拒否されます。
+
+成功時のレスポンス（抜粋）：
 ```json
-{"ok":true,"result":true,"description":"Webhook was set"}
+{"setWebhook":{"ok":true,"result":true,"description":"Webhook was set"},"webhookUrl":"https://mycrm.vercel.app/api/bot"}
 ```
 
 ---

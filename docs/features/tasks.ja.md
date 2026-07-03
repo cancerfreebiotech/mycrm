@@ -94,7 +94,7 @@ Bot が Gemini AI を使って解析します：
 
 ## Teams Bot 通知
 
-[Teams Bot](../bot/teams-setup.md) が設定されている場合、新しいタスクが作成されると Teams の個人チャットに **Adaptive Card** が送信されます。内容：
+[Teams Bot](../deployment/teams-setup.md) が設定されている場合、新しいタスクが作成されると Teams の個人チャットに **Adaptive Card** が送信されます。内容：
 - タスクのタイトルと期限
 - **「完了にする」**ボタン（Teams で直接クリックして完了可能）
 - **「タスク管理へ移動」**リンク

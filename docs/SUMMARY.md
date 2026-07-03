@@ -3,7 +3,7 @@
 ## 快速開始
 
 * [專案簡介](README.md)
-* [環境設定與部署](getting-started/setup.md)
+* [環境設定與部署](deployment/setup.md)
 * [第一次登入](getting-started/first-login.md)
 
 ## 功能說明
@@ -15,17 +15,21 @@
 * [報表](features/reports.md)
 * [個人設定](features/settings.md)
 * [電子報素材](features/newsletter.md)
+* [電子報活動與寄送](features/newsletter-campaigns.md)
+* [Social Briefing](features/social-briefing.md)
+* [AI 助理](features/ai-assistant.md)
+* [相簿](features/photos.md)
 
 ## Telegram Bot
 
 * [Bot 總覽](bot/overview.md)
 * [指令列表](bot/commands.md)
-* [Telegram Bot 設定](bot/telegram-setup.md)
+* [Telegram Bot 設定](deployment/telegram-setup.md)
 
 ## Microsoft Teams Bot
 
 * [Teams Bot 總覽](bot/teams-overview.md)
-* [Teams Bot 設定教學](bot/teams-setup.md)
+* [Teams Bot 設定教學](deployment/teams-setup.md)
 
 ## 管理員
 

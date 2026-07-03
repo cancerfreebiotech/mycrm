@@ -56,7 +56,19 @@ git push origin main
 
 ---
 
-## 5. Telegram Webhook
+## 5. Supabase — Edge Function Secrets
+
+The `send-reminder` and `send-newsletter` Edge Functions read their own copy
+of `NEXT_PUBLIC_APP_URL` from Edge Function secrets — updating the Vercel env
+var in Step 3 does **not** update this copy.
+
+1. **Supabase Dashboard → Edge Functions → Secrets**
+2. Update `NEXT_PUBLIC_APP_URL` to `https://crm.yourdomain.com`
+3. Redeploy `send-reminder` and `send-newsletter` so they pick up the new value
+
+---
+
+## 6. Telegram Webhook
 
 The project has a built-in utility route. After Vercel redeploys, open in browser:
 
@@ -75,7 +87,7 @@ Success response:
 
 ---
 
-## 6. Microsoft Teams Bot (Azure Portal)
+## 7. Microsoft Teams Bot (Azure Portal)
 
 1. [portal.azure.com](https://portal.azure.com) → Search **Azure Bot** → select your bot
 2. Left menu → **Configuration**
@@ -88,7 +100,7 @@ Success response:
 
 ---
 
-## 7. Google OAuth (Gmail Integration)
+## 8. Google OAuth (Gmail Integration)
 
 1. [console.cloud.google.com](https://console.cloud.google.com) → **APIs & Services → Credentials**
 2. Click your **OAuth 2.0 Client**
@@ -101,7 +113,7 @@ Success response:
 
 ---
 
-## 8. SendGrid Webhook
+## 9. SendGrid Webhook
 
 1. [app.sendgrid.com](https://app.sendgrid.com) → **Settings → Mail Settings → Event Webhooks**
 2. Edit the existing webhook
@@ -121,7 +133,8 @@ Success response:
 | 2 | SSL verified (Valid Configuration ✅) | ☐ |
 | 3 | Vercel env vars updated + redeployed | ☐ |
 | 4 | Supabase Auth URLs updated | ☐ |
-| 5 | Telegram Webhook re-registered | ☐ |
-| 6 | Azure Teams Bot endpoint updated | ☐ |
-| 7 | Google OAuth redirect URI added | ☐ |
-| 8 | SendGrid Webhook URL updated | ☐ |
+| 5 | Supabase Edge Function secret (`NEXT_PUBLIC_APP_URL`) updated | ☐ |
+| 6 | Telegram Webhook re-registered | ☐ |
+| 7 | Azure Teams Bot endpoint updated | ☐ |
+| 8 | Google OAuth redirect URI added | ☐ |
+| 9 | SendGrid Webhook URL updated | ☐ |

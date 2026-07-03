@@ -14,7 +14,7 @@ myCRM Telegram Bot 是系統的主要資料輸入管道，支援：
 | 搜尋聯絡人 | `/search` |
 | 新增互動筆記 | `/note` |
 | 發送 Email | `/email` |
-| 補充名片反面 | `/add_back` |
+| 為既有聯絡人補名片 | `/a` |
 | 建立任務 | `/work` |
 | 查看我的任務 | `/tasks` |
 | 列出組織成員 | `/user` |

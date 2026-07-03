@@ -1,0 +1,69 @@
+---
+title: Pre-meeting Briefing
+parent: Features
+nav_order: 8
+---
+
+# Pre-meeting Briefing
+
+Location: the "Pre-meeting briefing" section on the contact detail page
+
+A briefing is an AI-compiled summary of a contact: the system uses Google to search for the **latest public news** about the contact and their company, then assembles it into a pre-meeting reference so you can quickly get up to speed before a visit or meeting.
+
+---
+
+## Briefing Content
+
+Each briefing is presented in three sections (if a section has no data, it is marked "No public data found"):
+
+| Section | Content |
+|---------|---------|
+| **Person's recent activity** | Recent public news about the contact |
+| **Company's recent activity** | The company's recent news, funding, products, or other updates |
+| **Suggested opener & talking points** | Opening suggestions and topics to discuss, based on the above |
+
+A list of **sources** is shown below the sections. Each is a clickable link to a public web page so you can verify the information yourself.
+
+> Briefing quality depends on how complete the contact record is. Fill in fields such as **company**, **job title**, **company website**, and **LinkedIn** first so the AI can find the right information more easily.
+
+---
+
+## How to Generate
+
+1. Open any contact's detail page and find the "Pre-meeting briefing" section.
+2. Click the **"Generate briefing"** button.
+3. Wait for the system to compile it (see "Processing Time" below).
+
+---
+
+## Processing Time
+
+Briefings are generated **asynchronously**: after you click the button, the system starts working in the background immediately and the screen shows "Working… searching for the latest updates".
+
+- It is usually ready **within a minute**.
+- A scheduled job also scans the queue every 2 minutes as a backup, ensuring briefings that did not finish in real time are still processed.
+- You can leave the page while it works; return later to view the result.
+
+---
+
+## Where Results Appear
+
+Once finished, the briefing content appears directly in the same section, including the three compiled sections and the **sources** links.
+
+> Briefings are shown only in this section of the contact detail page; they are **not** written to the interaction log.
+
+---
+
+## Regenerating and Failure Handling
+
+- After a briefing is generated, the button changes to **"Regenerate"** — click it to compile a fresh briefing from the latest information.
+- If an error occurs during generation, the system **retries automatically**; if it keeps failing, that briefing is marked "Generation failed" and the error reason is shown.
+- On failure, you can click "Regenerate" again later to retry.
+
+---
+
+## Data Sources and Caveats
+
+- A briefing only compiles **public, verifiable** web information; it does not access social platforms that require a login.
+- Public information on the web may be **outdated or incorrect**; always **verify important details yourself** via the "sources" links before acting on them.
+- The AI only compiles search results — it does not speculate or fabricate, and marks sections honestly when no data is found.

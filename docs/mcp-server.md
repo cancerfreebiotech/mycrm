@@ -56,7 +56,7 @@ request — use this only for a trusted bot that acts on behalf of many people.
 
 Restart Claude Code. The agent sees only the tools its token has scope for.
 
-### 4. Connect from raw curl (testing)
+### 3. Connect from raw curl (testing)
 
 ```bash
 TOKEN="..."
@@ -112,7 +112,6 @@ Every tool call writes a row to `public.agent_actions` with:
 - `tool_name`
 - `arguments` (JSONB — recorded verbatim, mind PII)
 - `succeeded` + `error_message` if failed
-- `ip_hash` (first 8 hex chars of a hash of the requester IP, for spotting repeated callers without storing raw IPs)
 - `created_at`
 
 To review activity:
@@ -129,12 +128,9 @@ RLS: only super_admin can read this table.
 ## Limits
 
 - Function timeout: 60s (`export const maxDuration = 60`)
-- No SSE / streaming in v1
-- No per-agent rate limiting yet — add Vercel rate limit middleware if abuse becomes a concern
+- No SSE / streaming
 
-## v2 ideas (deferred)
+## Future ideas (deferred)
 
-- Write tools: `update_contact` (whitelist fields), `add_note`, `add_to_newsletter_list`
-- Per-agent tokens (table `agent_tokens(token_hash, name, scopes[], expires_at)`)
+- SSE streaming for long-running searches
 - Scoped read tools (e.g. agent only sees contacts they were granted)
-- Streaming responses for long-running searches

@@ -31,7 +31,15 @@ nav_order: 1
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key（後端用） |
 | `TELEGRAM_BOT_TOKEN` | Telegram BotFather 產生的 token |
-| `GEMINI_API_KEY` | Google Gemini API Key |
+| `TELEGRAM_WEBHOOK_SECRET` | Telegram Webhook 驗證密鑰；Bot 只接受帶此密鑰的更新 |
+| `ADMIN_SECRET` | 保護管理用 API（如註冊 Webhook）的密鑰 |
+| `PORTKEY_API_KEY` | Portkey AI Gateway API Key；所有 AI 呼叫的主要路徑 |
+| `PORTKEY_CONFIG_ID` | Portkey Config ID，定義路由與重試策略 |
+| `GEMINI_API_KEY` | Google Gemini API Key；Portkey 不可用時的備援，並供 AI 對話/情報功能使用 |
+| `SENDGRID_API_KEY` | SendGrid API Key；所有郵件寄送 |
+| `SENDGRID_FROM_EMAIL` | 寄件人 email（須通過 SendGrid 驗證） |
+| `NEXTAUTH_SECRET` | 郵件連結 token 與 HMAC 簽章密鑰 |
+| `CRON_SECRET` | 保護所有 Vercel Cron 任務的密鑰 |
 | `NEXT_PUBLIC_APP_URL` | 完整網址，例如 `https://mycrm.vercel.app` |
 
 ### Gmail 報表寄送（選用）
@@ -41,13 +49,15 @@ nav_order: 1
 | `GOOGLE_CLIENT_ID` | Google OAuth 2.0 Client ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth 2.0 Client Secret |
 
-### Teams Bot（選用）
+### Teams Bot / Microsoft OAuth（選用）
 
 | 變數名稱 | 說明 |
 |----------|------|
 | `TEAMS_BOT_APP_ID` | Azure AD Bot 的 App ID |
 | `TEAMS_BOT_APP_SECRET` | Azure AD Bot 的 App Secret |
 | `TEAMS_TENANT_ID` | Azure AD 租用戶 ID |
+| `AZURE_OAUTH_CLIENT_ID` | Azure AD OAuth Client ID；未設定則沿用 `TEAMS_BOT_APP_ID` |
+| `AZURE_OAUTH_CLIENT_SECRET` | Azure AD OAuth Client Secret；未設定則沿用 `TEAMS_BOT_APP_SECRET` |
 
 ---
 
@@ -86,17 +96,36 @@ nav_order: 1
 |----------|------|
 | `send-reminder` | 掃描到期任務，發 Telegram 提醒 |
 | `send-report` | 產生 Excel 報表，透過 Gmail 寄出 |
+| `inbound-parse` | 接收 BCC 郵件並寫入互動紀錄；跑在 Supabase Edge，Pro 方案容許 25 MB 內文（Vercel 上限僅 4.5 MB） |
+| `send-newsletter` | 透過 SendGrid 寄送電子報 |
 
 ### 設定環境變數（Supabase Dashboard → Edge Functions → Secrets）
 
 ```
 SUPABASE_URL=https://<project>.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<service_role_key>
-TELEGRAM_BOT_TOKEN=<telegram_token>
 NEXT_PUBLIC_APP_URL=https://mycrm.vercel.app
+TELEGRAM_BOT_TOKEN=<telegram_token>
+CRON_SECRET=<cron_secret>
 GOOGLE_CLIENT_ID=<google_client_id>
 GOOGLE_CLIENT_SECRET=<google_client_secret>
+SENDGRID_API_KEY=<sendgrid_api_key>
+SENDGRID_FROM_EMAIL=<sender_email>
+SENDGRID_FROM_NAME=<sender_name>
+NEXTAUTH_SECRET=<nextauth_secret>
+INBOUND_PARSE_SECRET=<inbound_parse_secret>
+ORG_EMAIL_DOMAIN=cancerfree.io
+BCC_INBOX_DOMAIN=bcc.cancerfree.io
 ```
+
+各函數額外需要的 Secrets（`SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`、`NEXT_PUBLIC_APP_URL` 為共用）：
+
+| 函數 | 額外 Secrets |
+|------|-------------|
+| `send-reminder` | `TELEGRAM_BOT_TOKEN`、`CRON_SECRET` |
+| `send-report` | `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET` |
+| `inbound-parse` | `INBOUND_PARSE_SECRET`、`ORG_EMAIL_DOMAIN`、`BCC_INBOX_DOMAIN` |
+| `send-newsletter` | `SENDGRID_API_KEY`、`SENDGRID_FROM_EMAIL`、`SENDGRID_FROM_NAME`、`NEXTAUTH_SECRET` |
 
 > Secrets 為整個專案共用，設定一次即可。
 
@@ -113,6 +142,21 @@ SELECT cron.schedule('send-reminder', '* * * * *',
   )$$
 );
 ```
+
+---
+
+## Vercel Cron Jobs
+
+`vercel.json` 已定義以下排程任務，部署到 Vercel 後自動生效。所有 Cron 均由 `CRON_SECRET` 保護——Vercel 會自動帶上 `Authorization: Bearer <CRON_SECRET>`，未設定或不符者拒絕執行。
+
+| 路徑 | 排程 (UTC) | 用途 |
+|------|-----------|------|
+| `/api/hunter/cron` | `0 18 * * *` | 每日以 Hunter.io 補全待處理聯絡人的 email |
+| `/api/sendgrid/import-suppressions` | `0 19 * * *` | 同步 SendGrid 退信/無效/退訂/封鎖名單 |
+| `/api/cron/process-pending-ocr` | `*/2 * * * *` | 每 2 分鐘補跑 Webhook 未完成的名片 OCR |
+| `/api/cron/process-pending-briefings` | `*/2 * * * *` | 每 2 分鐘處理聯絡人情報產生佇列 |
+| `/api/cron/check-feedback` | `0 18 * * *` | 每日檢查系統回報並寄出摘要 |
+| `/api/cron/run-report-schedules` | `0 * * * *` | 每小時執行到期的報表排程 |
 
 ---
 

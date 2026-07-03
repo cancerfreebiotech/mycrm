@@ -161,6 +161,23 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServiceClient()
 
+  // Persist every event durably (incl. click URLs, which the per-recipient
+  // clicked_at update below discards) — the raw feed campaign analytics need.
+  const eventRows = events
+    .filter((ev) => ev.event && ev.email)
+    .map((ev) => ({
+      campaign_id: ev['X-Campaign-Id'] ?? null,
+      recipient_id: ev['X-Recipient-Id'] ?? null,
+      email: ev.email.toLowerCase().trim(),
+      event: ev.event,
+      url: ev.url ?? null,
+      occurred_at: new Date(ev.timestamp * 1000).toISOString(),
+    }))
+  if (eventRows.length > 0) {
+    const { error: evErr } = await supabase.from('newsletter_events').insert(eventRows)
+    if (evErr) console.error('[sendgrid-webhook] newsletter_events insert failed:', evErr.message)
+  }
+
   for (const ev of events) {
     const recipientId = ev['X-Recipient-Id']
 

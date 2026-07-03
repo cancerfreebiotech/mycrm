@@ -19,6 +19,10 @@
     {
       "path": "/api/cron/check-feedback",
       "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/run-report-schedules",
+      "schedule": "0 * * * *"
     }
   ]
 }

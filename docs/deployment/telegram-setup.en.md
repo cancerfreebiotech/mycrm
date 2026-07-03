@@ -18,25 +18,36 @@ nav_order: 2
 
 ## Step 2: Set Environment Variables
 
-Enter the token into Vercel environment variables:
+Enter the token and two secrets into Vercel environment variables:
 
 ```
 TELEGRAM_BOT_TOKEN=<your token>
+TELEGRAM_WEBHOOK_SECRET=<your own random string>
+ADMIN_SECRET=<your own random string>
 ```
+
+- `TELEGRAM_WEBHOOK_SECRET`: the secret the Bot uses to verify every update.
+- `ADMIN_SECRET`: the secret protecting the admin endpoint that registers the webhook.
+
+Use a sufficiently long random string for each.
 
 ---
 
 ## Step 3: Set the Webhook
 
-After deployment is complete, run the following command to set the Webhook (one-time only):
+After deployment is complete, open the following URL in a browser to register the Webhook (one-time only):
 
-```bash
-curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://mycrm.vercel.app/api/bot"
+```
+https://<APP_URL>/api/admin/set-webhook?secret=<ADMIN_SECRET>
 ```
 
-Successful response:
+This endpoint registers the webhook with `TELEGRAM_WEBHOOK_SECRET` as its secret token, so the Bot only accepts updates carrying the correct secret.
+
+> ⚠️ Do not register manually with `curl .../setWebhook?url=...`: a webhook registered that way has no secret token, so the Bot returns 403 because the `x-telegram-bot-api-secret-token` header is missing, and all messages are rejected.
+
+Successful response (excerpt):
 ```json
-{"ok":true,"result":true,"description":"Webhook was set"}
+{"setWebhook":{"ok":true,"result":true,"description":"Webhook was set"},"webhookUrl":"https://mycrm.vercel.app/api/bot"}
 ```
 
 ---

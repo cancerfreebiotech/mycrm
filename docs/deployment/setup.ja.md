@@ -31,7 +31,15 @@ Vercel プロジェクト設定（またはローカルの `.env.local`）に以
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key（バックエンド用） |
 | `TELEGRAM_BOT_TOKEN` | Telegram BotFather が生成したトークン |
-| `GEMINI_API_KEY` | Google Gemini API Key |
+| `TELEGRAM_WEBHOOK_SECRET` | Telegram Webhook 検証用シークレット。Bot はこのシークレット付きの更新のみ受け付けます |
+| `ADMIN_SECRET` | 管理用 API（Webhook 登録など）を保護するシークレット |
+| `PORTKEY_API_KEY` | Portkey AI Gateway API Key。すべての AI 呼び出しの主経路 |
+| `PORTKEY_CONFIG_ID` | ルーティングとリトライ戦略を定義する Portkey Config ID |
+| `GEMINI_API_KEY` | Google Gemini API Key。Portkey が利用できない場合のフォールバック、および AI チャット/ブリーフィング機能で使用 |
+| `SENDGRID_API_KEY` | SendGrid API Key。すべてのメール送信 |
+| `SENDGRID_FROM_EMAIL` | 送信元メール（SendGrid で検証済みであること） |
+| `NEXTAUTH_SECRET` | メールリンクのトークンと HMAC 署名用シークレット |
+| `CRON_SECRET` | すべての Vercel Cron を保護するシークレット |
 | `NEXT_PUBLIC_APP_URL` | 完全な URL、例：`https://mycrm.vercel.app` |
 
 ### Gmail レポート送信（任意）
@@ -41,13 +49,15 @@ Vercel プロジェクト設定（またはローカルの `.env.local`）に以
 | `GOOGLE_CLIENT_ID` | Google OAuth 2.0 Client ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth 2.0 Client Secret |
 
-### Teams Bot（任意）
+### Teams Bot / Microsoft OAuth（任意）
 
 | 変数名 | 説明 |
 |--------|------|
 | `TEAMS_BOT_APP_ID` | Azure AD Bot の App ID |
 | `TEAMS_BOT_APP_SECRET` | Azure AD Bot の App Secret |
 | `TEAMS_TENANT_ID` | Azure AD テナント ID |
+| `AZURE_OAUTH_CLIENT_ID` | Azure AD OAuth Client ID。未設定の場合は `TEAMS_BOT_APP_ID` を使用 |
+| `AZURE_OAUTH_CLIENT_SECRET` | Azure AD OAuth Client Secret。未設定の場合は `TEAMS_BOT_APP_SECRET` を使用 |
 
 ---
 
@@ -86,17 +96,36 @@ Vercel プロジェクト設定（またはローカルの `.env.local`）に以
 |--------|------|
 | `send-reminder` | 期限切れタスクをスキャンして Telegram リマインダーを送信 |
 | `send-report` | Excel レポートを生成して Gmail 経由で送信 |
+| `inbound-parse` | BCC メールを受信してインタラクション記録に書き込む。Supabase Edge 上で動作し、Pro プランでは 25 MB の本文が許容される（Vercel の上限は 4.5 MB） |
+| `send-newsletter` | SendGrid 経由でニュースレターを送信 |
 
 ### 環境変数の設定（Supabase Dashboard → Edge Functions → Secrets）
 
 ```
 SUPABASE_URL=https://<project>.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<service_role_key>
-TELEGRAM_BOT_TOKEN=<telegram_token>
 NEXT_PUBLIC_APP_URL=https://mycrm.vercel.app
+TELEGRAM_BOT_TOKEN=<telegram_token>
+CRON_SECRET=<cron_secret>
 GOOGLE_CLIENT_ID=<google_client_id>
 GOOGLE_CLIENT_SECRET=<google_client_secret>
+SENDGRID_API_KEY=<sendgrid_api_key>
+SENDGRID_FROM_EMAIL=<sender_email>
+SENDGRID_FROM_NAME=<sender_name>
+NEXTAUTH_SECRET=<nextauth_secret>
+INBOUND_PARSE_SECRET=<inbound_parse_secret>
+ORG_EMAIL_DOMAIN=cancerfree.io
+BCC_INBOX_DOMAIN=bcc.cancerfree.io
 ```
+
+各関数が追加で必要とする Secrets（`SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`、`NEXT_PUBLIC_APP_URL` は共通）：
+
+| 関数 | 追加 Secrets |
+|------|-------------|
+| `send-reminder` | `TELEGRAM_BOT_TOKEN`、`CRON_SECRET` |
+| `send-report` | `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET` |
+| `inbound-parse` | `INBOUND_PARSE_SECRET`、`ORG_EMAIL_DOMAIN`、`BCC_INBOX_DOMAIN` |
+| `send-newsletter` | `SENDGRID_API_KEY`、`SENDGRID_FROM_EMAIL`、`SENDGRID_FROM_NAME`、`NEXTAUTH_SECRET` |
 
 > Secrets はプロジェクト全体で共有されます。一度設定すれば十分です。
 
@@ -113,6 +142,21 @@ SELECT cron.schedule('send-reminder', '* * * * *',
   )$$
 );
 ```
+
+---
+
+## Vercel Cron Jobs
+
+`vercel.json` に以下のスケジュールジョブが定義されており、Vercel へのデプロイ後に自動的に有効になります。すべての Cron は `CRON_SECRET` で保護されます——Vercel は自動的に `Authorization: Bearer <CRON_SECRET>` を送信し、未設定または不一致のリクエストは拒否されます。
+
+| パス | スケジュール (UTC) | 用途 |
+|------|-------------------|------|
+| `/api/hunter/cron` | `0 18 * * *` | 未処理連絡先のメールを Hunter.io で毎日補完 |
+| `/api/sendgrid/import-suppressions` | `0 19 * * *` | SendGrid のバウンス/無効/配信停止/ブロックリストを同期 |
+| `/api/cron/process-pending-ocr` | `*/2 * * * *` | 2 分ごとに、Webhook が完了しなかった名刺 OCR を再実行 |
+| `/api/cron/process-pending-briefings` | `*/2 * * * *` | 2 分ごとに連絡先ブリーフィング生成キューを処理 |
+| `/api/cron/check-feedback` | `0 18 * * *` | システムフィードバックを毎日チェックし要約メールを送信 |
+| `/api/cron/run-report-schedules` | `0 * * * *` | 期限が来たレポートスケジュールを毎時実行 |
 
 ---
 

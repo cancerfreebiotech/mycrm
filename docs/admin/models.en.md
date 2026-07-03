@@ -27,37 +27,52 @@ Users first select a provider, then select a model within that provider, in thei
 
 ## Managing AI Providers
 
+Providers are shown as a list with these columns: Provider Name, Base URL, API Key, Models (the number of models under that provider), and Status. Click any row to expand that provider's model list below.
+
 ### Add a Provider
+
+Click "Add Endpoint" and fill in:
 
 | Field | Description | Example |
 |-------|-------------|---------|
-| Name | Display name | Google Gemini |
+| Provider Name | Display name | Google Gemini |
 | Base URL | API endpoint | `https://generativelanguage.googleapis.com/v1beta` |
 | API Key | Provider's API Key | `AIza...` |
 
-### Edit / Delete
+### Change API Key
 
-Click the ✏️ / 🗑 button in the provider list.
+The API Key is masked in the list; click the eye icon to reveal the plaintext. Click "Change API Key" to reveal an inline input, enter the new key, and save. (The provider name and Base URL cannot be edited.)
 
-> Please delete all models under a provider before deleting the provider itself.
+### Enable / Disable a Provider
+
+Click the toggle in the Status column to enable or disable the entire provider.
+
+### Delete a Provider
+
+Click the 🗑 on the row and confirm to **delete the provider directly** — you do not need to delete its models first.
 
 ---
 
 ## Managing AI Models
 
+Select a provider above first; its model list then appears below.
+
 ### Add a Model
 
-Click "+ Add Model" under a provider:
+In that provider's model area, click "Add Model":
 
 | Field | Description | Example |
 |-------|-------------|---------|
-| Model ID | Model name used by the API | `gemini-2.0-flash` |
-| Display Name | Name shown when users select | `Gemini 2.0 Flash` |
-| Status | Enabled / Disabled | — |
+| Model ID | Model name used by the API | `gemini-2.5-flash` |
+| Display Name | Name shown when users select | `Gemini 2.5 Flash` |
 
-### Disabling a Model
+### Enable / Disable a Model
 
-When disabled, this model no longer appears in the personal settings dropdown. Users who have already selected this model will have the system fall back to the default model.
+Click the toggle in the model row's Status column. When disabled, the model no longer appears in the personal settings dropdown; users who had selected it fall back to the default model.
+
+### Delete a Model
+
+Click the 🗑 on the model row and confirm to delete it.
 
 ---
 

@@ -94,7 +94,7 @@ Bot 會使用 Gemini AI 解析：
 
 ## Teams Bot 通知
 
-若已設定 [Teams Bot](../bot/teams-setup.md)，新任務建立時會在 Teams 個人聊天送出 **Adaptive Card**，包含：
+若已設定 [Teams Bot](../deployment/teams-setup.md)，新任務建立時會在 Teams 個人聊天送出 **Adaptive Card**，包含：
 - 任務標題、截止時間
 - **「標記完成」** 按鈕（直接在 Teams 點擊即可完成）
 - **「前往任務管理」** 連結

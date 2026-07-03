@@ -94,7 +94,7 @@ Each task has three quick buttons:
 
 ## Teams Bot Notifications
 
-If [Teams Bot](../bot/teams-setup.md) is configured, an **Adaptive Card** is sent to your Teams personal chat when a new task is created, containing:
+If [Teams Bot](../deployment/teams-setup.md) is configured, an **Adaptive Card** is sent to your Teams personal chat when a new task is created, containing:
 - Task title and due date
 - **"Mark Complete"** button (click directly in Teams to complete)
 - **"Go to Task Management"** link

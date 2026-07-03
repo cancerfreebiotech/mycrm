@@ -4,41 +4,42 @@ parent: 管理員
 nav_order: 4
 ---
 
-# 報表管理（管理員）
+# 報表管理
 
-路徑：`/admin/reports`（僅 super_admin 可見）
+路徑：`/admin/reports`
+
+存取權限：**每位成員**都能開啟報表頁、立即產生報表，並管理自己建立的排程。`super_admin` 會額外看到「建立者」欄，可檢視所有人的排程。
 
 完整功能說明請見 [功能說明 → 報表](../features/reports.md)。
 
 ---
 
-## 管理員額外說明
+## 立即產生報表
 
-### Gmail OAuth 管理
+1. 選擇報表的日期區間（起、訖）。
+2. 視需要套用篩選：標籤、互動類型（會議／筆記／email）、建立者、國家。
+3. 點「產生報表」→ 頁面下方會以表格預覽互動紀錄，欄位可點擊排序。
+4. 或點「下載 Excel」→ 直接下載 `.xlsx` 檔。
 
-- 每個 Supabase 專案只需要授權一個 Gmail 帳號
-- Token 逾期（通常 1 小時）後系統會用 refresh token 自動更新
-- 若需要更換 Gmail 帳號，直接點擊「連結 Gmail」重新授權即可
+---
 
-### Edge Function 排程執行
+## 定期報表排程
 
-報表排程是由 `send-report` Edge Function 執行，需要透過 pg_cron 或外部排程器觸發。
+點「新增排程」開啟表單設定：
 
-若要設定 pg_cron 自動觸發（在 Supabase SQL Editor 執行一次）：
+| 欄位 | 說明 |
+|------|------|
+| 排程名稱 | 排程的識別名稱 |
+| 頻率 | 每週 / 每月 / 自訂（Cron 表達式） |
+| 報表日期範圍（天） | 每次寄送要涵蓋的最近天數 |
+| 收件人 | 以逗號分隔的 email 清單 |
 
-```sql
--- 每小時檢查一次活躍排程
-SELECT cron.schedule('send-report-hourly', '0 * * * *',
-  $$SELECT net.http_post(
-    url := 'https://<project>.supabase.co/functions/v1/send-report',
-    headers := '{"Authorization": "Bearer <anon_key>", "Content-Type": "application/json"}',
-    body := '{}'
-  )$$
-);
-```
+每個排程都可啟用／停用、編輯或刪除。「上次執行」欄會顯示最近一次自動寄送的時間與結果（✅ 成功／⚠️ 失敗）。
 
-> Edge Function 內部會判斷哪些排程需要在當下執行，不會每小時都寄出。
+---
 
-### 手動觸發
+## 排程寄送方式
 
-在報表頁面點擊「立即產生」→「發送 Gmail」可手動觸發寄送。
+排程寄送由**後端自動化**負責：系統每小時檢查一次，凡是排程時間到期者，會自動將報表寄給該排程的收件人清單，並更新「上次執行」狀態。
+
+不需要手動觸發，也**不需要連結任何外部郵件帳號**。

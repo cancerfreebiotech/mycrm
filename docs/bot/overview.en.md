@@ -14,7 +14,7 @@ The myCRM Telegram Bot is the primary data input channel for the system, support
 | Search contacts | `/search` |
 | Add interaction note | `/note` |
 | Send Email | `/email` |
-| Add card back | `/add_back` |
+| Add card to existing contact | `/a` |
 | Create task | `/work` |
 | View my tasks | `/tasks` |
 | List org members | `/user` |
