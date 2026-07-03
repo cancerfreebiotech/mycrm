@@ -16,6 +16,7 @@ export const CRON_EXPECTED_INTERVAL_MIN: Record<string, number> = {
   'hunter-cron': 1440,
   'import-suppressions': 1440,
   'health-watchdog': 10,
+  'process-scheduled-campaigns': 10,
 }
 
 /**

@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { PermissionGate } from '@/components/PermissionGate'
-import { Loader2, Send, FileDown, Rss, Eye, Save, ArrowLeft, CheckCircle2, AlertTriangle, Code, Columns, ImageIcon, Pencil } from 'lucide-react'
+import { Loader2, Send, FileDown, Rss, Eye, Save, ArrowLeft, CheckCircle2, AlertTriangle, Code, Columns, ImageIcon, Pencil, Clock } from 'lucide-react'
 import { InlineEmailEditor, type InlineEmailEditorHandle } from '@/components/InlineEmailEditor'
 
 interface Campaign {
@@ -23,6 +23,8 @@ interface Campaign {
   sent_count: number | null
   total_recipients: number | null
   promo_text: string | null
+  subject_b: string | null
+  scheduled_at: string | null
 }
 
 interface List {
@@ -54,6 +56,9 @@ export default function QuickSendPage() {
 
   // Editable fields
   const [subject, setSubject] = useState('')
+  const [subjectB, setSubjectB] = useState('')
+  const [scheduleAt, setScheduleAt] = useState('')
+  const [scheduling, setScheduling] = useState(false)
   const [previewText, setPreviewText] = useState('')
   const [promoText, setPromoText] = useState('')
   const [promoCopied, setPromoCopied] = useState(false)
@@ -84,6 +89,7 @@ export default function QuickSendPage() {
       const c = cRes as Campaign
       setCampaign(c)
       setSubject(c.subject ?? '')
+      setSubjectB(c.subject_b ?? '')
       setPreviewText(c.preview_text ?? '')
       setPromoText(c.promo_text ?? '')
       setListIds(c.list_ids ?? [])
@@ -280,15 +286,55 @@ export default function QuickSendPage() {
       const res = await fetch(`/api/newsletter/campaigns/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject, preview_text: previewText, list_ids: listIds, content_html: htmlToSave }),
+        body: JSON.stringify({ subject, subject_b: subjectB.trim() || null, preview_text: previewText, list_ids: listIds, content_html: htmlToSave }),
       })
       if (!res.ok) throw new Error((await res.json()).error ?? 'save failed')
       setBanner({ kind: 'ok', msg: t('saved') })
-      setCampaign((prev) => prev ? { ...prev, subject, preview_text: previewText, list_ids: listIds, content_html: htmlToSave } : prev)
+      setCampaign((prev) => prev ? { ...prev, subject, subject_b: subjectB.trim() || null, preview_text: previewText, list_ids: listIds, content_html: htmlToSave } : prev)
       if (contentHtmlOverride !== undefined) setContentHtml(contentHtmlOverride)
     } catch (e) {
       setBanner({ kind: 'err', msg: e instanceof Error ? e.message : t('errSaveFailed') })
     } finally { setSaving(false) }
+  }
+
+  async function scheduleSend() {
+    if (!scheduleAt) return
+    const when = new Date(scheduleAt)
+    if (isNaN(when.getTime()) || when.getTime() < Date.now()) {
+      setBanner({ kind: 'err', msg: t('scheduleInPast') })
+      return
+    }
+    setScheduling(true)
+    setBanner(null)
+    try {
+      await save()  // schedule what's on screen, not a stale draft
+      const res = await fetch(`/api/newsletter/campaigns/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduled_at: when.toISOString(), status: 'scheduled' }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error ?? t('scheduleFailed'))
+      setCampaign((prev) => prev ? { ...prev, scheduled_at: when.toISOString(), status: 'scheduled' } : prev)
+      setBanner({ kind: 'ok', msg: t('scheduled') })
+    } catch (e) {
+      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : t('scheduleFailed') })
+    } finally { setScheduling(false) }
+  }
+
+  async function cancelSchedule() {
+    setScheduling(true)
+    try {
+      const res = await fetch(`/api/newsletter/campaigns/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduled_at: null, status: 'draft' }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error ?? t('scheduleFailed'))
+      setCampaign((prev) => prev ? { ...prev, scheduled_at: null, status: 'draft' } : prev)
+      setBanner({ kind: 'ok', msg: t('scheduleCanceled') })
+    } catch (e) {
+      setBanner({ kind: 'err', msg: e instanceof Error ? e.message : t('scheduleFailed') })
+    } finally { setScheduling(false) }
   }
 
   async function sendReal() {
@@ -546,6 +592,16 @@ export default function QuickSendPage() {
                   type="text"
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
+                  className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">{t('subjectBLabel')}</label>
+                <input
+                  type="text"
+                  value={subjectB}
+                  onChange={(e) => setSubjectB(e.target.value)}
+                  placeholder={t('subjectBPlaceholder')}
                   className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -893,6 +949,42 @@ export default function QuickSendPage() {
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   {t('publishedAt', { date: new Date(campaign.published_at).toLocaleString('zh-TW') })}
                 </p>
+              )}
+            </div>
+
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-3">
+              <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('scheduleTitle')}</h2>
+              {campaign.status === 'scheduled' && campaign.scheduled_at ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-blue-600 dark:text-blue-400">
+                    {t('scheduledFor', { time: new Date(campaign.scheduled_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) })}
+                  </p>
+                  <button
+                    onClick={cancelSchedule}
+                    disabled={scheduling}
+                    className="w-full min-h-[44px] px-4 py-2 text-sm border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900/40 disabled:opacity-50"
+                  >
+                    {scheduling ? t('scheduleWorking') : t('cancelSchedule')}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <input
+                    type="datetime-local"
+                    value={scheduleAt}
+                    onChange={(e) => setScheduleAt(e.target.value)}
+                    className="w-full text-base px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                  />
+                  <button
+                    onClick={scheduleSend}
+                    disabled={scheduling || !scheduleAt || listIds.length === 0 || !subject.trim()}
+                    className="w-full min-h-[44px] flex items-center justify-center gap-2 px-4 py-2 text-sm border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 disabled:opacity-50"
+                  >
+                    {scheduling ? <Loader2 size={14} className="animate-spin" /> : <Clock size={14} />}
+                    {t('scheduleButton')}
+                  </button>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">{t('scheduleHint')}</p>
+                </div>
               )}
             </div>
 

@@ -6,7 +6,9 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { PermissionGate } from '@/components/PermissionGate'
-import { Loader2, Send, Rss, Mail, Plus, Copy, Wand2, Package, Pencil, Trash2 } from 'lucide-react'
+import { Loader2, Send, Rss, Mail, Plus, Copy, Wand2, Package, Pencil, Trash2, BarChart3, ListPlus } from 'lucide-react'
+
+type EngagementSegment = 'openers' | 'clickers' | 'non_openers'
 
 interface CampaignRow {
   id: string
@@ -37,6 +39,8 @@ export default function CampaignsIndexPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
   const [savingTitleId, setSavingTitleId] = useState<string | null>(null)
+  const [segmentMenuId, setSegmentMenuId] = useState<string | null>(null)
+  const [buildingListId, setBuildingListId] = useState<string | null>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
 
   async function createBlank() {
@@ -89,6 +93,25 @@ export default function CampaignsIndexPage() {
     } catch (e) {
       alert(e instanceof Error ? e.message : t('duplicateFailed'))
     } finally { setDuplicatingId(null) }
+  }
+
+  async function buildSegmentList(campaignId: string, segment: EngagementSegment) {
+    setSegmentMenuId(null)
+    setBuildingListId(campaignId)
+    try {
+      const res = await fetch('/api/newsletter/lists/from-engagement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId, segment }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error === 'no_recipients' ? t('noRecipients') : (data.error ?? t('buildListFailed')))
+      }
+      router.push(`/admin/newsletter/lists/${data.listId}`)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : t('buildListFailed'))
+    } finally { setBuildingListId(null) }
   }
 
   useEffect(() => {
@@ -257,6 +280,43 @@ export default function CampaignsIndexPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2 justify-end">
+                        {(r.status === 'sent' || r.status === 'partial') && (
+                          <>
+                            <Link
+                              href={`/admin/newsletter/campaigns/${r.id}`}
+                              title={t('analytics')}
+                              className="text-xs px-2 py-1 border border-gray-200 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
+                            >
+                              <BarChart3 size={12} />
+                            </Link>
+                            <div className="relative">
+                              <button
+                                onClick={() => setSegmentMenuId(segmentMenuId === r.id ? null : r.id)}
+                                disabled={buildingListId !== null}
+                                title={t('buildSegmentList')}
+                                className="flex items-center gap-1 text-xs px-2 py-1 border border-gray-200 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50"
+                              >
+                                {buildingListId === r.id ? <Loader2 size={12} className="animate-spin" /> : <ListPlus size={12} />}
+                              </button>
+                              {segmentMenuId === r.id && (
+                                <>
+                                  <button
+                                    aria-hidden
+                                    tabIndex={-1}
+                                    onClick={() => setSegmentMenuId(null)}
+                                    className="fixed inset-0 z-10 cursor-default"
+                                  />
+                                  <div className="absolute right-0 mt-1 z-20 w-36 py-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
+                                    <div className="px-3 py-1.5 text-[11px] font-medium text-gray-400 dark:text-gray-500">{t('buildSegmentList')}</div>
+                                    <button onClick={() => buildSegmentList(r.id, 'openers')} className="w-full text-left px-3 py-2.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">{t('segmentOpeners')}</button>
+                                    <button onClick={() => buildSegmentList(r.id, 'clickers')} className="w-full text-left px-3 py-2.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">{t('segmentClickers')}</button>
+                                    <button onClick={() => buildSegmentList(r.id, 'non_openers')} className="w-full text-left px-3 py-2.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">{t('segmentNonOpeners')}</button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </>
+                        )}
                         <button
                           onClick={() => duplicate(r.id)}
                           disabled={duplicatingId === r.id}

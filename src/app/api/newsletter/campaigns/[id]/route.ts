@@ -11,7 +11,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const service = createServiceClient()
   const { data, error } = await service
     .from('newsletter_campaigns')
-    .select('id, title, subject, preview_text, content_html, list_ids, status, slug, published_at, sent_at, sent_count, total_recipients, created_at, promo_text')
+    .select('id, title, subject, subject_b, preview_text, content_html, list_ids, status, slug, published_at, sent_at, sent_count, total_recipients, created_at, promo_text, scheduled_at')
     .eq('id', id)
     .maybeSingle()
 
@@ -28,8 +28,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = (await req.json().catch(() => ({}))) as {
-    title?: string; subject?: string; preview_text?: string;
-    content_html?: string; list_ids?: string[]; promo_text?: string | null
+    title?: string; subject?: string; subject_b?: string | null; preview_text?: string;
+    content_html?: string; list_ids?: string[]; promo_text?: string | null;
+    scheduled_at?: string | null; status?: string
   }
 
   const update: Record<string, unknown> = {}
@@ -39,10 +40,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (typeof body.content_html === 'string') update.content_html = body.content_html
   if (Array.isArray(body.list_ids)) update.list_ids = body.list_ids
   if (body.promo_text !== undefined) update.promo_text = body.promo_text
-
-  if (Object.keys(update).length === 0) return NextResponse.json({ ok: true, noChange: true })
+  if (body.subject_b !== undefined) update.subject_b = body.subject_b
 
   const service = createServiceClient()
+
+  // Scheduling: only the draft<->scheduled transition is editable here; sending/
+  // sent/partial are owned by the send worker. Guard on CURRENT status too —
+  // otherwise PATCH status:'draft' on a sent campaign would bypass the delete
+  // protection above.
+  if (body.scheduled_at !== undefined || body.status === 'scheduled' || body.status === 'draft') {
+    const { data: cur } = await service
+      .from('newsletter_campaigns').select('status').eq('id', id).maybeSingle()
+    if (cur && (cur.status === 'draft' || cur.status === 'scheduled')) {
+      if (body.scheduled_at !== undefined) update.scheduled_at = body.scheduled_at
+      if (body.status === 'scheduled' || body.status === 'draft') update.status = body.status
+    }
+  }
+
+  if (Object.keys(update).length === 0) return NextResponse.json({ ok: true, noChange: true })
   const { error } = await service.from('newsletter_campaigns').update(update).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
