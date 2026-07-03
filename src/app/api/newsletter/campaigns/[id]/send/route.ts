@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { createHmac } from 'crypto'
 import { emailTokenSecret } from '@/lib/emailTokenSecret'
+import { recordUsage } from '@/lib/usage'
 
 const SG_SEND_URL = 'https://api.sendgrid.com/v3/mail/send'
 
@@ -350,17 +351,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
 
   // ── Update campaign state ──
+  // 'partial' when any chunk failed (previously everything — even sent=0 — was
+  // stamped 'sent', hiding real incidents). send_errors keeps the failure detail
+  // so the campaigns page can show what went wrong; the resume dedup path is the
+  // retry mechanism (resend:true skips already-sent recipients).
   if (!body.testOnly) {
+    const failed = recipients.length - sent
     await service
       .from('newsletter_campaigns')
       .update({
-        status: 'sent',
+        status: errors.length > 0 || sent === 0 ? 'partial' : 'sent',
         sent_at: new Date().toISOString(),
         sent_count: sent,
         total_recipients: recipients.length,
+        failed_count: failed > 0 ? failed : 0,
+        send_errors: errors.length > 0 ? errors.slice(0, 50) : null,
       })
       .eq('id', campaignId)
   }
+
+  if (!body.testOnly && sent > 0) await recordUsage(service, { newsletter_sent: sent })
 
   return NextResponse.json({
     ok: errors.length === 0,

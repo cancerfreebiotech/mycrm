@@ -70,7 +70,8 @@
     "themeLight": "切換淺色",
     "themeDark": "切換深色",
     "pendingReview": "待審核名片",
-    "myFailedScans": "我的失敗辨識"
+    "myFailedScans": "我的失敗辨識",
+    "auditLog": "稽核日誌"
   },
   "auth": {
     "signInWithMicrosoft": "使用 Microsoft 帳號登入",
@@ -1540,7 +1541,37 @@
     "latencyLegend": "延遲指示燈說明",
     "latencyNormal": "< 500 ms — 正常",
     "latencySlow": "500–2000 ms — 緩慢",
-    "latencyCritical": "> 2000 ms — 異常慢"
+    "latencyCritical": "> 2000 ms — 異常慢",
+    "retry": "重試",
+    "loadFailed": "載入失敗",
+    "cronTitle": "排程心跳",
+    "cronSubtitle": "各定時任務最後執行狀況",
+    "cronStatusOk": "正常",
+    "cronStatusError": "異常",
+    "cronStatusOverdue": "逾時",
+    "cronStatusNone": "無紀錄",
+    "cronNever": "尚未執行",
+    "cronDuration": "耗時",
+    "cronEmpty": "尚無排程任務",
+    "deadLettersTitle": "死信佇列",
+    "deadLettersSubtitle": "處理失敗待重試的項目",
+    "deadLettersFailed": "{count} 筆失敗",
+    "deadLettersRequeue": "重新排入",
+    "deadLettersRequeuing": "排入中…",
+    "deadLettersRequeued": "已重新排入 {count} 筆",
+    "deadLettersRequeueFailed": "重新排入失敗，請稍後再試",
+    "deadLettersNewsletterHint": "請至活動頁繼續寄送",
+    "deadLettersViewScans": "查看失敗掃描",
+    "deadLettersEmpty": "沒有失敗項目 🎉",
+    "deadLettersNoError": "無錯誤訊息",
+    "usageTitle": "本月用量",
+    "usageSubtitle": "與上月比較",
+    "usageAiCall": "AI 呼叫",
+    "usageAiTokensIn": "AI 輸入 tokens",
+    "usageAiTokensOut": "AI 輸出 tokens",
+    "usageEmailSent": "Email 寄送",
+    "usageNewsletterSent": "電子報寄送",
+    "usageLastMonth": "上月 {value}"
   },
   "permission": {
     "noPermission": "沒有權限",
@@ -1864,7 +1895,9 @@
     "sentCount": "寄出 {count}",
     "duplicateTooltip": "複製成新草稿",
     "open": "開啟",
-    "delete": "刪除"
+    "delete": "刪除",
+    "statusPartial": "部分失敗",
+    "partialHint": "{failed} 位收件人寄送失敗"
   },
   "newsletterImport": {
     "pageTitle": "從 Skill 匯入電子報",
@@ -1952,5 +1985,32 @@
     "manualInputLabel": "或手動輸入 email：",
     "replace": "替換",
     "reloadWithCount": "重新載入（已替換 {count} 筆）"
+  },
+  "adminAuditLog": {
+    "title": "稽核日誌",
+    "description": "特權操作的完整紀錄",
+    "refresh": "重新整理",
+    "empty": "目前沒有稽核紀錄",
+    "colTime": "時間",
+    "colActor": "操作者",
+    "colAction": "動作",
+    "colTarget": "對象",
+    "colDetail": "細節",
+    "expand": "展開",
+    "collapse": "收合",
+    "prev": "上一頁",
+    "next": "下一頁",
+    "pageInfo": "第 {page} / {totalPages} 頁，共 {total} 筆",
+    "action": {
+      "reset_mfa": "重設 MFA",
+      "set_telegram_id": "設定 Telegram ID",
+      "maintenance_toggle": "維護模式切換",
+      "permanent_delete_contact": "永久刪除聯絡人",
+      "permanent_delete_bulk": "批次永久刪除",
+      "mcp_token_create": "建立 MCP Token",
+      "mcp_token_revoke": "撤銷 MCP Token",
+      "email_recovery_apply": "套用 Email 復原",
+      "hunter_config_change": "Hunter 設定變更"
+    }
   }
 }

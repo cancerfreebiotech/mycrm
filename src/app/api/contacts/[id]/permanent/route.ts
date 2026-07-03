@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { logAdminAction } from '@/lib/adminAudit'
 
 // DELETE /api/contacts/[id]/permanent — 永久刪除聯絡人（僅 super_admin）
 export async function DELETE(
@@ -61,6 +62,12 @@ export async function DELETE(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  await logAdminAction(service, {
+    actorEmail: user.email ?? 'unknown',
+    action: 'permanent_delete_contact',
+    target: id,
+  })
 
   return NextResponse.json({ success: true })
 }

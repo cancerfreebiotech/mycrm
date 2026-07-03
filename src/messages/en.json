@@ -70,7 +70,8 @@
     "themeLight": "Switch to light",
     "themeDark": "Switch to dark",
     "pendingReview": "Pending Cards",
-    "myFailedScans": "My Failed Scans"
+    "myFailedScans": "My Failed Scans",
+    "auditLog": "Audit Log"
   },
   "auth": {
     "signInWithMicrosoft": "Sign in with Microsoft",
@@ -1540,7 +1541,37 @@
     "latencyLegend": "Latency indicator legend",
     "latencyNormal": "< 500 ms — Normal",
     "latencySlow": "500–2000 ms — Slow",
-    "latencyCritical": "> 2000 ms — Critical"
+    "latencyCritical": "> 2000 ms — Critical",
+    "retry": "Retry",
+    "loadFailed": "Failed to load",
+    "cronTitle": "Cron heartbeat",
+    "cronSubtitle": "Last run status of scheduled jobs",
+    "cronStatusOk": "OK",
+    "cronStatusError": "Error",
+    "cronStatusOverdue": "Overdue",
+    "cronStatusNone": "No record",
+    "cronNever": "Never run",
+    "cronDuration": "Duration",
+    "cronEmpty": "No scheduled jobs",
+    "deadLettersTitle": "Dead letters",
+    "deadLettersSubtitle": "Failed items awaiting retry",
+    "deadLettersFailed": "{count} failed",
+    "deadLettersRequeue": "Requeue",
+    "deadLettersRequeuing": "Requeuing…",
+    "deadLettersRequeued": "Requeued {count}",
+    "deadLettersRequeueFailed": "Requeue failed, please try again",
+    "deadLettersNewsletterHint": "Continue sending on the campaign page",
+    "deadLettersViewScans": "View failed scans",
+    "deadLettersEmpty": "No failed items 🎉",
+    "deadLettersNoError": "No error message",
+    "usageTitle": "This month's usage",
+    "usageSubtitle": "vs. last month",
+    "usageAiCall": "AI calls",
+    "usageAiTokensIn": "AI input tokens",
+    "usageAiTokensOut": "AI output tokens",
+    "usageEmailSent": "Emails sent",
+    "usageNewsletterSent": "Newsletters sent",
+    "usageLastMonth": "Last month {value}"
   },
   "permission": {
     "noPermission": "No permission",
@@ -1864,7 +1895,9 @@
     "sentCount": "Sent {count}",
     "duplicateTooltip": "Duplicate as new draft",
     "open": "Open",
-    "delete": "Delete"
+    "delete": "Delete",
+    "statusPartial": "Partial failure",
+    "partialHint": "{failed} recipients failed"
   },
   "newsletterImport": {
     "pageTitle": "Import Newsletter from Skill",
@@ -1952,5 +1985,32 @@
     "manualInputLabel": "Or enter an email manually:",
     "replace": "Replace",
     "reloadWithCount": "Reload ({count} replaced)"
+  },
+  "adminAuditLog": {
+    "title": "Audit Log",
+    "description": "Full record of privileged actions",
+    "refresh": "Refresh",
+    "empty": "No audit records yet",
+    "colTime": "Time",
+    "colActor": "Actor",
+    "colAction": "Action",
+    "colTarget": "Target",
+    "colDetail": "Detail",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "prev": "Previous",
+    "next": "Next",
+    "pageInfo": "Page {page} of {totalPages} · {total} total",
+    "action": {
+      "reset_mfa": "Reset MFA",
+      "set_telegram_id": "Set Telegram ID",
+      "maintenance_toggle": "Maintenance toggle",
+      "permanent_delete_contact": "Permanently delete contact",
+      "permanent_delete_bulk": "Bulk permanent delete",
+      "mcp_token_create": "Create MCP token",
+      "mcp_token_revoke": "Revoke MCP token",
+      "email_recovery_apply": "Apply email recovery",
+      "hunter_config_change": "Hunter config change"
+    }
   }
 }

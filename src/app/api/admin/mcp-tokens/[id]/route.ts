@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { logAdminAction } from '@/lib/adminAudit'
 
 // PATCH  /api/admin/mcp-tokens/[id]  — enable / disable a token
 //   Body: { disabled: boolean, reason?: string }
@@ -14,7 +15,7 @@ async function requireSuperAdmin() {
   const service = createServiceClient()
   const { data: profile } = await service.from('users').select('id, role').eq('email', user.email).single()
   if (profile?.role !== 'super_admin') return null
-  return { id: profile.id as string }
+  return { id: profile.id as string, email: user.email }
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -38,5 +39,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const service = createServiceClient()
   const { error } = await service.from('agent_tokens').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  await logAdminAction(service, {
+    actorEmail: admin.email ?? 'unknown',
+    action: 'mcp_token_revoke',
+    target: id,
+  })
+
   return NextResponse.json({ ok: true })
 }

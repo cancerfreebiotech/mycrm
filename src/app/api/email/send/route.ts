@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from '@/lib/supabase'
 import { getValidProviderToken } from '@/lib/graph-server'
 import { sendMail } from '@/lib/graph'
 import { generateOptOutToken } from '@/lib/email-optout'
+import { recordUsage } from '@/lib/usage'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.cancerfree.io'
 
@@ -433,6 +434,8 @@ export async function POST(req: NextRequest) {
     (method === 'outlook') ||
     (method === 'sendgrid' && sgMode === 'bcc')
   const emailCount = isGrouped ? (sentCount > 0 ? 1 : 0) : sentCount
+
+  if (sentCount > 0) await recordUsage(supabase, { email_sent: sentCount })
 
   return NextResponse.json({
     ok: errors.length === 0,

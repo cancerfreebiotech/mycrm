@@ -150,6 +150,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/admin/health', label: t('health'), icon: Activity },
     { href: '/admin/mcp-tokens', label: 'MCP Tokens', icon: ShieldCheck },
     { href: '/admin/mcp-activity', label: 'MCP 活動', icon: Activity },
+    { href: '/admin/audit-log', label: t('auditLog'), icon: ClipboardList },
     { href: '/admin/feedback', label: t('feedbackManage'), icon: MessageSquarePlus },
   ] : []
   // User-management gated separately — super_admin OR has user_management feature

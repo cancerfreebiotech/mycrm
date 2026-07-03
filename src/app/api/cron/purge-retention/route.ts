@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { recordCronRun } from '@/lib/cronHeartbeat'
 
 /**
  * Vercel Cron — daily data-retention purge.
@@ -31,6 +32,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const startMs = Date.now()
   const service = createServiceClient()
   const result = {
     contacts_purged: 0,
@@ -55,6 +57,7 @@ export async function GET(req: NextRequest) {
       .limit(MAX_CONTACTS_PER_RUN)
     if (error) {
       console.error('[purge-retention] load stale contacts failed:', error.message)
+      await recordCronRun(service, 'purge-retention', 'error', { error: error.message }, Date.now() - startMs)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
     const ids = (stale ?? []).map((c) => c.id as string)
@@ -74,6 +77,7 @@ export async function GET(req: NextRequest) {
       const { error: delErr } = await service.from('contacts').delete().in('id', ids)
       if (delErr) {
         console.error('[purge-retention] delete contacts failed:', delErr.message)
+        await recordCronRun(service, 'purge-retention', 'error', { error: delErr.message }, Date.now() - startMs)
         return NextResponse.json({ error: delErr.message }, { status: 500 })
       }
       result.contacts_purged = ids.length
@@ -127,6 +131,7 @@ export async function GET(req: NextRequest) {
     else result.compose_cache_deleted = count ?? 0
   }
 
+  await recordCronRun(service, 'purge-retention', 'ok', result, Date.now() - startMs)
   return NextResponse.json({ ok: true, ...result })
 }
 

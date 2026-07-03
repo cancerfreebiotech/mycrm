@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { recordCronRun } from '@/lib/cronHeartbeat'
 
 /**
  * Vercel Cron — daily system-feedback check.
@@ -56,21 +57,27 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const startMs = Date.now()
+  const service = createServiceClient()
+
   const sgKey = process.env.SENDGRID_API_KEY
   const fromEmail = process.env.SENDGRID_FROM_EMAIL
   const fromName = process.env.SENDGRID_FROM_NAME ?? 'CancerFree Biotech'
   if (!sgKey || !fromEmail) {
+    await recordCronRun(service, 'check-feedback', 'error', { error: 'SendGrid not configured' }, Date.now() - startMs)
     return NextResponse.json({ error: 'SendGrid not configured (SENDGRID_API_KEY / SENDGRID_FROM_EMAIL)' }, { status: 500 })
   }
 
-  const service = createServiceClient()
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
   const { data, error } = await service
     .from('feedback')
     .select('type, status, title, description, created_at, creator:created_by(display_name)')
     .gte('created_at', since)
     .order('created_at', { ascending: false })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    await recordCronRun(service, 'check-feedback', 'error', { error: error.message }, Date.now() - startMs)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 
   const rows: FeedbackRow[] = (data ?? []).map((r) => {
     const creator = r.creator as { display_name: string | null } | { display_name: string | null }[] | null
@@ -128,8 +135,10 @@ export async function GET(req: NextRequest) {
   })
   if (res.status !== 202) {
     const body = await res.text()
+    await recordCronRun(service, 'check-feedback', 'error', { error: `SendGrid ${res.status}` }, Date.now() - startMs)
     return NextResponse.json({ ok: false, error: `SendGrid ${res.status}: ${body}` }, { status: 500 })
   }
+  await recordCronRun(service, 'check-feedback', 'ok', { count: rows.length }, Date.now() - startMs)
   return NextResponse.json({ ok: true, count: rows.length, emailed: RECIPIENT })
 }
 

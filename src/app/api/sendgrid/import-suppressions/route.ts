@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { recordCronRun } from '@/lib/cronHeartbeat'
 
 const SG_BASE = 'https://api.sendgrid.com/v3'
 const PAGE_SIZE = 500
@@ -310,5 +311,14 @@ export async function GET(req: NextRequest) {
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  return runImport()
+
+  // Heartbeat only on the cron (GET) path — the manual POST import is not recorded.
+  const startMs = Date.now()
+  const res = await runImport()
+  try {
+    const body = await res.clone().json()
+    const status: 'ok' | 'error' = body?.ok === false || body?.error ? 'error' : 'ok'
+    await recordCronRun(createServiceClient(), 'import-suppressions', status, body, Date.now() - startMs)
+  } catch { /* recording must never break the cron response */ }
+  return res
 }

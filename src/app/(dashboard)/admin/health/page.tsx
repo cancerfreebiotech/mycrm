@@ -1,11 +1,13 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import {
   Activity, Loader2, RefreshCw, CheckCircle2, XCircle, MinusCircle,
-  Database, Cpu, Send, Bot, Zap, Search, Key
+  Database, Cpu, Send, Bot, Zap, Search, Key,
+  Clock, Inbox, BarChart3, ChevronDown, RotateCcw, ExternalLink, AlertTriangle
 } from 'lucide-react'
-import { useTranslations } from 'next-intl'
+import { useTranslations, useFormatter } from 'next-intl'
 import type { ServiceStatus } from '@/app/api/health-check/route'
 
 const SERVICE_ICONS: Record<string, React.ReactNode> = {
@@ -31,6 +33,37 @@ interface HealthResult {
   checkedAt: string
   services: ServiceStatus[]
 }
+
+interface CronJob {
+  job: string
+  last_status: 'ok' | 'error' | null
+  last_finished_at: string | null
+  duration_ms: number | null
+  overdue: boolean
+  expected_interval_min: number
+}
+
+interface CronHealthData {
+  jobs: CronJob[]
+}
+
+interface DeadLetterTable {
+  table: string
+  failed: number
+  recent: Array<{ id: string; error: string | null; at: string | null }>
+}
+
+interface DeadLettersData {
+  tables: DeadLetterTable[]
+}
+
+interface UsageData {
+  period: string
+  metrics: Record<string, number>
+  previous: { period: string; metrics: Record<string, number> }
+}
+
+type SectionState = 'loading' | 'error' | 'ready'
 
 function StatusBadge({ status }: { status: ServiceStatus['status'] }) {
   if (status === 'ok') return (
@@ -270,6 +303,319 @@ function HunterSection() {
   )
 }
 
+function SectionSkeleton() {
+  return (
+    <div className="space-y-2 animate-pulse" aria-hidden>
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="h-11 bg-gray-100 dark:bg-gray-800 rounded-lg" />
+      ))}
+    </div>
+  )
+}
+
+function SectionError({ onRetry }: { onRetry: () => void }) {
+  const t = useTranslations('health')
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/20 px-4 py-3">
+      <span className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+        <XCircle size={15} className="shrink-0" /> {t('loadFailed')}
+      </span>
+      <button
+        onClick={onRetry}
+        className="flex items-center gap-1.5 text-xs font-medium text-red-700 dark:text-red-300 hover:underline shrink-0"
+      >
+        <RefreshCw size={12} /> {t('retry')}
+      </button>
+    </div>
+  )
+}
+
+function CronBadge({ job }: { job: CronJob }) {
+  const t = useTranslations('health')
+  let cls: string
+  let icon: React.ReactNode
+  let label: string
+  if (job.last_status === 'error') {
+    cls = 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800'
+    icon = <XCircle size={11} />
+    label = t('cronStatusError')
+  } else if (job.overdue) {
+    cls = 'text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-950/40 border-yellow-200 dark:border-yellow-800'
+    icon = <AlertTriangle size={11} />
+    label = t('cronStatusOverdue')
+  } else if (job.last_status === 'ok') {
+    cls = 'text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-800'
+    icon = <CheckCircle2 size={11} />
+    label = t('cronStatusOk')
+  } else {
+    cls = 'text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+    icon = <MinusCircle size={11} />
+    label = t('cronStatusNone')
+  }
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-medium border px-2 py-0.5 rounded-full shrink-0 ${cls}`}>
+      {icon} {label}
+    </span>
+  )
+}
+
+function CronHealthSection() {
+  const t = useTranslations('health')
+  const format = useFormatter()
+  const [state, setState] = useState<SectionState>('loading')
+  const [data, setData] = useState<CronHealthData | null>(null)
+
+  const load = useCallback(async () => {
+    setState('loading')
+    try {
+      const res = await fetch('/api/admin/cron-health')
+      if (!res.ok) throw new Error()
+      setData(await res.json())
+      setState('ready')
+    } catch {
+      setState('error')
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const hasIssue = state === 'ready' && !!data?.jobs.some((j) => j.overdue || j.last_status === 'error')
+
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mt-6">
+      <div className="flex items-center gap-2 mb-5">
+        <div className={`p-2 rounded-lg ${hasIssue ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-500' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-500'}`}>
+          <Clock size={18} />
+        </div>
+        <div>
+          <h2 className={`font-semibold text-sm ${hasIssue ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-gray-100'}`}>{t('cronTitle')}</h2>
+          <p className="text-xs text-gray-400">{t('cronSubtitle')}</p>
+        </div>
+      </div>
+
+      {state === 'loading' && <SectionSkeleton />}
+      {state === 'error' && <SectionError onRetry={load} />}
+      {state === 'ready' && data && (
+        data.jobs.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-6">{t('cronEmpty')}</p>
+        ) : (
+          <div className="divide-y divide-gray-100 dark:divide-gray-800">
+            {data.jobs.map((job) => (
+              <div key={job.job} className="flex items-center justify-between gap-3 py-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{job.job}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {job.last_finished_at ? format.relativeTime(new Date(job.last_finished_at)) : t('cronNever')}
+                    {job.duration_ms != null && (
+                      <span className="ml-2">· {t('cronDuration')} {job.duration_ms} ms</span>
+                    )}
+                  </p>
+                </div>
+                <CronBadge job={job} />
+              </div>
+            ))}
+          </div>
+        )
+      )}
+    </div>
+  )
+}
+
+const REQUEUE_TABLES = ['pending_contacts', 'contact_briefings']
+
+function DeadLettersSection() {
+  const t = useTranslations('health')
+  const format = useFormatter()
+  const [state, setState] = useState<SectionState>('loading')
+  const [data, setData] = useState<DeadLettersData | null>(null)
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [requeuing, setRequeuing] = useState<string | null>(null)
+  const [requeuedMsg, setRequeuedMsg] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setState('loading')
+    try {
+      const res = await fetch('/api/admin/dead-letters')
+      if (!res.ok) throw new Error()
+      setData(await res.json())
+      setState('ready')
+    } catch {
+      setState('error')
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const requeue = async (table: string) => {
+    setRequeuing(table)
+    try {
+      const res = await fetch('/api/admin/dead-letters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ table }),
+      })
+      if (!res.ok) throw new Error()
+      const { requeued } = await res.json()
+      setRequeuedMsg(t('deadLettersRequeued', { count: requeued ?? 0 }))
+      setTimeout(() => setRequeuedMsg(null), 3000)
+      await load()
+    } catch {
+      setRequeuedMsg(t('deadLettersRequeueFailed'))
+      setTimeout(() => setRequeuedMsg(null), 5000)
+    } finally {
+      setRequeuing(null)
+    }
+  }
+
+  const hasFailures = state === 'ready' && !!data?.tables.some((tb) => tb.failed > 0)
+
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mt-6">
+      <div className="flex items-center gap-2 mb-5">
+        <div className={`p-2 rounded-lg ${hasFailures ? 'bg-red-50 dark:bg-red-950/30 text-red-500' : 'bg-teal-50 dark:bg-teal-950/30 text-teal-500'}`}>
+          <Inbox size={18} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h2 className={`font-semibold text-sm ${hasFailures ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}>{t('deadLettersTitle')}</h2>
+          <p className="text-xs text-gray-400">{t('deadLettersSubtitle')}</p>
+        </div>
+        {requeuedMsg && (
+          <span className="text-xs text-green-600 dark:text-green-400 font-medium shrink-0">{requeuedMsg}</span>
+        )}
+      </div>
+
+      {state === 'loading' && <SectionSkeleton />}
+      {state === 'error' && <SectionError onRetry={load} />}
+      {state === 'ready' && data && (
+        data.tables.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-6">{t('deadLettersEmpty')}</p>
+        ) : (
+          <div className="space-y-2">
+            {data.tables.map((tb) => {
+              const isOpen = expanded === tb.table
+              const canExpand = tb.recent.length > 0
+              return (
+                <div key={tb.table} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                  <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+                    <button
+                      onClick={() => setExpanded(isOpen ? null : tb.table)}
+                      disabled={!canExpand}
+                      className="flex items-center gap-1.5 flex-1 min-w-0 text-left disabled:cursor-default"
+                    >
+                      {canExpand && (
+                        <ChevronDown size={14} className={`text-gray-400 transition-transform shrink-0 ${isOpen ? '' : '-rotate-90'}`} />
+                      )}
+                      <span className="text-sm font-mono text-gray-800 dark:text-gray-200 truncate">{tb.table}</span>
+                    </button>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${tb.failed > 0 ? 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/40' : 'text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800'}`}>
+                      {t('deadLettersFailed', { count: tb.failed })}
+                    </span>
+                    {tb.failed > 0 && REQUEUE_TABLES.includes(tb.table) && (
+                      <button
+                        onClick={() => requeue(tb.table)}
+                        disabled={requeuing === tb.table}
+                        className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 shrink-0"
+                      >
+                        {requeuing === tb.table ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+                        {requeuing === tb.table ? t('deadLettersRequeuing') : t('deadLettersRequeue')}
+                      </button>
+                    )}
+                    {tb.table === 'newsletter_recipients' && tb.failed > 0 && (
+                      <span className="text-[11px] text-gray-400 shrink-0">{t('deadLettersNewsletterHint')}</span>
+                    )}
+                    {tb.table === 'failed_scans' && (
+                      <Link
+                        href="/admin/failed-scans"
+                        className="flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline shrink-0"
+                      >
+                        {t('deadLettersViewScans')} <ExternalLink size={11} />
+                      </Link>
+                    )}
+                  </div>
+                  {isOpen && canExpand && (
+                    <div className="border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40 divide-y divide-gray-100 dark:divide-gray-800 max-h-48 overflow-y-auto">
+                      {tb.recent.map((r) => (
+                        <div key={r.id} className="px-3 py-2">
+                          <p className="text-xs text-gray-600 dark:text-gray-300 break-words">{r.error ?? t('deadLettersNoError')}</p>
+                          {r.at && <p className="text-[11px] text-gray-400 mt-0.5">{format.relativeTime(new Date(r.at))}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )
+      )}
+    </div>
+  )
+}
+
+const USAGE_METRICS: Array<{ key: string; labelKey: string; optional?: boolean }> = [
+  { key: 'ai_call', labelKey: 'usageAiCall' },
+  { key: 'ai_tokens_in', labelKey: 'usageAiTokensIn', optional: true },
+  { key: 'ai_tokens_out', labelKey: 'usageAiTokensOut', optional: true },
+  { key: 'email_sent', labelKey: 'usageEmailSent' },
+  { key: 'newsletter_sent', labelKey: 'usageNewsletterSent' },
+]
+
+function UsageSection() {
+  const t = useTranslations('health')
+  const [state, setState] = useState<SectionState>('loading')
+  const [data, setData] = useState<UsageData | null>(null)
+
+  const load = useCallback(async () => {
+    setState('loading')
+    try {
+      const res = await fetch('/api/admin/usage')
+      if (!res.ok) throw new Error()
+      setData(await res.json())
+      setState('ready')
+    } catch {
+      setState('error')
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const cards = data
+    ? USAGE_METRICS.filter((m) => !m.optional || m.key in (data.metrics ?? {}) || m.key in (data.previous?.metrics ?? {}))
+    : []
+
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mt-6">
+      <div className="flex items-center gap-2 mb-5">
+        <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-950/30 text-purple-500">
+          <BarChart3 size={18} />
+        </div>
+        <div>
+          <h2 className="font-semibold text-sm text-gray-900 dark:text-gray-100">{t('usageTitle')}</h2>
+          <p className="text-xs text-gray-400">{data?.period ? `${data.period} · ${t('usageSubtitle')}` : t('usageSubtitle')}</p>
+        </div>
+      </div>
+
+      {state === 'loading' && <SectionSkeleton />}
+      {state === 'error' && <SectionError onRetry={load} />}
+      {state === 'ready' && data && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {cards.map((m) => {
+            const cur = data.metrics?.[m.key] ?? 0
+            const prev = data.previous?.metrics?.[m.key] ?? 0
+            return (
+              <div key={m.key} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                <p className="text-xs text-gray-500 mb-1">{t(m.labelKey)}</p>
+                <p className="text-2xl font-bold text-gray-800 dark:text-gray-200">{cur.toLocaleString()}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{t('usageLastMonth', { value: prev.toLocaleString() })}</p>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function HealthPage() {
   const t = useTranslations('health')
   const [result, setResult] = useState<HealthResult | null>(null)
@@ -424,6 +770,15 @@ export default function HealthPage() {
 
       {/* Hunter.io section */}
       <HunterSection />
+
+      {/* Cron heartbeat section */}
+      <CronHealthSection />
+
+      {/* Dead letters section */}
+      <DeadLettersSection />
+
+      {/* This month's usage section */}
+      <UsageSection />
     </div>
   )
 }

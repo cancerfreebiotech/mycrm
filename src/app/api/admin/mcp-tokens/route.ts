@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { createHash, randomBytes } from 'node:crypto'
+import { logAdminAction } from '@/lib/adminAudit'
 
 // GET  /api/admin/mcp-tokens         — list all tokens (super_admin)
 // POST /api/admin/mcp-tokens         — create token, returns plaintext ONCE
@@ -17,7 +18,7 @@ async function requireSuperAdmin() {
   const service = createServiceClient()
   const { data: profile } = await service.from('users').select('id, role').eq('email', user.email).single()
   if (profile?.role !== 'super_admin') return null
-  return { id: profile.id as string }
+  return { id: profile.id as string, email: user.email }
 }
 
 export async function GET() {
@@ -77,6 +78,13 @@ export async function POST(req: NextRequest) {
     .select('id, name, prefix, scopes, expires_at')
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  await logAdminAction(service, {
+    actorEmail: admin.email ?? 'unknown',
+    action: 'mcp_token_create',
+    target: data.id,
+    detail: { name: data.name, scopes: data.scopes },
+  })
 
   // Plaintext returned ONCE — never retrievable again
   return NextResponse.json({ token: data, plaintext })

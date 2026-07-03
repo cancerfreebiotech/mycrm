@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { logAdminAction } from '@/lib/adminAudit'
 
 // DELETE /api/contacts/trash/bulk — 批次永久刪除回收區聯絡人（僅 super_admin）
 // Body: { ids: string[] }  OR  { all: true } 清空整個回收區
@@ -71,6 +72,12 @@ export async function DELETE(req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  await logAdminAction(service, {
+    actorEmail: user.email ?? 'unknown',
+    action: 'permanent_delete_bulk',
+    detail: { count: targetIds.length },
+  })
 
   return NextResponse.json({ deleted: targetIds.length })
 }

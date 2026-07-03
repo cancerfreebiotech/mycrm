@@ -12,6 +12,12 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/api/sendgrid') ||
     pathname === '/api/set-locale' ||
     pathname.startsWith('/api/admin/') ||
+    // Vercel cron 與 MCP 請求不帶 session cookie — 這些 route 全部自帶驗證
+    // (CRON_SECRET Bearer / agent token)。先前未放行導致所有 Vercel cron 被
+    // 307 到 /login,handler 從未執行(runtime logs 實證)。
+    pathname.startsWith('/api/cron/') ||
+    pathname === '/api/hunter/cron' ||
+    pathname === '/api/mcp' ||
     pathname.startsWith('/unsubscribe') ||
     // Public unsubscribe / opt-out — external recipients have no session.
     // These are protected server-side by a signed HMAC token, not by login.

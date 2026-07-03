@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { recordCronRun } from '@/lib/cronHeartbeat'
 
 /**
  * Vercel Cron — hourly report-schedule runner.
@@ -71,12 +72,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Supabase env not configured' }, { status: 500 })
   }
 
+  const startMs = Date.now()
   const service = createServiceClient()
   const { data: schedules, error } = await service
     .from('report_schedules')
     .select('id, name, cron_expr, is_active, last_run_at')
     .eq('is_active', true)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    await recordCronRun(service, 'run-report-schedules', 'error', { error: error.message }, Date.now() - startMs)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 
   const now = new Date()
   const due = ((schedules ?? []) as ScheduleRow[]).filter((s) => {
@@ -116,6 +121,13 @@ export async function GET(req: NextRequest) {
   if (failures.length > 0) {
     console.error('[run-report-schedules] failed schedules:', failures.join(', '))
   }
+  await recordCronRun(
+    service,
+    'run-report-schedules',
+    failures.length > 0 ? 'error' : 'ok',
+    { due: due.length, sent, failed: failures.length },
+    Date.now() - startMs,
+  )
   return NextResponse.json({ ok: true, due: due.length, sent, failed: failures.length })
 }
 

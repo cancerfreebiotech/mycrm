@@ -1,0 +1,165 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
+import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { ClipboardList, Loader2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react'
+
+interface AdminAction {
+  id: string
+  actor_email: string
+  action: string
+  target: string | null
+  detail: Record<string, unknown> | null
+  created_at: string
+}
+
+const PAGE_SIZE = 20
+
+export default function AuditLogPage() {
+  const t = useTranslations('adminAuditLog')
+  const router = useRouter()
+  const supabase = createBrowserSupabaseClient()
+  const [rows, setRows] = useState<AdminAction[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [loading, setLoading] = useState(true)
+  const [authChecked, setAuthChecked] = useState(false)
+  const [expanded, setExpanded] = useState<string | null>(null)
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user?.email) { router.push('/'); return }
+      const { data: profile } = await supabase
+        .from('users').select('role').eq('email', user.email).single()
+      if (profile?.role !== 'super_admin') { router.push('/'); return }
+      setAuthChecked(true)
+    })()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const load = async (p: number) => {
+    setLoading(true)
+    const res = await fetch(`/api/admin/audit-log?page=${p}&pageSize=${PAGE_SIZE}`)
+    if (res.ok) {
+      const data = await res.json()
+      setRows((data.rows ?? []) as AdminAction[])
+      setTotal(data.total ?? 0)
+    } else {
+      setRows([])
+      setTotal(0)
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => { if (authChecked) load(page) }, [authChecked, page])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+  const actionLabel = (action: string): string =>
+    t.has(`action.${action}`) ? t(`action.${action}` as string) : action
+
+  if (!authChecked) {
+    return <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-400" /></div>
+  }
+
+  return (
+    <div className="p-6 max-w-6xl mx-auto">
+      <div className="flex items-center gap-3 mb-6">
+        <ClipboardList size={22} className="text-blue-500" />
+        <div className="flex-1">
+          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{t('description')}</p>
+        </div>
+        <button
+          onClick={() => load(page)}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg font-medium disabled:opacity-60"
+        >
+          {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+          {t('refresh')}
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-400" /></div>
+      ) : rows.length === 0 ? (
+        <div className="text-center py-12 text-gray-400">{t('empty')}</div>
+      ) : (
+        <>
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden overflow-x-auto">
+            <table className="w-full text-sm min-w-[680px]">
+              <thead className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
+                <tr>
+                  <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">{t('colTime')}</th>
+                  <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400">{t('colActor')}</th>
+                  <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400">{t('colAction')}</th>
+                  <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400">{t('colTarget')}</th>
+                  <th className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400">{t('colDetail')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const isExpanded = expanded === r.id
+                  return (
+                    <tr key={r.id} className="border-b border-gray-100 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/30 align-top">
+                      <td className="px-3 py-2 text-gray-600 dark:text-gray-400 text-xs whitespace-nowrap">
+                        {new Date(r.created_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+                      </td>
+                      <td className="px-3 py-2 text-gray-900 dark:text-gray-100 text-xs break-all">{r.actor_email}</td>
+                      <td className="px-3 py-2 text-gray-900 dark:text-gray-100">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-xs font-medium">{actionLabel(r.action)}</span>
+                      </td>
+                      <td className="px-3 py-2 text-gray-600 dark:text-gray-400 text-xs font-mono break-all">{r.target ?? '—'}</td>
+                      <td className="px-3 py-2 text-xs">
+                        {r.detail ? (
+                          <>
+                            <button
+                              onClick={() => setExpanded(isExpanded ? null : r.id)}
+                              className="text-blue-600 dark:text-blue-400 hover:underline"
+                            >
+                              {isExpanded ? t('collapse') : t('expand')}
+                            </button>
+                            {isExpanded && (
+                              <pre className="mt-2 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-200 p-2 rounded text-xs whitespace-pre-wrap break-words max-w-2xl overflow-x-auto">{JSON.stringify(r.detail, null, 2)}</pre>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-gray-400 dark:text-gray-500">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex items-center justify-between mt-4">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {t('pageInfo', { page, totalPages, total })}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1 || loading}
+                className="flex items-center gap-1 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg font-medium disabled:opacity-40"
+              >
+                <ChevronLeft size={14} /> {t('prev')}
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages || loading}
+                className="flex items-center gap-1 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg font-medium disabled:opacity-40"
+              >
+                {t('next')} <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}

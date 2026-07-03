@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { logAdminAction } from '@/lib/adminAudit'
 
 // POST /api/admin/email-recovery/apply
 // Body: {
@@ -89,6 +90,13 @@ export async function POST(req: NextRequest) {
       .eq('id', body.merge_from_contact_id)
       .is('deleted_at', null)
   }
+
+  await logAdminAction(service, {
+    actorEmail: user.email ?? 'unknown',
+    action: 'email_recovery_apply',
+    target: body.bad_contact_id,
+    detail: { new_email: newEmail, merge_from_contact_id: body.merge_from_contact_id ?? null },
+  })
 
   return NextResponse.json({ ok: true, contact_id: body.bad_contact_id, new_email: newEmail })
 }

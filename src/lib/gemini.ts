@@ -2,6 +2,7 @@ import Portkey from 'portkey-ai'
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
 import { createServiceClient } from '@/lib/supabase'
 import { getPrompt } from '@/lib/prompts'
+import { recordUsage } from '@/lib/usage'
 
 export interface CardData {
   name: string
@@ -81,6 +82,17 @@ async function portkeyGenerate(
     })
     const raw = result.choices?.[0]?.message?.content
     const text = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw.map((p) => ('text' in p ? p.text : '')).join('') : ''
+    // Usage metering (fire-and-forget). gemini.ts is imported from non-route
+    // contexts (bot webhook, cron worker) too, so build our own service client.
+    // Wrapped so metering can never affect the AI call itself.
+    try {
+      const usage = result.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined
+      void recordUsage(createServiceClient(), {
+        ai_call: 1,
+        ai_tokens_in: usage?.prompt_tokens ?? 0,
+        ai_tokens_out: usage?.completion_tokens ?? 0,
+      })
+    } catch { /* metering must never break the AI call */ }
     return text.trim()
   } catch (err) {
     // Portkey unavailable (401 invalid key, network, misconfig). Fall back to a

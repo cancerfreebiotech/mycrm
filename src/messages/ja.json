@@ -70,7 +70,8 @@
     "themeLight": "ライトモードに切り替え",
     "themeDark": "ダークモードに切り替え",
     "pendingReview": "確認待ち名刺",
-    "myFailedScans": "認識失敗"
+    "myFailedScans": "認識失敗",
+    "auditLog": "監査ログ"
   },
   "auth": {
     "signInWithMicrosoft": "Microsoftアカウントでサインイン",
@@ -1540,7 +1541,37 @@
     "latencyLegend": "遅延インジケーターの説明",
     "latencyNormal": "< 500 ms — 正常",
     "latencySlow": "500–2000 ms — 遅い",
-    "latencyCritical": "> 2000 ms — 異常に遅い"
+    "latencyCritical": "> 2000 ms — 異常に遅い",
+    "retry": "再試行",
+    "loadFailed": "読み込みに失敗しました",
+    "cronTitle": "Cronハートビート",
+    "cronSubtitle": "各定期ジョブの最終実行状況",
+    "cronStatusOk": "正常",
+    "cronStatusError": "異常",
+    "cronStatusOverdue": "遅延",
+    "cronStatusNone": "記録なし",
+    "cronNever": "未実行",
+    "cronDuration": "所要時間",
+    "cronEmpty": "スケジュールされたジョブがありません",
+    "deadLettersTitle": "デッドレター",
+    "deadLettersSubtitle": "処理失敗して再試行待ちの項目",
+    "deadLettersFailed": "{count} 件失敗",
+    "deadLettersRequeue": "再登録",
+    "deadLettersRequeuing": "登録中…",
+    "deadLettersRequeued": "{count} 件を再登録しました",
+    "deadLettersRequeueFailed": "再登録に失敗しました。後でもう一度お試しください",
+    "deadLettersNewsletterHint": "キャンペーンページで送信を続けてください",
+    "deadLettersViewScans": "失敗したスキャンを表示",
+    "deadLettersEmpty": "失敗した項目はありません 🎉",
+    "deadLettersNoError": "エラーメッセージなし",
+    "usageTitle": "今月の使用量",
+    "usageSubtitle": "先月との比較",
+    "usageAiCall": "AI 呼び出し",
+    "usageAiTokensIn": "AI 入力トークン",
+    "usageAiTokensOut": "AI 出力トークン",
+    "usageEmailSent": "メール送信",
+    "usageNewsletterSent": "ニュースレター送信",
+    "usageLastMonth": "先月 {value}"
   },
   "permission": {
     "noPermission": "権限がありません",
@@ -1864,7 +1895,9 @@
     "sentCount": "配信 {count}",
     "duplicateTooltip": "新しい下書きとして複製",
     "open": "開く",
-    "delete": "削除"
+    "delete": "削除",
+    "statusPartial": "一部失敗",
+    "partialHint": "{failed} 名の宛先に送信失敗"
   },
   "newsletterImport": {
     "pageTitle": "Skill からニュースレターをインポート",
@@ -1952,5 +1985,32 @@
     "manualInputLabel": "または手動でメールを入力：",
     "replace": "置換",
     "reloadWithCount": "再読み込み（{count} 件置換済み）"
+  },
+  "adminAuditLog": {
+    "title": "監査ログ",
+    "description": "特権操作の完全な記録",
+    "refresh": "更新",
+    "empty": "監査記録はまだありません",
+    "colTime": "日時",
+    "colActor": "操作者",
+    "colAction": "操作",
+    "colTarget": "対象",
+    "colDetail": "詳細",
+    "expand": "展開",
+    "collapse": "折りたたむ",
+    "prev": "前へ",
+    "next": "次へ",
+    "pageInfo": "{page} / {totalPages} ページ・全 {total} 件",
+    "action": {
+      "reset_mfa": "MFA リセット",
+      "set_telegram_id": "Telegram ID 設定",
+      "maintenance_toggle": "メンテナンスモード切替",
+      "permanent_delete_contact": "連絡先を完全削除",
+      "permanent_delete_bulk": "一括完全削除",
+      "mcp_token_create": "MCP トークン作成",
+      "mcp_token_revoke": "MCP トークン失効",
+      "email_recovery_apply": "メール復旧を適用",
+      "hunter_config_change": "Hunter 設定変更"
+    }
   }
 }

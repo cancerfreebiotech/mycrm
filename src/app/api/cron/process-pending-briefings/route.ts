@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { processPendingBriefings } from '@/lib/social-briefing-worker'
+import { recordCronRun } from '@/lib/cronHeartbeat'
 
 /**
  * Vercel Cron — 每 2 分鐘處理 contact_briefings 佇列（unstick / 補跑沒被背景處理完的）。
@@ -14,12 +15,15 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = createServiceClient()
+  const startMs = Date.now()
   try {
     const result = await processPendingBriefings(supabase)
+    await recordCronRun(supabase, 'process-pending-briefings', 'ok', result, Date.now() - startMs)
     return NextResponse.json({ ok: true, ...result })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[briefing-cron] error', msg)
+    await recordCronRun(supabase, 'process-pending-briefings', 'error', { error: msg }, Date.now() - startMs)
     return NextResponse.json({ ok: false, error: msg }, { status: 500 })
   }
 }

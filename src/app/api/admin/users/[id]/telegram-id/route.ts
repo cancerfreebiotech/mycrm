@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { hasFeature } from '@/lib/features'
+import { logAdminAction } from '@/lib/adminAudit'
 
 // POST /api/admin/users/[id]/telegram-id
 // super_admin updates a teammate's telegram_id. Body: { telegramId: number | null }
@@ -44,5 +45,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .eq('id', targetUserId)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  await logAdminAction(service, {
+    actorEmail: user.email ?? 'unknown',
+    action: 'set_telegram_id',
+    target: targetUserId,
+    detail: { telegramId },
+  })
+
   return NextResponse.json({ ok: true, telegramId })
 }

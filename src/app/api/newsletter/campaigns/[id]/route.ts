@@ -63,7 +63,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     .maybeSingle()
 
   if (!campaign) return NextResponse.json({ error: 'not found' }, { status: 404 })
-  if (campaign.status === 'sent') return NextResponse.json({ error: '已寄送的電子報不可刪除' }, { status: 400 })
+  if (campaign.status === 'sent' || campaign.status === 'partial') return NextResponse.json({ error: '已寄送的電子報不可刪除' }, { status: 400 })
 
   const { error } = await service.from('newsletter_campaigns').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

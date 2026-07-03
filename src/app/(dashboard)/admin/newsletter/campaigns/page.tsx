@@ -16,6 +16,8 @@ interface CampaignRow {
   sent_at: string | null
   sent_count: number | null
   total_recipients: number | null
+  failed_count: number | null
+  send_errors: string[] | null
   published_at: string | null
   created_at: string
   slug: string | null
@@ -93,7 +95,7 @@ export default function CampaignsIndexPage() {
     (async () => {
       const { data } = await supabase
         .from('newsletter_campaigns')
-        .select('id, title, subject, status, sent_at, sent_count, total_recipients, published_at, created_at, slug')
+        .select('id, title, subject, status, sent_at, sent_count, total_recipients, failed_count, send_errors, published_at, created_at, slug')
         .order('created_at', { ascending: false })
         .limit(50)
       const baseRows = (data ?? []) as CampaignRow[]
@@ -211,15 +213,20 @@ export default function CampaignsIndexPage() {
                     <td className="px-4 py-3 text-gray-600 dark:text-gray-400 hidden sm:table-cell truncate max-w-[260px]">{r.subject ?? '—'}</td>
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-1">
-                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full w-fit ${
+                        <span
+                          className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full w-fit ${
                           r.status === 'sent'
                             ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                            : r.status === 'partial'
+                            ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
                             : r.status === 'scheduled'
                             ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
                             : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                        }`}>
+                        }`}
+                          title={r.status === 'partial' ? `${t('partialHint', { failed: r.failed_count ?? 0 })}\n${(r.send_errors ?? []).join('\n')}` : undefined}
+                        >
                           {r.status === 'sent' ? <Send size={10} /> : null}
-                          {r.status}
+                          {r.status === 'partial' ? t('statusPartial') : r.status}
                         </span>
                         {r.published_at && (
                           <span className="inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 w-fit">

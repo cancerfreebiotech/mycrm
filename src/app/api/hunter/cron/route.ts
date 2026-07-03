@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runHunterBatch } from '@/lib/hunter'
+import { createServiceClient } from '@/lib/supabase'
+import { recordCronRun } from '@/lib/cronHeartbeat'
 
 /**
  * Vercel Cron Job — Daily Hunter.io email enrichment for backlog contacts
@@ -21,11 +23,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const result = await runHunterBatch({
-    maxContacts: 50,
-    cooldownDays: 30,
-    remainingBuffer: 5,
-  })
-
-  return NextResponse.json(result)
+  const service = createServiceClient()
+  const startMs = Date.now()
+  try {
+    const result = await runHunterBatch({
+      maxContacts: 50,
+      cooldownDays: 30,
+      remainingBuffer: 5,
+    })
+    await recordCronRun(service, 'hunter-cron', 'ok', result, Date.now() - startMs)
+    return NextResponse.json(result)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    await recordCronRun(service, 'hunter-cron', 'error', { error: msg }, Date.now() - startMs)
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
 }

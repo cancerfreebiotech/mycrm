@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { logAdminAction } from '@/lib/adminAudit'
 
 async function requireSuperAdmin() {
   const supabase = await createClient()
@@ -16,7 +17,7 @@ async function requireSuperAdmin() {
   if (profile?.role !== 'super_admin') {
     return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
   }
-  return { service, profileId: profile.id }
+  return { service, profileId: profile.id, actorEmail: user.email }
 }
 
 export async function GET() {
@@ -60,6 +61,12 @@ export async function POST(req: Request) {
     .eq('key', 'maintenance_mode')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  await logAdminAction(auth.service, {
+    actorEmail: auth.actorEmail ?? 'unknown',
+    action: 'maintenance_toggle',
+    detail: { enabled: body.enabled },
+  })
 
   return NextResponse.json({ ok: true, enabled: body.enabled })
 }

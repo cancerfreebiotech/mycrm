@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { processPendingBatchAcrossUsers } from '@/lib/pending-ocr-worker'
+import { recordCronRun } from '@/lib/cronHeartbeat'
 
 /**
  * Vercel Cron — every 2 minutes, rescue any pending_contacts rows that the
@@ -19,12 +20,15 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = createServiceClient()
+  const startMs = Date.now()
   try {
     const result = await processPendingBatchAcrossUsers(supabase)
+    await recordCronRun(supabase, 'process-pending-ocr', 'ok', result, Date.now() - startMs)
     return NextResponse.json({ ok: true, ...result })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[pending-ocr-cron] error', msg)
+    await recordCronRun(supabase, 'process-pending-ocr', 'error', { error: msg }, Date.now() - startMs)
     return NextResponse.json({ ok: false, error: msg }, { status: 500 })
   }
 }
