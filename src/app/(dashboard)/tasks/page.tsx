@@ -117,6 +117,13 @@ export default function TasksPage() {
     setShowModal(true)
   }
 
+  // Shared handling: 401 → login, non-ok → translated alert, network error → alert.
+  async function taskFetch(res: Response): Promise<boolean> {
+    if (res.status === 401) { window.location.href = '/login'; return false }
+    if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error ?? tc('error')); return false }
+    return true
+  }
+
   async function handleSave() {
     setSaving(true)
     const payload = {
@@ -125,52 +132,69 @@ export default function TasksPage() {
       due_at: form.due_at ? new Date(form.due_at).toISOString() : null,
       assignee_emails: form.assignee_emails,
     }
-
-    if (editingTask) {
-      await fetch(`/api/tasks/${editingTask.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: payload.title, description: payload.description, due_at: payload.due_at }),
-      })
-    } else {
-      await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
+    try {
+      const res = editingTask
+        ? await fetch(`/api/tasks/${editingTask.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: payload.title, description: payload.description, due_at: payload.due_at }),
+          })
+        : await fetch('/api/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+      if (!(await taskFetch(res))) return  // keep modal open so edits aren't lost
+      setShowModal(false)
+      loadTasks()
+    } catch {
+      alert(tc('error'))
+    } finally {
+      setSaving(false)
     }
-
-    setSaving(false)
-    setShowModal(false)
-    loadTasks()
   }
 
   async function handleStatusChange(id: string, status: TaskStatus) {
     if (status === 'cancelled' && !confirm(t('confirmCancel'))) return
-    await fetch(`/api/tasks/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    })
-    loadTasks()
+    try {
+      const res = await fetch(`/api/tasks/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (!(await taskFetch(res))) return
+      loadTasks()
+    } catch {
+      alert(tc('error'))
+    }
   }
 
   async function handlePostponeSave() {
     if (!postponeId || !postponeDate) return
-    await fetch(`/api/tasks/${postponeId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'postponed', due_at: new Date(postponeDate).toISOString() }),
-    })
-    setPostponeId(null)
-    setPostponeDate('')
-    loadTasks()
+    try {
+      const res = await fetch(`/api/tasks/${postponeId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'postponed', due_at: new Date(postponeDate).toISOString() }),
+      })
+      if (!(await taskFetch(res))) return
+      setPostponeId(null)
+      setPostponeDate('')
+      loadTasks()
+    } catch {
+      alert(tc('error'))
+    }
   }
 
   async function handleDelete(id: string) {
     if (!confirm(tc('confirm') + '？')) return
-    await fetch(`/api/tasks/${id}`, { method: 'DELETE' })
-    loadTasks()
+    try {
+      const res = await fetch(`/api/tasks/${id}`, { method: 'DELETE' })
+      if (!(await taskFetch(res))) return
+      loadTasks()
+    } catch {
+      alert(tc('error'))
+    }
   }
 
   const filtered = tasks.filter(t =>

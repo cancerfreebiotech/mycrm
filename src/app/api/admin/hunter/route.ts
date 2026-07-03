@@ -1,9 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { createClient, createServiceClient } from '@/lib/supabase'
 import { runHunterBatch } from '@/lib/hunter'
+
+// /api/admin/* is exempted from the auth middleware (src/middleware.ts), so every
+// handler here MUST self-guard. Super-admin only. Returns a response on denial, else null.
+async function requireSuperAdmin() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const service = createServiceClient()
+  const { data: profile } = await service.from('users').select('role').eq('email', user.email).single()
+  if (profile?.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  return null
+}
 
 // GET — stats + api key presence
 export async function GET() {
+  const denied = await requireSuperAdmin(); if (denied) return denied
   const supabase = createServiceClient()
 
   const now = new Date()
@@ -71,6 +84,7 @@ export async function GET() {
 
 // PATCH — save API key
 export async function PATCH(req: NextRequest) {
+  const denied = await requireSuperAdmin(); if (denied) return denied
   const { apiKey } = await req.json()
   const supabase = createServiceClient()
 
@@ -85,6 +99,7 @@ export async function PATCH(req: NextRequest) {
 
 // POST — trigger Hunter Email Finder batch (up to 100 contacts per call)
 export async function POST() {
+  const denied = await requireSuperAdmin(); if (denied) return denied
   const result = await runHunterBatch({ maxContacts: 100 })
   if (result.skipped && result.skipReason === 'no_api_key') {
     return NextResponse.json({ error: 'no_api_key' }, { status: 400 })
@@ -94,6 +109,7 @@ export async function POST() {
 
 // DELETE — reset hunter_searched_at for all contacts without email
 export async function DELETE() {
+  const denied = await requireSuperAdmin(); if (denied) return denied
   const supabase = createServiceClient()
   // select('id') on an update returns the affected rows — row count is data.length.
   const { data, error } = await supabase

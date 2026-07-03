@@ -127,21 +127,30 @@ export async function POST(req: NextRequest) {
 
   // ── action='commit': read cached preview, INSERT campaigns, mark drafts used
   if (action === 'commit') {
-    const { data: cached, error: cacheErr } = await service
+    // Atomically CLAIM the freshest recent cache row (delete-returning) so two
+    // concurrent commits can't both insert campaigns from the same preview.
+    const { data: claimedRows, error: cacheErr } = await service
       .from('newsletter_compose_cache')
-      .select('id, payload, created_at')
+      .delete()
       .eq('period', period)
       .gt('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())  // < 30 min old
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+      .select('id, payload, created_at')
     if (cacheErr) return NextResponse.json({ error: cacheErr.message }, { status: 500 })
+    const cached = (claimedRows ?? []).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0]
     if (!cached) {
       return NextResponse.json({ error: 'No recent preview to commit. Run preview first.' }, { status: 409 })
     }
     const payload = cached.payload as {
       story_ids: string[]
       preview: Record<Lang, { html: string; subject: string; promo: string }>
+    }
+    // Re-check the drafts: refuse to commit if any story was deleted or removed
+    // since the preview (otherwise deleted content ships and its status flips to used).
+    const { data: liveDrafts } = await service
+      .from('newsletter_drafts').select('id, status').in('id', payload.story_ids)
+    const liveOk = new Set((liveDrafts ?? []).filter((d) => d.status !== 'deleted').map((d) => d.id as string))
+    if (payload.story_ids.some((id) => !liveOk.has(id))) {
+      return NextResponse.json({ error: 'Some stories were deleted or changed since the preview — re-generate before committing.' }, { status: 409 })
     }
     const langs: Lang[] = ['zh-TW', 'en', 'ja']
     const rows = langs.map((lang) => ({
@@ -155,8 +164,9 @@ export async function POST(req: NextRequest) {
     const { data: created, error: insErr } = await service
       .from('newsletter_campaigns').insert(rows).select('id, title')
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
-    await service.from('newsletter_drafts').update({ status: 'used' }).in('id', payload.story_ids)
-    await service.from('newsletter_compose_cache').delete().eq('id', cached.id)
+    const { error: usedErr } = await service
+      .from('newsletter_drafts').update({ status: 'used' }).in('id', payload.story_ids).neq('status', 'deleted')
+    if (usedErr) console.error('[compose commit] mark-used failed:', usedErr.message)
     return NextResponse.json({ campaigns: created, story_count: payload.story_ids.length })
   }
 

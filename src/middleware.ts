@@ -13,6 +13,11 @@ export async function middleware(request: NextRequest) {
     pathname === '/api/set-locale' ||
     pathname.startsWith('/api/admin/') ||
     pathname.startsWith('/unsubscribe') ||
+    // Public unsubscribe / opt-out — external recipients have no session.
+    // These are protected server-side by a signed HMAC token, not by login.
+    pathname.startsWith('/api/newsletter/unsubscribe') ||
+    pathname.startsWith('/email-optout') ||
+    pathname.startsWith('/api/email/optout') ||
     // Public newsletter assets — Substack RSS importer + Import-from-URL
     // both need to fetch these without authentication. Plus the read-only
     // public newsletter view (/newsletter/view/[slug]) so subscribers can

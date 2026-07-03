@@ -10,11 +10,41 @@
  * so the bot can resolve aadObjectId → email automatically on first message.
  */
 import { NextRequest, NextResponse } from 'next/server'
+import { createPublicKey, createVerify } from 'crypto'
 import { createServiceClient } from '@/lib/supabase'
 import { parseMeetingCommand } from '@/lib/gemini'
 import { createCalendarEvent } from '@/lib/graph'
 import { getValidProviderToken } from '@/lib/graph-server'
 import { sendTeamsMeetingConfirmCard } from '@/lib/teams'
+
+// ── Bot Framework JWT validation ────────────────────────────────────────────
+// Inbound Teams/Bot-Connector requests carry an RS256 JWT signed by keys the Bot
+// Framework publishes at its OpenID metadata endpoint. We verify the SIGNATURE
+// against that JWKS plus issuer / audience (== our bot app id) / exp / nbf. The
+// previous check only base64-decoded the (unsigned) payload and trusted `aud`,
+// which anyone knowing the public app id could forge to drive the bot.
+const BF_OPENID_CONFIG = 'https://login.botframework.com/v1/.well-known/openidconfiguration'
+const CLOCK_SKEW_MS = 5 * 60 * 1000
+const JWKS_TTL_MS = 12 * 60 * 60 * 1000  // Bot Framework rotates signing keys ~daily
+
+interface Jwk { kid?: string; kty?: string; n?: string; e?: string; [k: string]: unknown }
+let jwksCache: { keys: Jwk[]; issuer: string; fetchedAt: number } | null = null
+
+async function getBotFrameworkKeys(nowMs: number): Promise<{ keys: Jwk[]; issuer: string }> {
+  if (jwksCache && nowMs - jwksCache.fetchedAt < JWKS_TTL_MS) return jwksCache
+  const cfgRes = await fetch(BF_OPENID_CONFIG)
+  if (!cfgRes.ok) throw new Error(`openid config HTTP ${cfgRes.status}`)
+  const cfg = (await cfgRes.json()) as { jwks_uri: string; issuer: string }
+  const jwksRes = await fetch(cfg.jwks_uri)
+  if (!jwksRes.ok) throw new Error(`jwks HTTP ${jwksRes.status}`)
+  const jwks = (await jwksRes.json()) as { keys: Jwk[] }
+  jwksCache = { keys: jwks.keys ?? [], issuer: cfg.issuer, fetchedAt: nowMs }
+  return jwksCache
+}
+
+function decodeJwtPart(part: string): Record<string, unknown> {
+  return JSON.parse(Buffer.from(part, 'base64url').toString())
+}
 
 async function verifyTeamsRequest(req: NextRequest): Promise<boolean> {
   const appId = process.env.TEAMS_BOT_APP_ID
@@ -22,11 +52,29 @@ async function verifyTeamsRequest(req: NextRequest): Promise<boolean> {
   const authHeader = req.headers.get('authorization') ?? ''
   if (!authHeader.startsWith('Bearer ')) return false
   const token = authHeader.slice(7)
-  if (!token || token.split('.').length !== 3) return false
+  const parts = token.split('.')
+  if (parts.length !== 3) return false
   try {
-    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString())
-    return payload.aud === appId || payload.appid === appId
-  } catch {
+    const header = decodeJwtPart(parts[0]) as { alg?: string; kid?: string }
+    const payload = decodeJwtPart(parts[1]) as { aud?: string; iss?: string; exp?: number; nbf?: number }
+    // Pin algorithm to RS256 — blocks `none`/HS256 alg-confusion attacks.
+    if (header.alg !== 'RS256' || !header.kid) return false
+    // Cheap claim rejects before crypto.
+    if (payload.aud !== appId) return false
+    const now = Date.now()
+    if (typeof payload.exp === 'number' && now > payload.exp * 1000 + CLOCK_SKEW_MS) return false
+    if (typeof payload.nbf === 'number' && now < payload.nbf * 1000 - CLOCK_SKEW_MS) return false
+    const { keys, issuer } = await getBotFrameworkKeys(now)
+    if (payload.iss !== issuer) return false
+    const jwk = keys.find((k) => k.kid === header.kid)
+    if (!jwk) return false
+    const pubKey = createPublicKey({ key: jwk as JsonWebKey, format: 'jwk' })
+    const verifier = createVerify('RSA-SHA256')
+    verifier.update(`${parts[0]}.${parts[1]}`)
+    verifier.end()
+    return verifier.verify(pubKey, Buffer.from(parts[2], 'base64url'))
+  } catch (e) {
+    console.error('[teams-bot] verifyTeamsRequest error:', e)
     return false
   }
 }

@@ -48,13 +48,13 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ deleted: 0 })
   }
 
-  // 收集要刪的 Storage 圖片
-  const { data: cards } = await service
-    .from('contact_cards')
-    .select('storage_path')
-    .in('contact_id', targetIds)
+  // 收集要刪的 Storage 圖片（contact_cards + contact_photos，兩者皆存於 'cards' bucket）
+  const [{ data: cards }, { data: photos }] = await Promise.all([
+    service.from('contact_cards').select('storage_path').in('contact_id', targetIds),
+    service.from('contact_photos').select('storage_path').in('contact_id', targetIds),
+  ])
 
-  const paths = (cards ?? [])
+  const paths = [...(cards ?? []), ...(photos ?? [])]
     .map((c: { storage_path: string | null }) => c.storage_path)
     .filter(Boolean) as string[]
 

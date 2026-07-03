@@ -38,13 +38,13 @@ export async function DELETE(
     return NextResponse.json({ error: 'Contact not found in trash' }, { status: 404 })
   }
 
-  // 刪除 Storage 圖片（contact_cards）
-  const { data: cards } = await service
-    .from('contact_cards')
-    .select('storage_path')
-    .eq('contact_id', id)
+  // 刪除 Storage 圖片（contact_cards + contact_photos，兩者皆存於 'cards' bucket）
+  const [{ data: cards }, { data: photos }] = await Promise.all([
+    service.from('contact_cards').select('storage_path').eq('contact_id', id),
+    service.from('contact_photos').select('storage_path').eq('contact_id', id),
+  ])
 
-  const paths = (cards ?? [])
+  const paths = [...(cards ?? []), ...(photos ?? [])]
     .map((c: { storage_path: string | null }) => c.storage_path)
     .filter(Boolean) as string[]
 

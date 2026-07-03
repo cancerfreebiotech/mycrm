@@ -1606,6 +1606,7 @@
     "statPending": "待處理",
     "statPendingTitle": "暫時錯誤 / 信箱滿 / 寄件方問題 / 收件方擋信",
     "statUnsubscribed": "已退訂",
+    "statusUnsubscribed": "已退訂",
     "searchPlaceholder": "搜尋 email、姓名、聯絡人名...",
     "filterStatusAll": "全部狀態",
     "statusActive": "訂閱中",

@@ -203,26 +203,36 @@ export default function CamcardPage() {
     const allCards = groups.flatMap((g) => g.cards)
     if (allCards.length === 0) return
     setApplyingBatch(true)
-    for (const card of allCards) {
-      const newOcr: Record<string, string | null> = { ...(card.ocr_data ?? {}) }
-      if (batchMetAt.trim()) newOcr.met_at = batchMetAt.trim()
-      if (batchMetDate) newOcr.met_date = batchMetDate
-      await fetch(`/api/camcard/${card.id}/update`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ocr_data: newOcr }),
-      })
-    }
-    setGroups((prev) => prev.map((g) => ({
-      ...g,
-      cards: g.cards.map((c) => {
-        const newOcr: Record<string, string | null> = { ...(c.ocr_data ?? {}) }
+    const succeeded = new Set<string>()
+    try {
+      for (const card of allCards) {
+        const newOcr: Record<string, string | null> = { ...(card.ocr_data ?? {}) }
         if (batchMetAt.trim()) newOcr.met_at = batchMetAt.trim()
         if (batchMetDate) newOcr.met_date = batchMetDate
-        return { ...c, ocr_data: newOcr }
-      }),
-    })))
-    setApplyingBatch(false)
+        try {
+          const res = await fetch(`/api/camcard/${card.id}/update`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ocr_data: newOcr }),
+          })
+          if (res.ok) succeeded.add(card.id)
+        } catch { /* leave this card un-applied */ }
+      }
+      // Only reflect cards whose PUT actually succeeded, so the UI matches the DB.
+      setGroups((prev) => prev.map((g) => ({
+        ...g,
+        cards: g.cards.map((c) => {
+          if (!succeeded.has(c.id)) return c
+          const newOcr: Record<string, string | null> = { ...(c.ocr_data ?? {}) }
+          if (batchMetAt.trim()) newOcr.met_at = batchMetAt.trim()
+          if (batchMetDate) newOcr.met_date = batchMetDate
+          return { ...c, ocr_data: newOcr }
+        }),
+      })))
+      if (succeeded.size < allCards.length) alert(tc('error'))
+    } finally {
+      setApplyingBatch(false)
+    }
   }
 
   async function bulkAssign(label: string | null) {

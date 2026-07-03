@@ -244,7 +244,14 @@ export default function EmailComposePage() {
         })
       }
 
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        // Show the API error instead of crashing the render (result.errors.length
+        // on an {error}-only payload). Keep sessionStorage so recipients aren't lost.
+        setResult({ ok: false, method: '', sent: 0, emailCount: 0, errors: [data.error ?? t('sentFailed')] })
+        setSent(true)
+        return
+      }
       setResult(data)
       setSent(true)
       sessionStorage.removeItem('emailRecipients')

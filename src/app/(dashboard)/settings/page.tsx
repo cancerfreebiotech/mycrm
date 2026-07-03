@@ -221,13 +221,16 @@ export default function SettingsPage() {
 
   async function loadEmailPrompt() {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user?.id) return
+    if (!user?.email) return
+    // user_prompts.user_id is public.users.id (FK), NOT the auth uid — resolve by email.
+    const { data: profile } = await supabase.from('users').select('id').eq('email', user.email).single()
+    if (!profile) return
     const { data } = await supabase
       .from('user_prompts')
       .select('content')
-      .eq('user_id', user.id)
+      .eq('user_id', profile.id)
       .eq('key', 'email_generate')
-      .single()
+      .maybeSingle()
     const content = data?.content ?? ''
     setEmailPrompt(content)
     setSavedEmailPrompt(content)
@@ -236,18 +239,19 @@ export default function SettingsPage() {
   async function handleSaveEmailPrompt() {
     setSavingEmailPrompt(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user?.id) { setSavingEmailPrompt(false); return }
+    if (!user?.email) { setSavingEmailPrompt(false); return }
+    const { data: profile } = await supabase.from('users').select('id').eq('email', user.email).single()
+    if (!profile) { setSavingEmailPrompt(false); alert(tc('error')); return }
     const content = emailPrompt.trim()
-    if (content === '') {
-      await supabase.from('user_prompts').delete().eq('user_id', user.id).eq('key', 'email_generate')
-    } else {
-      await supabase.from('user_prompts').upsert(
-        { user_id: user.id, key: 'email_generate', content },
-        { onConflict: 'user_id,key' }
-      )
-    }
-    setSavedEmailPrompt(content)
+    const { error: err } = content === ''
+      ? await supabase.from('user_prompts').delete().eq('user_id', profile.id).eq('key', 'email_generate')
+      : await supabase.from('user_prompts').upsert(
+          { user_id: profile.id, key: 'email_generate', content },
+          { onConflict: 'user_id,key' }
+        )
     setSavingEmailPrompt(false)
+    if (err) { alert(err.message); return }
+    setSavedEmailPrompt(content)
     setSavedEmailPromptFlag(true)
     setTimeout(() => setSavedEmailPromptFlag(false), 2000)
   }

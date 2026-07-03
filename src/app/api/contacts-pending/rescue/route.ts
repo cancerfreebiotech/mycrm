@@ -17,12 +17,16 @@ export async function POST() {
     .single()
   if (!u?.id) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-  // Also flip rows stuck in 'processing' (worker died mid-OCR) back to pending
+  // Also flip rows STUCK in 'processing' (worker died mid-OCR) back to pending.
+  // Age-gate on claim time (processed_at) so a rescue click can't reset a row a
+  // worker just claimed seconds ago → that would itself cause double-processing.
+  const stuckCutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString()
   await service
     .from('pending_contacts')
     .update({ status: 'pending' })
     .eq('created_by', u.id)
     .eq('status', 'processing')
+    .or(`processed_at.is.null,processed_at.lt.${stuckCutoff}`)
 
   const { count } = await service
     .from('pending_contacts')

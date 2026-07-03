@@ -40,10 +40,13 @@ export async function processOnePending(
     return { ok: false, error: 'no storage_path' }
   }
 
-  // Optimistic mark to prevent double-processing
+  // Optimistic mark to prevent double-processing. Stamp processed_at at CLAIM
+  // time so the stuck-row unstick can key off "how long since claimed" — NOT
+  // created_at (immutable), which would re-rescue any row older than the cutoff
+  // on every run and cause genuine double-processing of the backlog.
   const { error: claimErr, data: claimed } = await supabase
     .from('pending_contacts')
-    .update({ status: 'processing' })
+    .update({ status: 'processing', processed_at: new Date().toISOString() })
     .eq('id', row.id)
     .eq('status', 'pending')
     .select('id')
@@ -138,6 +141,7 @@ export async function processOnePending(
         processed_at: new Date().toISOString(),
       })
       .eq('id', row.id)
+      .eq('status', 'processing')  // only if still OUR claim (not unstuck + re-claimed)
 
     return { ok: true }
   } catch (err) {
@@ -152,6 +156,7 @@ export async function processOnePending(
         error_message: msg.slice(0, 500),
       })
       .eq('id', row.id)
+      .eq('status', 'processing')  // only if still OUR claim (not unstuck + re-claimed)
     return { ok: false, error: msg }
   }
 }
@@ -252,7 +257,10 @@ export async function processPendingBatchAcrossUsers(
     .from('pending_contacts')
     .update({ status: 'pending' })
     .eq('status', 'processing')
-    .lt('created_at', stuckCutoff)
+    // key off claim time (processed_at), not created_at — created_at is immutable
+    // so it would re-rescue any backlog row >10min old every run. Null-guard the
+    // few legacy rows claimed before processed_at was stamped at claim time.
+    .or(`processed_at.is.null,processed_at.lt.${stuckCutoff}`)
     .select('id')
   const unstuck = (stuckRows ?? []).length
   if (unstuck > 0) console.warn('[pending-ocr-cron] unstuck', unstuck, 'rows from processing → pending')

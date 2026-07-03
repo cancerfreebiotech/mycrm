@@ -28,9 +28,16 @@ export default function MyFailedScansPage() {
   const [bulkBusy, setBulkBusy] = useState(false)
 
   const fetchRows = useCallback(async () => {
+    // Scope to the current user's own scans. RLS SELECT on failed_scans is still
+    // permissive, so filter here so "My failed scans" doesn't list everyone's.
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user?.email) { setLoading(false); return }
+    const { data: profile } = await supabase.from('users').select('id').eq('email', user.email).single()
+    if (!profile) { setLoading(false); return }
     const { data } = await supabase
       .from('failed_scans')
       .select('id, storage_path, card_img_url, created_at')
+      .eq('user_id', profile.id)
       .order('created_at', { ascending: false })
     setRows((data as unknown as FailedScan[]) ?? [])
     setLoading(false)
@@ -55,10 +62,16 @@ export default function MyFailedScansPage() {
   async function deleteRow(row: FailedScan) {
     if (!confirm(t('deleteConfirm'))) return
     setBusyId(row.id)
-    if (row.storage_path) {
-      await supabase.storage.from('cards').remove([row.storage_path])
+    // Delete the DB row FIRST and confirm it was actually ours (RLS may silently
+    // block another user's row → 0 rows). Only then remove the image, so we never
+    // destroy a file we couldn't delete the record for.
+    const { data: del, error } = await supabase.from('failed_scans').delete().eq('id', row.id).select('id')
+    if (error || !del || del.length === 0) {
+      setBusyId(null)
+      alert(tc('error'))
+      return
     }
-    await supabase.from('failed_scans').delete().eq('id', row.id)
+    if (row.storage_path) await supabase.storage.from('cards').remove([row.storage_path])
     setBusyId(null)
     setRows((prev) => prev.filter((r) => r.id !== row.id))
     setSelected((prev) => {
@@ -73,13 +86,14 @@ export default function MyFailedScansPage() {
     if (!confirm(t('bulkDeleteConfirm', { count: selected.size }))) return
     setBulkBusy(true)
     const ids = Array.from(selected)
-    const targets = rows.filter((r) => selected.has(r.id))
-    const paths = targets.map((r) => r.storage_path).filter(Boolean) as string[]
-    if (paths.length > 0) {
-      await supabase.storage.from('cards').remove(paths)
-    }
-    await supabase.from('failed_scans').delete().in('id', ids)
-    setRows((prev) => prev.filter((r) => !selected.has(r.id)))
+    // Delete DB rows first; only remove the storage objects for rows that were
+    // actually deleted (returned by .select), never for rows RLS blocked.
+    const { data: del, error } = await supabase.from('failed_scans').delete().in('id', ids).select('id, storage_path')
+    if (error) { setBulkBusy(false); alert(tc('error')); return }
+    const deletedIds = new Set((del ?? []).map((r) => r.id as string))
+    const paths = (del ?? []).map((r) => (r as { storage_path: string | null }).storage_path).filter(Boolean) as string[]
+    if (paths.length > 0) await supabase.storage.from('cards').remove(paths)
+    setRows((prev) => prev.filter((r) => !deletedIds.has(r.id)))
     setSelected(new Set())
     setBulkBusy(false)
   }

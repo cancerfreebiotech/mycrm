@@ -1606,6 +1606,7 @@
     "statPending": "Pending",
     "statPendingTitle": "Temporary error / mailbox full / sender issue / recipient blocked",
     "statUnsubscribed": "Unsubscribed",
+    "statusUnsubscribed": "Unsubscribed",
     "searchPlaceholder": "Search email, name, contact name...",
     "filterStatusAll": "All statuses",
     "statusActive": "Subscribed",

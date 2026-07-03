@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { createClient, createServiceClient } from '@/lib/supabase'
 
 const SG_BASE = 'https://api.sendgrid.com/v3'
 const PAGE_SIZE = 500
@@ -288,6 +288,14 @@ async function runImport() {
  *   3. Creates system interaction logs for matched CRM contacts
  */
 export async function POST() {
+  // /api/sendgrid/* is exempted from the auth middleware, so guard the manual
+  // (dashboard) trigger with a super-admin session check. The GET/cron path uses CRON_SECRET.
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const service = createServiceClient()
+  const { data: profile } = await service.from('users').select('role').eq('email', user.email).single()
+  if (profile?.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   return runImport()
 }
 

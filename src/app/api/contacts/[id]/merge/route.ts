@@ -99,16 +99,20 @@ export async function POST(
   // 6. Move email_events from source to keep
   await supabase.from('email_events').update({ contact_id: keepId }).eq('contact_id', sourceId)
 
-  // 7. Move newsletter tables (skip rows that already exist for keep)
+  // 7. Move newsletter tables to keep by re-pointing contact_id. (Previously an
+  //    upsert-with-source-PK + delete, which hit ON CONFLICT DO NOTHING and
+  //    silently DELETED the rows instead of moving them → unsubscribed/bounced
+  //    contacts became re-mailable.) Safe: these tables' uniqueness is on email
+  //    (unchanged here), and none is unique on contact_id.
   for (const table of ['newsletter_blacklist', 'newsletter_recipients', 'newsletter_unsubscribes'] as const) {
-    const { data: sourceRows } = await supabase.from(table).select('*').eq('contact_id', sourceId)
-    if (sourceRows && sourceRows.length > 0) {
-      await supabase.from(table).upsert(
-        sourceRows.map((r) => ({ ...r, contact_id: keepId })),
-        { ignoreDuplicates: true }
-      )
-      await supabase.from(table).delete().eq('contact_id', sourceId)
-    }
+    await supabase.from(table).update({ contact_id: keepId }).eq('contact_id', sourceId)
+  }
+
+  // 7b. Move the source's AI briefings, face embeddings, and newsletter-subscriber
+  //     link to keep BEFORE the delete — otherwise the contact delete CASCADE-drops
+  //     briefings/embeddings and NULLs the subscriber link (losing email suppression).
+  for (const table of ['contact_briefings', 'face_embeddings', 'newsletter_subscribers'] as const) {
+    await supabase.from(table).update({ contact_id: keepId }).eq('contact_id', sourceId)
   }
 
   // 8. Merge contact_tags (union — upsert ignores conflicts)

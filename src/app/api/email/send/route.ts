@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { createClient, createServiceClient } from '@/lib/supabase'
 import { getValidProviderToken } from '@/lib/graph-server'
 import { sendMail } from '@/lib/graph'
 import { generateOptOutToken } from '@/lib/email-optout'
@@ -97,13 +97,21 @@ export async function POST(req: NextRequest) {
     body = (await req.json()) as SendBody
   }
 
-  const { contactIds, subject, bodyHtml, cc, replyTo, userId, sgMode = 'individual', outlookMode = 'bcc', selfEmail } = body
+  const { contactIds, subject, bodyHtml, cc, replyTo, sgMode = 'individual', outlookMode = 'bcc', selfEmail } = body
+
+  const supabase = createServiceClient()
+
+  // Derive the sender from the session — never trust body.userId, or any logged-in
+  // user could send from a teammate's Outlook mailbox and forge attribution.
+  const authClient = await createClient()
+  const { data: { user: authUser } } = await authClient.auth.getUser()
+  if (!authUser?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: senderProfile } = await supabase.from('users').select('id').ilike('email', authUser.email).maybeSingle()
+  const userId = senderProfile?.id
 
   if (!contactIds?.length || !subject?.trim() || !bodyHtml?.trim() || !userId) {
     return NextResponse.json({ error: '缺少必要欄位' }, { status: 400 })
   }
-
-  const supabase = createServiceClient()
 
   // Fetch contacts in batches — `.in('id', [...uuids])` URL param breaks
   // around 200 uuids (~32 KB). SendGrid mode supports up to thousands.
@@ -165,6 +173,9 @@ export async function POST(req: NextRequest) {
   const emails = valid.map(c => c.email!.trim())
   let method: 'outlook' | 'sendgrid'
   let sentCount = 0
+  // Contacts the provider actually accepted (per successful batch). Used for logs +
+  // the confirmation email so a failed batch doesn't attribute sends to the wrong people.
+  const sentContacts: typeof valid = []
   const errors: string[] = []
 
   // Use client-chosen method, fallback to auto-detect by count
@@ -211,6 +222,7 @@ export async function POST(req: NextRequest) {
         })) : undefined,
       })
       sentCount = valid.length
+      sentContacts.push(...valid)
     } catch (e) {
       errors.push(e instanceof Error ? e.message : String(e))
     }
@@ -259,6 +271,7 @@ export async function POST(req: NextRequest) {
         })
         if (res.ok || res.status === 202) {
           sentCount = valid.length
+          sentContacts.push(...valid)
         } else {
           const err = await res.json().catch(() => ({}))
           errors.push(`SendGrid BCC: ${JSON.stringify(err)}`)
@@ -321,6 +334,7 @@ export async function POST(req: NextRequest) {
           })
           if (res.ok || res.status === 202) {
             sentCount += batch.length
+            sentContacts.push(...batch)
           } else {
             const err = await res.json().catch(() => ({}))
             errors.push(`SendGrid batch ${i}: ${JSON.stringify(err)}`)
@@ -368,10 +382,10 @@ export async function POST(req: NextRequest) {
         const { data: senderData } = await supabase.from('users').select('email').eq('id', userId).single()
         const senderEmail = senderData?.email
         if (senderEmail) {
-          const selfSent = selfEmail && sentCount > valid.length
+          const selfSent = selfEmail && sentCount > sentContacts.length
           const confirmRecipients = selfSent
-            ? [...valid, { name: '我', email: selfEmail!, company: null }]
-            : valid
+            ? [...sentContacts, { name: '我', email: selfEmail!, company: null }]
+            : sentContacts
           const confirmHtml = buildConfirmationHtml(subject, sentCount, confirmRecipients, bodyHtml, sgMode)
           await fetch(SG_SEND_URL, {
             method: 'POST',
@@ -395,7 +409,7 @@ export async function POST(req: NextRequest) {
     const logLabel = method === 'outlook'
       ? (outlookMode === 'to' ? 'Outlook TO' : 'Outlook BCC')
       : sgMode === 'bcc' ? 'SendGrid BCC' : 'SendGrid 個人化'
-    const logRows = valid.slice(0, sentCount).map(c => ({
+    const logRows = sentContacts.map(c => ({
       contact_id: c.id,
       type: 'email' as const,
       direction: 'outbound' as const,

@@ -46,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const userId = me?.id ?? null
 
   // Optional: allow overrides in body (testOnly flag to send only to self)
-  const body = (await req.json().catch(() => ({}))) as { testOnly?: boolean; testEmail?: string }
+  const body = (await req.json().catch(() => ({}))) as { testOnly?: boolean; testEmail?: string; resend?: boolean }
 
   const { data: campaign } = await service
     .from('newsletter_campaigns')
@@ -56,6 +56,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!campaign) return NextResponse.json({ error: 'campaign not found' }, { status: 404 })
   if (!campaign.subject || !campaign.content_html) {
     return NextResponse.json({ error: 'campaign missing subject or content_html' }, { status: 400 })
+  }
+  // Guard against accidental re-send: a completed send stamps sent_at. Require an
+  // explicit resend flag to send again. (People already sent are skipped below
+  // regardless, so even a resend only reaches those who haven't received it.)
+  if (!body.testOnly && campaign.sent_at && !body.resend) {
+    return NextResponse.json({ error: 'campaign already sent — pass resend:true to send again', sent_at: campaign.sent_at }, { status: 409 })
   }
 
   const sgKey = process.env.SENDGRID_API_KEY
@@ -169,6 +175,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return true
     })
 
+    // Resume-safe dedup: exclude anyone who already has a 'sent' recipient row
+    // for this campaign, so a re-send or a retry after a mid-loop timeout never
+    // emails the same person twice.
+    const alreadySent = await chunkedIn<{ email: string }>(
+      'newsletter_recipients', 'email', 'email',
+      [...new Set(recipients.map((r) => r.email.toLowerCase().trim()))],
+      (q) => q.eq('campaign_id', campaignId).eq('status', 'sent')
+    )
+    if (alreadySent.length > 0) {
+      const sentSet = new Set(alreadySent.map((r) => r.email.toLowerCase().trim()))
+      recipients = recipients.filter((r) => !sentSet.has(r.email.toLowerCase().trim()))
+    }
+
     if (invalidEmails.length > 0) {
       console.warn('[newsletter send] dropped invalid emails', invalidEmails)
     }
@@ -198,6 +217,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // click events → the webhook attributes them to this row). Per-chunk so a
     // mid-loop timeout doesn't leave rows for chunks that never sent.
     const recipientIdByEmail = new Map<string, string>()
+    const chunkRecipientIds: string[] = []
     if (!body.testOnly) {
       const recipientRows = slice.map((r) => ({
         campaign_id: campaignId,
@@ -215,6 +235,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       } else {
         for (const row of inserted ?? []) {
           recipientIdByEmail.set((row.email as string).toLowerCase().trim(), row.id as string)
+          chunkRecipientIds.push(row.id as string)
         }
       }
     }
@@ -230,6 +251,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         // in the body/subject. Newsletter HTML from listmonk uses {{{unsubscribe}}}
         // and {{{unsubscribe_preferences}}} — map both to our mycrm unsubscribe URL.
         substitutions: {
+          '{{optout_url}}': unsubUrl,
           '{{{unsubscribe}}}': unsubUrl,
           '{{{unsubscribe_preferences}}}': unsubUrl,
         },
@@ -261,6 +283,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (!res.ok) {
         const errText = await res.text()
         errors.push(`chunk ${i}: ${res.status} ${errText.slice(0, 200)}`)
+        // Roll back this chunk's pre-inserted 'sent' rows so counts/analytics stay
+        // accurate and the resume dedup will retry these recipients next run.
+        if (chunkRecipientIds.length > 0) {
+          await service.from('newsletter_recipients').update({ status: 'failed' }).in('id', chunkRecipientIds)
+        }
         continue
       }
       sent += slice.length
@@ -304,6 +331,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     } catch (e) {
       errors.push(`chunk ${i}: ${e instanceof Error ? e.message : String(e)}`)
+      if (chunkRecipientIds.length > 0) {
+        await service.from('newsletter_recipients').update({ status: 'failed' }).in('id', chunkRecipientIds)
+      }
     }
   }
 

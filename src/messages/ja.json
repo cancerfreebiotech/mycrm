@@ -1606,6 +1606,7 @@
     "statPending": "保留中",
     "statPendingTitle": "一時的エラー / メールボックス満杯 / 送信側の問題 / 受信側ブロック",
     "statUnsubscribed": "配信停止済み",
+    "statusUnsubscribed": "配信停止済み",
     "searchPlaceholder": "メール、名前、連絡先名を検索...",
     "filterStatusAll": "すべてのステータス",
     "statusActive": "購読中",

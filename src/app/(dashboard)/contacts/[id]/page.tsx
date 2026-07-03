@@ -248,7 +248,6 @@ export default function ContactDetailPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
   const [aiModelId, setAiModelId] = useState<string | null>(null)
-  const [msProviderToken, setMsProviderToken] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
   // Merge modal
@@ -405,12 +404,6 @@ export default function ContactDetailPage() {
       setCurrentUserId(me.id)
       setCurrentUserRole(me.role || null)
       setAiModelId(me.ai_model_id ?? null)
-      // provider_token is a separate concern; fetch via existing client path
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user?.email) {
-        const { data: tokenRow } = await supabase.from('users').select('provider_token').ilike('email', user.email).maybeSingle()
-        if (tokenRow) setMsProviderToken(tokenRow.provider_token ?? null)
-      }
     } else {
       console.warn('[contact-detail] /api/me failed', meRes?.status)
     }
