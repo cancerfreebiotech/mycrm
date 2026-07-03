@@ -4,6 +4,7 @@ import { hasFeature } from '@/lib/features'
 import { refineProseZh, translateStory, generatePromoText } from '@/lib/newsletter-ai'
 import { composeNewsletter, type NewsletterStory } from '@/lib/newsletter-compose'
 import { fetchUrlContext } from '@/lib/fetch-url-context'
+import { getOrgSettings } from '@/lib/orgSettings'
 
 // POST /api/newsletter/compose-from-drafts
 //   Body (preview): { period: 'YYYY-MM', action: 'preview' }
@@ -276,6 +277,14 @@ export async function POST(req: NextRequest) {
   // of the newsletter, not in the upcoming/recap columns.
   const highlightStory = trilingual.find((s) => s.section === 'highlight') ?? null
 
+  // Branding / social links come from org settings (env fallback baked in).
+  const org = await getOrgSettings(service, [
+    'newsletter_logo_url',
+    'company_facebook',
+    'company_linkedin',
+    'company_website',
+  ])
+
   // Build per-lang inputs to composeNewsletter
   async function buildOneLang(lang: Lang): Promise<{ html: string; subject: string; promo: string }> {
     const langKey = lang === 'zh-TW' ? 'zh' : lang
@@ -316,11 +325,11 @@ export async function POST(req: NextRequest) {
       upcoming_stories: upcoming,
       recap_title: labels.last,
       recap_stories: recap,
-      logo_url: process.env.NEWSLETTER_LOGO_URL ?? 'https://gaxjgcztzfxokesiraai.supabase.co/storage/v1/object/public/newsletter-assets/branding/cancerfree-logo.png',
+      logo_url: org.newsletter_logo_url,
       substack_url: '',
-      facebook_url: 'https://www.facebook.com/cancerfreebio',
-      linkedin_url: 'https://www.linkedin.com/company/cancerfree-biotech',
-      website_url: 'https://www.cancerfree.io',
+      facebook_url: org.company_facebook,
+      linkedin_url: org.company_linkedin,
+      website_url: org.company_website,
     })
     return { html, subject, promo }
   }

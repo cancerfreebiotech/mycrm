@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { fetchApiKey } from './hunter'
+import { isEmailErased } from './erasureTombstone'
 
 const FREE_DOMAINS = new Set([
   'gmail.com', 'googlemail.com',
@@ -41,6 +42,8 @@ export async function hunterEnrich(
   if (!apiKey) return
 
   const norm = email.trim().toLowerCase()
+  // 防復活：曾被永久刪除（erasure）的 email 不再補全
+  if (await isEmailErased(supabase, norm)) return
   const domain = norm.split('@')[1]
   if (!domain || FREE_DOMAINS.has(domain)) return
 

@@ -71,7 +71,8 @@
     "themeDark": "Switch to dark",
     "pendingReview": "Pending Cards",
     "myFailedScans": "My Failed Scans",
-    "auditLog": "Audit Log"
+    "auditLog": "Audit Log",
+    "orgSettings": "Org Settings"
   },
   "auth": {
     "signInWithMicrosoft": "Sign in with Microsoft",
@@ -2095,5 +2096,21 @@
     "abVariantB": "Subject B",
     "abSent": "Sent {count}",
     "abOpenRate": "Open rate {rate}"
+  },
+  "orgSettings": {
+    "title": "Org Settings & Branding",
+    "description": "Manage company-wide name, login domains, and newsletter branding. Changes take up to 60s to apply.",
+    "labelOrgName": "Organization name",
+    "labelAllowedDomains": "Allowed login email domains",
+    "hintAllowedDomains": "Comma-separated, e.g. cancerfree.io, example.com",
+    "labelNewsletterLogoUrl": "Newsletter logo URL",
+    "labelNewsletterReplyTo": "Newsletter reply-to email",
+    "labelCompanyWebsite": "Company website",
+    "labelCompanyFacebook": "Facebook URL",
+    "labelCompanyLinkedin": "LinkedIn URL",
+    "saving": "Saving…",
+    "saved": "Saved. Settings are cached for 60s — refresh to apply.",
+    "saveError": "Failed to save, please try again",
+    "loadError": "Failed to load, please refresh"
   }
 }

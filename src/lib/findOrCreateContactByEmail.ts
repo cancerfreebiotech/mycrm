@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { tldToCountryCode, countryCodeToLanguage } from './emailDomainToCountry'
+import { isEmailErased } from './erasureTombstone'
 
 export interface FindOrCreateContactInput {
   email: string
@@ -15,10 +16,12 @@ export interface FindOrCreateContactResult {
 // Find an existing contact by lowercase email, or create a minimal new one.
 // Used by inbound email capture (workers/inbound-email) to attach interactions
 // to a contact even when the sender/recipient isn't in the CRM yet.
+// Returns null when the email carries a GDPR erasure tombstone — the caller must
+// skip it so an erased contact is never recreated from the same address.
 export async function findOrCreateContactByEmail(
   supabase: SupabaseClient,
   { email, name, createdBy }: FindOrCreateContactInput
-): Promise<FindOrCreateContactResult> {
+): Promise<FindOrCreateContactResult | null> {
   const norm = email.trim().toLowerCase()
   if (!norm) throw new Error('email required')
 
@@ -32,6 +35,9 @@ export async function findOrCreateContactByEmail(
 
   if (selErr) throw selErr
   if (existing?.id) return { id: existing.id, created: false }
+
+  // 防復活：曾被永久刪除（erasure）的 email 不得重建
+  if (await isEmailErased(supabase, norm)) return null
 
   const countryCode = tldToCountryCode(norm)
   const language = countryCodeToLanguage(countryCode)

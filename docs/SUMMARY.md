@@ -37,6 +37,21 @@
 * [標籤管理](admin/tags.md)
 * [AI 模型管理](admin/models.md)
 * [報表管理](admin/reports.md)
+* [名片王匯入審查](admin/camcard.md)
+* [重複聯絡人審查](admin/duplicates.md)
+* [辨識失敗審查](admin/failed-scans.md)
+* [國家管理](admin/countries.md)
+* [郵件範本](admin/templates.md)
+* [提示詞](admin/prompts.md)
+* [回收區](admin/trash.md)
+* [Email 復活](admin/email-recovery.md)
+* [共用 Email 聯絡人](admin/shared-emails.md)
+* [意見回饋管理](admin/feedback.md)
+* [系統健康](admin/health.md)
+* [MCP 權杖](admin/mcp-tokens.md)
+* [MCP 活動紀錄](admin/mcp-activity.md)
+* [稽核日誌](admin/audit-log.md)
+* [組織設定與品牌](admin/org-settings.md)
 
 ## 其他
 

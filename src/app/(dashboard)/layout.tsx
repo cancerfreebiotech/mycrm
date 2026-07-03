@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import React, { useEffect, useRef, useState } from 'react'
-import { Users, LayoutDashboard, ShieldCheck, Mail, MailX, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon, Globe, BarChart2, ClipboardList, MapPin, Menu, X, ChevronLeft, ChevronRight, Newspaper, ScanSearch, FolderInput, Activity, Images, Trash2, MessageSquarePlus, Wrench } from 'lucide-react'
+import { Users, LayoutDashboard, ShieldCheck, Mail, MailX, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon, Globe, BarChart2, ClipboardList, MapPin, Menu, X, ChevronLeft, ChevronRight, Newspaper, ScanSearch, FolderInput, Activity, Images, Trash2, MessageSquarePlus, Wrench, Building2 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
@@ -146,6 +146,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   ]
   // Super admin only — hidden from regular users
   const superAdminItems: NavItem[] = isSuperAdmin ? [
+    { href: '/admin/org-settings', label: t('orgSettings'), icon: Building2 },
     { href: '/admin/models', label: t('models'), icon: ShieldCheck },
     { href: '/admin/health', label: t('health'), icon: Activity },
     { href: '/admin/mcp-tokens', label: 'MCP Tokens', icon: ShieldCheck },

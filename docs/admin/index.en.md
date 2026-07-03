@@ -16,22 +16,24 @@ has_children: true
 
 | Feature | Description |
 |---------|-------------|
-| User Management | Manage member accounts, roles, feature grants, MFA reset, Telegram ID, Teams binding status, and maintenance mode |
-| Tag Management | Add, rename, and delete contact tags; mark a tag as an Email blacklist |
-| AI Models | Configure AI providers (endpoints) and available models |
-| Email Templates | Manage prompt templates for AI-generated emails |
-| Prompts | Configure system prompts for card recognition and the AI assistant (blank uses system defaults) |
-| Country Management | Maintain the country list (ISO code, multilingual names, flag emoji, enabled status) |
+| [User Management](users.md) | Manage member accounts, roles, feature grants, MFA reset, Telegram ID, Teams binding status, and maintenance mode |
+| [Tag Management](tags.md) | Add, rename, and delete contact tags; mark a tag as an Email blacklist |
+| [AI Models](models.md) | Configure AI providers (endpoints) and available models |
+| [Email Templates](templates.md) | Manage prompt templates for AI-generated emails |
+| [Prompts](prompts.md) | Configure system prompts for card recognition and the AI assistant (blank uses system defaults) |
+| [Country Management](countries.md) | Maintain the country list (ISO code, multilingual names, flag emoji, enabled status) |
 | Newsletter | Subscriber management / campaign editor / sending / PDF export / RSS feed for Substack auto-drafts |
-| Reports | Generate interaction-log reports (JSON preview or Excel) and scheduled sending |
-| Card Import Review | Batch-import business cards and review OCR results grouped by company |
-| Duplicate Contact Review | Find and merge duplicate contacts |
-| Failed Scan Review | Review cards that failed OCR (no name detected); manually create a contact then mark as reviewed |
+| [Reports](reports.md) | Generate interaction-log reports (JSON preview or Excel) and scheduled sending |
+| [Card Import Review](camcard.md) | Batch-import business cards and review OCR results grouped by company |
+| [Duplicate Contact Review](duplicates.md) | Find and merge duplicate contacts |
+| [Failed Scan Review](failed-scans.md) | Review cards that failed OCR (no name detected); manually create a contact then mark as reviewed |
 | Unassigned Notes | View Bot notes not yet linked to any contact |
-| Trash | Restore or permanently delete removed contacts |
-| Email Recovery | For contacts with bounced/invalid emails, find their post-job-change card and replace the email in one click |
-| Shared-email Contacts | Find contacts where 2+ records share one email (couples, family, shared inboxes) |
-| Feedback Management | Review and manage feedback submitted by users |
-| System Health | View the health status of external services and system components |
-| MCP Activity Log | View AI assistant (MCP) operation logs |
-| MCP Tokens | Manage access tokens for external agents (plaintext shown only once) |
+| [Trash](trash.md) | Restore or permanently delete removed contacts |
+| [Email Recovery](email-recovery.md) | For contacts with bounced/invalid emails, find their post-job-change card and replace the email in one click |
+| [Shared-email Contacts](shared-emails.md) | Find contacts where 2+ records share one email (couples, family, shared inboxes) |
+| [Feedback Management](feedback.md) | Review and manage feedback submitted by users |
+| [System Health](health.md) | View the health status of external services and system components |
+| [MCP Activity Log](mcp-activity.md) | View AI assistant (MCP) operation logs |
+| [MCP Tokens](mcp-tokens.md) | Manage access tokens for external agents (plaintext shown only once) |
+| [Audit Log](audit-log.md) | View the audit log of privileged actions such as role changes and deletions |
+| [Org Settings & Branding](org-settings.md) | Company-wide name, login domains and newsletter branding |

@@ -71,7 +71,8 @@
     "themeDark": "ダークモードに切り替え",
     "pendingReview": "確認待ち名刺",
     "myFailedScans": "認識失敗",
-    "auditLog": "監査ログ"
+    "auditLog": "監査ログ",
+    "orgSettings": "組織設定"
   },
   "auth": {
     "signInWithMicrosoft": "Microsoftアカウントでサインイン",
@@ -2095,5 +2096,21 @@
     "abVariantB": "件名 B",
     "abSent": "送信 {count}",
     "abOpenRate": "開封率 {rate}"
+  },
+  "orgSettings": {
+    "title": "組織設定とブランド",
+    "description": "全社共通の名称・ログインドメイン・ニュースレターのブランドを管理します。変更は最大60秒で反映されます。",
+    "labelOrgName": "組織名",
+    "labelAllowedDomains": "ログイン許可メールドメイン",
+    "hintAllowedDomains": "カンマ区切り。例：cancerfree.io, example.com",
+    "labelNewsletterLogoUrl": "ニュースレターのロゴ URL",
+    "labelNewsletterReplyTo": "ニュースレターの返信先メール",
+    "labelCompanyWebsite": "会社ウェブサイト",
+    "labelCompanyFacebook": "Facebook URL",
+    "labelCompanyLinkedin": "LinkedIn URL",
+    "saving": "保存中…",
+    "saved": "保存しました。設定は60秒キャッシュされます。反映するにはページを更新してください。",
+    "saveError": "保存に失敗しました。しばらくしてから再試行してください",
+    "loadError": "読み込みに失敗しました。更新してください"
   }
 }

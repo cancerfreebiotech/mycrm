@@ -1,9 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { createServiceClient } from '@/lib/supabase'
+import { getOrgSettings } from '@/lib/orgSettings'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
-
-const ALLOWED_DOMAIN = process.env.ALLOWED_EMAIL_DOMAIN ?? 'cancerfree.io'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -35,15 +34,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login?error=auth_failed`)
   }
 
-  // Enforce cancerfree.io domain only
+  // Enforce allowed email domain(s). Source is org settings (allowed_email_domains,
+  // comma-separated) with env/hardcoded fallback — same value, editable at runtime.
+  const serviceClient = createServiceClient()
+  const { allowed_email_domains } = await getOrgSettings(serviceClient, ['allowed_email_domains'])
+  const allowedDomains = allowed_email_domains.split(',').map((d) => d.trim()).filter(Boolean)
   const email = data.user.email ?? ''
-  if (!email.endsWith(`@${ALLOWED_DOMAIN}`)) {
+  if (!allowedDomains.some((d) => email.endsWith(`@${d}`))) {
     await supabase.auth.signOut()
     return NextResponse.redirect(`${origin}/login?error=unauthorized_domain`)
   }
 
   // Upsert user record (also persist provider_token for Graph API calls)
-  const serviceClient = createServiceClient()
   await serviceClient.from('users').upsert(
     {
       email,

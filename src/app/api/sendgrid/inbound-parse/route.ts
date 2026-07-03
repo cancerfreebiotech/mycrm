@@ -226,6 +226,8 @@ export async function POST(req: NextRequest) {
         name: party.name,
         createdBy,
       })
+      // erasure tombstone → 跳過，不重建也不留紀錄
+      if (!result) continue
       const { error: logErr } = await supabase.from('interaction_logs').insert({
         contact_id: result.id,
         type: 'email',

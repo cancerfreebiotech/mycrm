@@ -71,7 +71,8 @@
     "themeDark": "切換深色",
     "pendingReview": "待審核名片",
     "myFailedScans": "我的失敗辨識",
-    "auditLog": "稽核日誌"
+    "auditLog": "稽核日誌",
+    "orgSettings": "組織設定"
   },
   "auth": {
     "signInWithMicrosoft": "使用 Microsoft 帳號登入",
@@ -2095,5 +2096,21 @@
     "abVariantB": "主旨 B",
     "abSent": "寄出 {count}",
     "abOpenRate": "開信率 {rate}"
+  },
+  "orgSettings": {
+    "title": "組織設定與品牌",
+    "description": "管理全公司共用的名稱、登入網域與電子報品牌。變更最多 60 秒後生效。",
+    "labelOrgName": "組織名稱",
+    "labelAllowedDomains": "允許登入的 Email 網域",
+    "hintAllowedDomains": "以逗號分隔多個網域，例如：cancerfree.io, example.com",
+    "labelNewsletterLogoUrl": "電子報 Logo 網址",
+    "labelNewsletterReplyTo": "電子報回信 Email",
+    "labelCompanyWebsite": "公司網站",
+    "labelCompanyFacebook": "Facebook 連結",
+    "labelCompanyLinkedin": "LinkedIn 連結",
+    "saving": "儲存中…",
+    "saved": "已儲存。設定有 60 秒快取，請重新整理頁面以套用。",
+    "saveError": "儲存失敗，請稍後再試",
+    "loadError": "載入失敗，請重新整理"
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { logAdminAction } from '@/lib/adminAudit'
+import { addErasureTombstones } from '@/lib/erasureTombstone'
 
 // DELETE /api/contacts/[id]/permanent — 永久刪除聯絡人（僅 super_admin）
 export async function DELETE(
@@ -30,7 +31,7 @@ export async function DELETE(
   // 確認聯絡人存在且已軟刪除（只能永久刪除回收區的聯絡人）
   const { data: contact } = await service
     .from('contacts')
-    .select('id')
+    .select('id, email, second_email')
     .eq('id', id)
     .not('deleted_at', 'is', null)
     .single()
@@ -63,10 +64,14 @@ export async function DELETE(
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  // 防復活：把 email 寫入 erasure 名單，避免隔天被 inbound capture / hunter 重建
+  const tombstoned = await addErasureTombstones(service, [contact.email, contact.second_email])
+
   await logAdminAction(service, {
     actorEmail: user.email ?? 'unknown',
     action: 'permanent_delete_contact',
     target: id,
+    detail: { erasure_tombstone: tombstoned },
   })
 
   return NextResponse.json({ success: true })
