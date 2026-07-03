@@ -9,6 +9,7 @@ import { getValidProviderToken } from '@/lib/graph-server'
 import { sendTeamsTaskNotification, sendTeamsMessage } from '@/lib/teams'
 import { processOnePending, summarizeBatchAndNotify } from '@/lib/pending-ocr-worker'
 import { mergeIntoContact, type MergeMode } from '@/lib/merge-into-contact'
+import { signCardUrl } from '@/lib/cardImageUrl'
 
 function countryToLanguage(code: string | null | undefined): string {
   if (code === 'TW' || code === 'CN') return 'chinese'
@@ -361,6 +362,7 @@ async function handleSearch(chatId: number, keyword: string, m: BotMessages, lan
     await sendMessage(chatId, m.searchNotFound(keyword))
     return
   }
+  const supabase = createServiceClient()
 
   for (const c of contacts) {
     const empty = m.cardEmptyValue
@@ -384,8 +386,8 @@ async function handleSearch(chatId: number, keyword: string, m: BotMessages, lan
 
     await sendMessage(chatId, info, { reply_markup: { inline_keyboard: buttons } })
 
-    if (c.card_img_url) await sendPhoto(chatId, c.card_img_url)
-    if (c.card_img_back_url) await sendPhoto(chatId, c.card_img_back_url)
+    if (c.card_img_url) await sendPhoto(chatId, await signCardUrl(supabase, c.card_img_url))
+    if (c.card_img_back_url) await sendPhoto(chatId, await signCardUrl(supabase, c.card_img_back_url))
   }
 }
 

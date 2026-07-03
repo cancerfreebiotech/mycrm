@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { signCardUrls } from '@/lib/cardImageUrl'
 import { Check, Loader2, ExternalLink } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { PermissionGate } from '@/components/PermissionGate'
@@ -28,6 +29,7 @@ export default function FailedScansPage() {
   const [loading, setLoading] = useState(true)
   const [showReviewed, setShowReviewed] = useState(false)
   const [reviewing, setReviewing] = useState<string | null>(null)
+  const [signedUrls, setSignedUrls] = useState<Map<string, string>>(new Map())
 
   useEffect(() => { fetchScans() }, [showReviewed])
 
@@ -39,9 +41,14 @@ export default function FailedScansPage() {
       .order('created_at', { ascending: false })
     if (!showReviewed) query.eq('reviewed', false)
     const { data } = await query
-    setScans((data as unknown as FailedScan[]) ?? [])
+    const list = (data as unknown as FailedScan[]) ?? []
+    setScans(list)
+    // cards bucket is private — sign the images for display (the /contacts/new link keeps the public URL)
+    setSignedUrls(await signCardUrls(supabase, list.map((s) => s.card_img_url)))
     setLoading(false)
   }
+
+  const signed = (url: string): string => signedUrls.get(url) ?? url
 
   async function markReviewed(id: string) {
     setReviewing(id)
@@ -90,10 +97,10 @@ export default function FailedScansPage() {
             >
               <div className="flex gap-5">
                 {/* Card image */}
-                <a href={scan.card_img_url} target="_blank" rel="noopener noreferrer" className="shrink-0 group">
+                <a href={signed(scan.card_img_url)} target="_blank" rel="noopener noreferrer" className="shrink-0 group">
                   <div className="relative w-40 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
                     <Image
-                      src={scan.card_img_url}
+                      src={signed(scan.card_img_url)}
                       alt={t('cardImage')}
                       fill
                       className="object-cover group-hover:opacity-90 transition-opacity"
@@ -138,7 +145,7 @@ export default function FailedScansPage() {
 
                   <div className="mt-3 flex gap-2">
                     <a
-                      href={scan.card_img_url}
+                      href={signed(scan.card_img_url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"

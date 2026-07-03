@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { Loader2, Check, RefreshCw, Trash2, GitMerge, ExternalLink, AlertCircle, Search, X, CalendarCheck } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { signCardUrls } from '@/lib/cardImageUrl'
 
 type PendingStatus = 'pending' | 'processing' | 'done' | 'failed'
 type StatusFilter = 'all' | 'pending' | 'done' | 'failed'
@@ -36,6 +37,16 @@ function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString()
 }
 
+// OCR sets data.card_img_url; before then, derive public URL from storage_path
+// so users see the thumbnail right away rather than a placeholder.
+function deriveCardImg(row: PendingRow): string | undefined {
+  const data = row.data ?? {}
+  const fromData = data.card_img_url as string | undefined
+  return fromData ?? (row.storage_path
+    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/cards/${row.storage_path}`
+    : undefined)
+}
+
 export default function PendingReviewPage() {
   const t = useTranslations('pendingReview')
   const tc = useTranslations('common')
@@ -48,6 +59,17 @@ export default function PendingReviewPage() {
   const [uploaderFilter, setUploaderFilter] = useState<string>('all')
   const [rescueBusy, setRescueBusy] = useState(false)
   const [allTags, setAllTags] = useState<Tag[]>([])
+  const [cardSignedUrls, setCardSignedUrls] = useState<Map<string, string>>(new Map())
+
+  // cards bucket is private — batch-sign card thumbnails whenever the list changes
+  useEffect(() => {
+    const urls = rows.map(deriveCardImg).filter((u): u is string => !!u)
+    if (urls.length === 0) { setCardSignedUrls(new Map()); return }
+    let active = true
+    signCardUrls(supabase, urls).then((m) => { if (active) setCardSignedUrls(m) })
+    return () => { active = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows])
 
   // Load tags once for the picker
   useEffect(() => {
@@ -314,6 +336,7 @@ export default function PendingReviewPage() {
               isMine={r.created_by === myUserId}
               busy={busyId === r.id}
               allTags={allTags}
+              cardSignedUrls={cardSignedUrls}
               onSave={() => callAction(r.id, 'save')}
               onMerge={(mode) => callAction(r.id, 'merge', { mode })}
               onMergeManual={(targetId, mode) => callAction(r.id, 'merge', { targetId, mode })}
@@ -353,13 +376,14 @@ function FilterDropdown({
 interface ContactSearchResult { id: string; name: string | null; name_en: string | null; company: string | null; email: string | null }
 
 function PendingCard({
-  row, isMine, busy, allTags,
+  row, isMine, busy, allTags, cardSignedUrls,
   onSave, onMerge, onMergeManual, onDelete, onRetry, onPatch,
 }: {
   row: PendingRow
   isMine: boolean
   busy: boolean
   allTags: Tag[]
+  cardSignedUrls: Map<string, string>
   onSave: () => void
   onMerge: (mode: 'fill' | 'replace') => void
   onMergeManual: (targetId: string, mode: 'fill' | 'replace') => void
@@ -393,12 +417,9 @@ function PendingCard({
     return () => { cancelled = true; clearTimeout(handle) }
   }, [pickerQuery, pickerOpen])
   const data = row.data ?? {}
-  // OCR sets data.card_img_url; before then, derive public URL from storage_path
-  // so users see the thumbnail right away rather than a placeholder.
-  const cardImgFromData = data.card_img_url as string | undefined
-  const cardImg = cardImgFromData ?? (row.storage_path
-    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/cards/${row.storage_path}`
-    : undefined)
+  // cards bucket is private: resolve the public-form URL to its signed URL (fall back to original)
+  const cardImgRaw = deriveCardImg(row)
+  const cardImg = cardImgRaw ? (cardSignedUrls.get(cardImgRaw) ?? cardImgRaw) : undefined
   const mergeTargetId = data._merge_target_id as string | undefined
   const mergeTargetName = data._merge_target_name as string | undefined
   const batchDupOfId = data._batch_dup_of_id as string | undefined

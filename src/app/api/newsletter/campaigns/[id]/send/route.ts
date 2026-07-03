@@ -209,6 +209,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const cleanBody = campaign.content_html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000)
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.cancerfree.io'
+
+  // Inbox preview text: inject a hidden preheader div right after <body> (the
+  // standard technique — an X-Preview-Text header does nothing in any client).
+  // Trailing &nbsp;&zwnj; padding stops clients from pulling body text after it.
+  let htmlWithPreheader = campaign.content_html
+  if (campaign.preview_text) {
+    const preheaderDiv = `<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all">${campaign.preview_text
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}${'&nbsp;&zwnj;'.repeat(40)}</div>`
+    htmlWithPreheader = /<body[^>]*>/i.test(campaign.content_html)
+      ? campaign.content_html.replace(/(<body[^>]*>)/i, `$1${preheaderDiv}`)
+      : preheaderDiv + campaign.content_html
+  }
+
   for (let i = 0; i < recipients.length; i += CHUNK) {
     const slice = recipients.slice(i, i + CHUNK)
 
@@ -263,7 +276,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const payload = {
       from: { email: fromEmail, name: fromName },
       subject: campaign.subject,
-      content: [{ type: 'text/html', value: campaign.content_html }],
+      content: [{ type: 'text/html', value: htmlWithPreheader }],
       personalizations,
       // Force open + click tracking on so SendGrid emits the events the
       // webhook records (independent of account-level defaults).
@@ -271,8 +284,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         open_tracking: { enable: true },
         click_tracking: { enable: true, enable_text: false },
       },
-      // Best-effort preview text via SendGrid custom_args; also set subject summary
-      ...(campaign.preview_text ? { headers: { 'X-Preview-Text': campaign.preview_text } } : {}),
     }
     try {
       const res = await fetch(SG_SEND_URL, {

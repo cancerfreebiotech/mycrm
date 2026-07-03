@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { signCardUrl } from '@/lib/cardImageUrl'
 import { ArrowLeft, Loader2, CheckCircle, Eye, MousePointerClick, AlertTriangle, Clock, Download, RefreshCw, Zap, Sparkles, X, Check } from 'lucide-react'
 import { format } from 'date-fns'
 
@@ -223,8 +224,9 @@ export default function CampaignDetailPage() {
       setOcrRows(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'processing' } : r))
 
       try {
-        const images: string[] = [await imgUrlToBase64(row.cardImgUrl!)]
-        if (row.cardImgBackUrl) images.push(await imgUrlToBase64(row.cardImgBackUrl))
+        // cards bucket is private — sign the public-form URLs before fetching
+        const images: string[] = [await imgUrlToBase64(await signCardUrl(supabase, row.cardImgUrl!))]
+        if (row.cardImgBackUrl) images.push(await imgUrlToBase64(await signCardUrl(supabase, row.cardImgBackUrl)))
 
         const ocrRes = await fetch('/api/ocr', {
           method: 'POST',

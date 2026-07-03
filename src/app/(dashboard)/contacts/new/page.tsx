@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import Image from 'next/image'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { signCardUrl } from '@/lib/cardImageUrl'
 import { Upload, Loader2, AlertTriangle, X, Sparkles, Check } from 'lucide-react'
 
 interface Tag { id: string; name: string }
@@ -100,6 +101,17 @@ export default function NewContactPage() {
   const [dupSimilar, setDupSimilar] = useState<DupContact[]>([])
   const [aiModelId, setAiModelId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // cards bucket is private — the preloaded card_img_url (from query) is public-form; sign it for preview.
+  // The value written to DB (via /api/link-card) keeps the original public form.
+  const [signedPreloadedCardUrl, setSignedPreloadedCardUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!preloadedCardUrl) return
+    let active = true
+    signCardUrl(supabase, preloadedCardUrl).then((u) => { if (active) setSignedPreloadedCardUrl(u) })
+    return () => { active = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preloadedCardUrl])
 
   useEffect(() => {
     async function init() {
@@ -242,8 +254,8 @@ export default function NewContactPage() {
     setOcring(true)
     setError(null)
     try {
-      // Fetch the remote image and convert to base64
-      const resp = await fetch(preloadedCardUrl)
+      // Fetch the remote image and convert to base64 (cards bucket is private → sign first)
+      const resp = await fetch(await signCardUrl(supabase, preloadedCardUrl))
       const blob = await resp.blob()
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader()
@@ -421,7 +433,7 @@ export default function NewContactPage() {
               </p>
               <div className="flex items-start gap-3">
                 <div className="relative w-40 h-24 rounded-lg overflow-hidden border border-amber-200 dark:border-amber-700 shrink-0">
-                  <Image src={preloadedCardUrl} alt={t('cardAlt')} fill className="object-cover" unoptimized />
+                  <Image src={signedPreloadedCardUrl ?? preloadedCardUrl} alt={t('cardAlt')} fill className="object-cover" unoptimized />
                 </div>
                 {!ocring && ocrResult === null && (
                   <button

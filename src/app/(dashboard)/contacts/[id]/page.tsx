@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { signCardUrl, signCardUrls } from '@/lib/cardImageUrl'
 import { sendMail } from '@/lib/graph'
 import { ArrowLeft, ImageIcon, Mail, X, Pencil, Loader2, Plus, Upload, Trash2, Copy, Check, Sparkles, Paperclip, ZoomIn, ZoomOut, Maximize2, ChevronDown, Merge, Search, RotateCw } from 'lucide-react'
 import Image from 'next/image'
@@ -234,6 +235,7 @@ export default function ContactDetailPage() {
 
   const [contact, setContact] = useState<Contact | null>(null)
   const [contactCards, setContactCards] = useState<ContactCard[]>([])
+  const [cardSignedUrls, setCardSignedUrls] = useState<Map<string, string>>(new Map())
   const [rotatingCard, setRotatingCard] = useState<string | null>(null)
   const [contactPhotos, setContactPhotos] = useState<ContactPhoto[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
@@ -271,6 +273,8 @@ export default function ContactDetailPage() {
   const lbDragRef = useRef<{ startX: number; startY: number; ox: number; oy: number } | null>(null)
   const lbPinchRef = useRef<{ dist: number; scale: number } | null>(null)
 
+  // cards bucket is private: resolve a public-form URL to its signed URL (falls back to original)
+  const signedCard = (url: string | null | undefined): string => (url && cardSignedUrls.get(url)) || url || ''
   function openLightbox(url: string) { setLightbox(url); setLbScale(1); setLbOffset({ x: 0, y: 0 }) }
   function closeLightbox() { setLightbox(null); setLbScale(1); setLbOffset({ x: 0, y: 0 }) }
 
@@ -394,6 +398,18 @@ export default function ContactDetailPage() {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [])
+
+  // cards bucket is private — batch-sign all card image URLs (legacy + contact_cards) for rendering
+  useEffect(() => {
+    const urls: (string | null | undefined)[] = [contact?.card_img_url, contact?.card_img_back_url]
+    for (const c of contactCards) urls.push(c.card_img_url, c.card_img_back_url)
+    const present = urls.filter((u): u is string => !!u)
+    if (present.length === 0) { setCardSignedUrls(new Map()); return }
+    let active = true
+    signCardUrls(supabase, present).then((m) => { if (active) setCardSignedUrls(m) })
+    return () => { active = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contact?.card_img_url, contact?.card_img_back_url, contactCards])
 
   async function load() {
     // Use /api/me (service role, email lookup) because auth.users.id !== public.users.id
@@ -1058,7 +1074,7 @@ export default function ContactDetailPage() {
     setPhotoAttaching(photo.id)
     setMailError(null)
     try {
-      const res = await fetch(photo.photo_url)
+      const res = await fetch(await signCardUrl(supabase, photo.photo_url))
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const blob = await res.blob()
       const MAX = 5 * 1024 * 1024
@@ -1432,8 +1448,8 @@ export default function ContactDetailPage() {
                 <div className="flex gap-1">
                   {/* Front */}
                   <div className="relative">
-                    <div className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative" onClick={() => openLightbox(card.card_img_url)}>
-                      <Image src={card.card_img_url} alt={card.label ?? t('cardFront')} width={144} height={96} className="object-cover w-full h-full" />
+                    <div className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative" onClick={() => openLightbox(signedCard(card.card_img_url))}>
+                      <Image src={signedCard(card.card_img_url)} alt={card.label ?? t('cardFront')} width={144} height={96} className="object-cover w-full h-full" />
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
                         <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
                       </div>
@@ -1450,8 +1466,8 @@ export default function ContactDetailPage() {
                   {/* Back (if exists) */}
                   {card.card_img_back_url && (
                     <div className="relative">
-                      <div className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative" onClick={() => openLightbox(card.card_img_back_url!)}>
-                        <Image src={card.card_img_back_url} alt={card.label ? `${card.label} ${t('backSuffix')}` : t('cardBack')} width={144} height={96} className="object-cover w-full h-full" />
+                      <div className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative" onClick={() => openLightbox(signedCard(card.card_img_back_url))}>
+                        <Image src={signedCard(card.card_img_back_url)} alt={card.label ? `${card.label} ${t('backSuffix')}` : t('cardBack')} width={144} height={96} className="object-cover w-full h-full" />
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
                           <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
                         </div>

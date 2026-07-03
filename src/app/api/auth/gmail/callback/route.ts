@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { encryptToken } from '@/lib/tokenCrypto'
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
@@ -60,23 +61,17 @@ export async function GET(req: NextRequest) {
   // Upsert into gmail_oauth (keep only one row)
   const { data: existing } = await service.from('gmail_oauth').select('id').limit(1).single()
 
+  // Tokens are encrypted at rest (AES-256-GCM) — see src/lib/tokenCrypto.ts.
+  const row = {
+    access_token: encryptToken(tokens.access_token),
+    refresh_token: encryptToken(tokens.refresh_token),
+    expiry,
+    email: userInfo.email,
+  }
   if (existing?.id) {
-    await service
-      .from('gmail_oauth')
-      .update({
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
-        expiry,
-        email: userInfo.email,
-      })
-      .eq('id', existing.id)
+    await service.from('gmail_oauth').update(row).eq('id', existing.id)
   } else {
-    await service.from('gmail_oauth').insert({
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      expiry,
-      email: userInfo.email,
-    })
+    await service.from('gmail_oauth').insert(row)
   }
 
   return NextResponse.redirect(new URL('/admin/reports?gmail=connected', req.url))

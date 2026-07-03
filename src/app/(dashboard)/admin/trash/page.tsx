@@ -5,6 +5,7 @@ import { Trash2, RotateCcw, Loader2, AlertTriangle, X, CreditCard, MessageSquare
 import { PermissionGate } from '@/components/PermissionGate'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { signCardUrls } from '@/lib/cardImageUrl'
 
 interface TrashedContact {
   id: string
@@ -67,6 +68,7 @@ export default function TrashPage() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [actionId, setActionId] = useState<string | null>(null)
   const [detailContact, setDetailContact] = useState<ContactDetail | null>(null)
+  const [detailCardUrls, setDetailCardUrls] = useState<Map<string, string>>(new Map())
   const [detailLoading, setDetailLoading] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
@@ -115,7 +117,10 @@ export default function TrashPage() {
       `)
       .eq('id', id)
       .single()
-    setDetailContact(data as unknown as ContactDetail)
+    const detail = data as unknown as ContactDetail
+    setDetailContact(detail)
+    // cards bucket is private — sign the card images for display
+    setDetailCardUrls(await signCardUrls(supabase, (detail?.contact_cards ?? []).map((c) => c.card_img_url)))
     setDetailLoading(false)
   }
 
@@ -419,7 +424,7 @@ export default function TrashPage() {
                         card.card_img_url ? (
                           <img
                             key={card.id}
-                            src={card.card_img_url}
+                            src={detailCardUrls.get(card.card_img_url) ?? card.card_img_url}
                             alt={card.label ?? t('cardDefaultAlt')}
                             className="h-24 rounded border border-gray-200 dark:border-gray-700 object-cover"
                           />

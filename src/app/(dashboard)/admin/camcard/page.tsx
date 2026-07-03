@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { signCardUrls } from '@/lib/cardImageUrl'
 import {
   FolderInput, Loader2, Check, X, Merge, ExternalLink,
   ChevronDown, ChevronRight, AlertTriangle, CheckSquare, ZoomIn,
@@ -81,6 +82,7 @@ export default function CamcardPage() {
 
   // Lightbox
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [signedCards, setSignedCards] = useState<Map<string, string>>(new Map())
 
   // Batch confirm
   const [batchConfirming, setBatchConfirming] = useState<string | null>(null)
@@ -138,6 +140,10 @@ export default function CamcardPage() {
     const json = res.ok ? await res.json() : { cards: [], total: 0 }
     const cards: PendingCard[] = json.cards ?? []
     setTotalPending(json.total ?? 0)
+
+    // cards bucket is private — batch-sign thumbnails + previews
+    const cardUrls = cards.flatMap((c) => [c.card_img_url, c.back_img_url])
+    setSignedCards(await signCardUrls(supabase, cardUrls))
 
     // Group by company
     const map = new Map<string, PendingCard[]>()
@@ -562,9 +568,9 @@ export default function CamcardPage() {
               className="w-5 h-5 sm:w-4 sm:h-4 mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
             />
             <div className="flex flex-row sm:flex-col gap-1 shrink-0">
-              <CardThumb url={card.card_img_url} alt={t('sideFront')} onPreview={setPreviewUrl} />
+              <CardThumb url={card.card_img_url ? (signedCards.get(card.card_img_url) ?? card.card_img_url) : null} alt={t('sideFront')} onPreview={setPreviewUrl} />
               {card.back_img_url && (
-                <CardThumb url={card.back_img_url} alt={t('sideBack')} onPreview={setPreviewUrl} />
+                <CardThumb url={signedCards.get(card.back_img_url) ?? card.back_img_url} alt={t('sideBack')} onPreview={setPreviewUrl} />
               )}
             </div>
           </div>

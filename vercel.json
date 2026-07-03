@@ -23,6 +23,10 @@
     {
       "path": "/api/cron/run-report-schedules",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/purge-retention",
+      "schedule": "30 19 * * *"
     }
   ]
 }

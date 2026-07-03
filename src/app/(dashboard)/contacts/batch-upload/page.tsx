@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { signCardUrls } from '@/lib/cardImageUrl'
 import { Upload, Loader2, AlertTriangle, CheckCircle, X, Save } from 'lucide-react'
 
 const MAX_FILES = 50
@@ -69,6 +70,17 @@ export default function BatchUploadPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [aiModelId, setAiModelId] = useState<string | null>(null)
   const [saveResult, setSaveResult] = useState<{ saved: number; skipped: number } | null>(null)
+  const [signedUrls, setSignedUrls] = useState<Map<string, string>>(new Map())
+
+  // cards bucket is private — sign the freshly-uploaded thumbnails for display
+  useEffect(() => {
+    const urls = rows.map((r) => r.imgUrl).filter((u): u is string => !!u)
+    if (urls.length === 0) { setSignedUrls(new Map()); return }
+    let active = true
+    signCardUrls(supabase, urls).then((m) => { if (active) setSignedUrls(m) })
+    return () => { active = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows])
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -329,7 +341,7 @@ export default function BatchUploadPage() {
                     </td>
                     <td className="px-3 py-2">
                       {row.imgUrl ? (
-                        <img src={row.imgUrl} alt={tcnt('cardAlt')} className="w-16 h-10 object-cover rounded border border-gray-200 dark:border-gray-700" />
+                        <img src={signedUrls.get(row.imgUrl) ?? row.imgUrl} alt={tcnt('cardAlt')} className="w-16 h-10 object-cover rounded border border-gray-200 dark:border-gray-700" />
                       ) : row.status === 'processing' ? (
                         <div className="w-16 h-10 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded">
                           <Loader2 size={14} className="animate-spin text-blue-400" />

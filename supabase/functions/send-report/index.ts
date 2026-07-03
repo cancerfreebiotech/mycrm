@@ -8,7 +8,50 @@ const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET')!
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-async function refreshGmailToken(refreshToken: string): Promise<string> {
+// ── Token at-rest crypto ─────────────────────────────────────────────────────
+// Mirror of src/lib/tokenCrypto.ts (AES-256-GCM, key = sha256(NEXTAUTH_SECRET),
+// format enc:v1:<iv>:<ct>:<tag> base64url). Keep both sides in sync.
+const ENC_PREFIX = 'enc:v1:'
+
+function b64urlToBytes(s: string): Uint8Array {
+  const b64 = s.replace(/-/g, '+').replace(/_/g, '/')
+  return Uint8Array.from(atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, '=')), (c) => c.charCodeAt(0))
+}
+function bytesToB64url(b: Uint8Array): string {
+  return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+async function cryptoKey(): Promise<CryptoKey> {
+  const secret = Deno.env.get('NEXTAUTH_SECRET')
+  if (!secret) throw new Error('NEXTAUTH_SECRET secret missing — cannot decrypt gmail tokens')
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret))
+  return crypto.subtle.importKey('raw', digest, 'AES-GCM', false, ['encrypt', 'decrypt'])
+}
+
+async function decryptToken(stored: string): Promise<string> {
+  if (!stored.startsWith(ENC_PREFIX)) return stored // legacy plaintext row
+  const [ivB64, ctB64, tagB64] = stored.slice(ENC_PREFIX.length).split(':')
+  const iv = b64urlToBytes(ivB64)
+  const ct = b64urlToBytes(ctB64)
+  const tag = b64urlToBytes(tagB64)
+  const combined = new Uint8Array(ct.length + tag.length)
+  combined.set(ct)
+  combined.set(tag, ct.length)
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, await cryptoKey(), combined)
+  return new TextDecoder().decode(plain)
+}
+
+async function encryptToken(plain: string): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const buf = new Uint8Array(
+    await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await cryptoKey(), new TextEncoder().encode(plain)),
+  )
+  const ct = buf.slice(0, buf.length - 16)
+  const tag = buf.slice(buf.length - 16)
+  return `${ENC_PREFIX}${bytesToB64url(iv)}:${bytesToB64url(ct)}:${bytesToB64url(tag)}`
+}
+
+async function refreshGmailToken(rowId: string, refreshToken: string): Promise<string> {
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -22,12 +65,13 @@ async function refreshGmailToken(refreshToken: string): Promise<string> {
   const data = await res.json()
   if (!res.ok) throw new Error(`Token refresh failed: ${JSON.stringify(data)}`)
 
-  // Update stored token
+  // Update stored token (encrypted at rest; match by row id — the stored
+  // refresh_token is ciphertext so it can't be used as a lookup key)
   const expiry = new Date(Date.now() + data.expires_in * 1000).toISOString()
   await supabase
     .from('gmail_oauth')
-    .update({ access_token: data.access_token, expiry })
-    .eq('refresh_token', refreshToken)
+    .update({ access_token: await encryptToken(data.access_token), expiry })
+    .eq('id', rowId)
 
   return data.access_token
 }
@@ -35,14 +79,16 @@ async function refreshGmailToken(refreshToken: string): Promise<string> {
 async function getAccessToken(): Promise<{ token: string; senderEmail: string }> {
   const { data, error } = await supabase
     .from('gmail_oauth')
-    .select('access_token, refresh_token, expiry, email')
+    .select('id, access_token, refresh_token, expiry, email')
     .limit(1)
     .single()
 
   if (error || !data) throw new Error('No Gmail OAuth token stored')
 
   const isExpired = new Date(data.expiry) <= new Date(Date.now() + 60_000)
-  const token = isExpired ? await refreshGmailToken(data.refresh_token) : data.access_token
+  const token = isExpired
+    ? await refreshGmailToken(data.id, await decryptToken(data.refresh_token))
+    : await decryptToken(data.access_token)
 
   return { token, senderEmail: data.email }
 }

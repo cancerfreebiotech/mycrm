@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { Loader2, Trash2, ExternalLink } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { signCardUrls } from '@/lib/cardImageUrl'
 
 interface FailedScan {
   id: string
@@ -26,6 +27,7 @@ export default function MyFailedScansPage() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
+  const [signedUrls, setSignedUrls] = useState<Map<string, string>>(new Map())
 
   const fetchRows = useCallback(async () => {
     // Scope to the current user's own scans. RLS SELECT on failed_scans is still
@@ -39,11 +41,16 @@ export default function MyFailedScansPage() {
       .select('id, storage_path, card_img_url, created_at')
       .eq('user_id', profile.id)
       .order('created_at', { ascending: false })
-    setRows((data as unknown as FailedScan[]) ?? [])
+    const list = (data as unknown as FailedScan[]) ?? []
+    setRows(list)
+    // cards bucket is private — sign the images for display
+    setSignedUrls(await signCardUrls(supabase, list.map((r) => r.card_img_url)))
     setLoading(false)
   }, [supabase])
 
   useEffect(() => { fetchRows() }, [fetchRows])
+
+  const signed = (url: string): string => signedUrls.get(url) ?? url
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -151,8 +158,8 @@ export default function MyFailedScansPage() {
                   }`}
                 >
                   <div className="relative">
-                    <a href={r.card_img_url} target="_blank" rel="noreferrer" className="block aspect-[3/2] bg-gray-100 dark:bg-gray-800 relative">
-                      <Image src={r.card_img_url} alt="" fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover" />
+                    <a href={signed(r.card_img_url)} target="_blank" rel="noreferrer" className="block aspect-[3/2] bg-gray-100 dark:bg-gray-800 relative">
+                      <Image src={signed(r.card_img_url)} alt="" fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover" />
                     </a>
                     <label className="absolute top-2 left-2 bg-white/90 dark:bg-gray-900/90 rounded p-1.5 cursor-pointer">
                       <input type="checkbox" checked={isSelected} onChange={() => toggle(r.id)} className="rounded" />
@@ -162,7 +169,7 @@ export default function MyFailedScansPage() {
                     <span className="text-xs text-gray-500 dark:text-gray-400">{fmtDateTime(r.created_at)}</span>
                     <div className="flex gap-1">
                       <a
-                        href={r.card_img_url}
+                        href={signed(r.card_img_url)}
                         target="_blank"
                         rel="noreferrer"
                         className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded transition-colors"

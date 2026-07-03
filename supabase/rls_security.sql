@@ -332,6 +332,15 @@ CREATE POLICY "cards_authenticated_insert" ON storage.objects FOR INSERT TO auth
 CREATE POLICY "cards_authenticated_update" ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'cards') WITH CHECK (bucket_id = 'cards');
 CREATE POLICY "cards_authenticated_delete" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'cards');
 
+-- v7.3.0：cards / camcard bucket 轉 private（名片影像 = 個資，先前任何人拿到
+-- URL 即可讀）。DB 仍存 public 形式 URL 作為識別字（寫入點與 cleanup-orphan-cards
+-- cron 的 regexp 依賴此形式），讀取端一律經 src/lib/cardImageUrl.ts 換發短效
+-- signed URL。authenticated 需 SELECT 權才能在瀏覽器端 createSignedUrl。
+-- ⚠️ 執行順序：先部署 v7.3.0 程式碼，再跑下面兩行（順序反了會斷線上圖片）。
+CREATE POLICY "cards_authenticated_select" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'cards');
+UPDATE storage.buckets SET public = false WHERE id = 'cards';
+UPDATE storage.buckets SET public = false WHERE id = 'camcard';  -- 孤兒 bucket（程式碼零引用，332 個舊物件）一併關閉
+
 DROP POLICY IF EXISTS "camcard_authenticated_select" ON storage.objects;
 DROP POLICY IF EXISTS "camcard_authenticated_insert" ON storage.objects;
 DROP POLICY IF EXISTS "camcard_authenticated_update" ON storage.objects;
