@@ -8,6 +8,18 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const service = createServiceClient()
+
+  // Contact-scoped view: all tasks linked to a contact (used by the contact detail task panel)
+  const contactId = req.nextUrl.searchParams.get('contact_id')
+  if (contactId) {
+    const { data } = await service
+      .from('tasks')
+      .select(`id, task_number, title, description, due_at, status, created_by, completed_by, completed_at, created_at, contact_id, task_assignees(assignee_email, users(display_name)), contacts(id, name, company)`)
+      .eq('contact_id', contactId)
+      .order('due_at', { ascending: true, nullsFirst: false })
+    return NextResponse.json({ tasks: data ?? [] })
+  }
+
   const tab = req.nextUrl.searchParams.get('tab') ?? 'mine'  // mine | assigned | to_me
 
   let tasks
@@ -61,13 +73,13 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const service = createServiceClient()
-  const { title, description, due_at, assignee_emails } = await req.json()
+  const { title, description, due_at, assignee_emails, contact_id } = await req.json()
 
   if (!title?.trim()) return NextResponse.json({ error: '標題必填' }, { status: 400 })
 
   const { data: task, error } = await service
     .from('tasks')
-    .insert({ title: title.trim(), description: description ?? null, due_at: due_at ?? null, created_by: user.email! })
+    .insert({ title: title.trim(), description: description ?? null, due_at: due_at ?? null, created_by: user.email!, contact_id: contact_id ?? null })
     .select('id')
     .single()
 

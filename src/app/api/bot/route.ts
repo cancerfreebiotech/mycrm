@@ -10,6 +10,7 @@ import { sendTeamsTaskNotification, sendTeamsMessage } from '@/lib/teams'
 import { processOnePending, summarizeBatchAndNotify } from '@/lib/pending-ocr-worker'
 import { mergeIntoContact, type MergeMode } from '@/lib/merge-into-contact'
 import { signCardUrl } from '@/lib/cardImageUrl'
+import { runAgentLoop } from '@/lib/ai-agent'
 
 function countryToLanguage(code: string | null | undefined): string {
   if (code === 'TW' || code === 'CN') return 'chinese'
@@ -188,6 +189,15 @@ async function downloadTelegramPhoto(fileId: string): Promise<Buffer> {
   return Buffer.from(await imgRes.arrayBuffer())
 }
 
+// Telegram message text hard limit (chars). AI agent replies are truncated to fit.
+const TELEGRAM_MAX_LEN = 4096
+
+// Escape HTML special chars — sendMessage uses parse_mode=HTML, so free-form AI
+// output (may contain <, >, &, e.g. "AT&T") would otherwise break Telegram parsing.
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 // ── Handle /AI ────────────────────────────────────────────────────────────────
 
 async function handleAI(chatId: number, aiModelId: string | null, m: BotMessages) {
@@ -207,6 +217,28 @@ async function handleAI(chatId: number, aiModelId: string | null, m: BotMessages
   }
   const endpointName = (model.ai_endpoints as unknown as { name: string } | null)?.name ?? ''
   await sendMessage(chatId, m.aiModelInfo(model.display_name, model.model_id, endpointName))
+}
+
+// /ai <question> → run the shared Gemini function-calling agent as this user.
+async function handleAiAgent(
+  chatId: number,
+  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
+  question: string,
+  m: BotMessages,
+) {
+  const supabase = createServiceClient()
+  await sendMessage(chatId, m.aiThinking)
+  try {
+    const reply = await runAgentLoop({
+      service: supabase,
+      actingUserId: user.id,
+      messages: [{ role: 'user', content: question }],
+    })
+    const truncated = reply.length > TELEGRAM_MAX_LEN ? reply.slice(0, TELEGRAM_MAX_LEN - 1) + '…' : reply
+    await sendMessage(chatId, escapeHtml(truncated))
+  } catch (e) {
+    await sendMessage(chatId, m.aiGenerateFailed(e instanceof Error ? e.message : m.unknownError))
+  }
 }
 
 // ── Search contacts ───────────────────────────────────────────────────────────
@@ -1361,9 +1393,16 @@ async function handleText(
     return
   }
 
-  // ── /AI ────────────────────────────────────────────────────────────────────
-  if (cmd.toLowerCase() === '/ai') {
-    await handleAI(chatId, user.ai_model_id, m)
+  // ── /ai ────────────────────────────────────────────────────────────────────
+  // `/ai <question>` → AI agent Q&A; bare `/ai` → show current model (old behavior).
+  const aiMatch = cmd.match(/^\/ai(?:\s+([\s\S]+))?$/i)
+  if (aiMatch) {
+    const question = aiMatch[1]?.trim()
+    if (question) {
+      await handleAiAgent(chatId, user, question, m)
+    } else {
+      await handleAI(chatId, user.ai_model_id, m)
+    }
     return
   }
 
@@ -2224,7 +2263,14 @@ export async function POST(req: NextRequest) {
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
           const contactLink = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">${m.cardViewContactLink}</a>` : ''
-          await sendMessage(from.id, m.cardSavedWithLink(contactLink))
+          await sendMessage(from.id, m.cardSavedWithLink(contactLink), {
+            reply_markup: {
+              inline_keyboard: [[
+                { text: m.followupBtn3d, callback_data: `followup_${inserted.id}_3` },
+                { text: m.followupBtn1w, callback_data: `followup_${inserted.id}_7` },
+              ]],
+            },
+          })
 
           // Hunter.io auto-enrich when namecard OCR yielded no email
           const currentEmail = (pendingData.email as string | null | undefined) ?? null
@@ -3172,6 +3218,43 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId, m.taskCancelCallback)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await sendMessage(from.id, m.taskCancelledNotice(task?.title ?? ''))
+        }
+
+        // ── Follow-up task from a scanned card ────────────────────────────────
+        else if (data?.startsWith('followup_')) {
+          // callback_data = followup_<contactId>_<days>; contactId is a UUID
+          // (contains '-' but no '_'), so split on the LAST underscore.
+          const rest = data.replace('followup_', '')
+          const sep = rest.lastIndexOf('_')
+          const contactId = rest.slice(0, sep)
+          const days = parseInt(rest.slice(sep + 1), 10)
+
+          const { data: contact } = await supabase
+            .from('contacts').select('name').eq('id', contactId).single()
+          const contactName = contact?.name ?? m.cardThisContact
+
+          const dueAt = new Date(Date.now() + days * 86_400_000).toISOString()
+          const { data: task, error } = await supabase
+            .from('tasks')
+            .insert({
+              title: m.followupTaskTitle(contactName),
+              due_at: dueAt,
+              created_by: user.email,
+              contact_id: contactId,
+            })
+            .select('id')
+            .single()
+          if (error || !task) {
+            await answerCallbackQuery(callbackQueryId, m.taskSaveFailed)
+            await sendMessage(from.id, m.taskSaveFailed)
+            return NextResponse.json({ ok: true })
+          }
+          await supabase.from('task_assignees').insert({ task_id: task.id, assignee_email: user.email })
+
+          await answerCallbackQuery(callbackQueryId, m.followupCbCreated)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          const dueLine = m.taskDueLabel(new Date(dueAt).toLocaleString(dateLocale(lang), { timeZone: 'Asia/Taipei' }))
+          await sendMessage(from.id, m.followupCreated(contactName, dueLine))
         }
 
       } catch (err) {

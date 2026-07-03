@@ -67,6 +67,12 @@ interface Log {
   campaign_id: string | null
   users: { display_name: string | null } | null
 }
+interface ContactTask {
+  id: string
+  title: string
+  due_at: string | null
+  status: 'pending' | 'done' | 'postponed' | 'cancelled'
+}
 
 // Email tracking event aggregation per campaign (from SendGrid webhook events)
 interface CampaignEmailStatus {
@@ -217,6 +223,7 @@ export default function ContactDetailPage() {
   const tm = useTranslations('mail')
   const tc = useTranslations('common')
   const tt = useTranslations('interactionLogs')
+  const ttk = useTranslations('tasks')
   const OCR_FIELD_LABELS: Record<string, string> = {
     name: t('name'), name_en: t('nameEn'), name_local: t('nameLocal'),
     company: t('company'), company_en: t('companyEn'), company_local: t('companyLocal'),
@@ -369,6 +376,12 @@ export default function ContactDetailPage() {
   // Newsletter suppression status per email
   const [emailSuppressions, setEmailSuppressions] = useState<Record<string, { blacklisted: boolean; unsubscribed: boolean }>>({})
 
+  // Related tasks
+  const [contactTasks, setContactTasks] = useState<ContactTask[]>([])
+  const [taskTitle, setTaskTitle] = useState('')
+  const [taskDueAt, setTaskDueAt] = useState('')
+  const [taskCreating, setTaskCreating] = useState(false)
+
 
   // Mail modal
   const [mailOpen, setMailOpen] = useState(false)
@@ -392,6 +405,7 @@ export default function ContactDetailPage() {
   const LOG_PAGE = 20
 
   useEffect(() => { load() }, [id])
+  useEffect(() => { loadTasks() }, [id])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeLightbox() }
@@ -490,6 +504,44 @@ export default function ContactDetailPage() {
       statusMap[e.campaign_id] = cur
     }
     setEmailStatus(statusMap)
+  }
+
+  // ── Related tasks ────────────────────────────────────────────────────────────
+  async function loadTasks() {
+    const res = await fetch(`/api/tasks?contact_id=${id}`).catch(() => null)
+    if (!res?.ok) return
+    const data = await res.json() as { tasks: ContactTask[] }
+    const open = (data.tasks ?? []).filter((tk) => tk.status !== 'done' && tk.status !== 'cancelled')
+    setContactTasks(open)
+  }
+
+  async function handleAddTask() {
+    const title = taskTitle.trim()
+    if (!title || taskCreating) return
+    setTaskCreating(true)
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, due_at: taskDueAt || null, contact_id: id }),
+      })
+      if (res.ok) {
+        setTaskTitle('')
+        setTaskDueAt('')
+        await loadTasks()
+      }
+    } finally {
+      setTaskCreating(false)
+    }
+  }
+
+  async function handleToggleTask(taskId: string) {
+    const res = await fetch(`/api/tasks/${taskId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'done' }),
+    })
+    if (res.ok) setContactTasks((prev) => prev.filter((tk) => tk.id !== taskId))
   }
 
   const loadMoreLogs = useCallback(async () => {
@@ -1031,7 +1083,7 @@ export default function ContactDetailPage() {
       const res = await fetch('/api/ai-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description, templateContent: existingBody, model: aiModelId, generateSubject: true, returnHtml: true }),
+        body: JSON.stringify({ description, templateContent: existingBody, model: aiModelId, generateSubject: true, returnHtml: true, contact_id: id }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -1712,6 +1764,67 @@ export default function ContactDetailPage() {
 
       {/* Pre-meeting Social Briefing */}
       <ContactBriefing contactId={id} />
+
+      {/* Related Tasks */}
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-4">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('relatedTasks')}</h2>
+
+        {/* Add task */}
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
+          <input
+            type="text"
+            value={taskTitle}
+            onChange={(e) => setTaskTitle(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleAddTask() }}
+            placeholder={ttk('titleLabel')}
+            className="flex-1 text-base sm:text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <input
+            type="date"
+            value={taskDueAt}
+            onChange={(e) => setTaskDueAt(e.target.value)}
+            title={ttk('dueLabel')}
+            className="text-base sm:text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+          />
+          <button
+            onClick={handleAddTask}
+            disabled={taskCreating || !taskTitle.trim()}
+            className="px-4 py-2 min-h-[44px] text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 flex items-center justify-center gap-1.5"
+          >
+            {taskCreating ? <Loader2 size={15} className="animate-spin" /> : <><Plus size={15} /> {ttk('addTask')}</>}
+          </button>
+        </div>
+
+        {/* Task list */}
+        {contactTasks.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-4">{ttk('noTasks')}</p>
+        ) : (
+          <ul className="space-y-2">
+            {contactTasks.map((tk) => (
+              <li key={tk.id} className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => handleToggleTask(tk.id)}
+                  title={ttk('markDone')}
+                  className="shrink-0 w-11 h-11 flex items-center justify-center rounded-lg border border-gray-300 dark:border-gray-600 text-gray-400 hover:text-green-600 hover:border-green-500 dark:hover:text-green-400"
+                >
+                  <Check size={18} />
+                </button>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-gray-900 dark:text-gray-100 truncate">{tk.title}</p>
+                  {tk.due_at && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      📅 {new Date(tk.due_at).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                    </p>
+                  )}
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded shrink-0 ${tk.status === 'postponed' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400'}`}>
+                  {tk.status === 'postponed' ? ttk('status.postponed') : ttk('status.pending')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       {/* Interaction Logs */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6">

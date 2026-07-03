@@ -10,7 +10,7 @@
  * so the bot can resolve aadObjectId → email automatically on first message.
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { createPublicKey, createVerify } from 'crypto'
+import { createPublicKey, createVerify, type JsonWebKeyInput } from 'crypto'
 import { createServiceClient } from '@/lib/supabase'
 import { parseMeetingCommand } from '@/lib/gemini'
 import { createCalendarEvent } from '@/lib/graph'
@@ -68,7 +68,7 @@ async function verifyTeamsRequest(req: NextRequest): Promise<boolean> {
     if (payload.iss !== issuer) return false
     const jwk = keys.find((k) => k.kid === header.kid)
     if (!jwk) return false
-    const pubKey = createPublicKey({ key: jwk as JsonWebKey, format: 'jwk' })
+    const pubKey = createPublicKey({ key: jwk, format: 'jwk' } as unknown as JsonWebKeyInput)
     const verifier = createVerify('RSA-SHA256')
     verifier.update(`${parts[0]}.${parts[1]}`)
     verifier.end()

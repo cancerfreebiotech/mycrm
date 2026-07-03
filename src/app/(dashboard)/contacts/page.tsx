@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Search, Download, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Copy, Check, Loader2, X, Linkedin, Mail, Users, SlidersHorizontal } from 'lucide-react'
+import { Search, Download, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Copy, Check, Loader2, X, Linkedin, Mail, Users, SlidersHorizontal, Bookmark } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 interface Tag {
@@ -42,6 +42,8 @@ interface Contact {
 }
 
 interface Creator { id: string; display_name: string | null }
+
+interface SavedView { id: string; name: string; params: Record<string, string>; created_at: string }
 
 function ImportanceDots({ value }: { value: string }) {
   const filled = value === 'high' ? 3 : value === 'low' ? 1 : 2
@@ -89,6 +91,12 @@ export default function ContactsPage() {
   const [metDateTo, setMetDateTo] = useState('')
   const [metDateDropdownOpen, setMetDateDropdownOpen] = useState(false)
   const [columnsDropdownOpen, setColumnsDropdownOpen] = useState(false)
+  const [noInteraction, setNoInteraction] = useState<string>(searchParams?.get('no_interaction') ?? '')
+  const [noInteractionDropdownOpen, setNoInteractionDropdownOpen] = useState(false)
+  const [savedViews, setSavedViews] = useState<SavedView[]>([])
+  const [saveViewOpen, setSaveViewOpen] = useState(false)
+  const [saveViewName, setSaveViewName] = useState('')
+  const [savingView, setSavingView] = useState(false)
 
   type ColKey = 'company' | 'job_title' | 'email' | 'tags' | 'met_at' | 'creator' | 'created_at'
   const DEFAULT_COLS: Record<ColKey, boolean> = {
@@ -140,7 +148,19 @@ export default function ContactsPage() {
 
   useEffect(() => {
     fetchAll()
+    fetchSavedViews()
   }, [])
+
+  async function fetchSavedViews() {
+    try {
+      const res = await fetch('/api/saved-views')
+      if (!res.ok) return
+      const data = await res.json()
+      setSavedViews(Array.isArray(data.views) ? data.views : [])
+    } catch {
+      // Non-blocking: saved views are an optional convenience.
+    }
+  }
 
   async function fetchAll() {
     const supabase = createBrowserSupabaseClient()
@@ -211,6 +231,80 @@ export default function ContactsPage() {
     setPage(1)
   }
 
+  // Serialize the active filter state into a flat param object.
+  // Used both for URL sync and for persisting a saved view.
+  function buildParams(overrides: Record<string, string> = {}): Record<string, string> {
+    const p: Record<string, string> = {}
+    if (query) p.q = query
+    if (metQuery) p.met = metQuery
+    if (selectedTags.length) p.tags = selectedTags.join(',')
+    if (selectedCountries.length) p.countries = selectedCountries.join(',')
+    if (selectedImportance) p.importance = selectedImportance
+    if (selectedLanguage) p.language = selectedLanguage
+    if (selectedEmailStatus) p.email_status = selectedEmailStatus
+    if (selectedCreators.length) p.creators = selectedCreators.join(',')
+    if (createdFrom) p.created_from = createdFrom
+    if (createdTo) p.created_to = createdTo
+    if (metDateFrom) p.met_from = metDateFrom
+    if (metDateTo) p.met_to = metDateTo
+    if (noInteraction) p.no_interaction = noInteraction
+    for (const [k, v] of Object.entries(overrides)) {
+      if (v) p[k] = v
+      else delete p[k]
+    }
+    return p
+  }
+
+  // Apply a saved view's params to the active filters and reflect them in the URL.
+  function applyView(params: Record<string, string>) {
+    setQuery(params.q ?? '')
+    setMetQuery(params.met ?? '')
+    setSelectedTags(params.tags ? params.tags.split(',') : [])
+    setSelectedCountries(params.countries ? params.countries.split(',') : [])
+    setSelectedImportance(params.importance ?? '')
+    setSelectedLanguage(params.language ?? '')
+    setSelectedEmailStatus(params.email_status ?? '')
+    setSelectedCreators(params.creators ? params.creators.split(',') : [])
+    setCreatedFrom(params.created_from ?? '')
+    setCreatedTo(params.created_to ?? '')
+    setMetDateFrom(params.met_from ?? '')
+    setMetDateTo(params.met_to ?? '')
+    setNoInteraction(params.no_interaction ?? '')
+    setPage(1)
+    const qs = new URLSearchParams(params).toString()
+    router.push(qs ? `/contacts?${qs}` : '/contacts')
+  }
+
+  async function handleSaveView(e: React.FormEvent) {
+    e.preventDefault()
+    const name = saveViewName.trim()
+    if (!name) return
+    setSavingView(true)
+    try {
+      const res = await fetch('/api/saved-views', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, params: buildParams() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? '')
+      setSavedViews((prev) => [data.view, ...prev])
+      setSaveViewName('')
+      setSaveViewOpen(false)
+    } catch {
+      alert(t('savedViewSaveFailed'))
+    } finally {
+      setSavingView(false)
+    }
+  }
+
+  async function handleDeleteView(id: string, name: string) {
+    if (!confirm(t('savedViewDeleteConfirm', { name }))) return
+    const res = await fetch(`/api/saved-views/${id}`, { method: 'DELETE' })
+    if (res.ok) setSavedViews((prev) => prev.filter((v) => v.id !== id))
+    else alert(t('savedViewDeleteFailed'))
+  }
+
   // Unique met_at values for the datalist autocomplete dropdown.
   // Sorted by frequency desc, then alpha — most-used events surface first.
   const metAtOptions = useMemo(() => {
@@ -255,7 +349,16 @@ export default function ContactsPage() {
     const metDateStr = c.met_date?.slice(0, 10) ?? ''
     const matchMetDateFrom = !metDateFrom || (!!metDateStr && metDateStr >= metDateFrom)
     const matchMetDateTo = !metDateTo || (!!metDateStr && metDateStr <= metDateTo)
-    return matchQuery && matchMet && matchTags && matchCountry && matchImportance && matchLanguage && matchEmailStatus && matchCreator && matchCreatedFrom && matchCreatedTo && matchMetDateFrom && matchMetDateTo
+    // No-interaction filter: null/empty last_activity_at counts as "never
+    // interacted" and always satisfies the 30/60/90-day thresholds.
+    let matchNoInteraction = true
+    if (noInteraction) {
+      if (c.last_activity_at) {
+        const diffDays = (Date.now() - new Date(c.last_activity_at).getTime()) / 86400000
+        matchNoInteraction = diffDays >= Number(noInteraction)
+      }
+    }
+    return matchQuery && matchMet && matchTags && matchCountry && matchImportance && matchLanguage && matchEmailStatus && matchCreator && matchCreatedFrom && matchCreatedTo && matchMetDateFrom && matchMetDateTo && matchNoInteraction
   })
 
   const sorted = sortField
@@ -281,7 +384,7 @@ export default function ContactsPage() {
       })
     : filtered
 
-  const hasFilter = !!(query || metQuery || selectedTags.length > 0 || selectedCountries.length > 0 || selectedImportance || selectedLanguage || selectedEmailStatus || selectedCreators.length > 0 || createdFrom || createdTo || metDateFrom || metDateTo)
+  const hasFilter = !!(query || metQuery || selectedTags.length > 0 || selectedCountries.length > 0 || selectedImportance || selectedLanguage || selectedEmailStatus || selectedCreators.length > 0 || createdFrom || createdTo || metDateFrom || metDateTo || noInteraction)
   const visibleColCount = 2 + Object.values(visibleCols).filter(Boolean).length // checkbox + name + visible cols
   const isBlacklisted = (c: Contact) => c.contact_tags.some((ct) => ct.tags?.is_email_blacklist === true)
   const isEmailable = (c: Contact) => !!c.email && !c.email_status && !c.email_opt_out && !isBlacklisted(c)
@@ -590,6 +693,60 @@ export default function ContactsPage() {
         </div>
       )}
 
+      {/* Saved views (chips) */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        {savedViews.slice(0, 10).map((v) => (
+          <span
+            key={v.id}
+            className="inline-flex items-center gap-1 pl-3 pr-1 py-1 text-sm rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+          >
+            <button onClick={() => applyView(v.params)} className="hover:text-blue-600 dark:hover:text-blue-400">
+              {v.name}
+            </button>
+            <button
+              onClick={() => handleDeleteView(v.id, v.name)}
+              aria-label={tc('delete')}
+              className="p-0.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <X size={13} />
+            </button>
+          </span>
+        ))}
+        {saveViewOpen ? (
+          <form onSubmit={handleSaveView} className="inline-flex items-center gap-1">
+            <input
+              type="text"
+              autoFocus
+              value={saveViewName}
+              onChange={(e) => setSaveViewName(e.target.value)}
+              placeholder={t('savedViewNamePlaceholder')}
+              className="px-3 py-1.5 text-base sm:text-sm border border-gray-200 dark:border-gray-700 rounded-full bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-40"
+            />
+            <button
+              type="submit"
+              disabled={savingView || !saveViewName.trim()}
+              className="p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {savingView ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setSaveViewOpen(false); setSaveViewName('') }}
+              className="p-1.5 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              <X size={14} />
+            </button>
+          </form>
+        ) : (
+          <button
+            onClick={() => setSaveViewOpen(true)}
+            className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full border border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400"
+          >
+            <Bookmark size={14} /> {t('savedViewsSave')}
+          </button>
+        )}
+      </div>
+
       {/* Filters */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <div className="relative max-w-sm flex-1">
@@ -724,6 +881,44 @@ export default function ContactsPage() {
                   }`}
                 >
                   {value && <ImportanceDots value={value} />}
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* No-interaction filter dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => { setNoInteractionDropdownOpen((v) => !v); setTagDropdownOpen(false); setCountryDropdownOpen(false); setImportanceDropdownOpen(false); setLanguageDropdownOpen(false); setEmailStatusDropdownOpen(false); setCreatorDropdownOpen(false); setCreatedDateDropdownOpen(false); setMetDateDropdownOpen(false) }}
+            className="flex items-center gap-2 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            {t('noInteractionFilter')}
+            {noInteraction && (
+              <span className="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs px-1.5 py-0.5 rounded-full">1</span>
+            )}
+            <ChevronDown size={14} />
+          </button>
+          {noInteractionDropdownOpen && (
+            <div className="absolute top-full mt-1 left-0 z-10 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-40">
+              {[
+                { value: '', label: t('noInteractionAll') },
+                { value: '30', label: t('noInteraction30') },
+                { value: '60', label: t('noInteraction60') },
+                { value: '90', label: t('noInteraction90') },
+              ].map(({ value, label }) => (
+                <button
+                  key={value || 'all'}
+                  onClick={() => {
+                    setNoInteraction(value); setNoInteractionDropdownOpen(false); setPage(1)
+                    const qs = new URLSearchParams(buildParams({ no_interaction: value })).toString()
+                    router.replace(qs ? `/contacts?${qs}` : '/contacts')
+                  }}
+                  className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 ${
+                    noInteraction === value ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300'
+                  }`}
+                >
                   {label}
                 </button>
               ))}

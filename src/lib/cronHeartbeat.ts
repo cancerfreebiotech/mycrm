@@ -10,6 +10,7 @@ type ServiceClient = ReturnType<typeof createServiceClient>
 export const CRON_EXPECTED_INTERVAL_MIN: Record<string, number> = {
   'process-pending-ocr': 2,
   'process-pending-briefings': 2,
+  'pre-meeting-briefings': 360,
   'check-feedback': 1440,
   'run-report-schedules': 60,
   'purge-retention': 1440,
@@ -17,6 +18,7 @@ export const CRON_EXPECTED_INTERVAL_MIN: Record<string, number> = {
   'import-suppressions': 1440,
   'health-watchdog': 10,
   'process-scheduled-campaigns': 10,
+  'task-reminders': 1440,
 }
 
 /**

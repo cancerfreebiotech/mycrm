@@ -349,7 +349,18 @@
     "trackUnsub": "取消訂閱",
     "trackUnsubTitle": "此收件人已退訂",
     "clearUnsubscribeConfirm": "確認清除這個聯絡人的退訂/退信狀態？\n\n會清掉：\n- contact 的 email 狀態 badge\n- 全域退訂名單 (newsletter_unsubscribes)\n- 訂閱者 unsubscribed_at\n\n下次寄送會把這個 email 算進去。",
-    "clearUnsubscribeFailed": "清除失敗"
+    "clearUnsubscribeFailed": "清除失敗",
+    "relatedTasks": "相關任務",
+    "noInteractionFilter": "無互動時間",
+    "noInteractionAll": "全部",
+    "noInteraction30": "30 天以上",
+    "noInteraction60": "60 天以上",
+    "noInteraction90": "90 天以上",
+    "savedViewsSave": "儲存檢視",
+    "savedViewNamePlaceholder": "檢視名稱",
+    "savedViewDeleteConfirm": "確定要刪除檢視「{name}」嗎？",
+    "savedViewSaveFailed": "儲存檢視失敗",
+    "savedViewDeleteFailed": "刪除檢視失敗"
   },
   "batchUpload": {
     "title": "批次上傳名片",
@@ -498,7 +509,12 @@
     "deleteConfirm": "確定要刪除此筆記嗎？",
     "empty": "目前沒有未歸類的筆記",
     "emptyHint": "所有筆記都已歸類到聯絡人",
-    "emptyContent": "（空白）"
+    "emptyContent": "（空白）",
+    "aiSuggest": "AI 建議",
+    "aiFailed": "AI 建議失敗",
+    "aiNoSuggestion": "AI 找不到合適的聯絡人",
+    "aiNoName": "（無姓名）",
+    "aiConfidence": "{pct}%"
   },
   "tags": {
     "title": "Tag 管理",
@@ -1119,7 +1135,16 @@
     "mergeAll": "名片、互動紀錄、Tag 全部合併到保留聯絡人",
     "mergeIrreversible": "來源聯絡人刪除後無法復原",
     "confirmMerge": "確認合併",
-    "mergeFailed": "合併失敗"
+    "mergeFailed": "合併失敗",
+    "aiReview": "AI 判斷",
+    "aiFailed": "AI 判斷失敗",
+    "aiConfidence": "信心 {pct}%",
+    "aiAdoptMerge": "採用建議合併",
+    "verdict": {
+      "same_person": "同一人",
+      "different": "不同人",
+      "unsure": "無法判定"
+    }
   },
   "pendingReview": {
     "title": "待審核名片",

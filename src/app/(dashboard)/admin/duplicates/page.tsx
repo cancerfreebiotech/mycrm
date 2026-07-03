@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { ScanSearch, Loader2, Merge, X, ExternalLink, CheckSquare, Square } from 'lucide-react'
+import { ScanSearch, Loader2, Merge, X, ExternalLink, CheckSquare, Square, Sparkles } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { PermissionGate } from '@/components/PermissionGate'
 
@@ -33,6 +33,19 @@ interface DupPair {
 
 type MergeAction = { pairId: string; keepId: string; sourceId: string } | null
 
+interface AiReview {
+  verdict: 'same_person' | 'different' | 'unsure'
+  confidence: number
+  reason: string
+  keepSuggestion: 'a' | 'b' | null
+}
+
+const VERDICT_BADGE: Record<AiReview['verdict'], string> = {
+  same_person: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+  different: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
+  unsure: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+}
+
 export default function DuplicatesPage() {
   const t = useTranslations('duplicates')
   const tc = useTranslations('common')
@@ -50,6 +63,31 @@ export default function DuplicatesPage() {
   const [bulkActions, setBulkActions] = useState<Map<string, BulkAction>>(new Map())
   const [bulkExecuting, setBulkExecuting] = useState(false)
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
+  const [aiLoading, setAiLoading] = useState<string | null>(null)
+  const [aiResults, setAiResults] = useState<Map<string, AiReview>>(new Map())
+  const [aiErrors, setAiErrors] = useState<Map<string, string>>(new Map())
+
+  async function runAiReview(pairId: string) {
+    setAiLoading(pairId)
+    setAiErrors((prev) => { const next = new Map(prev); next.delete(pairId); return next })
+    try {
+      const res = await fetch('/api/contacts/ai-merge-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pairId }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? String(res.status))
+      }
+      const data = (await res.json()) as AiReview
+      setAiResults((prev) => new Map(prev).set(pairId, data))
+    } catch (e) {
+      setAiErrors((prev) => new Map(prev).set(pairId, e instanceof Error ? e.message : t('aiFailed')))
+    } finally {
+      setAiLoading(null)
+    }
+  }
 
   function setBulkAction(pairId: string, action: BulkAction | null) {
     setBulkActions((prev) => {
@@ -255,6 +293,14 @@ export default function DuplicatesPage() {
             <ContactCard c={b} />
           </div>
           <div className="flex flex-col gap-2 shrink-0 mt-1">
+            <button
+              onClick={() => runAiReview(pair.id)}
+              disabled={aiLoading === pair.id || bulkExecuting}
+              className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs border border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/30 disabled:opacity-50"
+            >
+              {aiLoading === pair.id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              {t('aiReview')}
+            </button>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setBulkAction(pair.id, 'mergeLeft')}
@@ -306,6 +352,39 @@ export default function DuplicatesPage() {
         {pair.match_type === 'similar_name' && pair.similarity_score != null && (
           <p className="text-xs text-gray-400 mt-2">{t('similarity', { pct: (pair.similarity_score * 100).toFixed(0) })}</p>
         )}
+        {aiErrors.get(pair.id) && (
+          <p className="mt-3 text-xs text-red-600 dark:text-red-400">{t('aiFailed')}: {aiErrors.get(pair.id)}</p>
+        )}
+        {(() => {
+          const review = aiResults.get(pair.id)
+          if (!review) return null
+          return (
+            <div className="mt-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`px-2 py-0.5 text-xs rounded font-medium ${VERDICT_BADGE[review.verdict]}`}>
+                  {t(`verdict.${review.verdict}`)}
+                </span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {t('aiConfidence', { pct: (review.confidence * 100).toFixed(0) })}
+                </span>
+              </div>
+              {review.reason && <p className="text-xs text-gray-600 dark:text-gray-300 mt-1.5">{review.reason}</p>}
+              {review.verdict === 'same_person' && (
+                <button
+                  onClick={() => {
+                    const keepId = review.keepSuggestion === 'b' ? b.id : a.id
+                    const sourceId = review.keepSuggestion === 'b' ? a.id : b.id
+                    setMergeAction({ pairId: pair.id, keepId, sourceId })
+                  }}
+                  disabled={bulkExecuting}
+                  className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
+                >
+                  <Merge size={12} /> {t('aiAdoptMerge')}
+                </button>
+              )}
+            </div>
+          )
+        })()}
       </div>
     )
   }

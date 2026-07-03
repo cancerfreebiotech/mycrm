@@ -349,7 +349,18 @@
     "trackUnsub": "配信停止",
     "trackUnsubTitle": "この受信者は配信を停止しました",
     "clearUnsubscribeConfirm": "この連絡先の配信停止／バウンスステータスをクリアしますか？\n\n以下がクリアされます：\n- 連絡先のメールステータスバッジ\n- 全体の配信停止リスト（newsletter_unsubscribes）\n- 購読者の unsubscribed_at\n\n次回の送信からこのメールが対象に含まれます。",
-    "clearUnsubscribeFailed": "クリアに失敗しました"
+    "clearUnsubscribeFailed": "クリアに失敗しました",
+    "relatedTasks": "関連タスク",
+    "noInteractionFilter": "未接触期間",
+    "noInteractionAll": "すべて",
+    "noInteraction30": "30日以上",
+    "noInteraction60": "60日以上",
+    "noInteraction90": "90日以上",
+    "savedViewsSave": "ビューを保存",
+    "savedViewNamePlaceholder": "ビュー名",
+    "savedViewDeleteConfirm": "ビュー「{name}」を削除しますか？",
+    "savedViewSaveFailed": "ビューの保存に失敗しました",
+    "savedViewDeleteFailed": "ビューの削除に失敗しました"
   },
   "batchUpload": {
     "title": "名刺一括アップロード",
@@ -498,7 +509,12 @@
     "deleteConfirm": "このメモを削除してもよろしいですか？",
     "empty": "未分類のメモはありません",
     "emptyHint": "すべてのメモが連絡先に割り当てられています",
-    "emptyContent": "（空白）"
+    "emptyContent": "（空白）",
+    "aiSuggest": "AI 提案",
+    "aiFailed": "AI 提案に失敗しました",
+    "aiNoSuggestion": "AI は該当する連絡先を見つけられませんでした",
+    "aiNoName": "（名前なし）",
+    "aiConfidence": "{pct}%"
   },
   "tags": {
     "title": "タグ管理",
@@ -1119,7 +1135,16 @@
     "mergeAll": "名刺・やり取り・タグはすべて保持する連絡先にマージされます",
     "mergeIrreversible": "ソース連絡先は削除後に復元できません",
     "confirmMerge": "マージを確認",
-    "mergeFailed": "マージに失敗しました"
+    "mergeFailed": "マージに失敗しました",
+    "aiReview": "AI 判定",
+    "aiFailed": "AI 判定に失敗しました",
+    "aiConfidence": "信頼度 {pct}%",
+    "aiAdoptMerge": "提案されたマージを採用",
+    "verdict": {
+      "same_person": "同一人物",
+      "different": "別人物",
+      "unsure": "判定不可"
+    }
   },
   "pendingReview": {
     "title": "確認待ち名刺",

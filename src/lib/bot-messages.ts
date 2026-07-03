@@ -289,6 +289,16 @@ export interface BotMessages {
   aiGenerating: string
   aiGenerateFailed: (msg: string) => string
 
+  // ── /ai agent (bot Q&A) ─────────────────────────────────────────────────────
+  aiThinking: string
+
+  // ── Follow-up buttons (card scan) ───────────────────────────────────────────
+  followupBtn3d: string
+  followupBtn1w: string
+  followupTaskTitle: (name: string) => string
+  followupCreated: (name: string, dueLine: string) => string
+  followupCbCreated: string
+
   // ── Email flow ─────────────────────────────────────────────────────────────
   emailEnterContactQuery: string
   emailEnterContactNameOrCompany: string
@@ -432,7 +442,7 @@ const zh: BotMessages = {
     '/a [姓名] 或 /a 姓名 | 公司 — 為聯絡人新增名片（找不到可建立新聯絡人）\n' +
     '/p [姓名] 或 /p 姓名 | 公司 — 為聯絡人新增合照（找不到可建立新聯絡人）\n' +
     '/li　　　　　　　　　 — 傳送 LinkedIn 截圖解析\n' +
-    '/ai　　　　　　　　　 — AI 生成拜訪信/感謝函\n' +
+    '/ai [問題]　　　　　 — AI 助理問答（帶問題直接問，無參數看模型）\n' +
     '/news　　　　　　　　 — 累積電子報素材（需 newsletter 權限）\n' +
     '/task [任務內容]　　 — 新增任務\n' +
     '/meet [會議資訊]　　 — 新增行程\n' +
@@ -509,6 +519,14 @@ const zh: BotMessages = {
   aiNoRecent: '找不到最近的聯絡人記錄',
   aiGenerating: '⏳ AI 生成中，請稍候...',
   aiGenerateFailed: (msg) => `❌ AI 生成失敗：${msg}`,
+
+  aiThinking: '🤖 思考中…',
+
+  followupBtn3d: '📅 3 天後跟進',
+  followupBtn1w: '📅 1 週後跟進',
+  followupTaskTitle: (name) => `跟進：${name}`,
+  followupCreated: (name, dueLine) => `✅ 已建立跟進任務：<b>${name}</b>\n${dueLine}`,
+  followupCbCreated: '✅ 已建立跟進任務',
 
   photoSaved: (name, count, note) => `✅ 合照${count}已存入 <b>${name}</b>${note}`,
   photoFailed: (msg) => `❌ 處理失敗：${msg}`,
@@ -832,7 +850,7 @@ const en: BotMessages = {
     '/a [name] or /a name | company — Add business card (create contact on miss)\n' +
     '/p [name] or /p name | company — Add personal photo (create contact on miss)\n' +
     '/li　　　　　　　　　　　 — Send LinkedIn screenshot to parse\n' +
-    '/ai　　　　　　　　　　　 — AI generate follow-up / thank-you email\n' +
+    '/ai [question]　　　 — AI assistant Q&A (send a question; no arg shows model)\n' +
     '/news　　　　　　　　　　 — Accumulate newsletter material (needs newsletter permission)\n' +
     '/task [task]　　　　　　 — Add task\n' +
     '/meet [meeting info]　 — Add schedule\n' +
@@ -909,6 +927,14 @@ const en: BotMessages = {
   aiNoRecent: 'No recent contact records found.',
   aiGenerating: '⏳ AI generating, please wait...',
   aiGenerateFailed: (msg) => `❌ AI generation failed: ${msg}`,
+
+  aiThinking: '🤖 Thinking…',
+
+  followupBtn3d: '📅 Follow up in 3 days',
+  followupBtn1w: '📅 Follow up in 1 week',
+  followupTaskTitle: (name) => `Follow up: ${name}`,
+  followupCreated: (name, dueLine) => `✅ Follow-up task created: <b>${name}</b>\n${dueLine}`,
+  followupCbCreated: '✅ Follow-up task created',
 
   photoSaved: (name, count, note) => `✅ Photo(s)${count} saved to <b>${name}</b>${note}`,
   photoFailed: (msg) => `❌ Processing failed: ${msg}`,
@@ -1232,7 +1258,7 @@ const ja: BotMessages = {
     '/a [名前] または /a 名前 | 会社 — 連絡先に名刺を追加（未登録なら新規作成）\n' +
     '/p [名前] または /p 名前 | 会社 — 連絡先に写真を追加（未登録なら新規作成）\n' +
     '/li　　　　　　　　　　　　 — LinkedInスクショを解析\n' +
-    '/ai　　　　　　　　　　　　 — AI でフォローアップメールを生成\n' +
+    '/ai [質問]　　　　　　 — AI アシスタントに質問（引数なしはモデル表示）\n' +
     '/news　　　　　　　　　　　 — ニュースレター素材を蓄積（newsletter 権限必要）\n' +
     '/task [タスク内容]　　　 — タスクを追加\n' +
     '/meet [会議情報]　　　　 — スケジュールを追加\n' +
@@ -1309,6 +1335,14 @@ const ja: BotMessages = {
   aiNoRecent: '最近の連絡先記録が見つかりません。',
   aiGenerating: '⏳ AI生成中、少々お待ちください...',
   aiGenerateFailed: (msg) => `❌ AI生成失敗：${msg}`,
+
+  aiThinking: '🤖 考え中…',
+
+  followupBtn3d: '📅 3日後にフォロー',
+  followupBtn1w: '📅 1週間後にフォロー',
+  followupTaskTitle: (name) => `フォローアップ：${name}`,
+  followupCreated: (name, dueLine) => `✅ フォローアップタスクを作成しました：<b>${name}</b>\n${dueLine}`,
+  followupCbCreated: '✅ フォローアップタスクを作成しました',
 
   photoSaved: (name, count, note) => `✅ 写真${count}を <b>${name}</b> に保存しました${note}`,
   photoFailed: (msg) => `❌ 処理失敗：${msg}`,

@@ -38,6 +38,51 @@ export async function createCalendarEvent(params: CalendarEventParams): Promise<
   return (data.webLink as string) ?? ''
 }
 
+export interface UpcomingEvent {
+  subject: string
+  startIso: string
+  attendeeEmails: string[]
+}
+
+// Read the signed-in user's calendar for the next `hoursAhead` hours.
+// Uses calendarView so recurring-event instances are expanded. Times are
+// requested in UTC and normalised to a proper ISO instant for stable storage.
+export async function listUpcomingEvents(accessToken: string, hoursAhead: number): Promise<UpcomingEvent[]> {
+  const now = new Date()
+  const end = new Date(now.getTime() + hoursAhead * 60 * 60 * 1000)
+  const url = 'https://graph.microsoft.com/v1.0/me/calendarView'
+    + `?startDateTime=${encodeURIComponent(now.toISOString())}`
+    + `&endDateTime=${encodeURIComponent(end.toISOString())}`
+    + '&$select=subject,start,attendees'
+    + '&$top=100'
+
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Prefer: 'outlook.timezone="UTC"',
+    },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message ?? `Graph API error: ${res.status}`)
+  }
+  const data = await res.json()
+  const events = (data.value ?? []) as Array<{
+    subject?: string
+    start?: { dateTime?: string; timeZone?: string }
+    attendees?: Array<{ emailAddress?: { address?: string } }>
+  }>
+
+  return events.map((ev) => {
+    const dt = ev.start?.dateTime ?? ''
+    const startIso = dt ? new Date(dt.endsWith('Z') ? dt : `${dt}Z`).toISOString() : ''
+    const attendeeEmails = (ev.attendees ?? [])
+      .map((a) => a.emailAddress?.address)
+      .filter((e): e is string => !!e)
+    return { subject: ev.subject ?? '', startIso, attendeeEmails }
+  })
+}
+
 interface Attachment {
   name: string
   contentType: string

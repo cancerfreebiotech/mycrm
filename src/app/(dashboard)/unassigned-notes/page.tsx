@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Search, Trash2, X } from 'lucide-react'
+import { Search, Trash2, X, Sparkles, Loader2 } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
 
 interface Note {
@@ -20,6 +20,13 @@ interface ContactOption {
   name: string
   company: string | null
   email: string | null
+}
+
+interface Suggestion {
+  contactId: string
+  name: string | null
+  company: string | null
+  confidence: number
 }
 
 const TYPE_COLOR: Record<string, string> = {
@@ -44,8 +51,33 @@ export default function UnassignedNotesPage() {
   const [searchResults, setSearchResults] = useState<ContactOption[]>([])
   const [searching, setSearching] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [aiNote, setAiNote] = useState<string | null>(null)
+  const [suggestions, setSuggestions] = useState<Map<string, Suggestion[]>>(new Map())
+  const [aiErrors, setAiErrors] = useState<Map<string, string>>(new Map())
 
   useEffect(() => { loadNotes() }, [page])
+
+  async function runAiSuggest(noteId: string) {
+    setAiNote(noteId)
+    setAiErrors((prev) => { const next = new Map(prev); next.delete(noteId); return next })
+    try {
+      const res = await fetch('/api/notes/suggest-contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noteId }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? String(res.status))
+      }
+      const data = (await res.json()) as { suggestions: Suggestion[] }
+      setSuggestions((prev) => new Map(prev).set(noteId, data.suggestions ?? []))
+    } catch (e) {
+      setAiErrors((prev) => new Map(prev).set(noteId, e instanceof Error ? e.message : t('aiFailed')))
+    } finally {
+      setAiNote(null)
+    }
+  }
 
   async function loadNotes() {
     setLoading(true)
@@ -146,8 +178,39 @@ export default function UnassignedNotesPage() {
                   </span>
                 </div>
                 <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{note.content || t('emptyContent')}</p>
+                {aiErrors.get(note.id) && (
+                  <p className="text-xs text-red-500 dark:text-red-400 mt-2">{t('aiFailed')}</p>
+                )}
+                {(() => {
+                  const sugg = suggestions.get(note.id)
+                  if (!sugg) return null
+                  if (sugg.length === 0) return <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">{t('aiNoSuggestion')}</p>
+                  return (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {sugg.map((s) => (
+                        <button
+                          key={s.contactId}
+                          onClick={() => assignContact(note.id, s.contactId)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                        >
+                          <span className="font-medium">{s.name || t('aiNoName')}</span>
+                          {s.company && <span className="text-blue-500 dark:text-blue-400">{s.company}</span>}
+                          <span className="text-blue-400 dark:text-blue-500">{t('aiConfidence', { pct: Math.round(s.confidence * 100) })}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )
+                })()}
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => runAiSuggest(note.id)}
+                  disabled={aiNote === note.id}
+                  className="inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 hover:underline whitespace-nowrap disabled:opacity-50"
+                >
+                  {aiNote === note.id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                  {t('aiSuggest')}
+                </button>
                 <button
                   onClick={() => { setAssigningNote(note.id); setSearchQuery(''); setSearchResults([]) }}
                   className="text-xs text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap"
