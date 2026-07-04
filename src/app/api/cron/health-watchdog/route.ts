@@ -33,6 +33,33 @@ function setsEqual(a: string[], b: string[]): boolean {
 }
 
 // Look up the super admin's telegram_id (service client bypasses RLS) and send.
+// Email fallback (independent of Telegram) — the alert often warns that Telegram
+// itself is down, so a Telegram-only alert can never arrive. Sends directly via
+// SendGrid; never throws (best-effort second channel).
+async function sendEmailAlert(text: string): Promise<void> {
+  const sgKey = process.env.SENDGRID_API_KEY
+  const fromEmail = process.env.SENDGRID_FROM_EMAIL
+  if (!sgKey || !fromEmail) {
+    console.error('[health-watchdog] email fallback unavailable: SendGrid not configured')
+    return
+  }
+  try {
+    const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${sgKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: { email: fromEmail, name: 'myCRM 監控' },
+        subject: '⚠️ myCRM 監控警報',
+        content: [{ type: 'text/html', value: text.replace(/\n/g, '<br>') }],
+        personalizations: [{ to: [{ email: SUPER_ADMIN_EMAIL }] }],
+      }),
+    })
+    if (!res.ok) console.error('[health-watchdog] email fallback failed:', res.status, (await res.text()).slice(0, 200))
+  } catch (e) {
+    console.error('[health-watchdog] email fallback exception:', e)
+  }
+}
+
 async function notifySuperAdmin(service: ServiceClient, text: string): Promise<void> {
   const { data } = await service
     .from('users')
@@ -40,8 +67,18 @@ async function notifySuperAdmin(service: ServiceClient, text: string): Promise<v
     .eq('email', SUPER_ADMIN_EMAIL)
     .single()
   const chatId = data?.telegram_id == null ? NaN : Number(data.telegram_id)
-  if (!Number.isFinite(chatId) || chatId === 0) return
-  await sendTelegramMessage(chatId, text)
+  let telegramDelivered = false
+  if (Number.isFinite(chatId) && chatId !== 0) {
+    try {
+      await sendTelegramMessage(chatId, text)
+      telegramDelivered = true
+    } catch (e) {
+      console.error('[health-watchdog] telegram alert failed, falling back to email:', e)
+    }
+  }
+  // Fall back to email when Telegram is unconfigured or the send failed (e.g.
+  // Telegram is the very service being reported as down).
+  if (!telegramDelivered) await sendEmailAlert(text)
 }
 
 function buildAlert(
@@ -87,7 +124,13 @@ export async function GET(req: NextRequest) {
   const failingJobs: string[] = []
   for (const [job, expectedMin] of Object.entries(CRON_EXPECTED_INTERVAL_MIN)) {
     const run = latest[job]
-    if (!run) continue
+    if (!run) {
+      // Dead-man's switch: a registered job with NO heartbeat EVER (bad path,
+      // rotated CRON_SECRET, never deployed) was previously skipped and thus
+      // invisible. Treat it as overdue so a silently-dead cron surfaces.
+      if (job !== SELF_JOB) overdueJobs.push(`${job}（從未執行）`)
+      continue
+    }
     // The watchdog excludes itself from the overdue check.
     if (job !== SELF_JOB && run.finished_at) {
       const ageMs = Date.now() - new Date(run.finished_at).getTime()

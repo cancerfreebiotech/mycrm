@@ -17,6 +17,7 @@
 * [個人設定](features/settings.md)
 * [電子報素材](features/newsletter.md)
 * [電子報活動與寄送](features/newsletter-campaigns.md)
+* [群發郵件](features/bulk-email.md)
 * [Social Briefing](features/social-briefing.md)
 * [AI 助理](features/ai-assistant.md)
 * [相簿](features/photos.md)

@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## v7.7.2 — fix(ops/security/docs): 監控告警強化 + Super Admin DB 保護 + 群發郵件文件（2026-07-04）
+
+### 維運監控
+- **健康監控告警加入 Email 備援管道**：管理員告警先前只走 Telegram，當 Telegram 未設定或本身故障時（而告警內容正是「Telegram 掛了」）就完全收不到。現在 Telegram 送失敗會自動改寄 Email（SendGrid）給管理員。
+- **排程「從未執行」偵測（dead-man switch）**：登記在案但從未產生過任何心跳的排程（路徑錯、CRON_SECRET 更換、未部署）先前被靜默略過、完全看不到；現在會被標為「從未執行」逾時並告警。
+
+### 安全性
+- **Super Admin 帳號 DB 層保護**：正式資料庫新增 trigger，`pohan.chen@cancerfree.io` 無法被降級或刪除（連直接 SQL 也擋），落實 CLAUDE.md 的 Super Admin 保護規範（app 層先前已擋，此為第二道防線）。
+
+### 文件
+- 新增「群發郵件」使用說明（三語 + 加入說明書目錄）——先前此功能無專屬文件，與電子報功能區分（1:1 個人化寄信 vs 名單群發）。
+- 內部稽核報告移至 repo 根目錄 `AUDIT-2026-07-04.md`（不再放在說明書來源目錄）。
+
 ## v7.7.1 — fix(security/docs): 權限稽核強化 + 組織設定接線 + 全站文件對齊 v7.7.0（2026-07-04）
 
 ### 安全性 / 權限
