@@ -176,11 +176,23 @@ export default function AdminUsersPage() {
   async function toggleRole(u: CrmUser) {
     const newRole = u.role === 'super_admin' ? 'member' : 'super_admin'
     setUpdatingId(u.id)
-    const { error } = await supabase.from('users').update({ role: newRole }).eq('id', u.id)
-    if (!error) {
-      setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, role: newRole } : x))
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/access`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: newRole }),
+      })
+      if (res.ok) {
+        setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, role: newRole } : x))
+      } else {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error ?? tc('error'))
+      }
+    } catch {
+      alert(tc('error'))
+    } finally {
+      setUpdatingId(null)
     }
-    setUpdatingId(null)
   }
 
   async function resetMfa(u: CrmUser) {
@@ -212,11 +224,23 @@ export default function AdminUsersPage() {
       ? current.filter((f) => f !== feature)
       : [...current, feature]
     setUpdatingId(u.id)
-    const { error } = await supabase.from('users').update({ granted_features: next }).eq('id', u.id)
-    if (!error) {
-      setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, granted_features: next } : x))
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/access`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ granted_features: next }),
+      })
+      if (res.ok) {
+        setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, granted_features: next } : x))
+      } else {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error ?? tc('error'))
+      }
+    } catch {
+      alert(tc('error'))
+    } finally {
+      setUpdatingId(null)
     }
-    setUpdatingId(null)
   }
 
   function startEditTelegram(u: CrmUser) {

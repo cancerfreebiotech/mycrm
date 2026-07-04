@@ -2,6 +2,7 @@
 
 ## 快速開始
 
+* [快速開始總覽](getting-started/index.md)
 * [專案簡介](README.md)
 * [環境設定與部署](deployment/setup.md)
 * [第一次登入](getting-started/first-login.md)

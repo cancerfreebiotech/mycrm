@@ -108,7 +108,7 @@ myCRM は 3 つの言語に対応しています：**繁体字中国語**・**En
 
 **super_admin 専用：**
 
-AI モデル管理、システム健全性、MCP Tokens、MCP 活動、フィードバック管理は super_admin のみに表示されます。
+組織設定、AI モデル管理、システム健全性、MCP Tokens、MCP 活動、監査ログ、フィードバック管理は super_admin のみに表示されます。
 
 ---
 

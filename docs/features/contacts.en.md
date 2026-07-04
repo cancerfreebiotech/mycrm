@@ -26,6 +26,33 @@ Click the "Excel" or "CSV" button to download the current filtered results (not 
 
 > **Export permission required**: Only **super_admin** or members granted the "Export Contacts (`export_contacts`)" permission can use this. Without permission the buttons are disabled, and hovering shows "Contact admin to request export permission".
 
+### Multi-select & Batch Edit
+
+- Each row has a checkbox on the left, with "Select all" in the header (applies to the current page)
+- Once one or more are selected, a "**Batch Edit (N)**" button appears in the toolbar, opening the batch edit modal
+- You can apply at once: Met at / Met date, Referred by, Company, Country, Language, and Tags (tags are **added**; existing tags are not removed)
+- Empty fields mean **keep unchanged**; if "Met at" is filled, a meeting interaction log is also written for each selected contact
+
+### Email Selected / Filtered Contacts
+
+When you have a selection or an active filter and there are emailable contacts, a green "**Email (N)**" button appears in the toolbar; clicking it carries those recipients to `/email/compose` for a bulk send.
+
+- Recipients are **deduplicated by Email** (multiple contacts sharing one Email are sent to once)
+- Non-emailable contacts (no Email, blacklisted, unsubscribed, or bad Email status) are automatically excluded; the excluded count is shown next to the button and in a banner above
+
+### Create a Newsletter List
+
+When you have a selection or an active filter and there are emailable contacts, a "**Create List (N)**" button appears in the toolbar (requires **super_admin** or the "Newsletter (`newsletter`)" permission).
+
+- Click it to enter a list name (required) and description; the list is created from the **emailable subset**
+- After creation you are redirected to the new list's page
+
+### Add a Contact via LinkedIn Screenshot
+
+The toolbar's "**New**" button is a dropdown with two options:
+- **Add Contact**: go to `/contacts/new` for manual entry
+- **LinkedIn Screenshot**: pick a screenshot of a LinkedIn profile; AI parses it and pre-fills the new-contact form
+
 ---
 
 ## Add Contact

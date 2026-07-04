@@ -20,9 +20,11 @@ nav_order: 2
 | `/b [description]` | `/batch` | Enter batch mode: shoot many cards in a row, OCR runs in background; add a description of where you met to tag the whole batch |
 | `/done` | — | End batch mode and queue OCR |
 | `/cancel` | — | Abort current mode |
+| `/met [count] [description]` | — | Bulk-tag "where met / date / referrer" on your most recently created contacts |
 | `/email [keyword]` | `/e` | Send Email from contact details |
 | `/work [description]` | `/w` | AI parses natural language to create a task |
 | `/tasks` | `/t` | List your pending tasks |
+| `/meet [meeting info]` | `/m` | AI parses natural language to schedule a meeting and write it to your calendar |
 | `/user` | `/u` | List all organization members |
 | `/ai` | — | Show the AI model you are currently using |
 | `/stop` | — | (Super Admin) Enable maintenance mode; type `/stop off` to disable |
@@ -208,6 +210,49 @@ Each task has buttons:
 - **✅ Complete** — Mark as done
 - **⏭ Postpone** — Enter new due date
 - **❌ Cancel** — Cancel the task
+
+---
+
+### `/meet` / `/m` — Schedule a Meeting (AI Natural Language Parsing)
+
+Schedule a meeting in natural language. The Bot uses AI to parse the time, attendees, and location, then replies with a confirmation card; the event is only written to your Outlook / Teams calendar after you press "Confirm".
+
+```
+/meet Product meeting with Luna tomorrow at 3pm
+/m Visit Kyushu University lab on 3/25 at 1pm
+→ Bot: ⏳ AI parsing...
+→ Bot: [Confirmation card]
+        📅 Product meeting
+        🕐 3/25 (Tue) 13:00 – 14:00 (Taipei)
+        👤 You, Luna
+        [Confirm]  [Cancel]
+→ Press "Confirm" → Bot: ✅ Event created! (with calendar link)
+```
+
+- Attendees are matched against the organization member list by name / Email.
+- Creating an event requires that you have completed Microsoft login authorization on the myCRM website.
+- Press "Cancel" to not create the event.
+
+---
+
+### `/met` — Bulk-Tag "Where Met"
+
+Add "where met / date / referrer" to your N most recently created contacts at once. Handy right after scanning a stack of cards with `/b`, to tag the whole batch's source in one go.
+
+Format: `/met [count] [description]` (count capped at 20)
+
+```
+/met 5 Met at BioJapan in Tokyo last week, introduced by Luna
+→ Bot: 🤖 Parsing...
+→ Bot: Found your 5 most recent contacts, will tag:
+        📍 BioJapan  📅 2026-06-25  🤝 Referrer Luna
+        1. John Smith (ABC Corp)
+        ...
+        [Confirm]  [Cancel]
+→ Press "Confirm" → the whole batch gets the "where met" info
+```
+
+AI parses "where met / date / referrer" from the description and applies it to the N most recent contacts. Press "Cancel" to make no changes.
 
 ---
 

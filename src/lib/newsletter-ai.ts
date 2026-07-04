@@ -68,9 +68,9 @@ export interface RefinedStory {
 }
 
 // ── Refine raw zh-TW content into polished paragraphs_html ──────────────────
-export async function refineProseZh(story: DraftStoryInput): Promise<RefinedStory> {
+export async function refineProseZh(story: DraftStoryInput, orgName = 'CancerFree Biotech'): Promise<RefinedStory> {
   const tone = await loadToneCorpus('zh-TW', 2)
-  const prompt = `你是 cancerfree.io 月電子報的文字編輯。把員工的原始素材潤稿成正式版段落。
+  const prompt = `你是 ${orgName} 月電子報的文字編輯。把員工的原始素材潤稿成正式版段落。
 
 【品牌語氣（過去電子報摘錄，僅供參考）】
 ${tone || '(無過往樣本，請按一般專業商業語氣)'}
@@ -172,6 +172,7 @@ export async function generatePromoText(
   period: string,
   titles: string[],   // up to 3 highlight story titles in the target lang
   lang: Lang,
+  orgName = 'CancerFree Biotech',
 ): Promise<string> {
   const limits = lang === 'en' ? '100-200 chars' : '80-150 chars'
   const langName = lang === 'zh-TW' ? '繁體中文' : lang === 'en' ? 'English' : '日本語'
@@ -182,7 +183,7 @@ export async function generatePromoText(
     'ja':    'CancerFree 2026年5月号ニュースレター配信開始！今号の注目：Prometheus Lab AI 沖縄初導入、EVA Select ニューヨーク発表。詳細はメールをご確認ください。',
   }
 
-  const prompt = `Write a short PLAIN-TEXT promo for cancerfree.io's ${period} newsletter.
+  const prompt = `Write a short PLAIN-TEXT promo for ${orgName}'s ${period} newsletter.
 
 Language: ${langName}
 Length: ${limits}

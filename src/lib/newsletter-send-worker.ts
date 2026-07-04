@@ -2,6 +2,7 @@ import type { createServiceClient } from '@/lib/supabase'
 import { createHmac } from 'crypto'
 import { emailTokenSecret } from '@/lib/emailTokenSecret'
 import { recordUsage } from '@/lib/usage'
+import { getOrgSettings } from '@/lib/orgSettings'
 
 type ServiceClient = ReturnType<typeof createServiceClient>
 
@@ -104,6 +105,9 @@ export async function sendCampaign(
   if (!sgKey || !fromEmail) {
     throw new SendCampaignError(500, { error: 'SendGrid not configured (SENDGRID_API_KEY / SENDGRID_FROM_EMAIL)' })
   }
+  // Reply-To comes from org settings (env fallback baked in) so replies route to
+  // the configured address rather than SendGrid's from-only default.
+  const { newsletter_reply_to: replyTo } = await getOrgSettings(service, ['newsletter_reply_to'])
 
   // ── Gather recipients ──
   let recipients: Subscriber[] = []
@@ -321,6 +325,7 @@ export async function sendCampaign(
     })
     const payload = {
       from: { email: fromEmail, name: fromName },
+      reply_to: { email: replyTo },
       subject: campaign.subject,
       content: [{ type: 'text/html', value: htmlWithPreheader }],
       personalizations,

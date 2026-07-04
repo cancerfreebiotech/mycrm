@@ -38,9 +38,11 @@ Vercel プロジェクト設定（またはローカルの `.env.local`）に以
 | `GEMINI_API_KEY` | Google Gemini API Key。Portkey が利用できない場合のフォールバック、および AI チャット/ブリーフィング機能で使用 |
 | `SENDGRID_API_KEY` | SendGrid API Key。すべてのメール送信 |
 | `SENDGRID_FROM_EMAIL` | 送信元メール（SendGrid で検証済みであること） |
+| `SENDGRID_WEBHOOK_SECRET` | SendGrid イベント Webhook の署名を検証するシークレット（開封／クリック／バウンス／配信停止などのイベント通知） |
 | `NEXTAUTH_SECRET` | メールリンクのトークンと HMAC 署名用シークレット |
 | `CRON_SECRET` | すべての Vercel Cron を保護するシークレット |
 | `NEXT_PUBLIC_APP_URL` | 完全な URL、例：`https://mycrm.vercel.app` |
+| `NEXTAUTH_URL` | メールリンクや Bot 返信などの絶対 URL を生成する際のベース。`NEXT_PUBLIC_APP_URL` より優先 |
 
 ### Gmail レポート送信（任意）
 
@@ -58,6 +60,13 @@ Vercel プロジェクト設定（またはローカルの `.env.local`）に以
 | `TEAMS_TENANT_ID` | Azure AD テナント ID |
 | `AZURE_OAUTH_CLIENT_ID` | Azure AD OAuth Client ID。未設定の場合は `TEAMS_BOT_APP_ID` を使用 |
 | `AZURE_OAUTH_CLIENT_SECRET` | Azure AD OAuth Client Secret。未設定の場合は `TEAMS_BOT_APP_SECRET` を使用 |
+
+### MCP エンドポイントとログインドメイン（任意）
+
+| 変数名 | 説明 |
+|--------|------|
+| `MCP_AGENT_TOKEN` | 外部 AI エージェント向けの MCP エンドポイント（`/api/mcp`）を保護するアクセストークン。未設定の場合は当該エンドポイントへのアクセスを拒否 |
+| `ALLOWED_EMAIL_DOMAIN` | ログインを許可する会社メールドメインの許可リスト（デフォルトは `cancerfree.io`）。これは Next.js アプリ側の設定で、下記 Supabase Edge Functions の `ORG_EMAIL_DOMAIN` secret（inbound-parse が組織自身のドメインを判定）に対応します。両者は異なる実行環境ですが、通常は同じ値に設定します |
 
 ---
 
@@ -157,6 +166,11 @@ SELECT cron.schedule('send-reminder', '* * * * *',
 | `/api/cron/process-pending-briefings` | `*/2 * * * *` | 2 分ごとに連絡先ブリーフィング生成キューを処理 |
 | `/api/cron/check-feedback` | `0 18 * * *` | システムフィードバックを毎日チェックし要約メールを送信 |
 | `/api/cron/run-report-schedules` | `0 * * * *` | 期限が来たレポートスケジュールを毎時実行 |
+| `/api/cron/purge-retention` | `30 19 * * *` | 保持期間を過ぎたソフト削除／期限切れ行（ゴミ箱の連絡先、bot セッション、重複排除記録など）を毎日削除 |
+| `/api/cron/health-watchdog` | `*/10 * * * *` | 10 分ごとにサービスヘルスチェックを実行し cron ハートビートを点検。遅延／失敗ジョブを Telegram で super admin に通知 |
+| `/api/cron/process-scheduled-campaigns` | `*/10 * * * *` | 10 分ごとに、期限が来た予約済みニュースレターを送信 |
+| `/api/cron/task-reminders` | `0 1 * * *` | 毎日 09:00（Asia/Taipei）に Telegram で個人タスクダイジェストを送信（期限切れ＋本日期限） |
+| `/api/cron/pre-meeting-briefings` | `0 */6 * * *` | 6 時間ごとに Outlook カレンダーの今後 24 時間の会議をスキャンし、外部参加者の会議前ブリーフィングを自動キュー投入 |
 
 ---
 

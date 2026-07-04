@@ -89,3 +89,13 @@ Adds a second verification step at login using TOTP (time-based one-time passwor
 ### Disable
 
 Click "Disable MFA" and confirm to remove it. After disabling, you will no longer need a code when signing in.
+
+---
+
+## Personal Email Generation Prompt
+
+Customize **your personal** AI email-generation instructions, overriding the organization/system default prompt. This instruction is applied when you use "AI Generate" to write an email from the [Contact Detail](contacts.md) page.
+
+- Enter a custom prompt in the text box, then click "Save"
+- Click "Reset to default" to clear the text box
+- **Leaving it empty** means the organization or system default is used; when empty, the currently effective system default is shown below for reference

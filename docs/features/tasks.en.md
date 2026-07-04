@@ -47,14 +47,15 @@ Click "+ Add Task" and fill in:
 
 ### Actions
 
-Each task has action buttons on the right (only available for `pending` status):
+Each task has action buttons on the right:
 
-| Button | Action |
-|--------|--------|
-| ✏️ | Edit task |
-| ✅ Complete | Mark as done |
-| ⏭ Postpone | Open popup to enter new due date; status changes to postponed |
-| ❌ Cancel | Mark as cancelled |
+| Button | Action | Available for |
+|--------|--------|---------------|
+| ✏️ | Edit task | All statuses |
+| 🗑 | Delete task | All statuses |
+| ✅ Complete | Mark as done | `pending` only |
+| ⏭ Postpone | Open popup to enter new due date; status changes to postponed | `pending` only |
+| ❌ Cancel | Mark as cancelled | `pending` only |
 
 > **Assistant acting on behalf**: If a manager has set up assistants (see [Personal Settings](settings.md)), assistants can also mark the manager's tasks as complete; the `completed_by` field records the actual operator.
 
@@ -103,6 +104,12 @@ If [Teams Bot](../deployment/teams-setup.md) is configured, an **Adaptive Card**
 
 ## Due Date Reminders
 
-The system automatically scans for due tasks every minute (where `due_at` has just passed within the last 1 minute) and sends Telegram reminders to:
-- All assigned members
-- The task creator (if not in the assignee list)
+Every day at **09:00 (Asia/Taipei)**, a scheduled job (Vercel Cron `task-reminders`) sends a single Telegram "Today's Task Digest" containing:
+- 🔴 **Overdue** tasks (`due_at` has passed and not yet done)
+- 🟡 Tasks **due today**
+
+The digest is only sent to members who have linked Telegram; anyone with no overdue or due-today tasks receives no message (an empty digest is silence, so no opt-out is needed).
+
+Each member receives their **own** tasks, with recipients determined by:
+- Assignees always receive their tasks
+- The task creator is included only for self-reminders (tasks with no assignees); a creator who assigned the task to others is not additionally reminded

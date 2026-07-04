@@ -38,9 +38,11 @@ Fill in the following variables in the Vercel project settings (or local `.env.l
 | `GEMINI_API_KEY` | Google Gemini API Key; fallback when Portkey is unavailable, and used by the AI chat/briefing features |
 | `SENDGRID_API_KEY` | SendGrid API Key; all mail sending |
 | `SENDGRID_FROM_EMAIL` | Sender email (must be verified in SendGrid) |
+| `SENDGRID_WEBHOOK_SECRET` | Secret verifying SendGrid event-webhook signatures (open/click/bounce/unsubscribe event tracking) |
 | `NEXTAUTH_SECRET` | Secret for email-link tokens and HMAC signing |
 | `CRON_SECRET` | Secret protecting all Vercel cron jobs |
 | `NEXT_PUBLIC_APP_URL` | Full URL, e.g. `https://mycrm.vercel.app` |
+| `NEXTAUTH_URL` | Base URL for building absolute links in emails, Bot replies, etc.; takes precedence over `NEXT_PUBLIC_APP_URL` |
 
 ### Gmail Report Delivery (Optional)
 
@@ -58,6 +60,13 @@ Fill in the following variables in the Vercel project settings (or local `.env.l
 | `TEAMS_TENANT_ID` | Azure AD Tenant ID |
 | `AZURE_OAUTH_CLIENT_ID` | Azure AD OAuth Client ID; falls back to `TEAMS_BOT_APP_ID` if unset |
 | `AZURE_OAUTH_CLIENT_SECRET` | Azure AD OAuth Client Secret; falls back to `TEAMS_BOT_APP_SECRET` if unset |
+
+### MCP Endpoint & Login Domain (Optional)
+
+| Variable | Description |
+|----------|-------------|
+| `MCP_AGENT_TOKEN` | Access token protecting the MCP endpoint (`/api/mcp`) for external AI agents; the endpoint rejects access if unset |
+| `ALLOWED_EMAIL_DOMAIN` | Allowlist of company email domains permitted to log in (defaults to `cancerfree.io`). This is a Next.js app-side setting corresponding to the `ORG_EMAIL_DOMAIN` secret of the Supabase Edge Functions below (inbound-parse uses it to identify the org's own domain); they run in different environments and are usually set to the same value |
 
 ---
 
@@ -157,6 +166,11 @@ SELECT cron.schedule('send-reminder', '* * * * *',
 | `/api/cron/process-pending-briefings` | `*/2 * * * *` | Every 2 min, process the contact-briefing generation queue |
 | `/api/cron/check-feedback` | `0 18 * * *` | Daily system-feedback check and summary email |
 | `/api/cron/run-report-schedules` | `0 * * * *` | Hourly runner for due report schedules |
+| `/api/cron/purge-retention` | `30 19 * * *` | Daily purge of soft-deleted/expired rows past their retention window (trash contacts, bot sessions, dedup records, etc.) |
+| `/api/cron/health-watchdog` | `*/10 * * * *` | Every 10 min, run service health checks and inspect the cron heartbeat, alerting the super admin over Telegram on overdue/failing jobs |
+| `/api/cron/process-scheduled-campaigns` | `*/10 * * * *` | Every 10 min, dispatch due scheduled newsletter campaigns |
+| `/api/cron/task-reminders` | `0 1 * * *` | Daily personal task digest via Telegram at 09:00 Asia/Taipei (overdue + due today) |
+| `/api/cron/pre-meeting-briefings` | `0 */6 * * *` | Every 6 hours, scan the next 24h of Outlook calendars and auto-queue pre-meeting briefings for external attendees |
 
 ---
 

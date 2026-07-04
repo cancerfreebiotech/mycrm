@@ -38,9 +38,11 @@ nav_order: 1
 | `GEMINI_API_KEY` | Google Gemini API Key；Portkey 不可用時的備援，並供 AI 對話/情報功能使用 |
 | `SENDGRID_API_KEY` | SendGrid API Key；所有郵件寄送 |
 | `SENDGRID_FROM_EMAIL` | 寄件人 email（須通過 SendGrid 驗證） |
+| `SENDGRID_WEBHOOK_SECRET` | 驗證 SendGrid 事件 Webhook 簽章的密鑰（開信／點擊／退信／退訂等事件回報） |
 | `NEXTAUTH_SECRET` | 郵件連結 token 與 HMAC 簽章密鑰 |
 | `CRON_SECRET` | 保護所有 Vercel Cron 任務的密鑰 |
 | `NEXT_PUBLIC_APP_URL` | 完整網址，例如 `https://mycrm.vercel.app` |
+| `NEXTAUTH_URL` | 產生郵件連結、Bot 回覆等絕對網址的基底；優先於 `NEXT_PUBLIC_APP_URL` |
 
 ### Gmail 報表寄送（選用）
 
@@ -58,6 +60,13 @@ nav_order: 1
 | `TEAMS_TENANT_ID` | Azure AD 租用戶 ID |
 | `AZURE_OAUTH_CLIENT_ID` | Azure AD OAuth Client ID；未設定則沿用 `TEAMS_BOT_APP_ID` |
 | `AZURE_OAUTH_CLIENT_SECRET` | Azure AD OAuth Client Secret；未設定則沿用 `TEAMS_BOT_APP_SECRET` |
+
+### MCP 端點與登入網域（選用）
+
+| 變數名稱 | 說明 |
+|----------|------|
+| `MCP_AGENT_TOKEN` | 保護 MCP 端點（`/api/mcp`）的存取權杖，供外部 AI agent 呼叫；未設定則該端點拒絕存取 |
+| `ALLOWED_EMAIL_DOMAIN` | 允許登入的公司信箱網域白名單（預設 `cancerfree.io`）。此為 Next.js 應用端設定，對應下方 Supabase Edge Functions 的 `ORG_EMAIL_DOMAIN` secret（inbound-parse 判斷組織自有網域）；兩者屬不同執行環境，通常設為相同值 |
 
 ---
 
@@ -157,6 +166,11 @@ SELECT cron.schedule('send-reminder', '* * * * *',
 | `/api/cron/process-pending-briefings` | `*/2 * * * *` | 每 2 分鐘處理聯絡人情報產生佇列 |
 | `/api/cron/check-feedback` | `0 18 * * *` | 每日檢查系統回報並寄出摘要 |
 | `/api/cron/run-report-schedules` | `0 * * * *` | 每小時執行到期的報表排程 |
+| `/api/cron/purge-retention` | `30 19 * * *` | 每日清理逾保留期的軟刪除／過期資料（垃圾桶聯絡人、bot 對話、去重紀錄等） |
+| `/api/cron/health-watchdog` | `*/10 * * * *` | 每 10 分鐘執行服務健康檢查並巡查 cron 心跳，逾時／失敗時以 Telegram 通知 super admin |
+| `/api/cron/process-scheduled-campaigns` | `*/10 * * * *` | 每 10 分鐘寄出到期的排程電子報 |
+| `/api/cron/task-reminders` | `0 1 * * *` | 每日 09:00（Asia/Taipei）以 Telegram 發送個人任務摘要（逾期＋今日到期） |
+| `/api/cron/pre-meeting-briefings` | `0 */6 * * *` | 每 6 小時掃描 Outlook 行事曆未來 24 小時的會議，為外部與會者自動排入會前 briefing |
 
 ---
 

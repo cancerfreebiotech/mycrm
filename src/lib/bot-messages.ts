@@ -444,10 +444,10 @@ const zh: BotMessages = {
     '/li　　　　　　　　　 — 傳送 LinkedIn 截圖解析\n' +
     '/ai [問題]　　　　　 — AI 助理問答（帶問題直接問，無參數看模型）\n' +
     '/news　　　　　　　　 — 累積電子報素材（需 newsletter 權限）\n' +
-    '/task [任務內容]　　 — 新增任務\n' +
+    '/work [任務內容]　　 — 新增任務\n' +
     '/meet [會議資訊]　　 — 新增行程\n' +
-    '/members　　　　　　 — 查看組織成員\n' +
-    '/todos　　　　　　　 — 查看我的任務\n' +
+    '/user　　　　　　 — 查看組織成員\n' +
+    '/tasks　　　　　　　 — 查看我的任務\n' +
     '/lang [zh|en|ja]　　 — 切換 Bot 語言\n' +
     '/stop　　　　　　　　 — 中止目前操作',
 
@@ -852,10 +852,10 @@ const en: BotMessages = {
     '/li　　　　　　　　　　　 — Send LinkedIn screenshot to parse\n' +
     '/ai [question]　　　 — AI assistant Q&A (send a question; no arg shows model)\n' +
     '/news　　　　　　　　　　 — Accumulate newsletter material (needs newsletter permission)\n' +
-    '/task [task]　　　　　　 — Add task\n' +
+    '/work [task]　　　　　　 — Add task\n' +
     '/meet [meeting info]　 — Add schedule\n' +
-    '/members　　　　　　　 — View team members\n' +
-    '/todos　　　　　　　　　 — View my tasks\n' +
+    '/user　　　　　　　 — View team members\n' +
+    '/tasks　　　　　　　　　 — View my tasks\n' +
     '/lang [zh|en|ja]　　　 — Switch Bot language\n' +
     '/stop　　　　　　　　　　 — Cancel current operation',
 
@@ -1260,10 +1260,10 @@ const ja: BotMessages = {
     '/li　　　　　　　　　　　　 — LinkedInスクショを解析\n' +
     '/ai [質問]　　　　　　 — AI アシスタントに質問（引数なしはモデル表示）\n' +
     '/news　　　　　　　　　　　 — ニュースレター素材を蓄積（newsletter 権限必要）\n' +
-    '/task [タスク内容]　　　 — タスクを追加\n' +
+    '/work [タスク内容]　　　 — タスクを追加\n' +
     '/meet [会議情報]　　　　 — スケジュールを追加\n' +
-    '/members　　　　　　　　 — メンバー一覧を表示\n' +
-    '/todos　　　　　　　　　　 — 自分のタスクを確認\n' +
+    '/user　　　　　　　　 — メンバー一覧を表示\n' +
+    '/tasks　　　　　　　　　　 — 自分のタスクを確認\n' +
     '/lang [zh|en|ja]　　　　 — Bot言語を切り替え\n' +
     '/stop　　　　　　　　　　　 — 現在の操作をキャンセル',
 

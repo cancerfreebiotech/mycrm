@@ -8,7 +8,7 @@ has_children: true
 
 > This area contains system administration features; most are limited to `super_admin`. Since v2.3, super_admin can grant selected features to regular members individually via [User Management](users.md); members who are not granted a feature will not see the corresponding item in the sidebar.
 
-**Grantable to regular members:** Tags, Email Templates, Prompts, Countries, Newsletter, Failed Scan Review, Duplicate Contacts, Card Import, Trash, User Management (MFA reset / Telegram edit only).
+**Grantable to regular members:** Tags, Unassigned Notes, Email Templates, Prompts, Countries, Newsletter, Failed Scan Review, Duplicate Contacts, Card Import, Trash, Export Contacts, Bulk Email, User Management (MFA reset / Telegram edit only).
 
 **Reports** is open to all members, who each manage their own schedules; super_admin can see all schedules.
 

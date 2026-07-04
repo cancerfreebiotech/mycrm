@@ -244,6 +244,10 @@ export async function POST(req: NextRequest) {
 
   // AI pipeline: refine zh → translate to en + ja
   // Run stories in parallel for speed (each story = 3 sequential calls but stories parallel)
+  // Org name feeds the AI prompts so the copy references the configured org,
+  // not a hardcoded company (org-settings otherwise silently had no effect here).
+  const { org_name: orgName } = await getOrgSettings(service, ['org_name'])
+
   const trilingual: StoryTrilingual[] = await Promise.all(
     valid.map(async (d) => {
       // If story has a link, fetch its content and prepend to the AI prompt
@@ -258,7 +262,7 @@ export async function POST(req: NextRequest) {
       const dateLabel = d.event_date_end && d.event_date && d.event_date_end > d.event_date
         ? `${d.event_date} – ${d.event_date_end}`
         : d.event_date
-      const zh = await refineProseZh({ title: d.title!, content: enrichedContent, event_date: dateLabel })
+      const zh = await refineProseZh({ title: d.title!, content: enrichedContent, event_date: dateLabel }, orgName)
       const [en, ja] = await Promise.all([
         translateStory(zh, 'en'),
         translateStory(zh, 'ja'),
@@ -309,7 +313,7 @@ export async function POST(req: NextRequest) {
       next: customLabelNext || defaults.next,
     }
     const promoTitles = trilingual.slice(0, 3).map((s) => s[langKey as 'zh' | 'en' | 'ja'].title)
-    const promo = await generatePromoText(period, promoTitles, lang)
+    const promo = await generatePromoText(period, promoTitles, lang, orgName)
     const subject = lang === 'zh-TW'
       ? `CancerFree 電子報 ${monthLabel}`
       : lang === 'en'

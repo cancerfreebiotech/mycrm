@@ -21,8 +21,7 @@ The page lists recent newsletters in a table with columns for title, subject, st
 | Draft | Not yet sent; content and recipient lists can still be edited |
 | Scheduled | Queued for sending (shown in blue) |
 | Sent | Sending completed; shows the number of recipients |
-
-> Newsletters are sent immediately, so a campaign is usually either "Draft" or "Sent".
+| Partial failure | Some recipients failed to receive it (shown in red); hover over the status to see the failure count and error reasons |
 
 A newsletter that has been published to RSS also gets a separate purple "Published" marker next to its status (independent of the send status above).
 
@@ -71,6 +70,10 @@ The editor also offers export and sharing:
 
 > Remember to click "Save draft" after edits. The system also auto-saves once before a real send.
 
+### A/B subject testing
+
+Fill in the "Subject B" field with a second subject and, at send time, the system splits recipients evenly in half — each half receives either subject A or subject B (test sends always use subject A). Leave it empty to disable A/B testing. The open rate of each variant is shown on the analytics page.
+
 ---
 
 ## Selecting recipient lists
@@ -100,6 +103,44 @@ Click "Send now" to start the broadcast. What the system does:
 - **Malformed emails are skipped** and reported in the result so you can clean up the source data
 
 Once complete, the newsletter is marked "Sent" and the list page shows its delivery / open / click engagement.
+
+---
+
+## Scheduled send
+
+Besides sending immediately, you can schedule a newsletter to go out automatically at a future time:
+
+- In the editor, pick the send **date and time** and click "Schedule send" — the newsletter's status becomes "Scheduled" (shown in blue).
+- A scheduled job checks every 10 minutes and sends the newsletter within ~10 minutes of the chosen time; the send behaves exactly like a regular "Send now".
+- You can **cancel the schedule at any time** before it goes out, which returns the newsletter to "Draft".
+
+---
+
+## Analytics
+
+For a sent (or partial failure) newsletter, click the **chart icon** on its row in the list page to open the analytics page:
+
+- **Summary numbers**: delivered, failed, opens (open rate), clicks (click rate)
+- **A/B open rates**: if A/B subject testing was used, the open rate of each of the A and B variants
+- **Link clicks**: the number of clicks and unique clickers per link
+- **Open / click timeline**: opens and clicks distributed over time
+- **Other events**: counts of bounces, unsubscribes, and spam reports
+
+For a partial-failure newsletter, the page also lists the failure count and each error reason at the top (expandable).
+
+---
+
+## Engagement segment lists
+
+For any sent newsletter, you can build a new recipient list from recipients' engagement in one click — handy for follow-up marketing (for example, re-sending only to those who didn't open). Click the "Build segment list" button on the row in the list page and choose the segment to build:
+
+| Segment | Who it includes |
+|---------|-----------------|
+| Openers | Recipients with a recorded open |
+| Clickers | Recipients with a recorded click |
+| Non-openers | Recipients who were delivered but did not open |
+
+Building one creates a new list (named "Newsletter title — Segment") and jumps to that list's page.
 
 ---
 

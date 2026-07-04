@@ -2,7 +2,7 @@
 
 A lightweight CRM built for `@cancerfree.io`. Snap a business card in Telegram → AI reads it → one tap to save → manage everything on the web.
 
-> Current version: **v7.2.8**
+> Current version: **v7.7.0**
 
 ---
 
@@ -32,6 +32,9 @@ A lightweight CRM built for `@cancerfree.io`. Snap a business card in Telegram �
 - **Photo Albums & Face Tagging** — Shared photo album for companion photos; tag multiple people in a single photo and link each face to a contact (v7.1).
 - **AI Assistant** — In-app chat assistant that can search your CRM and answer questions about contacts and activity (v7.2).
 - **Social Briefing** — From a contact's page, generate an AI briefing that summarizes public context about the person or company before a meeting (v7.2).
+- **Org Settings** — Super admins configure organization branding (name, newsletter reply-to/logo, company links) and the allowed login email domain from `/admin/org-settings` (v7.7).
+- **Audit Log** — Super admins review a chronological log of sensitive admin actions (role changes, exports, deletions) at `/admin/audit-log` (v7.7).
+- **GDPR Contact Export** — Export every personal-data record tied to a single contact (cards, photos, logs, tasks, newsletter/email events) as one JSON file for data-subject requests; gated by the `export_contacts` grant and audit-logged (v7.7).
 - **Email Enrichment (Hunter.io)** — Automatically discover and verify missing contact emails; managed from the admin Health page.
 - **MCP Server** — Exposes CRM data to AI agents over the Model Context Protocol; admins issue scoped access tokens and monitor usage.
 - **i18n** — UI fully translated in 繁中 / English / 日本語; locale saved in cookie.
@@ -92,8 +95,11 @@ A lightweight CRM built for `@cancerfree.io`. Snap a business card in Telegram �
 | `/admin/mcp-activity` | MCP usage activity |
 | `/admin/trash` | Soft-deleted contacts (super_admin only) |
 | `/admin/feedback` | Feedback triage (super_admin only) |
+| `/admin/org-settings` | Organization branding + login-domain config (super_admin only) |
+| `/admin/audit-log` | Sensitive admin-action audit trail (super_admin only) |
 | `/api/bot` | Telegram webhook |
 | `/api/mcp` | MCP server endpoint for AI agents |
+| `/api/contacts/[id]/export` | GDPR data-subject export (JSON) for a single contact |
 
 ---
 
