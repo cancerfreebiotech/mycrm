@@ -1,9 +1,9 @@
-# myCRM 說明書
+# Table of contents
 
 ## 快速開始
 
-* [快速開始總覽](getting-started/index.md)
-* [專案簡介](README.md)
+* [快速開始總覽](README.md)
+* [專案簡介](<README (1).md>)
 * [環境設定與部署](deployment/setup.md)
 * [第一次登入](getting-started/first-login.md)
 
