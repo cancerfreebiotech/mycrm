@@ -47,10 +47,43 @@ interface Subscriber {
   contact_id: string | null
 }
 
+// Automatic UTM tagging. Pure transform — appends utm_source/utm_medium/
+// utm_campaign to every outbound http(s) href in the HTML. Existing query
+// params (including pre-set utm_*) are preserved and never overwritten.
+// Skipped: unsubscribe/opt-out links; mailto:/tel:/in-page anchors and the
+// {{{unsubscribe}}} placeholders never match the http(s) pattern anyway.
+export function addUtmTags(html: string, campaignTag: string): string {
+  return html.replace(
+    /(<a\b[^>]*?\shref=)(["'])(https?:\/\/[^"']+)\2/gi,
+    (full, prefix: string, quote: string, href: string) => {
+      if (/unsubscribe|opt-?out/i.test(href)) return full
+      // Query separators inside HTML attributes may be entity-encoded (&amp;) —
+      // decode before parsing, re-encode after so the document stays consistent.
+      const hadAmp = href.includes('&amp;')
+      let url: URL
+      try {
+        url = new URL(hadAmp ? href.replace(/&amp;/g, '&') : href)
+      } catch {
+        return full
+      }
+      if (!url.searchParams.has('utm_source')) url.searchParams.set('utm_source', 'newsletter')
+      if (!url.searchParams.has('utm_medium')) url.searchParams.set('utm_medium', 'email')
+      if (!url.searchParams.has('utm_campaign')) url.searchParams.set('utm_campaign', campaignTag)
+      let out = url.toString()
+      if (hadAmp) out = out.replace(/&/g, '&amp;')
+      return `${prefix}${quote}${out}${quote}`
+    },
+  )
+}
+
 export interface SendCampaignOpts {
   testOnly?: boolean
   testEmail?: string
   resend?: boolean
+  /** Second phase of an A/B holdout test (winner already stamped): bypasses the
+   *  already-sent 409 guard so the cron can send the remainder with the winning
+   *  subject. Resume-dedup still excludes everyone already emailed. */
+  abFinal?: boolean
   actorUserId?: string | null
 }
 
@@ -85,7 +118,7 @@ export async function sendCampaign(
 
   const { data: campaign } = await service
     .from('newsletter_campaigns')
-    .select('id, subject, subject_b, preview_text, content_html, list_ids, sent_at')
+    .select('id, subject, subject_b, preview_text, content_html, list_ids, sent_at, slug, ab_test_pct, ab_winner, sent_count, total_recipients, failed_count')
     .eq('id', campaignId)
     .maybeSingle()
   if (!campaign) throw new SendCampaignError(404, { error: 'campaign not found' })
@@ -95,9 +128,21 @@ export async function sendCampaign(
   // Guard against accidental re-send: a completed send stamps sent_at. Require an
   // explicit resend flag to send again. (People already sent are skipped below
   // regardless, so even a resend only reaches those who haven't received it.)
-  if (!opts.testOnly && campaign.sent_at && !opts.resend) {
+  // abFinal is the deliberate second phase of an A/B holdout test, so it passes.
+  if (!opts.testOnly && campaign.sent_at && !opts.resend && !opts.abFinal) {
     throw new SendCampaignError(409, { error: 'campaign already sent — pass resend:true to send again', sent_at: campaign.sent_at })
   }
+
+  // A/B subject test mode (null when no subject_b or a test send):
+  //   'split'   — subject_b only: alternate a/b across the WHOLE list (legacy 50/50)
+  //   'holdout' — subject_b + ab_test_pct, winner undecided: send only the test cohort
+  //   'final'   — winner stamped: send the remainder with the winning subject (variant 'w')
+  const abMode: 'split' | 'holdout' | 'final' | null =
+    opts.testOnly || !campaign.subject_b?.trim()
+      ? null
+      : campaign.ab_test_pct == null
+        ? 'split'
+        : campaign.ab_winner ? 'final' : 'holdout'
 
   const sgKey = process.env.SENDGRID_API_KEY
   const fromEmail = process.env.SENDGRID_FROM_EMAIL
@@ -213,6 +258,21 @@ export async function sendCampaign(
       return true
     })
 
+    // A/B holdout: send only a deterministic ab_test_pct% cohort now; the
+    // remainder goes out later with the winning subject (decided by the
+    // process-scheduled-campaigns cron). Sort by email + slice so the cohort is
+    // stable across retries — the resume dedup below then keeps working, and
+    // the 'final' phase reaches exactly the complement.
+    if (abMode === 'holdout') {
+      const sorted = [...recipients].sort((x, y) => {
+        const a = x.email.toLowerCase().trim()
+        const b = y.email.toLowerCase().trim()
+        return a < b ? -1 : a > b ? 1 : 0
+      })
+      const cohortSize = Math.max(1, Math.round(sorted.length * (campaign.ab_test_pct as number) / 100))
+      recipients = sorted.slice(0, cohortSize)
+    }
+
     // Resume-safe dedup: exclude anyone who already has a 'sent' recipient row
     // for this campaign, so a re-send or a retry after a mid-loop timeout never
     // emails the same person twice.
@@ -246,6 +306,12 @@ export async function sendCampaign(
   const errors: string[] = []
   const cleanBody = campaign.content_html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000)
 
+  // Top-level subject: in the A/B 'final' phase everyone gets the winning
+  // subject; otherwise subject A (variant b overrides per-personalization).
+  const sendSubject: string = abMode === 'final' && campaign.ab_winner === 'b'
+    ? (campaign.subject_b as string).trim()
+    : campaign.subject
+
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.cancerfree.io'
 
   // Inbox preview text: inject a hidden preheader div right after <body> (the
@@ -260,6 +326,9 @@ export async function sendCampaign(
       : preheaderDiv + campaign.content_html
   }
 
+  // Automatic UTM tagging on every outbound link (campaign slug preferred, id fallback).
+  htmlWithPreheader = addUtmTags(htmlWithPreheader, (campaign.slug as string | null)?.trim() || campaignId)
+
   for (let i = 0; i < recipients.length; i += CHUNK) {
     const slice = recipients.slice(i, i + CHUNK)
 
@@ -269,11 +338,13 @@ export async function sendCampaign(
     // mid-loop timeout doesn't leave rows for chunks that never sent.
     const recipientIdByEmail = new Map<string, string>()
     const chunkRecipientIds: string[] = []
-    // A/B subject test: when subject_b is set, alternate variants a/b across
-    // recipients (deterministic 50/50 by index). Test sends always use subject A.
-    const abActive = !opts.testOnly && !!campaign.subject_b?.trim()
+    // A/B subject test: in 'split' (whole list) and 'holdout' (test cohort)
+    // modes, alternate variants a/b across recipients (deterministic 50/50 by
+    // index). The 'final' phase marks everyone 'w' (winner). Test sends always
+    // use subject A.
+    const abAlternate = abMode === 'split' || abMode === 'holdout'
     const variantByEmail = new Map<string, 'a' | 'b'>()
-    if (abActive) {
+    if (abAlternate) {
       slice.forEach((r, idx) => variantByEmail.set(r.email.toLowerCase().trim(), (i + idx) % 2 === 0 ? 'a' : 'b'))
     }
     if (!opts.testOnly) {
@@ -283,7 +354,7 @@ export async function sendCampaign(
         email: r.email,
         status: 'sent',
         sent_at: new Date().toISOString(),
-        variant: abActive ? variantByEmail.get(r.email.toLowerCase().trim()) : null,
+        variant: abMode === 'final' ? 'w' : abAlternate ? variantByEmail.get(r.email.toLowerCase().trim()) : null,
       }))
       const { data: inserted, error: recErr } = await service
         .from('newsletter_recipients')
@@ -318,7 +389,7 @@ export async function sendCampaign(
         // per-recipient attribution. Omitted for test sends.
         ...(rid ? { custom_args: { 'X-Recipient-Id': rid } } : {}),
         // A/B: per-personalization subject overrides the top-level one for variant b.
-        ...(abActive && variantByEmail.get(r.email.toLowerCase().trim()) === 'b'
+        ...(abAlternate && variantByEmail.get(r.email.toLowerCase().trim()) === 'b'
           ? { subject: campaign.subject_b!.trim() }
           : {}),
       }
@@ -326,7 +397,7 @@ export async function sendCampaign(
     const payload = {
       from: { email: fromEmail, name: fromName },
       reply_to: { email: replyTo },
-      subject: campaign.subject,
+      subject: sendSubject,
       content: [{ type: 'text/html', value: htmlWithPreheader }],
       personalizations,
       // Force open + click tracking on so SendGrid emits the events the
@@ -347,8 +418,12 @@ export async function sendCampaign(
         errors.push(`chunk ${i}: ${res.status} ${errText.slice(0, 200)}`)
         // Roll back this chunk's pre-inserted 'sent' rows so counts/analytics stay
         // accurate and the resume dedup will retry these recipients next run.
+        // error carries the SendGrid status + trimmed body for the 失敗明細 table.
         if (chunkRecipientIds.length > 0) {
-          await service.from('newsletter_recipients').update({ status: 'failed' }).in('id', chunkRecipientIds)
+          await service
+            .from('newsletter_recipients')
+            .update({ status: 'failed', error: `${res.status} ${errText.trim()}`.slice(0, 500) })
+            .in('id', chunkRecipientIds)
         }
         continue
       }
@@ -365,8 +440,8 @@ export async function sendCampaign(
             contact_id: cid,
             type: 'email' as const,
             direction: 'outbound' as const,
-            content: `電子報：${campaign.subject}`,
-            email_subject: campaign.subject,
+            content: `電子報：${sendSubject}`,
+            email_subject: sendSubject,
             email_body: cleanBody,
             created_by: userId,
             campaign_id: campaignId,
@@ -392,9 +467,13 @@ export async function sendCampaign(
         }
       }
     } catch (e) {
-      errors.push(`chunk ${i}: ${e instanceof Error ? e.message : String(e)}`)
+      const msg = e instanceof Error ? e.message : String(e)
+      errors.push(`chunk ${i}: ${msg}`)
       if (chunkRecipientIds.length > 0) {
-        await service.from('newsletter_recipients').update({ status: 'failed' }).in('id', chunkRecipientIds)
+        await service
+          .from('newsletter_recipients')
+          .update({ status: 'failed', error: msg.slice(0, 500) })
+          .in('id', chunkRecipientIds)
       }
     }
   }
@@ -407,14 +486,19 @@ export async function sendCampaign(
   // retry mechanism (resend:true skips already-sent recipients).
   if (!opts.testOnly) {
     const failed = recipients.length - sent
+    // In the A/B 'final' phase the cohort counters are already on the campaign —
+    // add this run's numbers instead of overwriting them.
+    const prevSent = abMode === 'final' ? ((campaign.sent_count as number | null) ?? 0) : 0
+    const prevTotal = abMode === 'final' ? ((campaign.total_recipients as number | null) ?? 0) : 0
+    const prevFailed = abMode === 'final' ? ((campaign.failed_count as number | null) ?? 0) : 0
     await service
       .from('newsletter_campaigns')
       .update({
         status: errors.length > 0 || sent === 0 ? 'partial' : 'sent',
         sent_at: new Date().toISOString(),
-        sent_count: sent,
-        total_recipients: recipients.length,
-        failed_count: failed > 0 ? failed : 0,
+        sent_count: prevSent + sent,
+        total_recipients: prevTotal + recipients.length,
+        failed_count: prevFailed + (failed > 0 ? failed : 0),
         send_errors: errors.length > 0 ? errors.slice(0, 50) : null,
       })
       .eq('id', campaignId)

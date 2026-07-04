@@ -19,6 +19,7 @@ export const CRON_EXPECTED_INTERVAL_MIN: Record<string, number> = {
   'health-watchdog': 10,
   'process-scheduled-campaigns': 10,
   'task-reminders': 1440,
+  'stale-contacts': 10080,
 }
 
 /**

@@ -19,9 +19,22 @@ export async function POST(req: NextRequest) {
   const meetingAt = body?.meeting_at ?? null
 
   const service = createServiceClient()
+
+  // created_by（FK → auth.users）維持 auth user.id；notify_user_id 需要 public.users.id，
+  // 以 email 對應（auth.users.id ≠ public.users.id）。找不到就不通知（null）。
+  let notifyUserId: string | null = null
+  if (user.email) {
+    const { data: publicUser } = await service
+      .from('users')
+      .select('id')
+      .eq('email', user.email)
+      .maybeSingle()
+    notifyUserId = publicUser?.id ?? null
+  }
+
   const { data, error } = await service
     .from('contact_briefings')
-    .insert({ contact_id: contactId, trigger, meeting_at: meetingAt, created_by: user.id })
+    .insert({ contact_id: contactId, trigger, meeting_at: meetingAt, created_by: user.id, notify_user_id: notifyUserId })
     .select('id')
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

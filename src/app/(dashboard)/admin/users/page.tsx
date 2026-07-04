@@ -36,6 +36,10 @@ export default function AdminUsersPage() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [resetMfaId, setResetMfaId] = useState<string | null>(null)
   const [mfaStatus, setMfaStatus] = useState<Record<string, { verified: boolean; anyFactor: boolean }>>({})
+  // Membership status (active / suspended) keyed by user id — served by the
+  // access route GET (organization_members is RLS-locked to service role).
+  const [statusMap, setStatusMap] = useState<Record<string, string>>({})
+  const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
@@ -145,6 +149,19 @@ export default function AdminUsersPage() {
         const { enabled } = await mRes.json()
         setMaintenanceEnabled(!!enabled)
       }
+
+      // Membership status (suspend/offboarding) — super_admin only route.
+      if (role === 'super_admin') {
+        const sRes = await fetch(`/api/admin/users/${profile.id}/access`)
+        if (sRes.ok) {
+          const { statuses } = await sRes.json()
+          const map: Record<string, string> = {}
+          for (const s of (statuses ?? []) as { user_id: string; status: string }[]) {
+            map[s.user_id] = s.status
+          }
+          setStatusMap(map)
+        }
+      }
     }
     load()
   }, [])
@@ -192,6 +209,34 @@ export default function AdminUsersPage() {
       alert(tc('error'))
     } finally {
       setUpdatingId(null)
+    }
+  }
+
+  async function toggleStatus(u: CrmUser) {
+    const current = statusMap[u.id] ?? 'active'
+    const next = current === 'suspended' ? 'active' : 'suspended'
+    const name = u.display_name || u.email
+    const confirmMsg = next === 'suspended'
+      ? t('confirmSuspend', { name })
+      : t('confirmReactivate', { name })
+    if (!confirm(confirmMsg)) return
+    setStatusUpdatingId(u.id)
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/access`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: next }),
+      })
+      if (res.ok) {
+        setStatusMap((prev) => ({ ...prev, [u.id]: next }))
+      } else {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error ?? tc('error'))
+      }
+    } catch {
+      alert(tc('error'))
+    } finally {
+      setStatusUpdatingId(null)
     }
   }
 
@@ -305,6 +350,14 @@ export default function AdminUsersPage() {
     )
   }
 
+  function MembershipBadge({ status }: { status: string }) {
+    return status === 'suspended' ? (
+      <span className="px-2 py-0.5 text-xs bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-400 rounded-full">{t('statusSuspended')}</span>
+    ) : (
+      <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 rounded-full">{t('statusActive')}</span>
+    )
+  }
+
   function ActionButtons({ u }: { u: CrmUser }) {
     return (
       <>
@@ -320,6 +373,21 @@ export default function AdminUsersPage() {
               : u.role === 'super_admin'
               ? t('demoteToMember')
               : t('promoteToAdmin')}
+          </button>
+          <button
+            onClick={() => toggleStatus(u)}
+            disabled={statusUpdatingId === u.id}
+            className={`min-h-[44px] px-3 py-1.5 text-xs border rounded-lg disabled:opacity-40 transition-colors ${
+              statusMap[u.id] === 'suspended'
+                ? 'border-green-300 dark:border-green-800 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/30'
+                : 'border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30'
+            }`}
+          >
+            {statusUpdatingId === u.id
+              ? t('updating')
+              : statusMap[u.id] === 'suspended'
+              ? t('reactivate')
+              : t('suspend')}
           </button>
         </div>
         {u.role !== 'super_admin' && (
@@ -408,7 +476,10 @@ export default function AdminUsersPage() {
                   <p className="font-medium text-gray-900 dark:text-gray-100 truncate">{u.display_name || '—'}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{u.email}</p>
                 </div>
-                <RoleBadge role={u.role} />
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <RoleBadge role={u.role} />
+                  {statusMap[u.id] && <MembershipBadge status={statusMap[u.id]} />}
+                </div>
               </div>
               <div className="flex flex-wrap gap-1.5 mb-3">
                 <StatusPill active={!!u.telegram_id} on={`TG ${t('telegramBound')}`} off={`TG ${t('telegramUnbound')}`} />
@@ -555,7 +626,10 @@ export default function AdminUsersPage() {
                     <StatusPill active={!!u.teams_user_id} on={t('teamsBound')} off={t('teamsUnbound')} />
                   </td>
                   <td className="px-4 py-3">
-                    <RoleBadge role={u.role} />
+                    <div className="flex flex-col items-start gap-1">
+                      <RoleBadge role={u.role} />
+                      {statusMap[u.id] && <MembershipBadge status={statusMap[u.id]} />}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">
                     {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : '—'}

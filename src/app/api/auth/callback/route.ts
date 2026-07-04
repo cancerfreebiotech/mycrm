@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Upsert user record (also persist provider_token for Graph API calls)
-  await serviceClient.from('users').upsert(
+  const { data: upserted } = await serviceClient.from('users').upsert(
     {
       email,
       display_name: data.user.user_metadata?.full_name ?? data.user.user_metadata?.name ?? null,
@@ -55,7 +55,25 @@ export async function GET(request: NextRequest) {
       ...(data.session?.provider_refresh_token ? { provider_refresh_token: data.session.provider_refresh_token } : {}),
     },
     { onConflict: 'email' }
-  )
+  ).select('id').single()
+
+  // Offboarding gate: a suspended member is denied access at login. Suspension is
+  // stored on organization_members.status (user_id → public.users.id). This is the
+  // ONLY enforcement point — an already-logged-in user who is suspended keeps their
+  // session until it expires (≤7 days); suspension takes effect at their next login.
+  if (upserted?.id) {
+    const { data: suspended } = await serviceClient
+      .from('organization_members')
+      .select('status')
+      .eq('user_id', upserted.id)
+      .eq('status', 'suspended')
+      .limit(1)
+      .maybeSingle()
+    if (suspended) {
+      await supabase.auth.signOut()
+      return NextResponse.redirect(`${origin}/login?error=suspended`)
+    }
+  }
 
   return NextResponse.redirect(`${origin}/`)
 }

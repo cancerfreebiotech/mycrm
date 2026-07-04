@@ -13,6 +13,9 @@ type SettingKey =
   | 'company_website'
   | 'company_facebook'
   | 'company_linkedin'
+  | 'feedback_recipient'
+  | 'hunter_enabled'
+  | 'ai_assistant_enabled'
 
 interface SettingEntry {
   value: string
@@ -28,6 +31,13 @@ const FIELDS: { key: SettingKey; labelKey: string; hintKey?: string }[] = [
   { key: 'company_website', labelKey: 'labelCompanyWebsite' },
   { key: 'company_facebook', labelKey: 'labelCompanyFacebook' },
   { key: 'company_linkedin', labelKey: 'labelCompanyLinkedin' },
+  { key: 'feedback_recipient', labelKey: 'labelFeedbackRecipient', hintKey: 'hintFeedbackRecipient' },
+]
+
+// Module kill-switches. Rendered as toggles; values stored as 'true' / 'false'.
+const TOGGLES: { key: SettingKey; labelKey: string; hintKey: string }[] = [
+  { key: 'hunter_enabled', labelKey: 'labelHunterEnabled', hintKey: 'hintHunterEnabled' },
+  { key: 'ai_assistant_enabled', labelKey: 'labelAiAssistantEnabled', hintKey: 'hintAiAssistantEnabled' },
 ]
 
 export default function AdminOrgSettingsPage() {
@@ -145,6 +155,35 @@ export default function AdminOrgSettingsPage() {
             )}
           </div>
         ))}
+
+        <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">{t('sectionModules')}</h2>
+          <div className="space-y-4">
+            {TOGGLES.map(({ key, labelKey, hintKey }) => {
+              const isOn = (form[key] || fallbacks[key] || 'true') === 'true'
+              return (
+                <div key={key} className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{t(labelKey)}</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{t(hintKey)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isOn}
+                    aria-label={t(labelKey)}
+                    onClick={() => { setForm((p) => ({ ...p, [key]: isOn ? 'false' : 'true' })); setSaved(false) }}
+                    className="relative inline-flex items-center justify-center min-h-[44px] min-w-[44px] shrink-0"
+                  >
+                    <span className={`inline-flex h-6 w-11 items-center rounded-full transition-colors ${isOn ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${isOn ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </span>
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         {saved && (

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { ScanSearch, Loader2, Merge, X, ExternalLink, CheckSquare, Square, Sparkles } from 'lucide-react'
+import { ScanSearch, Loader2, Merge, X, ExternalLink, CheckSquare, Square, Sparkles, Wand2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { PermissionGate } from '@/components/PermissionGate'
 
@@ -40,6 +40,13 @@ interface AiReview {
   keepSuggestion: 'a' | 'b' | null
 }
 
+interface MergeSuggestion {
+  recommended_keep_id: string
+  confidence: number
+  field_notes: Array<{ field: string; keep_value: string | null; source_value: string | null; note: string }>
+  rationale: string
+}
+
 const VERDICT_BADGE: Record<AiReview['verdict'], string> = {
   same_person: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
   different: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
@@ -66,6 +73,9 @@ export default function DuplicatesPage() {
   const [aiLoading, setAiLoading] = useState<string | null>(null)
   const [aiResults, setAiResults] = useState<Map<string, AiReview>>(new Map())
   const [aiErrors, setAiErrors] = useState<Map<string, string>>(new Map())
+  const [suggestLoading, setSuggestLoading] = useState<string | null>(null)
+  const [suggestions, setSuggestions] = useState<Map<string, MergeSuggestion>>(new Map())
+  const [suggestErrors, setSuggestErrors] = useState<Map<string, string>>(new Map())
 
   async function runAiReview(pairId: string) {
     setAiLoading(pairId)
@@ -86,6 +96,28 @@ export default function DuplicatesPage() {
       setAiErrors((prev) => new Map(prev).set(pairId, e instanceof Error ? e.message : t('aiFailed')))
     } finally {
       setAiLoading(null)
+    }
+  }
+
+  async function runMergeSuggest(pair: DupPair) {
+    setSuggestLoading(pair.id)
+    setSuggestErrors((prev) => { const next = new Map(prev); next.delete(pair.id); return next })
+    try {
+      const res = await fetch('/api/contacts/merge-suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contact_id_a: pair.contact_id_a, contact_id_b: pair.contact_id_b }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? String(res.status))
+      }
+      const data = (await res.json()) as MergeSuggestion
+      setSuggestions((prev) => new Map(prev).set(pair.id, data))
+    } catch (e) {
+      setSuggestErrors((prev) => new Map(prev).set(pair.id, e instanceof Error ? e.message : t('aiSuggestFailed')))
+    } finally {
+      setSuggestLoading(null)
     }
   }
 
@@ -301,6 +333,14 @@ export default function DuplicatesPage() {
               {aiLoading === pair.id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
               {t('aiReview')}
             </button>
+            <button
+              onClick={() => runMergeSuggest(pair)}
+              disabled={suggestLoading === pair.id || bulkExecuting}
+              className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs border border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/30 disabled:opacity-50"
+            >
+              {suggestLoading === pair.id ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
+              {t('aiSuggest')}
+            </button>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setBulkAction(pair.id, 'mergeLeft')}
@@ -382,6 +422,50 @@ export default function DuplicatesPage() {
                   <Merge size={12} /> {t('aiAdoptMerge')}
                 </button>
               )}
+            </div>
+          )
+        })()}
+        {suggestErrors.get(pair.id) && (
+          <p className="mt-3 text-xs text-red-600 dark:text-red-400">{t('aiSuggestFailed')}: {suggestErrors.get(pair.id)}</p>
+        )}
+        {(() => {
+          const plan = suggestions.get(pair.id)
+          if (!plan) return null
+          const keepIsA = plan.recommended_keep_id === a.id
+          const keep = keepIsA ? a : b
+          const source = keepIsA ? b : a
+          return (
+            <div className="mt-3 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/20 p-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2 py-0.5 text-xs rounded font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                  {t('aiSuggestKeep', { name: keep.name || keep.name_en || t('noName'), side: keepIsA ? t('sideLeft') : t('sideRight') })}
+                </span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {t('aiConfidence', { pct: (plan.confidence * 100).toFixed(0) })}
+                </span>
+              </div>
+              {plan.rationale && <p className="text-xs text-gray-600 dark:text-gray-300 mt-1.5">{plan.rationale}</p>}
+              {plan.field_notes.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{t('aiSuggestFieldNotes')}</p>
+                  {plan.field_notes.map((n, i) => (
+                    <div key={i} className="text-xs text-gray-600 dark:text-gray-300 break-words">
+                      <span className="font-medium">{n.field}</span>：
+                      <span className="text-green-700 dark:text-green-400">{n.keep_value ?? '—'}</span>
+                      {' ← '}
+                      <span className="text-red-600 dark:text-red-400 line-through">{n.source_value ?? '—'}</span>
+                      {n.note && <span className="text-gray-400"> · {n.note}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={() => setMergeAction({ pairId: pair.id, keepId: keep.id, sourceId: source.id })}
+                disabled={bulkExecuting}
+                className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
+              >
+                <Merge size={12} /> {t('aiSuggestApply')}
+              </button>
             </div>
           )
         })()}

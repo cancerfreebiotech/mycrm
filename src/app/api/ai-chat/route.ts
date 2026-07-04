@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { TOOLS, TOOL_BY_NAME, executeTool } from '@/lib/agent-tools'
+import { getOrgSetting } from '@/lib/orgSettings'
 
 export const maxDuration = 60
 
@@ -74,6 +75,11 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Module kill-switch (org-settings). 60s-cached, so this read is near-free.
+  if ((await getOrgSetting(createServiceClient(), 'ai_assistant_enabled')) === 'false') {
+    return NextResponse.json({ error: 'AI 助理目前停用' }, { status: 503 })
+  }
 
   const acting = await resolveActingUser(user.email)
   if (!acting) return NextResponse.json({ error: 'No mycrm profile for this user' }, { status: 403 })

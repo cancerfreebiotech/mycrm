@@ -11,7 +11,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const service = createServiceClient()
   const { data, error } = await service
     .from('newsletter_campaigns')
-    .select('id, title, subject, subject_b, preview_text, content_html, list_ids, status, slug, published_at, sent_at, sent_count, total_recipients, created_at, promo_text, scheduled_at')
+    .select('id, title, subject, subject_b, preview_text, content_html, list_ids, status, slug, published_at, sent_at, sent_count, total_recipients, created_at, promo_text, scheduled_at, ab_test_pct, ab_wait_minutes, ab_winner, ab_decided_at')
     .eq('id', id)
     .maybeSingle()
 
@@ -30,7 +30,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = (await req.json().catch(() => ({}))) as {
     title?: string; subject?: string; subject_b?: string | null; preview_text?: string;
     content_html?: string; list_ids?: string[]; promo_text?: string | null;
-    scheduled_at?: string | null; status?: string
+    scheduled_at?: string | null; status?: string;
+    ab_test_pct?: number | null; ab_wait_minutes?: number | null
   }
 
   const update: Record<string, unknown> = {}
@@ -41,6 +42,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (Array.isArray(body.list_ids)) update.list_ids = body.list_ids
   if (body.promo_text !== undefined) update.promo_text = body.promo_text
   if (body.subject_b !== undefined) update.subject_b = body.subject_b
+  // A/B holdout settings: pct 10–50, wait one of 60/120/240 minutes (null clears both).
+  if (body.ab_test_pct !== undefined) {
+    if (body.ab_test_pct !== null && (!Number.isInteger(body.ab_test_pct) || body.ab_test_pct < 10 || body.ab_test_pct > 50)) {
+      return NextResponse.json({ error: 'ab_test_pct must be an integer between 10 and 50' }, { status: 400 })
+    }
+    update.ab_test_pct = body.ab_test_pct
+  }
+  if (body.ab_wait_minutes !== undefined) {
+    if (body.ab_wait_minutes !== null && ![60, 120, 240].includes(body.ab_wait_minutes)) {
+      return NextResponse.json({ error: 'ab_wait_minutes must be one of 60, 120, 240' }, { status: 400 })
+    }
+    update.ab_wait_minutes = body.ab_wait_minutes
+  }
 
   const service = createServiceClient()
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { recordCronRun } from '@/lib/cronHeartbeat'
+import { getOrgSetting } from '@/lib/orgSettings'
 
 /**
  * Vercel Cron — daily system-feedback check.
@@ -16,7 +17,6 @@ import { recordCronRun } from '@/lib/cronHeartbeat'
  */
 
 const SG_SEND_URL = 'https://api.sendgrid.com/v3/mail/send'
-const RECIPIENT = 'pohan.chen@cancerfree.io'
 const TZ = 'Asia/Taipei'
 
 function esc(s: string | null | undefined): string {
@@ -68,6 +68,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'SendGrid not configured (SENDGRID_API_KEY / SENDGRID_FROM_EMAIL)' }, { status: 500 })
   }
 
+  const recipient = (await getOrgSetting(service, 'feedback_recipient')) || 'pohan.chen@cancerfree.io'
+  const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.cancerfree.io'
+
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
   const { data, error } = await service
     .from('feedback')
@@ -117,7 +120,7 @@ export async function GET(req: NextRequest) {
       <p>過去 24 小時收到 <strong>${rows.length}</strong> 筆新回報：</p>
       <ul style="padding-left:1.2em;">${items}</ul>
       ${aiBlock}
-      <p style="margin-top:1em;"><a href="https://crm.cancerfree.io/admin/feedback">→ 前往後台處理</a></p>
+      <p style="margin-top:1em;"><a href="${appUrl}/admin/feedback">→ 前往後台處理</a></p>
       <p style="color:#888;font-size:12px;">myCRM 每日回報檢查 · ${today}（${TZ}）</p>
     </div>`
   }
@@ -127,10 +130,10 @@ export async function GET(req: NextRequest) {
     headers: { Authorization: `Bearer ${sgKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       from: { email: fromEmail, name: fromName },
-      reply_to: { email: RECIPIENT },
+      reply_to: { email: recipient },
       subject,
       content: [{ type: 'text/html', value: html }],
-      personalizations: [{ to: [{ email: RECIPIENT }] }],
+      personalizations: [{ to: [{ email: recipient }] }],
     }),
   })
   if (res.status !== 202) {
@@ -139,7 +142,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: `SendGrid ${res.status}: ${body}` }, { status: 500 })
   }
   await recordCronRun(service, 'check-feedback', 'ok', { count: rows.length }, Date.now() - startMs)
-  return NextResponse.json({ ok: true, count: rows.length, emailed: RECIPIENT })
+  return NextResponse.json({ ok: true, count: rows.length, emailed: recipient })
 }
 
 export const maxDuration = 300

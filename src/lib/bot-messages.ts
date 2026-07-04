@@ -186,6 +186,7 @@ export interface BotMessages {
   visitLastContactAsk: (name: string, company: string) => string
   visitAfterContactPick: (name: string) => string
   visitSavedDetailed: (contactName: string | null, detail: string) => string
+  visitNoteMissing: string
 
   // ── /task ──────────────────────────────────────────────────────────────────
   taskParsing: string
@@ -224,6 +225,7 @@ export interface BotMessages {
   taskPostponeFormatBad: string
   taskPostponed: (datetime: string) => string
   taskNoTitle: string
+  taskNotFound: string
 
   // ── /meet ──────────────────────────────────────────────────────────────────
   meetUsage: string
@@ -291,6 +293,9 @@ export interface BotMessages {
 
   // ── /ai agent (bot Q&A) ─────────────────────────────────────────────────────
   aiThinking: string
+  aiNotConfigured: string
+  aiTooManySteps: string
+  aiEmptyReply: string
 
   // ── Follow-up buttons (card scan) ───────────────────────────────────────────
   followupBtn3d: string
@@ -521,6 +526,9 @@ const zh: BotMessages = {
   aiGenerateFailed: (msg) => `❌ AI 生成失敗：${msg}`,
 
   aiThinking: '🤖 思考中…',
+  aiNotConfigured: 'AI 未設定（缺 GEMINI_API_KEY）',
+  aiTooManySteps: '這個請求需要的操作步驟太多，已達上限。請把需求拆小一點或更明確一些再試一次。',
+  aiEmptyReply: '抱歉，這次沒有產生有效回覆，請再試一次。',
 
   followupBtn3d: '📅 3 天後跟進',
   followupBtn1w: '📅 1 週後跟進',
@@ -646,6 +654,7 @@ const zh: BotMessages = {
   visitAfterContactPick: (name) => `聯絡人：${name}\n\n請輸入拜訪日期時間（例：2026-03-29 14:00），或輸入「略過」：`,
   visitSavedDetailed: (contactName, detail) =>
     contactName ? `✅ 已儲存拜訪紀錄（${contactName}）${detail}` : `✅ 已儲存為未歸類拜訪紀錄${detail}`,
+  visitNoteMissing: '❌ 找不到剛才輸入的拜訪內容，請重新輸入 <code>/v 姓名 內容</code>',
 
   // ── /task extras ───────────────────────────────────────────────────────────
   taskContactLine: (name, company) => `🔗 聯絡人：${name}${company ? `（${company}）` : ''}\n`,
@@ -674,6 +683,7 @@ const zh: BotMessages = {
   taskPostponeFormatBad: '無法解析日期，請輸入格式如：2026-03-20 15:00 或 tomorrow 3pm',
   taskPostponed: (datetime) => `✅ 已延後任務截止時間至 ${datetime}`,
   taskNoTitle: '',
+  taskNotFound: '❌ 找不到此任務，可能已被刪除',
 
   // ── /meet extras ───────────────────────────────────────────────────────────
   meetConfirmHeader: '📅 <b>確認建立行程</b>\n\n',
@@ -929,6 +939,9 @@ const en: BotMessages = {
   aiGenerateFailed: (msg) => `❌ AI generation failed: ${msg}`,
 
   aiThinking: '🤖 Thinking…',
+  aiNotConfigured: 'AI is not configured (missing GEMINI_API_KEY)',
+  aiTooManySteps: 'This request needs too many steps and hit the limit. Please break it into smaller or more specific requests and try again.',
+  aiEmptyReply: 'Sorry, no valid reply was generated this time. Please try again.',
 
   followupBtn3d: '📅 Follow up in 3 days',
   followupBtn1w: '📅 Follow up in 1 week',
@@ -1054,6 +1067,7 @@ const en: BotMessages = {
   visitAfterContactPick: (name) => `Contact: ${name}\n\nEnter visit datetime (e.g. 2026-03-29 14:00), or type "skip":`,
   visitSavedDetailed: (contactName, detail) =>
     contactName ? `✅ Visit log saved (${contactName})${detail}` : `✅ Unassigned visit log saved${detail}`,
+  visitNoteMissing: '❌ Could not find the visit note you just entered. Please try <code>/v name note</code> again.',
 
   // ── /task extras ───────────────────────────────────────────────────────────
   taskContactLine: (name, company) => `🔗 Contact: ${name}${company ? ` (${company})` : ''}\n`,
@@ -1082,6 +1096,7 @@ const en: BotMessages = {
   taskPostponeFormatBad: 'Could not parse date. Try formats like: 2026-03-20 15:00 or tomorrow 3pm',
   taskPostponed: (datetime) => `✅ Task due time postponed to ${datetime}`,
   taskNoTitle: '',
+  taskNotFound: '❌ Task not found — it may have been deleted.',
 
   // ── /meet extras ───────────────────────────────────────────────────────────
   meetConfirmHeader: '📅 <b>Confirm schedule</b>\n\n',
@@ -1337,6 +1352,9 @@ const ja: BotMessages = {
   aiGenerateFailed: (msg) => `❌ AI生成失敗：${msg}`,
 
   aiThinking: '🤖 考え中…',
+  aiNotConfigured: 'AI が未設定です（GEMINI_API_KEY がありません）',
+  aiTooManySteps: 'このリクエストは必要な操作が多すぎて上限に達しました。もう少し小さく、具体的に分けて再度お試しください。',
+  aiEmptyReply: '申し訳ありません、有効な回答を生成できませんでした。もう一度お試しください。',
 
   followupBtn3d: '📅 3日後にフォロー',
   followupBtn1w: '📅 1週間後にフォロー',
@@ -1462,6 +1480,7 @@ const ja: BotMessages = {
   visitAfterContactPick: (name) => `連絡先：${name}\n\n訪問日時を入力してください（例：2026-03-29 14:00）、または「スキップ」と入力：`,
   visitSavedDetailed: (contactName, detail) =>
     contactName ? `✅ 訪問記録を保存しました（${contactName}）${detail}` : `✅ 未分類の訪問記録を保存しました${detail}`,
+  visitNoteMissing: '❌ 入力された訪問メモが見つかりません。<code>/v 名前 内容</code> をもう一度入力してください。',
 
   // ── /task extras ───────────────────────────────────────────────────────────
   taskContactLine: (name, company) => `🔗 連絡先：${name}${company ? `（${company}）` : ''}\n`,
@@ -1490,6 +1509,7 @@ const ja: BotMessages = {
   taskPostponeFormatBad: '日付を解析できません。例：2026-03-20 15:00 や tomorrow 3pm の形式で入力してください',
   taskPostponed: (datetime) => `✅ タスクの締切を ${datetime} に延期しました`,
   taskNoTitle: '',
+  taskNotFound: '❌ タスクが見つかりません。削除された可能性があります。',
 
   // ── /meet extras ───────────────────────────────────────────────────────────
   meetConfirmHeader: '📅 <b>スケジュール作成の確認</b>\n\n',

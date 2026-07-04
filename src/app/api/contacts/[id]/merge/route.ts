@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { createClient, createServiceClient } from '@/lib/supabase'
+import { logAdminAction } from '@/lib/adminAudit'
 
 const MERGE_FIELDS = [
   'name', 'name_en', 'name_local',
@@ -40,13 +41,11 @@ export async function POST(
 
   const supabase = createServiceClient()
 
-  // Auth check
-  const authHeader = req.headers.get('authorization') || req.headers.get('cookie') || ''
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Use service role — identify caller from cookie via browser client check
-  // We'll verify via a separate auth approach: check X-User-Id header set by middleware
-  // For simplicity: any logged-in user can merge (PRD says all users can use it)
+  // Resolve the caller from the session cookie (proxy already requires a login;
+  // any logged-in user can merge per PRD). The service client above can't read
+  // the session, so use the route client purely for actor identity/audit.
+  const authClient = await createClient()
+  const { data: { user } } = await authClient.auth.getUser()
 
   // Load both contacts
   const [{ data: keepContact }, { data: sourceContact }] = await Promise.all([
@@ -143,6 +142,15 @@ export async function POST(
 
   // 11. Delete source contact (cascades contact_tags)
   await supabase.from('contacts').delete().eq('id', sourceId)
+
+  // Caller identity from the session cookie (route client above); the proxy
+  // guarantees a session exists, so 'unknown' only appears for edge cases.
+  await logAdminAction(supabase, {
+    actorEmail: user?.email ?? 'unknown',
+    action: 'contact_merge',
+    target: keepId,
+    detail: { sourceId },
+  })
 
   return NextResponse.json({ ok: true })
 }

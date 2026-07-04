@@ -14,7 +14,7 @@ async function requireSuperAdmin() {
   return null
 }
 
-interface RecentItem { id: string; error: string | null; at: string | null }
+interface RecentItem { id: string; error: string | null; at: string | null; meta?: string }
 interface TableReport { table: string; failed: number; recent: RecentItem[] }
 
 async function pendingContacts(sb: SupabaseClient): Promise<TableReport> {
@@ -93,7 +93,28 @@ async function failedScans(sb: SupabaseClient): Promise<TableReport> {
   return { table: 'failed_scans', failed: count ?? 0, recent }
 }
 
-// GET — aggregate failed/dead-letter counts across the 4 async pipelines.
+async function botErrors(sb: SupabaseClient): Promise<TableReport> {
+  // bot_errors — Telegram webhook 處理失敗的 dead-letter；resolved=false 視為未處理。
+  const { count } = await sb
+    .from('bot_errors')
+    .select('id', { count: 'exact', head: true })
+    .eq('resolved', false)
+  const { data } = await sb
+    .from('bot_errors')
+    .select('id, error_message, update_type, chat_id, created_at')
+    .eq('resolved', false)
+    .order('created_at', { ascending: false })
+    .limit(5)
+  const recent: RecentItem[] = (data ?? []).map((r) => ({
+    id: r.id as string,
+    error: (r.error_message as string | null) ?? null,
+    at: (r.created_at as string | null) ?? null,
+    meta: `${(r.update_type as string | null) ?? 'other'} · chat_id ${(r.chat_id as number | null) ?? '—'}`,
+  }))
+  return { table: 'bot_errors', failed: count ?? 0, recent }
+}
+
+// GET — aggregate failed/dead-letter counts across the 5 async pipelines.
 export async function GET() {
   const denied = await requireSuperAdmin(); if (denied) return denied
   const sb = createServiceClient()
@@ -102,6 +123,7 @@ export async function GET() {
     contactBriefings(sb),
     newsletterRecipients(sb),
     failedScans(sb),
+    botErrors(sb),
   ])
   return NextResponse.json({ tables })
 }

@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import React, { useEffect, useRef, useState } from 'react'
-import { Users, LayoutDashboard, ShieldCheck, Mail, MailX, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon, Globe, BarChart2, ClipboardList, MapPin, Menu, X, ChevronLeft, ChevronRight, Newspaper, ScanSearch, FolderInput, Activity, Images, Trash2, MessageSquarePlus, Wrench, Building2 } from 'lucide-react'
+import { Users, LayoutDashboard, ShieldCheck, Mail, MailX, LogOut, Settings, Tag, StickyNote, Search, BookOpen, Sun, Moon, Globe, BarChart2, ClipboardList, MapPin, Menu, X, ChevronLeft, ChevronRight, Newspaper, ScanSearch, FolderInput, Activity, Images, Trash2, MessageSquarePlus, Wrench, Building2, ShieldOff, FileSearch } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
@@ -152,6 +152,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/admin/mcp-tokens', label: 'MCP Tokens', icon: ShieldCheck },
     { href: '/admin/mcp-activity', label: 'MCP 活動', icon: Activity },
     { href: '/admin/audit-log', label: t('auditLog'), icon: ClipboardList },
+    { href: '/admin/suppressions', label: t('suppressions'), icon: ShieldOff },
+    { href: '/admin/dsar', label: t('dsar'), icon: FileSearch },
+    { href: '/admin/newsletter/overview', label: t('newsletterOverview'), icon: BarChart2 },
     { href: '/admin/feedback', label: t('feedbackManage'), icon: MessageSquarePlus },
   ] : []
   // User-management gated separately — super_admin OR has user_management feature

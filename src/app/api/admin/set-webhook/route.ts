@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { logAdminAction } from '@/lib/adminAudit'
 
 // One-time admin utility — call this to register Telegram webhook from server side
 // Protected by ADMIN_SECRET env var
@@ -30,6 +31,14 @@ export async function GET(req: NextRequest) {
   // Also return current webhook info
   const infoRes = await fetch(`https://api.telegram.org/bot${botToken}/getWebhookInfo`)
   const info = await infoRes.json()
+
+  // Auth is a shared ADMIN_SECRET (no user identity) → actor is unknown.
+  await logAdminAction(createServiceClient(), {
+    actorEmail: 'unknown',
+    action: 'set_webhook',
+    target: webhookUrl,
+    detail: { ok: data?.ok },
+  })
 
   return NextResponse.json({ setWebhook: data, webhookInfo: info, webhookUrl })
 }

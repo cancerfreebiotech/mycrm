@@ -101,6 +101,8 @@ export async function GET(req: NextRequest) {
               // loop iterates public.users rows (different ids for everyone —
               // see project memory). NULL is the honest system-actor value.
               created_by: null,
+              // notify_user_id → public.users(id): this loop already holds it.
+              notify_user_id: user.id,
             }))
           if (toInsert.length === 0) continue
 
@@ -132,7 +134,61 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const result = { usersProcessed, usersFailed, inserted: totalInserted }
+    // 第二輪：會後成果提示。會議結束後 48 小時內、briefing 已完成、且尚未提示過的
+    // pre_meeting 列，推一則提示請使用者用 /v 記錄成果。每次上限 10 筆，避免逼近 maxDuration。
+    // 即使 telegram_id 缺失也標記 outcome_prompted_at，避免同一列被反覆掃描。
+    let outcomePrompted = 0
+    try {
+      const nowIso = new Date().toISOString()
+      const windowStartIso = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
+      const { data: dueOutcome } = await service
+        .from('contact_briefings')
+        .select('id, notify_user_id, contacts(name, name_en)')
+        .eq('trigger', 'pre_meeting')
+        .eq('status', 'done')
+        .is('outcome_prompted_at', null)
+        .not('notify_user_id', 'is', null)
+        .gte('meeting_at', windowStartIso)
+        .lte('meeting_at', nowIso)
+        .limit(10)
+
+      for (const row of dueOutcome ?? []) {
+        try {
+          const { data: notifyUser } = await service
+            .from('users')
+            .select('telegram_id')
+            .eq('id', row.notify_user_id as string)
+            .maybeSingle()
+          const telegramId = notifyUser?.telegram_id == null ? NaN : Number(notifyUser.telegram_id)
+          if (Number.isFinite(telegramId) && telegramId !== 0) {
+            const rel = (row as { contacts?: { name?: string | null; name_en?: string | null } | { name?: string | null; name_en?: string | null }[] | null }).contacts
+            const c = Array.isArray(rel) ? rel[0] : rel
+            const rawName = (c?.name || c?.name_en || '').trim()
+            const nameEsc = esc(rawName || '（姓名不詳）')
+            const text = `🤝 你與 <b>${nameEsc}</b> 的會議應已結束 — 回覆 /v ${nameEsc} 加上重點，一句話記錄成果`
+            await sendTelegramMessage(telegramId, text)
+          }
+          await service
+            .from('contact_briefings')
+            .update({ outcome_prompted_at: new Date().toISOString() })
+            .eq('id', row.id)
+          outcomePrompted++
+        } catch (err) {
+          console.error(
+            '[pre-meeting-briefings] outcome prompt failed',
+            row.id,
+            err instanceof Error ? err.message : String(err),
+          )
+        }
+      }
+    } catch (err) {
+      console.error(
+        '[pre-meeting-briefings] outcome pass failed',
+        err instanceof Error ? err.message : String(err),
+      )
+    }
+
+    const result = { usersProcessed, usersFailed, inserted: totalInserted, outcomePrompted }
     await recordCronRun(service, 'pre-meeting-briefings', 'ok', result, Date.now() - startMs)
     return NextResponse.json({ ok: true, ...result })
   } catch (err) {

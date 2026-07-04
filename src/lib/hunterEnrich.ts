@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { fetchApiKey } from './hunter'
 import { isEmailErased } from './erasureTombstone'
+import { getOrgSetting } from './orgSettings'
 
 const FREE_DOMAINS = new Set([
   'gmail.com', 'googlemail.com',
@@ -38,6 +39,13 @@ export async function hunterEnrich(
   email: string,
   userId: string | null,
 ): Promise<void> {
+  // Module kill-switch (org-settings). `supabase` here is a service-role client,
+  // so it can read system_settings; getOrgSetting is 60s-cached so this is cheap.
+  if ((await getOrgSetting(supabase, 'hunter_enabled')) === 'false') {
+    console.error('[hunterEnrich] skipped: hunter_enabled=false')
+    return
+  }
+
   const apiKey = await fetchApiKey()
   if (!apiKey) return
 

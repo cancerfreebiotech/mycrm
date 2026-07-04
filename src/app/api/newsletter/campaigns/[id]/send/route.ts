@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { sendCampaign, SendCampaignError } from '@/lib/newsletter-send-worker'
+import { logAdminAction } from '@/lib/adminAudit'
 
 // POST — send this campaign via SendGrid to everyone in its list_ids.
 // The send logic lives in @/lib/newsletter-send-worker (shared with the
@@ -25,6 +26,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       resend: body.resend,
       actorUserId,
     })
+    // Audit real sends (not tests). logAdminAction swallows its own failures.
+    if (!body.testOnly) {
+      const { data: campaign } = await service
+        .from('newsletter_campaigns').select('title').eq('id', campaignId).maybeSingle()
+      await logAdminAction(service, {
+        actorEmail: authUser.email,
+        action: 'newsletter_send',
+        target: campaign?.title ?? campaignId,
+        detail: { sent: result.sent, failed: result.total - result.sent },
+      })
+    }
     return NextResponse.json({ ...result, testOnly: !!body.testOnly })
   } catch (e) {
     if (e instanceof SendCampaignError) return NextResponse.json(e.payload, { status: e.status })

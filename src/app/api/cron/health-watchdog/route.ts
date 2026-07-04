@@ -7,6 +7,7 @@ import {
   getLatestRunsPerJob,
   recordCronRun,
 } from '@/lib/cronHeartbeat'
+import { currentPeriod } from '@/lib/usage'
 
 /**
  * Vercel Cron — every 10 minutes, run all service health checks and inspect the
@@ -21,6 +22,27 @@ type ServiceClient = ReturnType<typeof createServiceClient>
 
 const SUPER_ADMIN_EMAIL = 'pohan.chen@cancerfree.io'
 const SELF_JOB = 'health-watchdog'
+
+// ── Usage budget alerts ─────────────────────────────────────────────────────
+// Any system_settings row keyed `usage_limit_<metric>` (value = monthly numeric
+// cap, stored as text) arms a proactive budget alert for the matching
+// usage_counters.metric. Nothing configured → no rows → no keys → zero change.
+//
+// Supported <metric> values mirror the recordUsage() call sites (src/lib/usage.ts):
+//   usage_limit_ai_call         — AI (Gemini/Portkey) completions      (src/lib/gemini.ts)
+//   usage_limit_ai_tokens_in    — AI prompt tokens                     (src/lib/gemini.ts)
+//   usage_limit_ai_tokens_out   — AI completion tokens                 (src/lib/gemini.ts)
+//   usage_limit_email_sent      — transactional emails sent            (src/app/api/email/send)
+//   usage_limit_newsletter_sent — newsletter recipients sent           (src/lib/newsletter-send-worker.ts)
+const USAGE_LIMIT_PREFIX = 'usage_limit_'
+
+interface UsageAlert {
+  key: string // debounce problem key: usage:<metric>:80 | usage:<metric>:100
+  metric: string
+  value: number
+  cap: number
+  pct: number
+}
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -81,10 +103,46 @@ async function notifySuperAdmin(service: ServiceClient, text: string): Promise<v
   if (!telegramDelivered) await sendEmailAlert(text)
 }
 
+// Read configured usage budgets and compare against this period's counters.
+// Returns one entry per breached threshold (≥80% or ≥100%). Never throws hard on
+// a missing/blank cap — non-numeric or ≤0 caps are ignored.
+async function checkUsageBudgets(service: ServiceClient): Promise<UsageAlert[]> {
+  const { data: settings } = await service
+    .from('system_settings')
+    .select('key, value')
+    .like('key', `${USAGE_LIMIT_PREFIX}%`)
+  const caps = new Map<string, number>()
+  for (const row of settings ?? []) {
+    const metric = String(row.key).slice(USAGE_LIMIT_PREFIX.length)
+    const raw = row.value
+    const cap = Number(typeof raw === 'string' ? raw.trim() : raw)
+    if (metric && Number.isFinite(cap) && cap > 0) caps.set(metric, cap)
+  }
+  if (caps.size === 0) return []
+
+  const { data: counters } = await service
+    .from('usage_counters')
+    .select('metric, value')
+    .eq('period', currentPeriod())
+    .in('metric', [...caps.keys()])
+  const used = new Map<string, number>()
+  for (const row of counters ?? []) used.set(String(row.metric), Number(row.value))
+
+  const alerts: UsageAlert[] = []
+  for (const [metric, cap] of caps) {
+    const value = used.get(metric) ?? 0
+    const pct = Math.floor((value / cap) * 100)
+    if (value >= cap) alerts.push({ key: `usage:${metric}:100`, metric, value, cap, pct })
+    else if (value >= cap * 0.8) alerts.push({ key: `usage:${metric}:80`, metric, value, cap, pct })
+  }
+  return alerts
+}
+
 function buildAlert(
   failedChecks: ServiceStatus[],
   overdueJobs: string[],
   failingJobs: string[],
+  usageAlerts: UsageAlert[],
 ): string {
   const lines: string[] = ['⚠️ <b>myCRM 監控警報</b>']
   if (failedChecks.length > 0) {
@@ -100,6 +158,12 @@ function buildAlert(
   if (failingJobs.length > 0) {
     lines.push('', '<b>排程最近一次執行失敗：</b>')
     for (const j of failingJobs) lines.push(`• ${esc(j)}`)
+  }
+  if (usageAlerts.length > 0) {
+    lines.push('', '<b>用量預算警告：</b>')
+    for (const u of usageAlerts) {
+      lines.push(`• 用量警告:${esc(u.metric)} 本月 ${u.value} / 上限 ${u.cap} (${u.pct}%)`)
+    }
   }
   return lines.join('\n')
 }
@@ -139,11 +203,15 @@ export async function GET(req: NextRequest) {
     if (run.status === 'error') failingJobs.push(job)
   }
 
+  // b2. Proactive usage-budget thresholds (see USAGE_LIMIT_PREFIX docs above).
+  const usageAlerts = await checkUsageBudgets(service)
+
   // Canonical, sorted problem-key set for change detection.
   const problems: string[] = [
     ...failedChecks.map((s) => `check:${s.name}`),
     ...overdueJobs.map((j) => `overdue:${j}`),
     ...failingJobs.map((j) => `failing:${j}`),
+    ...usageAlerts.map((u) => u.key),
   ].sort()
 
   // c. Debounce against the previous watchdog run's recorded problem set.
@@ -160,7 +228,7 @@ export async function GET(req: NextRequest) {
   if (problems.length > 0) {
     // Only send when the problem set changed since the last alert.
     if (!setsEqual(prevAlerted, problems)) {
-      await notifySuperAdmin(service, buildAlert(failedChecks, overdueJobs, failingJobs))
+      await notifySuperAdmin(service, buildAlert(failedChecks, overdueJobs, failingJobs, usageAlerts))
       alertSent = true
     }
   } else if (prevAlerted.length > 0) {

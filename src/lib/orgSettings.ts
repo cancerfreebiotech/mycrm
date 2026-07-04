@@ -28,6 +28,11 @@ export const ORG_SETTING_KEYS = {
   company_website: process.env.COMPANY_WEBSITE ?? 'https://www.cancerfree.io',
   company_facebook: process.env.COMPANY_FACEBOOK ?? 'https://www.facebook.com/cancerfreebio',
   company_linkedin: process.env.COMPANY_LINKEDIN ?? 'https://www.linkedin.com/company/cancerfree-biotech',
+  feedback_recipient: process.env.FEEDBACK_RECIPIENT ?? 'pohan.chen@cancerfree.io',
+  // Module kill-switches. Stored as the strings 'true' / 'false'; anything other
+  // than 'false' (including the blank/unset fallback) means enabled.
+  hunter_enabled: process.env.HUNTER_ENABLED ?? 'true',
+  ai_assistant_enabled: process.env.AI_ASSISTANT_ENABLED ?? 'true',
 } as const
 
 export type OrgSettingKey = keyof typeof ORG_SETTING_KEYS

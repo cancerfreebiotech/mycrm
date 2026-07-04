@@ -72,7 +72,10 @@
     "pendingReview": "Pending Cards",
     "myFailedScans": "My Failed Scans",
     "auditLog": "Audit Log",
-    "orgSettings": "Org Settings"
+    "orgSettings": "Org Settings",
+    "suppressions": "Suppressions",
+    "dsar": "DSAR Lookup",
+    "newsletterOverview": "Newsletter Overview"
   },
   "auth": {
     "signInWithMicrosoft": "Sign in with Microsoft",
@@ -574,7 +577,13 @@
     "telegramIdPlaceholder": "e.g., 123456789",
     "telegramIdInvalid": "Telegram ID must be a positive integer",
     "telegramIdSuspicious": "\"{value}\" looks too short (typically 9–10 digits). Save anyway?",
-    "telegramIdSaveFailed": "Update failed: {error}"
+    "telegramIdSaveFailed": "Update failed: {error}",
+    "statusActive": "Active",
+    "statusSuspended": "Suspended",
+    "suspend": "Suspend",
+    "reactivate": "Reactivate",
+    "confirmSuspend": "Suspend {name}? They will be signed out and blocked from access at their next login.",
+    "confirmReactivate": "Reactivate {name}?"
   },
   "templates": {
     "title": "Email Templates",
@@ -919,7 +928,8 @@
       "unauthorized_domain": "Access restricted to @cancerfree.io accounts only",
       "auth_failed": "Authentication failed. Please try again.",
       "no_code": "No auth code received. Please try again.",
-      "unknown": "An unknown error occurred"
+      "unknown": "An unknown error occurred",
+      "suspended": "Your account has been suspended. Please contact an administrator."
     }
   },
   "mfa": {
@@ -1145,7 +1155,14 @@
       "same_person": "Same person",
       "different": "Different people",
       "unsure": "Uncertain"
-    }
+    },
+    "aiSuggest": "AI Suggestion",
+    "aiSuggestFailed": "AI suggestion failed",
+    "aiSuggestKeep": "Suggest keeping: {name} ({side})",
+    "sideLeft": "left",
+    "sideRight": "right",
+    "aiSuggestFieldNotes": "Field conflicts (source values will be discarded)",
+    "aiSuggestApply": "Merge as suggested"
   },
   "pendingReview": {
     "title": "Pending Cards",
@@ -1881,7 +1898,11 @@
     "scheduled": "Scheduled",
     "scheduleFailed": "Scheduling failed",
     "scheduleInPast": "Schedule time must be in the future",
-    "scheduleWorking": "Working…"
+    "scheduleWorking": "Working…",
+    "abTestPctLabel": "Test group size (%)",
+    "abWaitLabel": "Wait time",
+    "abWaitOption": "{hours, plural, one {# hour} other {# hours}}",
+    "abHoldoutHint": "Sends only the test group first (A/B split evenly). After the wait time, the remaining recipients automatically receive the higher-open-rate subject."
   },
   "mcpActivity": {
     "title": "MCP Activity Log",
@@ -2007,7 +2028,12 @@
     "successDesc": "<b>{email}</b> will no longer receive newsletters from us.",
     "invalidLink": "Invalid unsubscribe link",
     "failed": "Unsubscribe failed",
-    "genericError": "An error occurred, please try again later"
+    "genericError": "An error occurred, please try again later",
+    "listsTitle": "Your subscriptions",
+    "listsHint": "Check the lists you want to leave, or unsubscribe from everything below.",
+    "unsubscribeSelected": "Unsubscribe from selected lists only",
+    "listsSuccessTitle": "Preferences updated",
+    "listsSuccessDesc": "<b>{email}</b> has been removed from the selected lists. Other subscriptions remain active."
   },
   "emailRecovery": {
     "title": "Email Recovery",
@@ -2055,8 +2081,17 @@
       "mcp_token_create": "Create MCP token",
       "mcp_token_revoke": "Revoke MCP token",
       "email_recovery_apply": "Apply email recovery",
-      "hunter_config_change": "Hunter config change"
-    }
+      "hunter_config_change": "Hunter config change",
+      "set_webhook": "Set webhook",
+      "notify_release": "Send release notice",
+      "contact_merge": "Merge contacts"
+    },
+    "filterActorPlaceholder": "Search actor email",
+    "filterActionAll": "All actions",
+    "filterFrom": "From",
+    "filterTo": "To",
+    "clearFilters": "Clear filters",
+    "exportCsv": "Export CSV"
   },
   "campaignAnalytics": {
     "title": "Campaign Analytics",
@@ -2095,7 +2130,16 @@
     "abVariantA": "Subject A",
     "abVariantB": "Subject B",
     "abSent": "Sent {count}",
-    "abOpenRate": "Open rate {rate}"
+    "abOpenRate": "Open rate {rate}",
+    "abCohortSize": "Test group: {count} recipients ({pct}%)",
+    "abWinnerDecided": "Winner: {variant} (decided {time})",
+    "abPending": "Collecting open data — winner decided after {minutes} minutes",
+    "abWinnerBadge": "Winner",
+    "failedDetailTitle": "Failure details ({count})",
+    "failedDetailUnavailable": "Failure details unavailable",
+    "failedColEmail": "Email",
+    "failedColError": "Error",
+    "failedDetailCap": "Showing first {shown} rows only"
   },
   "orgSettings": {
     "title": "Org Settings & Branding",
@@ -2111,6 +2155,92 @@
     "saving": "Saving…",
     "saved": "Saved. Settings are cached for 60s — refresh to apply.",
     "saveError": "Failed to save, please try again",
-    "loadError": "Failed to load, please refresh"
+    "loadError": "Failed to load, please refresh",
+    "labelFeedbackRecipient": "Feedback notification recipient",
+    "hintFeedbackRecipient": "Recipient of the daily feedback summary email",
+    "sectionModules": "Module toggles",
+    "labelHunterEnabled": "Hunter.io auto-enrichment",
+    "hintHunterEnabled": "When off, new contacts are not auto-enriched via Hunter.io",
+    "labelAiAssistantEnabled": "AI assistant",
+    "hintAiAssistantEnabled": "When off, the AI assistant chat is disabled"
+  },
+  "suppressions": {
+    "pageTitle": "Suppression & Consent",
+    "pageSubtitle": "Check whether an address is emailable and review suppression sources",
+    "searchPlaceholder": "Enter an email to check deliverability",
+    "searchButton": "Check",
+    "verdictCanEmail": "Can email",
+    "verdictCannotEmail": "Cannot email",
+    "sourcesTitle": "Status by source",
+    "colSource": "Source",
+    "colStatus": "Status",
+    "colDetail": "Detail",
+    "colEmail": "Email",
+    "colTime": "Time",
+    "summaryTitle": "Suppression totals",
+    "recentTitle": "Recently suppressed",
+    "sourceContactOptOut": "Contact opt-out",
+    "sourceContactStatus": "Contact email status",
+    "sourceBlacklist": "Blacklist",
+    "sourceUnsubscribe": "Global unsubscribe",
+    "sourceSubscriberUnsub": "Subscriber unsubscribed",
+    "statusSuppressed": "Suppressed",
+    "statusClear": "Clear",
+    "empty": "No suppression records",
+    "noPermission": "You do not have access to this page",
+    "invalidEmail": "Enter a valid email address",
+    "loadFailed": "Failed to load"
+  },
+  "dsar": {
+    "pageTitle": "Data Subject Lookup (DSAR)",
+    "pageSubtitle": "Look up every contact and personal-data footprint tied to an email",
+    "searchPlaceholder": "Enter an email to find matching contacts",
+    "searchButton": "Search",
+    "verdictTitle": "Deliverability",
+    "verdictCanEmail": "Can email",
+    "verdictCannotEmail": "Cannot email",
+    "resultsTitle": "Results",
+    "colName": "Name",
+    "colCompany": "Company",
+    "colCreator": "Created by",
+    "colCreatedAt": "Created",
+    "colInteractions": "Interactions",
+    "colCards": "Cards",
+    "colRecipients": "Newsletter",
+    "viewContact": "View",
+    "exportLink": "Export",
+    "deletedBadge": "Deleted",
+    "unnamed": "(Unnamed)",
+    "empty": "No matching contacts",
+    "emptyHint": "Enter an email to begin",
+    "noPermission": "You do not have access to this page",
+    "invalidEmail": "Enter a valid email address",
+    "searchFailed": "Search failed"
+  },
+  "newsletterOverview": {
+    "title": "Newsletter Overview",
+    "subtitle": "Send performance and list health at a glance",
+    "statSubscribers": "Total subscribers",
+    "statUnsubscribed": "Unsubscribed",
+    "statBlacklist": "Blacklist",
+    "trendTitle": "Recent campaign performance (last 12)",
+    "colCampaign": "Campaign",
+    "colSentAt": "Sent at",
+    "colSent": "Sent",
+    "colOpenRate": "Open rate",
+    "colClickRate": "Click rate",
+    "trendEmpty": "No sent campaigns yet",
+    "trendEmptyCta": "Go to campaigns",
+    "listHealthTitle": "List health",
+    "colList": "List",
+    "colMembers": "Members",
+    "colNonOpeners": "180-day non-openers",
+    "listEmpty": "No lists yet",
+    "listEmptyCta": "Go to lists",
+    "untitled": "(Untitled)",
+    "forbidden": "Super admin only",
+    "loadFailed": "Failed to load",
+    "genericError": "Something went wrong. Please try again later.",
+    "retry": "Retry"
   }
 }

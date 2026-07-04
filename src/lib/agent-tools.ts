@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase'
+import { buildContactContext } from '@/lib/contactContext'
 
 // 共用的 CRM agent 工具實作（唯一真相）。
 // MCP server（src/app/api/mcp/route.ts，JSON-RPC + token 授權）與
@@ -49,6 +50,12 @@ export const TOOLS: ToolDef[] = [
     scope: 'read:contacts', write: false,
     description: 'Full details for one contact by UUID + tags + 5 most recent interaction logs.',
     inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+  },
+  {
+    name: 'summarize_relationship',
+    scope: 'read:contacts', write: false,
+    description: 'Fetch the full relationship context for one contact by UUID (profile, tags, notes, recent interactions, latest social briefing) as text. Use it when asked to summarize the current relationship status with a contact, then write the summary yourself from the returned context.',
+    inputSchema: { type: 'object', properties: { contact_id: { type: 'string' } }, required: ['contact_id'] },
   },
   {
     name: 'list_newsletter_lists',
@@ -129,6 +136,15 @@ async function getContact(args: { id?: string }) {
     tags: (tagRows ?? []).map((r) => (r as { tags: unknown }).tags).filter(Boolean),
     recent_interactions: logs ?? [],
   }
+}
+
+async function summarizeRelationship(args: { contact_id?: string }) {
+  if (!args.contact_id) throw new Error('contact_id required')
+  const supabase = createServiceClient()
+  const context = await buildContactContext(supabase, args.contact_id)
+  if (!context) throw new Error('contact not found (or deleted)')
+  // 回傳完整脈絡文字，由呼叫端 LLM 據此自行總結（不做巢狀 AI 呼叫）。
+  return `以下是與此聯絡人的完整互動脈絡，請據此總結目前關係狀態：\n${context}`
 }
 
 async function listNewsletterLists() {
@@ -279,6 +295,7 @@ export async function executeTool(name: string, args: Record<string, unknown>, a
   switch (name) {
     case 'search_contacts': return await searchContacts(args)
     case 'get_contact': return await getContact(args)
+    case 'summarize_relationship': return await summarizeRelationship(args)
     case 'list_newsletter_lists': return await listNewsletterLists()
     case 'search_subscribers_in_list': return await searchSubscribersInList(args)
     case 'list_tags': return await listTags()

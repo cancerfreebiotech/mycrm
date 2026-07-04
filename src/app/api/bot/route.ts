@@ -10,7 +10,8 @@ import { sendTeamsTaskNotification, sendTeamsMessage } from '@/lib/teams'
 import { processOnePending, summarizeBatchAndNotify } from '@/lib/pending-ocr-worker'
 import { mergeIntoContact, type MergeMode } from '@/lib/merge-into-contact'
 import { signCardUrl } from '@/lib/cardImageUrl'
-import { runAgentLoop } from '@/lib/ai-agent'
+import { GoogleGenerativeAI } from '@google/generative-ai'
+import { TOOLS, TOOL_BY_NAME, executeTool } from '@/lib/agent-tools'
 
 function countryToLanguage(code: string | null | undefined): string {
   if (code === 'TW' || code === 'CN') return 'chinese'
@@ -219,21 +220,138 @@ async function handleAI(chatId: number, aiModelId: string | null, m: BotMessages
   await sendMessage(chatId, m.aiModelInfo(model.display_name, model.model_id, endpointName))
 }
 
-// /ai <question> → run the shared Gemini function-calling agent as this user.
+// /ai <question> → Gemini function-calling agent as this user.
+// 原本委派 src/lib/ai-agent.ts 的 runAgentLoop，但它沒有擴充工具的入口；
+// 為了加上 chatbot 專屬的 request_social_briefing 工具，改在此本地跑同一套 loop
+// （鏡射 src/app/api/ai-chat/route.ts：共用 TOOLS/executeTool + 本地 briefing 工具）。
+
+const BOT_AGENT_MODEL = 'gemini-2.5-flash'
+const BOT_AGENT_MAX_TURNS = 6
+
+// 與 src/app/api/ai-chat/route.ts 的 REQUEST_BRIEFING_TOOL 對齊
+const REQUEST_BRIEFING_TOOL = {
+  name: 'request_social_briefing',
+  description: '為某位聯絡人排程一份「會議前 briefing」（背景搜尋此人與公司的最新公開動態）。回傳 briefing_id；結果稍後產生。當使用者說「我要跟某人開會 / 幫我了解某人近況」時用。',
+  parameters: { type: 'object', properties: { contact_id: { type: 'string', description: '聯絡人 UUID（先用 search_contacts 找）' } }, required: ['contact_id'] },
+}
+
+// 稽核到 agent_actions（欄位與 ai-agent.ts / ai-chat 相同）。永不讓稽核失敗中斷主流程。
+async function auditBotTool(toolName: string, args: unknown, succeeded: boolean, errMsg: string | null, actingAs: string): Promise<void> {
+  try {
+    await createServiceClient().from('agent_actions').insert({
+      tool_name: toolName,
+      arguments: args ?? null,
+      result_summary: succeeded ? 'ok (bot)' : null,
+      succeeded,
+      error_message: errMsg,
+      token_id: null,
+      acting_as: actingAs,
+    })
+  } catch { /* never let logging break the call */ }
+}
+
+// bot 端工具執行：request_social_briefing 自己處理，其餘委派共用 executeTool。
+// Telegram 沒有 auth.users session，created_by（FK → auth.users）存 null，
+// 改以 notify_user_id 記錄要通知的 public.users.id。
+async function executeBotTool(name: string, args: Record<string, unknown>, actingUserId: string): Promise<unknown> {
+  if (name === 'request_social_briefing') {
+    const contactId = args.contact_id as string | undefined
+    if (!contactId) throw new Error('contact_id required')
+    const service = createServiceClient()
+    // Dedup：同一聯絡人已有 pending/processing 的 briefing 就不重複排程
+    const { data: existing } = await service
+      .from('contact_briefings')
+      .select('id, status')
+      .eq('contact_id', contactId)
+      .in('status', ['pending', 'processing'])
+      .limit(1)
+      .maybeSingle()
+    if (existing) {
+      return { briefing_id: existing.id, status: existing.status, note: '此聯絡人已有進行中的 briefing，不重複排程' }
+    }
+    const { data, error } = await service
+      .from('contact_briefings')
+      .insert({ contact_id: contactId, trigger: 'nl_command', created_by: null, notify_user_id: actingUserId })
+      .select('id')
+      .single()
+    if (error) throw new Error(error.message)
+    return { briefing_id: data.id, status: 'pending', note: 'briefing 已排程，稍後於聯絡人頁查看結果' }
+  }
+  // 寫入工具強制有 acting user
+  const tool = TOOL_BY_NAME.get(name)
+  if (tool?.write && !actingUserId) throw new Error('write tool requires an acting user')
+  return await executeTool(name, args, actingUserId)
+}
+
 async function handleAiAgent(
   chatId: number,
   user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
   question: string,
   m: BotMessages,
 ) {
-  const supabase = createServiceClient()
   await sendMessage(chatId, m.aiThinking)
   try {
-    const reply = await runAgentLoop({
-      service: supabase,
-      actingUserId: user.id,
-      messages: [{ role: 'user', content: question }],
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) throw new Error(m.aiNotConfigured)
+
+    const today = new Date().toISOString().slice(0, 10)
+    const systemInstruction = [
+      '你是 myCRM 的 AI 助理，協助公司同仁查詢與維護 CRM 聯絡人、名單、標籤，並可排程會議前 briefing。',
+      `目前使用者：${user.display_name ?? user.email}（${user.email}）。今天日期：${today}。`,
+      '可用工具：搜尋/讀取/更新聯絡人、加筆記、列出名單與標籤、加入名單、標記標籤、排程 social briefing。',
+      '更新聯絡人或加筆記前，先用 search_contacts/get_contact 確認對象。回答用使用者的語言（預設繁體中文），精簡明確。',
+      '需要寫入操作時，先在回覆中說明你做了什麼。',
+    ].join('\n')
+
+    const declarations = [
+      ...TOOLS.map((t) => ({ name: t.name, description: t.description, parameters: t.inputSchema })),
+      REQUEST_BRIEFING_TOOL,
+    ]
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const model = genAI.getGenerativeModel({
+      model: BOT_AGENT_MODEL,
+      systemInstruction,
+      tools: [{ functionDeclarations: declarations }] as unknown as Parameters<typeof genAI.getGenerativeModel>[0]['tools'],
     })
+
+    const chat = model.startChat({ history: [] })
+    let result = await chat.sendMessage(question)
+
+    for (let round = 0; round < BOT_AGENT_MAX_TURNS; round++) {
+      const calls = result.response.functionCalls()
+      if (!calls || calls.length === 0) break
+
+      const responses = []
+      for (const call of calls) {
+        let out: unknown
+        let ok = true
+        let errMsg: string | null = null
+        try {
+          out = await executeBotTool(call.name, (call.args ?? {}) as Record<string, unknown>, user.id)
+        } catch (e) {
+          ok = false
+          errMsg = e instanceof Error ? e.message : String(e)
+          out = { error: errMsg }
+        }
+        await auditBotTool(call.name, call.args, ok, errMsg, user.id)
+        responses.push({ functionResponse: { name: call.name, response: { result: out } } })
+      }
+      result = await chat.sendMessage(responses)
+    }
+
+    // 跑滿 turns 後若模型仍想呼叫工具，response 可能只含 functionCall、無文字，
+    // 直接 .text() 會丟錯或回空字串 → 回一個明確訊息。
+    const pendingCalls = result.response.functionCalls()
+    let reply: string
+    if (pendingCalls && pendingCalls.length > 0) {
+      reply = m.aiTooManySteps
+    } else {
+      try {
+        reply = result.response.text()
+      } catch {
+        reply = m.aiEmptyReply
+      }
+    }
     const truncated = reply.length > TELEGRAM_MAX_LEN ? reply.slice(0, TELEGRAM_MAX_LEN - 1) + '…' : reply
     await sendMessage(chatId, escapeHtml(truncated))
   } catch (e) {
@@ -1271,6 +1389,49 @@ async function handleMet(
   })
 }
 
+// ── /v <name> <note>: one-shot visit logging ──────────────────────────────────
+
+// AI 解析內容（日期/時間/地點/類型）後直接寫入 interaction_logs 並回覆確認。
+async function logVisitOneShot(
+  chatId: number,
+  user: { id: string; ai_model_id: string | null },
+  contactId: string,
+  contactName: string | null,
+  noteText: string,
+  m: BotMessages,
+) {
+  const supabase = createServiceClient()
+  await sendMessage(chatId, m.aiAnalyzing)
+
+  let logType: 'note' | 'meeting' = 'meeting'
+  let meetingDate: string | null = null
+  let meetingTime: string | null = null
+  let meetingLocation: string | null = null
+  try {
+    const parsed = await parseVisitNote(noteText, new Date().toISOString(), user.ai_model_id)
+    logType = parsed.type
+    meetingDate = parsed.meeting_date ?? null
+    meetingTime = parsed.meeting_time ?? null
+    meetingLocation = parsed.meeting_location ?? null
+  } catch { /* AI 解析失敗 → 存為無日期地點的拜訪紀錄 */ }
+
+  await supabase.from('interaction_logs').insert({
+    contact_id: contactId,
+    type: logType,
+    content: noteText,
+    meeting_date: meetingDate,
+    meeting_time: meetingTime,
+    meeting_location: meetingLocation,
+    created_by: user.id,
+  })
+
+  const detailParts: string[] = []
+  if (meetingDate) detailParts.push(`📅 ${meetingDate}${meetingTime ? ` ${meetingTime}` : ''}`)
+  if (meetingLocation) detailParts.push(`📍 ${meetingLocation}`)
+  const detail = detailParts.length > 0 ? `\n${detailParts.join('  ')}` : ''
+  await sendMessage(chatId, m.noteSavedWithDetail(contactName, logType === 'meeting', detail))
+}
+
 // ── Handle /tasks ─────────────────────────────────────────────────────────────
 
 async function handleTasks(
@@ -1773,10 +1934,35 @@ async function handleText(
     return
   }
 
-  // ── /visit /v name — shortcut with contact name ──────────────────────────
-  const visitNameMatch = cmd.match(/^\/(?:visit|v)\s+(.+)/)
+  // ── /visit /v name [note] — shortcut with contact name ───────────────────
+  // 只有姓名 → 原本的逐步流程；姓名後帶內容 → one-shot：AI 解析後直接寫入。
+  const visitNameMatch = cmd.match(/^\/(?:visit|v)\s+([\s\S]+)/)
   if (visitNameMatch) {
-    const contacts = await searchContacts(visitNameMatch[1].trim())
+    const raw = visitNameMatch[1].trim()
+    const wsIdx = raw.search(/\s/)
+    const searchTerm = wsIdx === -1 ? raw : raw.slice(0, wsIdx)
+    const noteText = wsIdx === -1 ? '' : raw.slice(wsIdx + 1).trim()
+
+    if (noteText) {
+      const oneShotContacts = await searchContacts(searchTerm)
+      if (oneShotContacts.length === 1) {
+        await logVisitOneShot(chatId, user, oneShotContacts[0].id, oneShotContacts[0].name, noteText, m)
+        return
+      }
+      if (oneShotContacts.length > 1) {
+        // callback_data 有 64-byte 限制 → 內容暫存 session，按鈕只帶 contact id
+        await setSession(fromId, 'waiting_visit_oneshot_pick', { note: noteText })
+        const buttons = oneShotContacts.map((c) => [{ text: `${c.name}（${c.company ?? ''}）`, callback_data: `vlog_${c.id}` }])
+        await sendMessage(chatId, m.noteFoundContactSelect, { reply_markup: { inline_keyboard: buttons } })
+        return
+      }
+      // 0 筆 → 告知後退回原本逐步流程（未歸類）
+      await setSession(fromId, 'waiting_for_visit_datetime', { contact_id: null, contact_name: null })
+      await sendMessage(chatId, m.visitContactNotFound)
+      return
+    }
+
+    const contacts = await searchContacts(raw)
     if (contacts.length === 0) {
       await setSession(fromId, 'waiting_for_visit_datetime', { contact_id: null, contact_name: null })
       await sendMessage(chatId, m.visitContactNotFound)
@@ -2168,6 +2354,31 @@ async function handleText(
   await sendMessage(chatId, m.defaultPrompt)
 }
 
+// ── Bot error dead-letter (bot_errors) ────────────────────────────────────────
+
+// 盡力而為：處理失敗的 update 記到 bot_errors 供 admin/health 檢視。
+// 任何記錄失敗都吞掉，絕不影響對 Telegram 的回應。
+async function logBotError(update: unknown, err: unknown): Promise<void> {
+  try {
+    const u = update as {
+      message?: { chat?: { id?: number } }
+      callback_query?: { message?: { chat?: { id?: number } }; from?: { id?: number } }
+    } | null
+    const chatId = u?.message?.chat?.id ?? u?.callback_query?.message?.chat?.id ?? u?.callback_query?.from?.id ?? null
+    const updateType = u?.message ? 'message' : u?.callback_query ? 'callback' : 'other'
+    const errorMessage = (err instanceof Error ? err.message : String(err)).slice(0, 500)
+    // payload 裁切：photo 等 update 可能很大，超過 8000 字元只留前段
+    const raw = JSON.stringify(update ?? null)
+    const payload = raw.length > 8000 ? { _truncated: true, preview: raw.slice(0, 8000) } : update
+    await createServiceClient().from('bot_errors').insert({
+      chat_id: chatId,
+      update_type: updateType,
+      error_message: errorMessage,
+      payload,
+    })
+  } catch { /* never let dead-letter logging break the reply */ }
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -2180,8 +2391,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // 供最外層 catch 的 dead-letter 記錄使用（body 解析失敗時維持 null）
+  let rawUpdate: unknown = null
   try {
     const body = await req.json()
+    rawUpdate = body
     const supabase = createServiceClient()
 
     // --- Deduplication: skip already-processed updates ---
@@ -2446,6 +2660,25 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await sendMessage(from.id, m.visitAfterContactPick(contact?.name ?? ''))
+        }
+
+        // ── /v one-shot: select contact from search results ──────────────────
+        else if (data?.startsWith('vlog_')) {
+          const contactId = data.replace('vlog_', '')
+          const session = await getSession(from.id)
+          const noteText = session?.state === 'waiting_visit_oneshot_pick'
+            ? (session.context?.note as string | undefined)
+            : undefined
+          await answerCallbackQuery(callbackQueryId)
+          await editMessageReplyMarkup(message.chat.id, message.message_id)
+          await clearSession(from.id)
+          if (!noteText) {
+            await sendMessage(from.id, m.visitNoteMissing)
+          } else {
+            const { data: contact } = await supabase
+              .from('contacts').select('id, name').eq('id', contactId).single()
+            await logVisitOneShot(from.id, user, contactId, contact?.name ?? null, noteText, m)
+          }
         }
 
         // ── Select contact for note ───────────────────────────────────────────
@@ -3220,6 +3453,42 @@ export async function POST(req: NextRequest) {
           await sendMessage(from.id, m.taskCancelledNotice(task?.title ?? ''))
         }
 
+        // ── Task digest reminder: mark done (trdone_<taskId>, from task-reminders cron)
+        // 不清掉原訊息的 reply_markup：digest 一則訊息可能帶多個任務的按鈕。
+        else if (data?.startsWith('trdone_')) {
+          const taskId = data.replace('trdone_', '')
+          const { data: task } = await supabase
+            .from('tasks').select('id, title').eq('id', taskId).maybeSingle()
+          if (!task) {
+            await answerCallbackQuery(callbackQueryId, m.taskNotFound)
+            return NextResponse.json({ ok: true })
+          }
+          await supabase.from('tasks').update({
+            status: 'done',
+            completed_by: user.email,
+            completed_at: new Date().toISOString(),
+          }).eq('id', taskId)
+          await answerCallbackQuery(callbackQueryId, m.taskDoneCallback)
+          await sendMessage(from.id, m.taskDoneNotice(task.title ?? ''))
+        }
+
+        // ── Task digest reminder: snooze 1 day (trsnooze_<taskId>) ───────────
+        else if (data?.startsWith('trsnooze_')) {
+          const taskId = data.replace('trsnooze_', '')
+          const { data: task } = await supabase
+            .from('tasks').select('id').eq('id', taskId).maybeSingle()
+          if (!task) {
+            await answerCallbackQuery(callbackQueryId, m.taskNotFound)
+            return NextResponse.json({ ok: true })
+          }
+          const newDueIso = new Date(Date.now() + 86_400_000).toISOString()
+          await supabase.from('tasks').update({ due_at: newDueIso }).eq('id', taskId)
+          await answerCallbackQuery(callbackQueryId)
+          await sendMessage(from.id, m.taskPostponed(
+            new Date(newDueIso).toLocaleString(dateLocale(lang), { timeZone: 'Asia/Taipei' })
+          ))
+        }
+
         // ── Follow-up task from a scanned card ────────────────────────────────
         else if (data?.startsWith('followup_')) {
           // callback_data = followup_<contactId>_<days>; contactId is a UUID
@@ -3262,6 +3531,8 @@ export async function POST(req: NextRequest) {
           ? err.message
           : (typeof err === 'object' && err !== null ? JSON.stringify(err) : String(err))
         console.error('[bot] callback error:', msg)
+        // callback 錯誤不會到達最外層 catch → 這裡也記 dead-letter
+        await logBotError(body, err)
         await answerCallbackQuery(callbackQueryId, m.callbackOpFailed)
         await sendMessage(from.id, m.processingFailed(msg))
       }
@@ -3312,7 +3583,9 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ ok: true })
-  } catch {
+  } catch (err) {
+    // Dead-letter：這裡原本靜默吞掉錯誤，現在先記到 bot_errors 再回 ok
+    await logBotError(rawUpdate, err)
     return NextResponse.json({ ok: true })
   }
 }

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { ClipboardList, Loader2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ClipboardList, Loader2, RefreshCw, ChevronLeft, ChevronRight, Download, X } from 'lucide-react'
 
 interface AdminAction {
   id: string
@@ -17,6 +17,23 @@ interface AdminAction {
 
 const PAGE_SIZE = 20
 
+// Known action keys — populates the action filter dropdown. Labels resolve via
+// the `action.*` i18n namespace (falling back to the raw key when unlabelled).
+const KNOWN_ACTIONS = [
+  'reset_mfa',
+  'set_telegram_id',
+  'maintenance_toggle',
+  'permanent_delete_contact',
+  'permanent_delete_bulk',
+  'mcp_token_create',
+  'mcp_token_revoke',
+  'email_recovery_apply',
+  'hunter_config_change',
+  'set_webhook',
+  'notify_release',
+  'contact_merge',
+]
+
 export default function AuditLogPage() {
   const t = useTranslations('adminAuditLog')
   const router = useRouter()
@@ -27,6 +44,15 @@ export default function AuditLogPage() {
   const [loading, setLoading] = useState(true)
   const [authChecked, setAuthChecked] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
+
+  // Filters
+  const [actorInput, setActorInput] = useState('')
+  const [actor, setActor] = useState('')
+  const [action, setAction] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+
+  const hasFilters = !!(actor || action || fromDate || toDate)
 
   useEffect(() => {
     (async () => {
@@ -40,9 +66,18 @@ export default function AuditLogPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const buildParams = (p: number): URLSearchParams => {
+    const params = new URLSearchParams({ page: String(p), pageSize: String(PAGE_SIZE) })
+    if (actor) params.set('actor', actor)
+    if (action) params.set('action', action)
+    if (fromDate) params.set('from', fromDate)
+    if (toDate) params.set('to', toDate)
+    return params
+  }
+
   const load = async (p: number) => {
     setLoading(true)
-    const res = await fetch(`/api/admin/audit-log?page=${p}&pageSize=${PAGE_SIZE}`)
+    const res = await fetch(`/api/admin/audit-log?${buildParams(p).toString()}`)
     if (res.ok) {
       const data = await res.json()
       setRows((data.rows ?? []) as AdminAction[])
@@ -54,16 +89,39 @@ export default function AuditLogPage() {
     setLoading(false)
   }
 
-  useEffect(() => { if (authChecked) load(page) }, [authChecked, page])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (authChecked) load(page) }, [authChecked, page, actor, action, fromDate, toDate])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const applyActor = () => { setActor(actorInput.trim()); setPage(1) }
+
+  const clearFilters = () => {
+    setActorInput('')
+    setActor('')
+    setAction('')
+    setFromDate('')
+    setToDate('')
+    setPage(1)
+  }
+
+  const exportCsv = () => {
+    const params = new URLSearchParams()
+    if (actor) params.set('actor', actor)
+    if (action) params.set('action', action)
+    if (fromDate) params.set('from', fromDate)
+    if (toDate) params.set('to', toDate)
+    params.set('format', 'csv')
+    window.location.href = `/api/admin/audit-log?${params.toString()}`
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
-  const actionLabel = (action: string): string =>
-    t.has(`action.${action}`) ? t(`action.${action}` as string) : action
+  const actionLabel = (a: string): string =>
+    t.has(`action.${a}`) ? t(`action.${a}` as string) : a
 
   if (!authChecked) {
     return <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-400" /></div>
   }
+
+  const inputClass = 'text-base px-3 py-2.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40'
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -80,6 +138,61 @@ export default function AuditLogPage() {
         >
           {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
           {t('refresh')}
+        </button>
+      </div>
+
+      {/* Filter bar */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <input
+          type="text"
+          value={actorInput}
+          onChange={(e) => setActorInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') applyActor() }}
+          onBlur={applyActor}
+          placeholder={t('filterActorPlaceholder')}
+          className={`${inputClass} sm:w-56`}
+        />
+        <select
+          value={action}
+          onChange={(e) => { setAction(e.target.value); setPage(1) }}
+          className={`${inputClass} sm:w-52`}
+        >
+          <option value="">{t('filterActionAll')}</option>
+          {KNOWN_ACTIONS.map((a) => (
+            <option key={a} value={a}>{actionLabel(a)}</option>
+          ))}
+        </select>
+        <label className="flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-400">
+          {t('filterFrom')}
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => { setFromDate(e.target.value); setPage(1) }}
+            className={inputClass}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-400">
+          {t('filterTo')}
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => { setToDate(e.target.value); setPage(1) }}
+            className={inputClass}
+          />
+        </label>
+        {hasFilters && (
+          <button
+            onClick={clearFilters}
+            className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg font-medium"
+          >
+            <X size={14} /> {t('clearFilters')}
+          </button>
+        )}
+        <button
+          onClick={exportCsv}
+          className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm bg-blue-600 hover:bg-blue-700 text-gray-50 rounded-lg font-medium sm:ml-auto"
+        >
+          <Download size={14} /> {t('exportCsv')}
         </button>
       </div>
 

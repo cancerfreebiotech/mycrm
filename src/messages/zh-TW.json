@@ -72,7 +72,10 @@
     "pendingReview": "待審核名片",
     "myFailedScans": "我的失敗辨識",
     "auditLog": "稽核日誌",
-    "orgSettings": "組織設定"
+    "orgSettings": "組織設定",
+    "suppressions": "退訂管理",
+    "dsar": "資料查詢 (DSAR)",
+    "newsletterOverview": "電子報總覽"
   },
   "auth": {
     "signInWithMicrosoft": "使用 Microsoft 帳號登入",
@@ -574,7 +577,13 @@
     "telegramIdPlaceholder": "例：123456789",
     "telegramIdInvalid": "Telegram ID 必須為正整數",
     "telegramIdSuspicious": "「{value}」看起來太短（一般是 9–10 位數）。仍要儲存？",
-    "telegramIdSaveFailed": "更新失敗：{error}"
+    "telegramIdSaveFailed": "更新失敗：{error}",
+    "statusActive": "啟用",
+    "statusSuspended": "已停用",
+    "suspend": "停用",
+    "reactivate": "重新啟用",
+    "confirmSuspend": "確定要停用 {name} 嗎？停用後他們將在下次登入時被登出並無法存取系統。",
+    "confirmReactivate": "確定要重新啟用 {name} 嗎？"
   },
   "templates": {
     "title": "郵件範本",
@@ -919,7 +928,8 @@
       "unauthorized_domain": "僅限 @cancerfree.io 帳號登入",
       "auth_failed": "認證失敗，請再試一次",
       "no_code": "未收到驗證碼，請再試一次",
-      "unknown": "發生未知錯誤"
+      "unknown": "發生未知錯誤",
+      "suspended": "你的帳號已被停用，請聯絡管理員"
     }
   },
   "mfa": {
@@ -1145,7 +1155,14 @@
       "same_person": "同一人",
       "different": "不同人",
       "unsure": "無法判定"
-    }
+    },
+    "aiSuggest": "AI 建議",
+    "aiSuggestFailed": "AI 建議失敗",
+    "aiSuggestKeep": "建議保留：{name}（{side}）",
+    "sideLeft": "左",
+    "sideRight": "右",
+    "aiSuggestFieldNotes": "欄位衝突（來源值將被捨棄）",
+    "aiSuggestApply": "依建議合併"
   },
   "pendingReview": {
     "title": "待審核名片",
@@ -1881,7 +1898,11 @@
     "scheduled": "已排程",
     "scheduleFailed": "排程失敗",
     "scheduleInPast": "排程時間必須在未來",
-    "scheduleWorking": "處理中…"
+    "scheduleWorking": "處理中…",
+    "abTestPctLabel": "測試比例（%）",
+    "abWaitLabel": "等待時間",
+    "abWaitOption": "{hours} 小時",
+    "abHoldoutHint": "先寄給測試比例的收件人（A/B 各半），等待時間結束後系統自動以開信率較高的主旨寄給其餘所有人。"
   },
   "mcpActivity": {
     "title": "MCP 活動紀錄",
@@ -2007,7 +2028,12 @@
     "successDesc": "<b>{email}</b> 將不再收到來自我們的電子報。",
     "invalidLink": "無效的退訂連結",
     "failed": "退訂失敗",
-    "genericError": "發生錯誤，請稍後再試"
+    "genericError": "發生錯誤，請稍後再試",
+    "listsTitle": "您訂閱的名單",
+    "listsHint": "勾選您想取消的名單，或直接取消所有訂閱。",
+    "unsubscribeSelected": "僅取消勾選的名單",
+    "listsSuccessTitle": "已更新訂閱設定",
+    "listsSuccessDesc": "<b>{email}</b> 已退出所選名單，其他訂閱維持不變。"
   },
   "emailRecovery": {
     "title": "Email 復活",
@@ -2055,8 +2081,17 @@
       "mcp_token_create": "建立 MCP Token",
       "mcp_token_revoke": "撤銷 MCP Token",
       "email_recovery_apply": "套用 Email 復原",
-      "hunter_config_change": "Hunter 設定變更"
-    }
+      "hunter_config_change": "Hunter 設定變更",
+      "set_webhook": "設定 Webhook",
+      "notify_release": "發送更新通知",
+      "contact_merge": "合併聯絡人"
+    },
+    "filterActorPlaceholder": "搜尋操作者 email",
+    "filterActionAll": "所有動作",
+    "filterFrom": "起始日期",
+    "filterTo": "結束日期",
+    "clearFilters": "清除篩選",
+    "exportCsv": "匯出 CSV"
   },
   "campaignAnalytics": {
     "title": "活動分析",
@@ -2095,7 +2130,16 @@
     "abVariantA": "主旨 A",
     "abVariantB": "主旨 B",
     "abSent": "寄出 {count}",
-    "abOpenRate": "開信率 {rate}"
+    "abOpenRate": "開信率 {rate}",
+    "abCohortSize": "測試組 {count} 人（{pct}%）",
+    "abWinnerDecided": "獲勝主旨：{variant}（{time} 判定）",
+    "abPending": "等待開信數據中，{minutes} 分鐘後判定獲勝主旨",
+    "abWinnerBadge": "獲勝",
+    "failedDetailTitle": "失敗明細（{count}）",
+    "failedDetailUnavailable": "無法載入失敗明細",
+    "failedColEmail": "Email",
+    "failedColError": "錯誤訊息",
+    "failedDetailCap": "僅顯示前 {shown} 筆"
   },
   "orgSettings": {
     "title": "組織設定與品牌",
@@ -2111,6 +2155,92 @@
     "saving": "儲存中…",
     "saved": "已儲存。設定有 60 秒快取，請重新整理頁面以套用。",
     "saveError": "儲存失敗，請稍後再試",
-    "loadError": "載入失敗，請重新整理"
+    "loadError": "載入失敗，請重新整理",
+    "labelFeedbackRecipient": "系統回報通知收件人",
+    "hintFeedbackRecipient": "每日系統回報摘要 Email 的收件人",
+    "sectionModules": "模組開關",
+    "labelHunterEnabled": "Hunter.io 自動補全",
+    "hintHunterEnabled": "關閉後，新聯絡人不會自動透過 Hunter.io 補全公司與職稱資訊",
+    "labelAiAssistantEnabled": "AI 助理",
+    "hintAiAssistantEnabled": "關閉後，AI 助理聊天功能將暫停使用"
+  },
+  "suppressions": {
+    "pageTitle": "退訂與寄送資格",
+    "pageSubtitle": "查詢任一 email 是否可寄送，並檢視各來源的抑制名單",
+    "searchPlaceholder": "輸入 email 查詢是否可寄送",
+    "searchButton": "查詢",
+    "verdictCanEmail": "可寄送",
+    "verdictCannotEmail": "不可寄送",
+    "sourcesTitle": "各來源狀態",
+    "colSource": "來源",
+    "colStatus": "狀態",
+    "colDetail": "詳情",
+    "colEmail": "Email",
+    "colTime": "時間",
+    "summaryTitle": "各來源統計",
+    "recentTitle": "最近的抑制紀錄",
+    "sourceContactOptOut": "聯絡人退訂 (opt-out)",
+    "sourceContactStatus": "聯絡人 Email 狀態",
+    "sourceBlacklist": "黑名單",
+    "sourceUnsubscribe": "全域退訂",
+    "sourceSubscriberUnsub": "訂閱者退訂",
+    "statusSuppressed": "已抑制",
+    "statusClear": "正常",
+    "empty": "目前沒有抑制紀錄",
+    "noPermission": "無權限存取此頁面",
+    "invalidEmail": "請輸入有效的 email",
+    "loadFailed": "載入失敗"
+  },
+  "dsar": {
+    "pageTitle": "資料主體查詢 (DSAR)",
+    "pageSubtitle": "以 email 查詢所有相關聯絡人與其個資足跡",
+    "searchPlaceholder": "輸入 email 查詢相關聯絡人",
+    "searchButton": "查詢",
+    "verdictTitle": "寄送資格",
+    "verdictCanEmail": "可寄送",
+    "verdictCannotEmail": "不可寄送",
+    "resultsTitle": "查詢結果",
+    "colName": "姓名",
+    "colCompany": "公司",
+    "colCreator": "建立者",
+    "colCreatedAt": "建立時間",
+    "colInteractions": "互動紀錄",
+    "colCards": "名片",
+    "colRecipients": "電子報收件",
+    "viewContact": "檢視",
+    "exportLink": "匯出",
+    "deletedBadge": "已刪除",
+    "unnamed": "（未命名）",
+    "empty": "找不到符合的聯絡人",
+    "emptyHint": "輸入 email 開始查詢",
+    "noPermission": "無權限存取此頁面",
+    "invalidEmail": "請輸入有效的 email",
+    "searchFailed": "查詢失敗"
+  },
+  "newsletterOverview": {
+    "title": "電子報總覽",
+    "subtitle": "寄送成效趨勢與名單健康度",
+    "statSubscribers": "訂閱者總數",
+    "statUnsubscribed": "已退訂",
+    "statBlacklist": "黑名單",
+    "trendTitle": "近期寄送成效（最近 12 次）",
+    "colCampaign": "活動",
+    "colSentAt": "寄送時間",
+    "colSent": "寄送數",
+    "colOpenRate": "開信率",
+    "colClickRate": "點擊率",
+    "trendEmpty": "尚無寄送紀錄",
+    "trendEmptyCta": "前往電子報活動",
+    "listHealthTitle": "名單健康度",
+    "colList": "名單",
+    "colMembers": "成員數",
+    "colNonOpeners": "180 天未開信",
+    "listEmpty": "尚無名單",
+    "listEmptyCta": "前往名單管理",
+    "untitled": "（未命名）",
+    "forbidden": "僅超級管理員可檢視此頁",
+    "loadFailed": "載入失敗",
+    "genericError": "系統發生錯誤，請稍後再試",
+    "retry": "重試"
   }
 }

@@ -72,7 +72,10 @@
     "pendingReview": "確認待ち名刺",
     "myFailedScans": "認識失敗",
     "auditLog": "監査ログ",
-    "orgSettings": "組織設定"
+    "orgSettings": "組織設定",
+    "suppressions": "配信停止管理",
+    "dsar": "DSAR照会",
+    "newsletterOverview": "ニュースレター概要"
   },
   "auth": {
     "signInWithMicrosoft": "Microsoftアカウントでサインイン",
@@ -574,7 +577,13 @@
     "telegramIdPlaceholder": "例：123456789",
     "telegramIdInvalid": "Telegram ID は正の整数で入力してください",
     "telegramIdSuspicious": "「{value}」は短すぎるようです（通常は 9〜10 桁）。それでも保存しますか？",
-    "telegramIdSaveFailed": "更新に失敗：{error}"
+    "telegramIdSaveFailed": "更新に失敗：{error}",
+    "statusActive": "有効",
+    "statusSuspended": "停止中",
+    "suspend": "停止",
+    "reactivate": "再開",
+    "confirmSuspend": "{name} を停止しますか？次回ログイン時にサインアウトされ、システムにアクセスできなくなります。",
+    "confirmReactivate": "{name} を再有効化しますか？"
   },
   "templates": {
     "title": "メールテンプレート",
@@ -919,7 +928,8 @@
       "unauthorized_domain": "@cancerfree.io アカウントのみアクセス可能",
       "auth_failed": "認証に失敗しました。もう一度お試しください。",
       "no_code": "認証コードが受信できませんでした。もう一度お試しください。",
-      "unknown": "不明なエラーが発生しました"
+      "unknown": "不明なエラーが発生しました",
+      "suspended": "アカウントが停止されています。管理者にお問い合わせください。"
     }
   },
   "mfa": {
@@ -1145,7 +1155,14 @@
       "same_person": "同一人物",
       "different": "別人物",
       "unsure": "判定不可"
-    }
+    },
+    "aiSuggest": "AI提案",
+    "aiSuggestFailed": "AI提案に失敗しました",
+    "aiSuggestKeep": "残す推奨：{name}（{side}）",
+    "sideLeft": "左",
+    "sideRight": "右",
+    "aiSuggestFieldNotes": "フィールド競合（統合元の値は破棄されます）",
+    "aiSuggestApply": "提案どおり統合"
   },
   "pendingReview": {
     "title": "確認待ち名刺",
@@ -1881,7 +1898,11 @@
     "scheduled": "予約済み",
     "scheduleFailed": "予約に失敗しました",
     "scheduleInPast": "予約時刻は未来である必要があります",
-    "scheduleWorking": "処理中…"
+    "scheduleWorking": "処理中…",
+    "abTestPctLabel": "テスト割合（%）",
+    "abWaitLabel": "待機時間",
+    "abWaitOption": "{hours}時間",
+    "abHoldoutHint": "まずテスト割合の宛先にのみ送信（A/B半々）。待機時間の経過後、開封率の高い件名で残り全員に自動送信されます。"
   },
   "mcpActivity": {
     "title": "MCP アクティビティログ",
@@ -2007,7 +2028,12 @@
     "successDesc": "<b>{email}</b> には、今後当社のニュースレターは届きません。",
     "invalidLink": "無効な配信停止リンクです",
     "failed": "配信停止に失敗しました",
-    "genericError": "エラーが発生しました。しばらくしてから再度お試しください"
+    "genericError": "エラーが発生しました。しばらくしてから再度お試しください",
+    "listsTitle": "ご購読中のリスト",
+    "listsHint": "解除したいリストにチェックを入れるか、下のボタンですべての配信を停止できます。",
+    "unsubscribeSelected": "チェックしたリストのみ解除",
+    "listsSuccessTitle": "配信設定を更新しました",
+    "listsSuccessDesc": "<b>{email}</b> は選択したリストから解除されました。その他の購読は継続されます。"
   },
   "emailRecovery": {
     "title": "メール復活",
@@ -2055,8 +2081,17 @@
       "mcp_token_create": "MCP トークン作成",
       "mcp_token_revoke": "MCP トークン失効",
       "email_recovery_apply": "メール復旧を適用",
-      "hunter_config_change": "Hunter 設定変更"
-    }
+      "hunter_config_change": "Hunter 設定変更",
+      "set_webhook": "Webhook 設定",
+      "notify_release": "リリース通知送信",
+      "contact_merge": "連絡先を統合"
+    },
+    "filterActorPlaceholder": "操作者メールを検索",
+    "filterActionAll": "すべての操作",
+    "filterFrom": "開始日",
+    "filterTo": "終了日",
+    "clearFilters": "フィルターをクリア",
+    "exportCsv": "CSV エクスポート"
   },
   "campaignAnalytics": {
     "title": "キャンペーン分析",
@@ -2095,7 +2130,16 @@
     "abVariantA": "件名 A",
     "abVariantB": "件名 B",
     "abSent": "送信 {count}",
-    "abOpenRate": "開封率 {rate}"
+    "abOpenRate": "開封率 {rate}",
+    "abCohortSize": "テストグループ {count} 名（{pct}%）",
+    "abWinnerDecided": "勝者：{variant}（{time} 判定）",
+    "abPending": "開封データ収集中 — {minutes} 分後に勝者を判定",
+    "abWinnerBadge": "勝者",
+    "failedDetailTitle": "失敗の詳細（{count}）",
+    "failedDetailUnavailable": "失敗の詳細を読み込めません",
+    "failedColEmail": "メールアドレス",
+    "failedColError": "エラー",
+    "failedDetailCap": "先頭 {shown} 件のみ表示"
   },
   "orgSettings": {
     "title": "組織設定とブランド",
@@ -2111,6 +2155,92 @@
     "saving": "保存中…",
     "saved": "保存しました。設定は60秒キャッシュされます。反映するにはページを更新してください。",
     "saveError": "保存に失敗しました。しばらくしてから再試行してください",
-    "loadError": "読み込みに失敗しました。更新してください"
+    "loadError": "読み込みに失敗しました。更新してください",
+    "labelFeedbackRecipient": "フィードバック通知の宛先",
+    "hintFeedbackRecipient": "毎日のフィードバック概要メールの宛先",
+    "sectionModules": "モジュール切り替え",
+    "labelHunterEnabled": "Hunter.io 自動補完",
+    "hintHunterEnabled": "オフにすると、新しい連絡先は Hunter.io で自動補完されません",
+    "labelAiAssistantEnabled": "AI アシスタント",
+    "hintAiAssistantEnabled": "オフにすると、AI アシスタントのチャットが無効になります"
+  },
+  "suppressions": {
+    "pageTitle": "配信停止・同意管理",
+    "pageSubtitle": "任意のメールの送信可否を確認し、各ソースの抑制状況を確認します",
+    "searchPlaceholder": "メールアドレスを入力して送信可否を確認",
+    "searchButton": "確認",
+    "verdictCanEmail": "送信可能",
+    "verdictCannotEmail": "送信不可",
+    "sourcesTitle": "ソース別ステータス",
+    "colSource": "ソース",
+    "colStatus": "ステータス",
+    "colDetail": "詳細",
+    "colEmail": "メール",
+    "colTime": "日時",
+    "summaryTitle": "ソース別集計",
+    "recentTitle": "最近の抑制記録",
+    "sourceContactOptOut": "連絡先オプトアウト",
+    "sourceContactStatus": "連絡先メールステータス",
+    "sourceBlacklist": "ブラックリスト",
+    "sourceUnsubscribe": "全体配信停止",
+    "sourceSubscriberUnsub": "購読者の配信停止",
+    "statusSuppressed": "抑制中",
+    "statusClear": "正常",
+    "empty": "抑制記録はありません",
+    "noPermission": "このページへのアクセス権限がありません",
+    "invalidEmail": "有効なメールアドレスを入力してください",
+    "loadFailed": "読み込みに失敗しました"
+  },
+  "dsar": {
+    "pageTitle": "データ主体照会 (DSAR)",
+    "pageSubtitle": "メールアドレスに紐づく全連絡先と個人データの範囲を照会します",
+    "searchPlaceholder": "メールアドレスを入力して該当連絡先を検索",
+    "searchButton": "検索",
+    "verdictTitle": "送信可否",
+    "verdictCanEmail": "送信可能",
+    "verdictCannotEmail": "送信不可",
+    "resultsTitle": "検索結果",
+    "colName": "名前",
+    "colCompany": "会社",
+    "colCreator": "作成者",
+    "colCreatedAt": "作成日",
+    "colInteractions": "対話記録",
+    "colCards": "名刺",
+    "colRecipients": "ニュースレター",
+    "viewContact": "表示",
+    "exportLink": "エクスポート",
+    "deletedBadge": "削除済み",
+    "unnamed": "（名称なし）",
+    "empty": "該当する連絡先が見つかりません",
+    "emptyHint": "メールアドレスを入力して検索を開始",
+    "noPermission": "このページへのアクセス権限がありません",
+    "invalidEmail": "有効なメールアドレスを入力してください",
+    "searchFailed": "検索に失敗しました"
+  },
+  "newsletterOverview": {
+    "title": "ニュースレター概要",
+    "subtitle": "配信成果とリストの健全性",
+    "statSubscribers": "購読者数",
+    "statUnsubscribed": "配信停止",
+    "statBlacklist": "ブラックリスト",
+    "trendTitle": "直近のキャンペーン成果（最新12件）",
+    "colCampaign": "キャンペーン",
+    "colSentAt": "送信日時",
+    "colSent": "送信数",
+    "colOpenRate": "開封率",
+    "colClickRate": "クリック率",
+    "trendEmpty": "送信履歴はまだありません",
+    "trendEmptyCta": "キャンペーンへ",
+    "listHealthTitle": "リストの健全性",
+    "colList": "リスト",
+    "colMembers": "メンバー数",
+    "colNonOpeners": "180日間未開封",
+    "listEmpty": "リストはまだありません",
+    "listEmptyCta": "リスト管理へ",
+    "untitled": "（無題）",
+    "forbidden": "スーパー管理者のみ閲覧できます",
+    "loadFailed": "読み込みに失敗しました",
+    "genericError": "システムエラーが発生しました。しばらくしてからもう一度お試しください",
+    "retry": "再試行"
   }
 }

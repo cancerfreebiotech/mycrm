@@ -22,6 +22,15 @@ interface CampaignMeta {
   total_recipients: number | null
   failed_count: number | null
   send_errors: string[] | null
+  ab_test_pct: number | null
+  ab_wait_minutes: number | null
+  ab_winner: 'a' | 'b' | null
+  ab_decided_at: string | null
+}
+
+interface FailedRecipient {
+  email: string
+  error: string | null
 }
 
 interface Analytics {
@@ -70,6 +79,7 @@ export default function CampaignAnalyticsPage() {
 
   const [campaign, setCampaign] = useState<CampaignMeta | null>(null)
   const [analytics, setAnalytics] = useState<Analytics | null>(null)
+  const [failedRows, setFailedRows] = useState<FailedRecipient[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [showErrors, setShowErrors] = useState(false)
@@ -77,16 +87,25 @@ export default function CampaignAnalyticsPage() {
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const [{ data: camp }, res] = await Promise.all([
+      const [{ data: camp }, res, failedRes] = await Promise.all([
         supabase
           .from('newsletter_campaigns')
-          .select('id, title, subject, status, sent_at, sent_count, total_recipients, failed_count, send_errors')
+          .select('id, title, subject, status, sent_at, sent_count, total_recipients, failed_count, send_errors, ab_test_pct, ab_wait_minutes, ab_winner, ab_decided_at')
           .eq('id', id)
           .maybeSingle(),
         fetch(`/api/newsletter/campaigns/${id}/analytics`),
+        // 失敗明細 (capped at 200 rows) — failure here must not break the page.
+        supabase
+          .from('newsletter_recipients')
+          .select('email, error')
+          .eq('campaign_id', id)
+          .eq('status', 'failed')
+          .order('email')
+          .limit(200),
       ])
       if (cancelled) return
       setCampaign((camp as CampaignMeta) ?? null)
+      setFailedRows((failedRes.data as FailedRecipient[] | null) ?? [])
       if (res.ok) {
         setAnalytics(await res.json())
       } else {
@@ -212,18 +231,87 @@ export default function CampaignAnalyticsPage() {
 
                 {analytics.variants.length > 0 && (
                   <section className="mb-6">
-                    <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{t('abTitle')}</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {analytics.variants.map((v) => (
-                        <div key={v.variant} className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-                          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                            {v.variant === 'a' ? t('abVariantA') : t('abVariantB')}
-                          </p>
-                          <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{t('abOpenRate', { rate: pct(v.openRate) })}</p>
-                          <p className="text-xs text-gray-400 mt-0.5">{t('abSent', { count: v.sent })}</p>
-                        </div>
-                      ))}
+                    <div className="mb-3">
+                      <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('abTitle')}</h2>
+                      {/* Holdout test meta: cohort size + winner (or pending) */}
+                      {campaign.ab_test_pct != null && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {t('abCohortSize', {
+                            pct: campaign.ab_test_pct,
+                            count: analytics.variants.reduce((sum, v) => sum + v.sent, 0),
+                          })}
+                          {' · '}
+                          {campaign.ab_winner && campaign.ab_decided_at
+                            ? t('abWinnerDecided', {
+                                variant: campaign.ab_winner === 'a' ? t('abVariantA') : t('abVariantB'),
+                                time: format(new Date(campaign.ab_decided_at), 'yyyy/MM/dd HH:mm'),
+                              })
+                            : t('abPending', { minutes: campaign.ab_wait_minutes ?? 120 })}
+                        </p>
+                      )}
                     </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {analytics.variants.map((v) => {
+                        const isWinner = campaign.ab_winner === v.variant
+                        return (
+                          <div
+                            key={v.variant}
+                            className={`rounded-lg border bg-white dark:bg-gray-900 p-4 ${
+                              isWinner ? 'border-green-400 dark:border-green-600' : 'border-gray-200 dark:border-gray-700'
+                            }`}
+                          >
+                            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-2">
+                              {v.variant === 'a' ? t('abVariantA') : t('abVariantB')}
+                              {isWinner && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400">
+                                  {t('abWinnerBadge')}
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{t('abOpenRate', { rate: pct(v.openRate) })}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{t('abSent', { count: v.sent })}</p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </section>
+                )}
+
+                {/* 失敗明細 — per-recipient failure detail (newsletter_recipients.error) */}
+                {analytics.summary.failed > 0 && (
+                  <section className="mb-6">
+                    <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                      {t('failedDetailTitle', { count: analytics.summary.failed })}
+                    </h2>
+                    {failedRows.length === 0 ? (
+                      <div className="text-center py-6 px-4 text-gray-400 text-xs rounded-lg border border-gray-200 dark:border-gray-700">
+                        {t('failedDetailUnavailable')}
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                        <table className="w-full text-sm min-w-[480px]">
+                          <thead>
+                            <tr className="bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700">
+                              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400">{t('failedColEmail')}</th>
+                              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400">{t('failedColError')}</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
+                            {failedRows.map((r, i) => (
+                              <tr key={`${r.email}-${i}`} className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+                                <td className="px-4 py-3 text-gray-900 dark:text-gray-100 whitespace-nowrap">{r.email}</td>
+                                <td className="px-4 py-3 text-xs font-mono text-red-600 dark:text-red-400 break-all">{r.error ?? '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {analytics.summary.failed > failedRows.length && (
+                          <p className="px-4 py-2 text-xs text-gray-400 border-t border-gray-100 dark:border-gray-700/50">
+                            {t('failedDetailCap', { shown: failedRows.length })}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </section>
                 )}
 

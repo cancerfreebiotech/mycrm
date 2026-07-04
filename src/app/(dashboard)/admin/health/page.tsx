@@ -50,7 +50,7 @@ interface CronHealthData {
 interface DeadLetterTable {
   table: string
   failed: number
-  recent: Array<{ id: string; error: string | null; at: string | null }>
+  recent: Array<{ id: string; error: string | null; at: string | null; meta?: string }>
 }
 
 interface DeadLettersData {
@@ -537,6 +537,7 @@ function DeadLettersSection() {
                       {tb.recent.map((r) => (
                         <div key={r.id} className="px-3 py-2">
                           <p className="text-xs text-gray-600 dark:text-gray-300 break-words">{r.error ?? t('deadLettersNoError')}</p>
+                          {r.meta && <p className="text-[11px] text-gray-400 font-mono mt-0.5 break-words">{r.meta}</p>}
                           {r.at && <p className="text-[11px] text-gray-400 mt-0.5">{format.relativeTime(new Date(r.at))}</p>}
                         </div>
                       ))}

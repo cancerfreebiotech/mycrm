@@ -131,7 +131,7 @@ function LoginContent() {
 
           {error && (
             <div className="mb-6 px-4 py-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
-              {t(`errors.${error as 'unauthorized_domain' | 'auth_failed' | 'no_code'}`, { fallback: t('errors.unknown') })}
+              {t(`errors.${error as 'unauthorized_domain' | 'auth_failed' | 'no_code' | 'suspended'}`, { fallback: t('errors.unknown') })}
             </div>
           )}
 

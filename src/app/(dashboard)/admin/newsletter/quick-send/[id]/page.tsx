@@ -25,6 +25,8 @@ interface Campaign {
   promo_text: string | null
   subject_b: string | null
   scheduled_at: string | null
+  ab_test_pct: number | null
+  ab_wait_minutes: number | null
 }
 
 interface List {
@@ -57,6 +59,8 @@ export default function QuickSendPage() {
   // Editable fields
   const [subject, setSubject] = useState('')
   const [subjectB, setSubjectB] = useState('')
+  const [abTestPct, setAbTestPct] = useState('20')
+  const [abWaitMinutes, setAbWaitMinutes] = useState(120)
   const [scheduleAt, setScheduleAt] = useState('')
   const [scheduling, setScheduling] = useState(false)
   const [previewText, setPreviewText] = useState('')
@@ -90,6 +94,8 @@ export default function QuickSendPage() {
       setCampaign(c)
       setSubject(c.subject ?? '')
       setSubjectB(c.subject_b ?? '')
+      setAbTestPct(String(c.ab_test_pct ?? 20))
+      setAbWaitMinutes(c.ab_wait_minutes ?? 120)
       setPreviewText(c.preview_text ?? '')
       setPromoText(c.promo_text ?? '')
       setListIds(c.list_ids ?? [])
@@ -280,17 +286,21 @@ export default function QuickSendPage() {
 
   async function save(contentHtmlOverride?: string) {
     const htmlToSave = typeof contentHtmlOverride === 'string' ? contentHtmlOverride : contentHtml
+    // A/B holdout settings only make sense alongside subject B — clear both otherwise.
+    const abPct = subjectB.trim() ? Math.min(50, Math.max(10, Math.round(Number(abTestPct) || 20))) : null
+    const abWait = subjectB.trim() ? abWaitMinutes : null
     setSaving(true)
     setBanner(null)
     try {
       const res = await fetch(`/api/newsletter/campaigns/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject, subject_b: subjectB.trim() || null, preview_text: previewText, list_ids: listIds, content_html: htmlToSave }),
+        body: JSON.stringify({ subject, subject_b: subjectB.trim() || null, preview_text: previewText, list_ids: listIds, content_html: htmlToSave, ab_test_pct: abPct, ab_wait_minutes: abWait }),
       })
       if (!res.ok) throw new Error((await res.json()).error ?? 'save failed')
+      if (abPct !== null) setAbTestPct(String(abPct))
       setBanner({ kind: 'ok', msg: t('saved') })
-      setCampaign((prev) => prev ? { ...prev, subject, subject_b: subjectB.trim() || null, preview_text: previewText, list_ids: listIds, content_html: htmlToSave } : prev)
+      setCampaign((prev) => prev ? { ...prev, subject, subject_b: subjectB.trim() || null, preview_text: previewText, list_ids: listIds, content_html: htmlToSave, ab_test_pct: abPct, ab_wait_minutes: abWait } : prev)
       if (contentHtmlOverride !== undefined) setContentHtml(contentHtmlOverride)
     } catch (e) {
       setBanner({ kind: 'err', msg: e instanceof Error ? e.message : t('errSaveFailed') })
@@ -592,7 +602,7 @@ export default function QuickSendPage() {
                   type="text"
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full text-base px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
@@ -602,16 +612,44 @@ export default function QuickSendPage() {
                   value={subjectB}
                   onChange={(e) => setSubjectB(e.target.value)}
                   placeholder={t('subjectBPlaceholder')}
-                  className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full text-base px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+              {subjectB.trim() && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">{t('abTestPctLabel')}</label>
+                    <input
+                      type="number"
+                      min={10}
+                      max={50}
+                      value={abTestPct}
+                      onChange={(e) => setAbTestPct(e.target.value)}
+                      className="w-full text-base px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">{t('abWaitLabel')}</label>
+                    <select
+                      value={abWaitMinutes}
+                      onChange={(e) => setAbWaitMinutes(Number(e.target.value))}
+                      className="w-full text-base px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value={60}>{t('abWaitOption', { hours: 1 })}</option>
+                      <option value={120}>{t('abWaitOption', { hours: 2 })}</option>
+                      <option value={240}>{t('abWaitOption', { hours: 4 })}</option>
+                    </select>
+                  </div>
+                  <p className="col-span-2 text-xs text-gray-400 dark:text-gray-500">{t('abHoldoutHint')}</p>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">{t('previewTextLabel')}</label>
                 <input
                   type="text"
                   value={previewText}
                   onChange={(e) => setPreviewText(e.target.value)}
-                  className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full text-base px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
@@ -624,7 +662,7 @@ export default function QuickSendPage() {
                   onChange={(e) => setPromoText(e.target.value)}
                   rows={3}
                   placeholder={t('promoPlaceholder')}
-                  className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  className="w-full text-base px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
                 <div className="flex justify-end gap-2 mt-1">
                   <button
@@ -911,7 +949,7 @@ export default function QuickSendPage() {
                   value={testEmail}
                   onChange={(e) => setTestEmail(e.target.value)}
                   placeholder="test@example.com"
-                  className="flex-1 text-sm px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                  className="flex-1 text-base px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                 />
                 <button
                   onClick={sendTest}

@@ -18,6 +18,7 @@ const BOT_SESSION_DAYS = 30          // bot_sessions：updated_at 逾 30 天 →
 const TELEGRAM_DEDUP_DAYS = 7        // telegram_dedup：processed_at 逾 7 天 → 刪除
 const AGENT_TOKEN_EXPIRED_DAYS = 30  // agent_tokens：expires_at 過期逾 30 天 → 刪除
 const COMPOSE_CACHE_DAYS = 1         // newsletter_compose_cache：created_at 逾 1 天 → 刪除
+const CRON_RUN_DAYS = 30             // cron_runs：finished_at 逾 30 天 → 刪除（2 分鐘排程每天累積 ~1500+ 列）
 const MAX_CONTACTS_PER_RUN = 50      // 每次最多永久刪除 50 個聯絡人（避免超時）
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -41,6 +42,7 @@ export async function GET(req: NextRequest) {
     telegram_dedup_deleted: 0,
     agent_tokens_deleted: 0,
     compose_cache_deleted: 0,
+    cron_runs_deleted: 0,
   }
 
   // ── 1. 垃圾桶聯絡人 > 90 天 ────────────────────────────────────────────────
@@ -129,6 +131,19 @@ export async function GET(req: NextRequest) {
       .lt('created_at', daysAgo(COMPOSE_CACHE_DAYS))
     if (error) console.error('[purge-retention] compose_cache delete failed:', error.message)
     else result.compose_cache_deleted = count ?? 0
+  }
+
+  // ── 6. cron_runs：finished_at 逾 30 天 ─────────────────────────────────────
+  // 心跳表：2 分鐘排程（process-pending-ocr / -briefings 等）每天累積 ~1500+ 列，
+  // 不清理會無上限成長。過濾欄位 finished_at 對齊 src/lib/cronHeartbeat.ts 的讀取
+  // （getLatestRunsPerJob 以 finished_at 排序；由 DB default now() 填入）。
+  {
+    const { count, error } = await service
+      .from('cron_runs')
+      .delete({ count: 'exact' })
+      .lt('finished_at', daysAgo(CRON_RUN_DAYS))
+    if (error) console.error('[purge-retention] cron_runs delete failed:', error.message)
+    else result.cron_runs_deleted = count ?? 0
   }
 
   await recordCronRun(service, 'purge-retention', 'ok', result, Date.now() - startMs)

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { logAdminAction } from '@/lib/adminAudit'
 
 // POST /api/admin/notify-release
 //
@@ -96,6 +97,14 @@ export async function POST(req: Request) {
       error: `SendGrid ${res.status}: ${errText.slice(0, 500)}`,
     }, { status: 502 })
   }
+
+  // Auth is a shared RELEASE_NOTIFY_TOKEN (no user identity) → actor is unknown.
+  await logAdminAction(createServiceClient(), {
+    actorEmail: 'unknown',
+    action: 'notify_release',
+    target: version,
+    detail: { recipients },
+  })
 
   return NextResponse.json({
     version,
