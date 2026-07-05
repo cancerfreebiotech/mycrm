@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { logAdminAction } from '@/lib/adminAudit'
+import { DEFAULT_ORG_ID } from '@/lib/orgContext'
 
 // Super Admin (per CLAUDE.md) must never be demoted or deleted.
 const SUPER_ADMIN_EMAIL = 'pohan.chen@cancerfree.io'
@@ -97,12 +98,29 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   if (statusChange) {
-    // Single org today → update all of this user's membership rows.
-    const { error: stErr } = await service
+    // Single org today → update all of this user's membership rows. .select()
+    // reports how many rows actually matched (PostgREST treats a 0-row UPDATE as
+    // success, not an error).
+    const { data: updatedRows, error: stErr } = await service
       .from('organization_members')
       .update({ status: statusChange.to })
       .eq('user_id', targetId)
+      .select('user_id')
     if (stErr) return NextResponse.json({ error: stErr.message }, { status: 500 })
+    // No membership row yet (auth/callback only upserts public.users, so users
+    // created after the Phase 0 backfill have none) → the UPDATE was a silent
+    // no-op and the suspension gate would never see the status. Create the row in
+    // the default org so the write actually takes effect. upsert on the (org_id,
+    // user_id) PK is idempotent under retries/races.
+    if (!updatedRows || updatedRows.length === 0) {
+      const { error: insErr } = await service
+        .from('organization_members')
+        .upsert(
+          { org_id: DEFAULT_ORG_ID, user_id: targetId, status: statusChange.to },
+          { onConflict: 'org_id,user_id' }
+        )
+      if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
+    }
   }
 
   if ('role' in updates) {

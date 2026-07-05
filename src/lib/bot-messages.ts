@@ -294,6 +294,7 @@ export interface BotMessages {
   // ── /ai agent (bot Q&A) ─────────────────────────────────────────────────────
   aiThinking: string
   aiNotConfigured: string
+  aiDisabled: string
   aiTooManySteps: string
   aiEmptyReply: string
 
@@ -527,6 +528,7 @@ const zh: BotMessages = {
 
   aiThinking: '🤖 思考中…',
   aiNotConfigured: 'AI 未設定（缺 GEMINI_API_KEY）',
+  aiDisabled: 'AI 助理目前停用。',
   aiTooManySteps: '這個請求需要的操作步驟太多，已達上限。請把需求拆小一點或更明確一些再試一次。',
   aiEmptyReply: '抱歉，這次沒有產生有效回覆，請再試一次。',
 
@@ -940,6 +942,7 @@ const en: BotMessages = {
 
   aiThinking: '🤖 Thinking…',
   aiNotConfigured: 'AI is not configured (missing GEMINI_API_KEY)',
+  aiDisabled: 'The AI assistant is currently disabled.',
   aiTooManySteps: 'This request needs too many steps and hit the limit. Please break it into smaller or more specific requests and try again.',
   aiEmptyReply: 'Sorry, no valid reply was generated this time. Please try again.',
 
@@ -1353,6 +1356,7 @@ const ja: BotMessages = {
 
   aiThinking: '🤖 考え中…',
   aiNotConfigured: 'AI が未設定です（GEMINI_API_KEY がありません）',
+  aiDisabled: 'AI アシスタントは現在無効になっています。',
   aiTooManySteps: 'このリクエストは必要な操作が多すぎて上限に達しました。もう少し小さく、具体的に分けて再度お試しください。',
   aiEmptyReply: '申し訳ありません、有効な回答を生成できませんでした。もう一度お試しください。',
 

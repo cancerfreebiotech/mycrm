@@ -2084,7 +2084,10 @@
       "hunter_config_change": "Hunter 設定変更",
       "set_webhook": "Webhook 設定",
       "notify_release": "リリース通知送信",
-      "contact_merge": "連絡先を統合"
+      "contact_merge": "連絡先を統合",
+      "dsar_lookup": "DSAR データ照会",
+      "set_status": "アカウント状態設定",
+      "newsletter_send": "ニュースレター送信"
     },
     "filterActorPlaceholder": "操作者メールを検索",
     "filterActionAll": "すべての操作",

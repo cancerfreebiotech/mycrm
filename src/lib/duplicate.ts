@@ -1,4 +1,5 @@
 import { createServiceClient } from './supabase'
+import { escapeLikePattern } from '@/lib/likeEscape'
 
 export interface Contact {
   id: string
@@ -22,14 +23,6 @@ export interface DuplicateResult {
 }
 
 const SIMILARITY_THRESHOLD = 0.6
-
-/**
- * Escape SQL LIKE wildcards (%, _, \) from user input so that .ilike() behaves
- * as case-insensitive exact equality.
- */
-function escapeLikePattern(s: string): string {
-  return s.replace(/[%_\\]/g, '\\$&')
-}
 
 function normalizeEmail(e: string | null | undefined): string | null {
   if (!e) return null

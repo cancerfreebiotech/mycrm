@@ -24,10 +24,15 @@ interface AuditRow {
 
 const CSV_CAP = 5000
 
-// `to` from a <input type="date"> is date-only (YYYY-MM-DD); widen it to the end
-// of that day so the range is inclusive. Full ISO timestamps pass through as-is.
+// A date-only value from <input type="date"> (YYYY-MM-DD) anchors to the
+// Asia/Taipei day (UTC+8) so the filter/CSV window matches the product day and
+// the timestamps the page displays. Full ISO timestamps pass through as-is.
+function normalizeFrom(value: string): string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00+08:00` : value
+}
+
 function normalizeTo(value: string): string {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T23:59:59.999Z` : value
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T23:59:59.999+08:00` : value
 }
 
 function csvEscape(value: unknown): string {
@@ -72,7 +77,7 @@ export async function GET(req: NextRequest) {
     if (actor) q = q.ilike('actor_email', `%${actor}%`)
     if (action) q = q.eq('action', action)
     if (target) q = q.ilike('target', `%${target}%`)
-    if (fromDate) q = q.gte('created_at', fromDate)
+    if (fromDate) q = q.gte('created_at', normalizeFrom(fromDate))
     if (toDate) q = q.lte('created_at', normalizeTo(toDate))
     return q
   }

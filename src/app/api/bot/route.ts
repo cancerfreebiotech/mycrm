@@ -12,6 +12,7 @@ import { mergeIntoContact, type MergeMode } from '@/lib/merge-into-contact'
 import { signCardUrl } from '@/lib/cardImageUrl'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { TOOLS, TOOL_BY_NAME, executeTool } from '@/lib/agent-tools'
+import { getOrgSetting } from '@/lib/orgSettings'
 
 function countryToLanguage(code: string | null | undefined): string {
   if (code === 'TW' || code === 'CN') return 'chinese'
@@ -289,6 +290,12 @@ async function handleAiAgent(
   question: string,
   m: BotMessages,
 ) {
+  // Module kill-switch (org-settings), mirrors the web route (/api/ai-chat).
+  // Toggling the assistant off must also stop the Telegram agent path.
+  if ((await getOrgSetting(createServiceClient(), 'ai_assistant_enabled')) === 'false') {
+    await sendMessage(chatId, m.aiDisabled)
+    return
+  }
   await sendMessage(chatId, m.aiThinking)
   try {
     const apiKey = process.env.GEMINI_API_KEY
@@ -1936,39 +1943,53 @@ async function handleText(
 
   // ── /visit /v name [note] — shortcut with contact name ───────────────────
   // 只有姓名 → 原本的逐步流程；姓名後帶內容 → one-shot：AI 解析後直接寫入。
+  // 姓名可能是多個字（如英文全名），不能只用第一個空白前的字當姓名。作法：
+  // 建立姓名候選——先把整串當姓名（無備註），再取最前面 4 個斷點由長到短切
+  // 成「姓名＋備註」（姓名很少超過 4 個字詞，以斷點位置而非候選長度設限，
+  // 備註再長也不會把姓名候選擠出掃描範圍）。第一個「唯一命中」的候選勝出
+  // （整串命中→逐步流程；前綴命中→one-shot）。最多 5 次查詢；皆非唯一時，
+  // 退回既有的 0 筆／多筆流程。
   const visitNameMatch = cmd.match(/^\/(?:visit|v)\s+([\s\S]+)/)
   if (visitNameMatch) {
     const raw = visitNameMatch[1].trim()
-    const wsIdx = raw.search(/\s/)
-    const searchTerm = wsIdx === -1 ? raw : raw.slice(0, wsIdx)
-    const noteText = wsIdx === -1 ? '' : raw.slice(wsIdx + 1).trim()
+    const tokens = raw.split(/\s+/)
+    const candidates: Array<{ term: string; note: string }> = [{ term: raw, note: '' }]
+    for (let i = Math.min(4, tokens.length - 1); i >= 1; i--) {
+      candidates.push({ term: tokens.slice(0, i).join(' '), note: tokens.slice(i).join(' ') })
+    }
 
-    if (noteText) {
-      const oneShotContacts = await searchContacts(searchTerm)
-      if (oneShotContacts.length === 1) {
-        await logVisitOneShot(chatId, user, oneShotContacts[0].id, oneShotContacts[0].name, noteText, m)
+    let rawMatches: Awaited<ReturnType<typeof searchContacts>> | null = null
+    let multiWithNote: { contacts: Awaited<ReturnType<typeof searchContacts>>; note: string } | null = null
+    for (const cand of candidates) {
+      const found = await searchContacts(cand.term)
+      if (cand.term === raw) rawMatches = found
+      if (found.length === 1) {
+        if (cand.note) {
+          await logVisitOneShot(chatId, user, found[0].id, found[0].name, cand.note, m)
+        } else {
+          await setSession(fromId, 'waiting_for_visit_datetime', { contact_id: found[0].id, contact_name: found[0].name })
+          await sendMessage(chatId, m.visitContactFound(found[0].name ?? '', found[0].company ?? ''))
+        }
         return
       }
-      if (oneShotContacts.length > 1) {
-        // callback_data 有 64-byte 限制 → 內容暫存 session，按鈕只帶 contact id
-        await setSession(fromId, 'waiting_visit_oneshot_pick', { note: noteText })
-        const buttons = oneShotContacts.map((c) => [{ text: `${c.name}（${c.company ?? ''}）`, callback_data: `vlog_${c.id}` }])
-        await sendMessage(chatId, m.noteFoundContactSelect, { reply_markup: { inline_keyboard: buttons } })
-        return
-      }
-      // 0 筆 → 告知後退回原本逐步流程（未歸類）
-      await setSession(fromId, 'waiting_for_visit_datetime', { contact_id: null, contact_name: null })
-      await sendMessage(chatId, m.visitContactNotFound)
+      // 記住第一個「多筆命中且帶備註」的候選，供 one-shot 多筆挑選使用
+      if (found.length > 1 && cand.note && !multiWithNote) multiWithNote = { contacts: found, note: cand.note }
+    }
+
+    // 無唯一命中，但有帶備註的多筆候選 → 沿用 one-shot 多筆挑選：
+    // callback_data 有 64-byte 限制 → 備註暫存 session，按鈕只帶 contact id
+    if (multiWithNote) {
+      await setSession(fromId, 'waiting_visit_oneshot_pick', { note: multiWithNote.note })
+      const buttons = multiWithNote.contacts.map((c) => [{ text: `${c.name}（${c.company ?? ''}）`, callback_data: `vlog_${c.id}` }])
+      await sendMessage(chatId, m.noteFoundContactSelect, { reply_markup: { inline_keyboard: buttons } })
       return
     }
 
-    const contacts = await searchContacts(raw)
+    // 其餘 → 用整串走既有的 0 筆／多筆流程（唯一命中已於上方處理）
+    const contacts = rawMatches ?? await searchContacts(raw)
     if (contacts.length === 0) {
       await setSession(fromId, 'waiting_for_visit_datetime', { contact_id: null, contact_name: null })
       await sendMessage(chatId, m.visitContactNotFound)
-    } else if (contacts.length === 1) {
-      await setSession(fromId, 'waiting_for_visit_datetime', { contact_id: contacts[0].id, contact_name: contacts[0].name })
-      await sendMessage(chatId, m.visitContactFound(contacts[0].name ?? '', contacts[0].company ?? ''))
     } else {
       const buttons = contacts.map((c) => [{ text: `${c.name}（${c.company ?? ''}）`, callback_data: `select_visit_contact_${c.id}` }])
       await sendMessage(chatId, m.noteFoundContactSelect, { reply_markup: { inline_keyboard: buttons } })

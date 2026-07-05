@@ -2084,7 +2084,10 @@
       "hunter_config_change": "Hunter 設定變更",
       "set_webhook": "設定 Webhook",
       "notify_release": "發送更新通知",
-      "contact_merge": "合併聯絡人"
+      "contact_merge": "合併聯絡人",
+      "dsar_lookup": "DSAR 資料查詢",
+      "set_status": "設定帳號狀態",
+      "newsletter_send": "發送電子報"
     },
     "filterActorPlaceholder": "搜尋操作者 email",
     "filterActionAll": "所有動作",

@@ -32,6 +32,9 @@ const KNOWN_ACTIONS = [
   'set_webhook',
   'notify_release',
   'contact_merge',
+  'dsar_lookup',
+  'set_status',
+  'newsletter_send',
 ]
 
 export default function AuditLogPage() {

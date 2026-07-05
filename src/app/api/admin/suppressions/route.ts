@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { escapeLikePattern } from '@/lib/likeEscape'
 
 // /api/admin/* is exempted from the auth middleware (src/middleware.ts), so this
 // handler MUST self-guard. Super-admin only. Mirrors /api/admin/hunter.
@@ -52,15 +53,19 @@ export interface SuppressionVerdict {
 // the verdict is the strict union of every suppression signal.
 export async function checkSuppression(service: SupabaseClient, rawEmail: string): Promise<SuppressionVerdict> {
   const email = rawEmail.trim().toLowerCase()
+  // ilike is used as case-insensitive exact match, so escape LIKE wildcards
+  // (%, _). Unescaped, they would let one address's verdict be computed from a
+  // DIFFERENT address's suppression state across every table below.
+  const escaped = escapeLikePattern(email)
 
   const [contactsRes, blRes, unsubRes, subRes] = await Promise.all([
     service.from('contacts')
       .select('email_opt_out, email_status')
-      .or(`email.ilike.${email},second_email.ilike.${email}`)
+      .or(`email.ilike.${escaped},second_email.ilike.${escaped}`)
       .is('deleted_at', null),
-    service.from('newsletter_blacklist').select('status, reason').ilike('email', email).limit(1),
-    service.from('newsletter_unsubscribes').select('reason, unsubscribed_at').ilike('email', email).limit(1),
-    service.from('newsletter_subscribers').select('unsubscribed_at').ilike('email', email)
+    service.from('newsletter_blacklist').select('status, reason').ilike('email', escaped).limit(1),
+    service.from('newsletter_unsubscribes').select('reason, unsubscribed_at').ilike('email', escaped).limit(1),
+    service.from('newsletter_subscribers').select('unsubscribed_at').ilike('email', escaped)
       .not('unsubscribed_at', 'is', null).limit(1),
   ])
 

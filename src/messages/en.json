@@ -2084,7 +2084,10 @@
       "hunter_config_change": "Hunter config change",
       "set_webhook": "Set webhook",
       "notify_release": "Send release notice",
-      "contact_merge": "Merge contacts"
+      "contact_merge": "Merge contacts",
+      "dsar_lookup": "DSAR data lookup",
+      "set_status": "Set account status",
+      "newsletter_send": "Send newsletter"
     },
     "filterActorPlaceholder": "Search actor email",
     "filterActionAll": "All actions",

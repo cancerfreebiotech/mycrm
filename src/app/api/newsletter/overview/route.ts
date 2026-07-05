@@ -97,6 +97,7 @@ export async function GET() {
       .from('newsletter_recipients')
       .select('email')
       .gte('opened_at', cutoff)
+      .order('id')
       .range(from, from + BATCH - 1)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     if (!data || data.length === 0) break
@@ -111,6 +112,8 @@ export async function GET() {
     const { data, error } = await service
       .from('newsletter_subscriber_lists')
       .select('list_id, newsletter_subscribers(email)')
+      .order('list_id')
+      .order('subscriber_id')
       .range(from, from + BATCH - 1)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     if (!data || data.length === 0) break
@@ -152,3 +155,5 @@ export async function GET() {
     },
   })
 }
+
+export const maxDuration = 300

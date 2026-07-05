@@ -69,8 +69,13 @@ export function addUtmTags(html: string, campaignTag: string): string {
       if (!url.searchParams.has('utm_source')) url.searchParams.set('utm_source', 'newsletter')
       if (!url.searchParams.has('utm_medium')) url.searchParams.set('utm_medium', 'email')
       if (!url.searchParams.has('utm_campaign')) url.searchParams.set('utm_campaign', campaignTag)
-      let out = url.toString()
-      if (hadAmp) out = out.replace(/&/g, '&amp;')
+      // Always emit '&' as the '&amp;' entity in the attribute value, not only
+      // when the source already used it: a raw '&' in an HTML attribute is
+      // invalid, and every client (incl. SendGrid's click-tracking rewriter)
+      // decodes the entity back to '&' when extracting the URL. url.toString()
+      // only produces '&' as query separators (a literal '&' inside a value is
+      // percent-encoded), so a blanket replace is safe and never double-encodes.
+      const out = url.toString().replace(/&/g, '&amp;')
       return `${prefix}${quote}${out}${quote}`
     },
   )
@@ -118,7 +123,7 @@ export async function sendCampaign(
 
   const { data: campaign } = await service
     .from('newsletter_campaigns')
-    .select('id, subject, subject_b, preview_text, content_html, list_ids, sent_at, slug, ab_test_pct, ab_winner, sent_count, total_recipients, failed_count')
+    .select('id, subject, subject_b, preview_text, content_html, list_ids, sent_at, slug, ab_test_pct, ab_winner')
     .eq('id', campaignId)
     .maybeSingle()
   if (!campaign) throw new SendCampaignError(404, { error: 'campaign not found' })
@@ -486,19 +491,60 @@ export async function sendCampaign(
   // retry mechanism (resend:true skips already-sent recipients).
   if (!opts.testOnly) {
     const failed = recipients.length - sent
-    // In the A/B 'final' phase the cohort counters are already on the campaign —
-    // add this run's numbers instead of overwriting them.
-    const prevSent = abMode === 'final' ? ((campaign.sent_count as number | null) ?? 0) : 0
-    const prevTotal = abMode === 'final' ? ((campaign.total_recipients as number | null) ?? 0) : 0
-    const prevFailed = abMode === 'final' ? ((campaign.failed_count as number | null) ?? 0) : 0
+    // A normal send just records this run's numbers. The A/B 'final' phase must
+    // reflect the holdout cohort PLUS this run — but a prev+increment sum
+    // double-counts when 'final' is re-run (a manual retry after a partial
+    // failure re-sends the recipients that previously failed, and they were
+    // already tallied → total_recipients drifts past the real audience, e.g. 110
+    // for a 100-person list). So for 'final' we derive the counters straight from
+    // the newsletter_recipients rows, keyed by email, which makes repeated runs
+    // idempotent. A first 'final' run (holdout fully sent) yields the same
+    // numbers the increment path did.
+    let sentCount = sent
+    let totalRecipients = recipients.length
+    let failedCount = failed > 0 ? failed : 0
+    let countersKnown = true
+    if (abMode === 'final') {
+      const hasSentByEmail = new Map<string, boolean>()
+      const PAGE = 1000
+      for (let from = 0; ; from += PAGE) {
+        const { data: page, error: pageErr } = await service
+          .from('newsletter_recipients')
+          .select('email, status')
+          .eq('campaign_id', campaignId)
+          .range(from, from + PAGE - 1)
+        if (pageErr) {
+          // 讀取失敗不能把空 Map 當 0 寫回——略過本次計數更新，保留 DB 既有值
+          console.error('[newsletter-send-worker] final recount read failed, keeping existing counters:', pageErr.message)
+          countersKnown = false
+          break
+        }
+        if (!page || page.length === 0) break
+        for (const row of page as { email: string; status: string }[]) {
+          const key = row.email.toLowerCase().trim()
+          hasSentByEmail.set(key, (hasSentByEmail.get(key) ?? false) || row.status === 'sent')
+        }
+        if (page.length < PAGE) break
+      }
+      if (countersKnown) {
+        // Dedup guarantees ≤1 'sent' row per email, so distinct sent emails ==
+        // 'sent' row count (matching the analytics denominator). total is the real
+        // audience (distinct emails); failed is everyone who never got a 'sent'.
+        totalRecipients = hasSentByEmail.size
+        sentCount = [...hasSentByEmail.values()].filter(Boolean).length
+        failedCount = totalRecipients - sentCount
+      }
+    }
     await service
       .from('newsletter_campaigns')
       .update({
         status: errors.length > 0 || sent === 0 ? 'partial' : 'sent',
         sent_at: new Date().toISOString(),
-        sent_count: prevSent + sent,
-        total_recipients: prevTotal + recipients.length,
-        failed_count: prevFailed + (failed > 0 ? failed : 0),
+        ...(countersKnown ? {
+          sent_count: sentCount,
+          total_recipients: totalRecipients,
+          failed_count: failedCount,
+        } : {}),
         send_errors: errors.length > 0 ? errors.slice(0, 50) : null,
       })
       .eq('id', campaignId)

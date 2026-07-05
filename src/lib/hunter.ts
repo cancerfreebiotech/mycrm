@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase'
+import { getOrgSetting } from '@/lib/orgSettings'
 
 // Hunter.io Email Finder integration
 //
@@ -65,6 +66,7 @@ function splitName(name: string | null | undefined): { firstName: string; lastNa
 export type EnrichStatus =
   | 'found'              // email found and written
   | 'not_found'          // Hunter queried, no email returned
+  | 'skipped_disabled'   // Hunter module kill-switch (hunter_enabled=false)
   | 'skipped_no_key'     // Hunter API key not configured
   | 'skipped_cjk_name'   // Name is CJK-only (no Latin). Hunter needs first+last
   | 'skipped_no_company' // Company required for Hunter Email Finder
@@ -85,6 +87,13 @@ export async function enrichContactEmail(
   name: string | null | undefined,
   company: string | null | undefined,
 ): Promise<EnrichResult> {
+  const supabase = createServiceClient()
+  // Module kill-switch (org-settings) — mirrors hunterEnrich.ts so hunter_enabled=false
+  // also stops single-contact lookups from spending Hunter credits.
+  if ((await getOrgSetting(supabase, 'hunter_enabled')) === 'false') {
+    return { status: 'skipped_disabled', email: null }
+  }
+
   const apiKey = await fetchApiKey()
   if (!apiKey) return { status: 'skipped_no_key', email: null }
 
@@ -99,7 +108,6 @@ export async function enrichContactEmail(
     company,
   })
 
-  const supabase = createServiceClient()
   try {
     const res = await fetch(`${HUNTER_BASE}/email-finder?${params}`)
     if (!res.ok) {
@@ -131,6 +139,7 @@ export function enrichStatusMessage(r: EnrichResult, lang: 'zh-TW' | 'en' | 'ja'
     'zh-TW': {
       found: `📧 Hunter 已自動查到 email：${r.email ?? ''}`,
       not_found: '🔍 Hunter 查過了，目前沒找到 email（cron 30 天後會再試一次）',
+      skipped_disabled: 'ℹ Hunter 模組已停用（hunter_enabled=false），跳過自動查詢',
       skipped_no_key: 'ℹ Hunter API key 未設定，跳過自動查詢',
       skipped_cjk_name: 'ℹ 中文/日文名無法使用 Hunter 查詢；若補上英文姓名並填公司，cron 會自動重試',
       skipped_no_company: 'ℹ Hunter 需要公司名才能查 email；補上公司後 cron 會自動重試',
@@ -139,6 +148,7 @@ export function enrichStatusMessage(r: EnrichResult, lang: 'zh-TW' | 'en' | 'ja'
     'en': {
       found: `📧 Hunter auto-found email: ${r.email ?? ''}`,
       not_found: '🔍 Hunter queried, no email found (will retry in 30 days via cron)',
+      skipped_disabled: 'ℹ Hunter module disabled (hunter_enabled=false); skipped',
       skipped_no_key: 'ℹ Hunter API key not configured; skipped',
       skipped_cjk_name: 'ℹ Hunter cannot query CJK-only names; add an English name + company and cron will retry',
       skipped_no_company: 'ℹ Hunter needs a company name to find the email; add a company and cron will retry',
@@ -147,6 +157,7 @@ export function enrichStatusMessage(r: EnrichResult, lang: 'zh-TW' | 'en' | 'ja'
     'ja': {
       found: `📧 Hunter が email を自動検出：${r.email ?? ''}`,
       not_found: '🔍 Hunter で照会済み、email は見つかりませんでした（30 日後に cron が再試行）',
+      skipped_disabled: 'ℹ Hunter モジュールは無効（hunter_enabled=false）のためスキップ',
       skipped_no_key: 'ℹ Hunter API キー未設定のためスキップ',
       skipped_cjk_name: 'ℹ CJK（中日韓）のみの名前は Hunter で照会できません。英語名＋会社名を追加すれば cron が再試行',
       skipped_no_company: 'ℹ Hunter は会社名が必須です。会社名を追加すれば cron が再試行',
@@ -176,6 +187,13 @@ export async function runHunterBatch(opts: BatchOptions = {}): Promise<BatchResu
   const cooldownDays = opts.cooldownDays ?? 30
   const remainingBuffer = opts.remainingBuffer ?? 5
 
+  const supabase = createServiceClient()
+  // Module kill-switch (org-settings) — mirrors hunterEnrich.ts. Stops the
+  // scheduled cron and admin batch from spending Hunter credits when disabled.
+  if ((await getOrgSetting(supabase, 'hunter_enabled')) === 'false') {
+    return { total: 0, found: 0, skipped: true, skipReason: 'disabled', creditsLeft: null, results: [] }
+  }
+
   const apiKey = await fetchApiKey()
   if (!apiKey) {
     return { total: 0, found: 0, skipped: true, skipReason: 'no_api_key', creditsLeft: null, results: [] }
@@ -195,7 +213,6 @@ export async function runHunterBatch(opts: BatchOptions = {}): Promise<BatchResu
   }
 
   const cooldownCutoff = new Date(Date.now() - cooldownDays * 24 * 60 * 60 * 1000).toISOString()
-  const supabase = createServiceClient()
   const { data: contacts } = await supabase
     .from('contacts')
     .select('id, name, name_en, company')

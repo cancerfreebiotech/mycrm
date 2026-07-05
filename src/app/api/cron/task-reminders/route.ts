@@ -3,13 +3,15 @@ import { createServiceClient } from '@/lib/supabase'
 import { sendTelegramMessage, type InlineKeyboardMarkup } from '@/lib/telegram'
 import { getValidProviderToken } from '@/lib/graph-server'
 import { recordCronRun } from '@/lib/cronHeartbeat'
+import { escapeLikePattern } from '@/lib/likeEscape'
 
 /**
  * Vercel Cron — daily personal task digest via Telegram (09:00 Asia/Taipei).
  *
  * Per user with a linked telegram_id: overdue tasks + tasks due today
- * (as assignee, or as creator of self-assigned tasks). Users with nothing
- * due get NO message — the empty digest is silence, so no opt-out needed.
+ * (as assignee, or as creator of self-assigned tasks), plus today's Outlook
+ * meetings. Users with neither tasks nor meetings today get NO message — the
+ * empty digest is silence, so no opt-out needed.
  *
  * Auth: Vercel sends Authorization: Bearer {CRON_SECRET}.
  * vercel.json: { "path": "/api/cron/task-reminders", "schedule": "0 1 * * *" }
@@ -36,12 +38,6 @@ interface TodayEvent {
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
-// ilike is used as case-insensitive exact match, so escape LIKE wildcards
-// (emails commonly contain '_'). Mirrors pre-meeting-briefings.
-function escapeLikePattern(s: string): string {
-  return s.replace(/[%_\\]/g, '\\$&')
 }
 
 // Read the signed-in user's Outlook calendar within an explicit UTC window.
@@ -132,7 +128,6 @@ export async function GET(req: NextRequest) {
       // Creator of a self-reminder (no other assignees) — same rule as the tasks page
       return t.created_by === u.email && assignees.length === 0
     })
-    if (mine.length === 0) continue
 
     const overdue = mine.filter((t) => new Date(t.due_at!) < now)
     const dueToday = mine.filter((t) => new Date(t.due_at!) >= now)
@@ -150,6 +145,7 @@ export async function GET(req: NextRequest) {
     // Feature B: 今日會議 — Outlook events for the Taipei day, with matched
     // contacts + briefing-ready markers. Wrapped so a calendar/token failure
     // never kills the digest (many users have no Microsoft token → skipped).
+    let hasMeetings = false
     try {
       const token = await getValidProviderToken(u.id)
       const events = (await fetchTodayEvents(token, startOfDayUtc.toISOString(), endOfDayUtc.toISOString()))
@@ -206,10 +202,17 @@ export async function GET(req: NextRequest) {
           meetingLines.push(line)
         }
         parts.push(`\n🗓 <b>今日會議</b>\n${meetingLines.join('\n')}`)
+        // 段落真的寫進 parts 才算有會議——若上方子查詢中途丟例外被 catch 吞掉，
+        // 不能讓無任務使用者收到近乎空白的摘要
+        hasMeetings = true
       }
     } catch (e) {
       console.error('[task-reminders] calendar section skipped for', u.email, e instanceof Error ? e.message : e)
     }
+
+    // Send when the user has tasks OR meetings today; skip only when both are
+    // empty so the empty digest stays silent (no message at all).
+    if (mine.length === 0 && !hasMeetings) continue
 
     parts.push('\n完成後可用下方按鈕、任務頁或 Teams 卡片處理。')
 

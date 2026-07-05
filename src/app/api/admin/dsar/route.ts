@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { logAdminAction } from '@/lib/adminAudit'
 import { checkSuppression } from '@/app/api/admin/suppressions/route'
+import { escapeLikePattern } from '@/lib/likeEscape'
 
 // /api/admin/* is exempted from the auth middleware (src/middleware.ts), so this
 // handler MUST self-guard. Super-admin only. Mirrors /api/admin/hunter.
@@ -36,10 +37,14 @@ export async function GET(req: NextRequest) {
 
   // Include soft-deleted contacts: a data subject request must surface all
   // records tied to the address, trashed or not.
+  // ilike is used as case-insensitive exact match, so escape LIKE wildcards
+  // (%, _) — VALID_EMAIL permits them, and unescaped they would match OTHER
+  // data subjects' records inside this .or() filter.
+  const escaped = escapeLikePattern(email)
   const { data: contacts, error } = await service
     .from('contacts')
     .select('id, name, company, created_at, deleted_at, users!created_by(display_name)')
-    .or(`email.ilike.${email},second_email.ilike.${email}`)
+    .or(`email.ilike.${escaped},second_email.ilike.${escaped}`)
     .order('created_at', { ascending: false })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

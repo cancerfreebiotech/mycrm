@@ -4,6 +4,7 @@ import { listUpcomingEvents } from '@/lib/graph'
 import { getValidProviderToken } from '@/lib/graph-server'
 import { sendTelegramMessage } from '@/lib/telegram'
 import { recordCronRun } from '@/lib/cronHeartbeat'
+import { escapeLikePattern } from '@/lib/likeEscape'
 
 /**
  * Vercel Cron — 會前自動 briefing（每 6 小時）。
@@ -19,12 +20,6 @@ import { recordCronRun } from '@/lib/cronHeartbeat'
 
 const HOURS_AHEAD = 24
 const INTERNAL_DOMAIN = '@cancerfree.io'
-
-// ilike is used as case-insensitive exact match, so escape LIKE wildcards
-// (emails commonly contain '_').
-function escapeLikePattern(s: string): string {
-  return s.replace(/[%_\\]/g, '\\$&')
-}
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
