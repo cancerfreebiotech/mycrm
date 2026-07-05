@@ -4,15 +4,19 @@ import { createClient, createServiceClient } from '@/lib/supabase'
  * v8.0 多租戶化 — org 情境解析（Phase 0 鷹架）
  *
  * ## 路線圖
- * - **Phase 0（現在）**：純鷹架，零行為改變。DB 已有 `organizations` 與
- *   `organization_members`（全員已入籍 default org）。本模組讓「新程式碼從今天起
- *   寫成 org-aware」，但 `orgScopedClient()` 仍是 pass-through、`getOrgContext()`
- *   永不 throw——它的用途是「準備」，不是「攔截」。既有 route 完全不動。
- * - **Phase 1**：業務表加 `org_id`，`orgScopedClient()` 在此注入 `.eq('org_id')`
- *   過濾與 insert default，讓「忘記過濾」從預設不安全變預設安全；route 逐一遷移到
- *   `getOrgContext()` + `orgScopedClient()`。
- * - **Phase 2**：RLS 依 `current_org_id()` 重寫（縱深防禦、支援前端直連），
- *   支援 org switcher / 多 org membership。
+ * - **Phase 0（已完成，2026-07-05 收尾）**：零行為改變。DB 已有 `organizations`/
+ *   `organization_members`/`organization_invites`（全員已入籍 default org）；
+ *   43 張業務表已加 nullable `org_id`（FK、DEFAULT = default org，既有列已
+ *   backfill）；複合唯一索引 (org_id, x) 與既有 UNIQUE 並存。本模組仍是鷹架：
+ *   `orgScopedClient()` pass-through、`getOrgContext()` 永不 throw——用途是
+ *   「準備」，不是「攔截」。既有 route 完全不動。migration 見 supabase/migrations/。
+ * - **Phase 1（下一步）**：`orgScopedClient()` 在此注入 `.eq('org_id')` 過濾與
+ *   insert 帶 org_id，讓「忘記過濾」從預設不安全變預設安全；route 逐一遷移到
+ *   `getOrgContext()` + `orgScopedClient()`；Auth Hook 注入 org_id claim。
+ * - **Phase 2**：`org_id` SET NOT NULL；RLS 依 `current_org_id()` 重寫（縱深
+ *   防禦、支援前端直連）；程式碼 onConflict 改帶 org_id 後 DROP 單欄 UNIQUE；
+ *   支援 org switcher / 多 org membership。⚠️ Phase 3 開放 onboarding 前必須
+ *   DROP 業務表的 org_id DEFAULT（屆時由本模組顯式注入）。
  *
  * ## 身分慣例
  * 本專案 `auth.users.id` ≠ `public.users.id`，一律以 **email** 解析 `public.users`。

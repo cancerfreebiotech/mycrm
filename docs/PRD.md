@@ -4327,7 +4327,7 @@ create policy "contacts_update" on public.contacts for update to authenticated
 4. **Hardcode → DB**：26 處搬到 `organizations.settings` / `branding`（reply_to、bcc_domain、app_domain、newsletter 公司名、FB/LinkedIn/website/logo URL、super admin fallback 改查 org owner）。各 route 經 `ctx.orgId` 載入 settings 取代常數。
 5. Azure AD 改 multi-tenant app，或加開放 OAuth / email+password（賣給其他公司不能綁你的 Azure tenant）。MFA 強制邏輯保留不動。
 
-### 45.6 計費（Stripe）
+### 45.6 計費（Stripe）（已擱置——2026-07-05 自 roadmap 移除，規格留供日後重啟）
 
 ```sql
 create table public.subscriptions (
@@ -4387,12 +4387,12 @@ create table public.usage_counters (
 
 > 分階段 roadmap，每階段結束時系統仍可正常運作（單租戶不中斷）。
 
-**Phase 0 — 基礎設施（無行為改變）**
-- [ ] **Task 171** `[新增]` — Migration：建 `organizations` / `organization_members` / `organization_invites` 表 + 索引
-- [ ] **Task 172** `[新增]` — Migration：建 default org（CancerFree）、現有 users 全加入為 member、搬移 `granted_features`
-- [ ] **Task 173** `[修改]` — Migration：所有業務表加 **nullable** `org_id` + 複合索引（leftmost org_id），backfill = default org
-- [ ] **Task 174** `[修改]` — Migration：所有 `UNIQUE(x)` 改 `UNIQUE(org_id, x)`
-- [ ] **Task 175** `[新增]` — `src/lib/orgContext.ts`：`getOrgContext()`、`orgScopedClient()`（寫好但尚未強制套用）
+**Phase 0 — 基礎設施（無行為改變）** ✅ **已完成（2026-07-05，v7.9.0）**。schema 改動自此進 repo `supabase/migrations/`（同步以 MCP `apply_migration` 打入 prod 並記錄歷史）。
+- [x] **Task 171** — 完成。`organizations`/`organization_members` 2026-07-04 建；`organization_invites` 2026-07-05 補完。
+- [x] **Task 172** — 完成。default org + 全員入籍 2026-07-04；`granted_features` 已複製到 `organization_members`（2026-07-05），**users 仍為真相來源**，Phase 2 切換讀取來源時需重同步。
+- [x] **Task 173** — 完成（2026-07-05，43 張業務表；PRD 原列 22 張 + newsletter 家族 12 張 + PRD 後新增 9 張）。實作差異：ADD COLUMN 直接帶 `DEFAULT = default org`（metadata-only 即刻 backfill、防 NULL 飄移；**Phase 3 開放 onboarding 前必須 DROP DEFAULT**）；一般複合索引延後至 Phase 1 隨查詢模式建（單 org 期間無用）。
+- [x] **Task 174** — 完成（2026-07-05）。**並存策略**：新增 11 個 `UNIQUE(org_id, x)` 唯一索引，既有 `UNIQUE(x)` 保留（全部 `onConflict` 程式碼依賴它們）；Phase 2 改完 onConflict 目標後才 DROP 單欄版。不建複合版：`agent_tokens(token_hash)`（全域 secret）、`photo_faces`/`task_assignees`（鍵首欄已是 org 所屬 FK）。
+- [x] **Task 175** — 完成（2026-07-04 鷹架；Phase 1 接線 `orgScopedClient()` 注入）。
 
 **Phase 1 — API 層 org 注入（隔離主防線）**
 - [ ] **Task 176** `[新增]` — Supabase Auth Hook `custom_access_token_hook` 注入 org_id claim；`active_org_id` cookie 機制
@@ -4411,11 +4411,9 @@ create table public.usage_counters (
 - [ ] **Task 185** `[修改]` — 26 處 hardcode 搬到 `organizations.settings` / `branding`，各 route 從 org 載入
 - [ ] **Task 186** `[修改]` — Azure AD 改 multi-tenant 或加開放 OAuth / email+password
 
-**Phase 4 — 計費 / Quota**
-- [ ] **Task 187** `[新增]` — Migration：`subscriptions` / `plan_limits` / `usage_counters` 表
-- [ ] **Task 188** `[新增]` — Stripe Checkout + Customer Portal + `/api/stripe/webhook`
-- [ ] **Task 189** `[新增]` — `enforceQuota()` 接 contacts insert / email send / AI 呼叫入口
-- [ ] **Task 190** `[新增]` — 平台級 super_admin 跨租戶營運後台
+**Phase 4 — 計費 / Quota（已自 roadmap 移除，2026-07-05 決策：目前不做）**
+
+> 原 Task 187–190（subscriptions/plan_limits/usage_counters 表、Stripe Checkout/Portal/webhook、`enforceQuota()`、平台級跨租戶後台）自 roadmap 移除。規格保留於「45.6 計費（Stripe）」供日後重啟參考；現行 `usage_counters` 為 v7.8.0 全域預算告警表（無 org_id），與 45.6 規格的 per-org 同名表無關、不予改造。
 
 ---
 

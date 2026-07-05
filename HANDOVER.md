@@ -62,11 +62,11 @@
 ### 🎯 主線：v8.0 — SaaS 多租戶化
 把 myCRM 從「cancerfree.io 單租戶」改為「可賣的多租戶 SaaS」。模型：**Shared DB + `org_id` + RLS（單一 Supabase project）**。完整規格在 `docs/PRD.md`「四十四～四十六章」。分階段（每階段結束系統仍可正常運作）：
 
-- **Phase 0 — 基礎設施（無行為改變）** Task 171-175：建 `organizations`/`organization_members`/`organization_invites`；default org 搬移；業務表加 nullable `org_id` + backfill；`UNIQUE(x)`→`UNIQUE(org_id,x)`；寫 `src/lib/orgContext.ts`（先寫不強制）。
+- ✅ **Phase 0 — 基礎設施** Task 171-175：**已完成（2026-07-05，v7.9.0）**。43 張業務表已有 `org_id`（nullable + FK + DEFAULT=default org）、`organization_invites` 已建、`granted_features` 已複製到 members、11 個複合唯一索引與既有 UNIQUE 並存。migration 檔在 `supabase/migrations/`（自此 schema 改動進 repo）。細節與實作差異見 PRD 四十六章 Phase 0 註記。
 - **Phase 1 — API 層 org 注入（隔離主防線）** Task 176-179：Auth Hook 注入 org_id claim + `active_org_id` cookie；**81 個 route** 逐批導入 `getOrgContext()` + `.eq('org_id')`；CI lint 禁裸 `createServiceClient()`；bot 加 org 綁定。
 - **Phase 2 — 收緊 + RLS/Storage** Task 180-182：`org_id` SET NOT NULL；重寫 `rls_security.sql`（`current_org_id()`/`is_org_member()`）；Storage 加 `{org_id}/` 前綴、轉 private + signed URL。
 - **Phase 3 — Onboarding/Auth 開放** Task 183-186：移除 `auth/callback` 網域強制、登入分流；`/onboarding` + 邀請流程 + org switcher；26 處 hardcode 搬到 `organizations.settings`；Azure AD 改 multi-tenant 或加開放 OAuth。
-- **Phase 4 — 計費/Quota** Task 187-190：`subscriptions`/`plan_limits`/`usage_counters`；Stripe Checkout + webhook；`enforceQuota()`；平台級跨租戶後台。
+- ~~**Phase 4 — 計費/Quota** Task 187-190~~：**已自 roadmap 移除（2026-07-05 決策，目前不做）**，規格保留於 PRD 45.6。
 
 > 注意：v7.7.0 已鋪了一部分多租戶鷹架與組織設定頁，動 v8.0 前先確認現況與 PRD 對齊。
 

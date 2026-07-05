@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v7.9.0 — feat(db/orgs): v8.0 Phase 0 多租戶基礎設施收尾（2026-07-05）
+
+> 純基礎設施、零行為改變（使用者無感）。自本版起 schema 改動進 repo `supabase/migrations/`，並同步以 migration 歷史記錄於正式 DB。
+
+### 變更項目
+- **`organization_invites` 表**（Task 171 補完）：邀請資料層落地，邀請流程本體留待 Phase 3。
+- **`organization_members.granted_features`**（Task 172 補完）：自 `users` 複製一份 per-org 授權；`users` 仍為真相來源，Phase 2 切換讀取來源時重同步。
+- **43 張業務表加 `org_id`**（Task 173）：nullable、FK → `organizations`、`DEFAULT` = default org（CancerFree）——既有列即刻視為已 backfill、新寫入自動歸屬，不會累積 NULL。涵蓋 PRD 原列 22 張 + newsletter 家族 12 張 + PRD 後新增 9 張（contact_briefings、meeting_drafts、face_embeddings、photo_faces、saved_views、user_assistants、email_campaigns、email_events、admin_actions）。全域表（users、system_settings、countries、ai_*、cron_runs 等 12 張）不加。
+- **11 個複合唯一索引 `(org_id, x)`**（Task 174）：與既有 `UNIQUE(x)` **並存**（所有 `onConflict` 程式碼不受影響），Phase 2 程式碼改造後才移除單欄版。
+- **Roadmap 調整**：Phase 4（計費/Quota，Task 187-190）自 roadmap 移除（規格保留於 PRD 45.6 供日後重啟）。
+- 修復 MCP migration runner 相容性：舊格式 `schema_migrations` 歷史表補上 `idempotency_key` 唯一索引。
+
 ## v7.8.1 — fix(security/bot/newsletter/admin): v7.8.0 程式碼審查修復（2026-07-05）
 
 > v7.8.0 上線後以多代理審查（6 finder + 逐項獨立驗證）掃出 15 項缺陷，本版全數修復。
