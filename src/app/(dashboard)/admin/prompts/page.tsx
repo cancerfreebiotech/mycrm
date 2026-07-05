@@ -63,7 +63,7 @@ export default function AdminPromptsPage() {
       // Delete org override → fall back to system default
       await supabase.from('prompts').delete().eq('key', key)
     } else {
-      await supabase.from('prompts').upsert({ key, content }, { onConflict: 'key' })
+      await supabase.from('prompts').upsert({ key, content }, { onConflict: 'org_id,key' })
     }
 
     setOrgPrompts((prev) => ({ ...prev, [key]: content }))

@@ -51,7 +51,7 @@ export async function addErasureTombstones(
     .from('newsletter_blacklist')
     .upsert(
       norm.map((email) => ({ email, reason: ERASURE_REASON, status: ERASURE_STATUS })),
-      { onConflict: 'email', ignoreDuplicates: true },
+      { onConflict: 'org_id,email', ignoreDuplicates: true },
     )
   return true
 }

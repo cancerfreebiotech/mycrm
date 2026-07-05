@@ -91,7 +91,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     email_events: events,
   }
 
-  await logAdminAction(service, {
+  await logAdminAction(db, {
     actorEmail: user.email,
     action: 'gdpr_export',
     target: id,

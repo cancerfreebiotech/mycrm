@@ -87,7 +87,7 @@ export async function DELETE(req: NextRequest) {
     targets.flatMap((c) => [c.email, c.second_email]),
   )
 
-  await logAdminAction(service, {
+  await logAdminAction(db, {
     actorEmail: user.email ?? 'unknown',
     action: 'permanent_delete_bulk',
     detail: { count: targetIds.length, erasure_tombstone: tombstoned },

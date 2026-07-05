@@ -100,7 +100,9 @@ export async function PATCH(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  await logAdminAction(supabase, {
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+  await logAdminAction(db, {
     actorEmail: auth.email,
     action: 'hunter_config_change',
     detail: { op: 'save_api_key' },
@@ -117,7 +119,9 @@ export async function POST() {
     return NextResponse.json({ error: 'no_api_key' }, { status: 400 })
   }
 
-  await logAdminAction(createServiceClient(), {
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+  await logAdminAction(db, {
     actorEmail: auth.email,
     action: 'hunter_config_change',
     detail: { op: 'run_batch' },
@@ -129,7 +133,6 @@ export async function POST() {
 // DELETE — reset hunter_searched_at for all contacts without email
 export async function DELETE() {
   const auth = await requireSuperAdmin(); if ('error' in auth) return auth.error
-  const supabase = createServiceClient()
   const ctx = await getOrgContext()
   const db = orgScopedClient(ctx)
   // select('id') on an update returns the affected rows — row count is data.length.
@@ -143,7 +146,7 @@ export async function DELETE() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  await logAdminAction(supabase, {
+  await logAdminAction(db, {
     actorEmail: auth.email,
     action: 'hunter_config_change',
     detail: { op: 'reset_searched', reset: data?.length ?? 0 },

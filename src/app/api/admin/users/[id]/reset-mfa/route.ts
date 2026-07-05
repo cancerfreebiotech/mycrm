@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { hasFeature } from '@/lib/features'
 import { logAdminAction } from '@/lib/adminAudit'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient()
@@ -54,7 +55,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   })
   if (rpcError) return NextResponse.json({ error: rpcError.message }, { status: 500 })
 
-  await logAdminAction(service, {
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+  await logAdminAction(db, {
     actorEmail: user.email ?? 'unknown',
     action: 'reset_mfa',
     target: targetProfile.email,

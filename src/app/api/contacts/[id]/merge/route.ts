@@ -148,7 +148,7 @@ export async function POST(
 
   // Caller identity from the session cookie (route client above); the proxy
   // guarantees a session exists, so 'unknown' only appears for edge cases.
-  await logAdminAction(supabase, {
+  await logAdminAction(db, {
     actorEmail: user?.email ?? 'unknown',
     action: 'contact_merge',
     target: keepId,

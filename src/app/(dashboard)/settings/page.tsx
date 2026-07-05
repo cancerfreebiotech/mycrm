@@ -247,7 +247,7 @@ export default function SettingsPage() {
       ? await supabase.from('user_prompts').delete().eq('user_id', profile.id).eq('key', 'email_generate')
       : await supabase.from('user_prompts').upsert(
           { user_id: profile.id, key: 'email_generate', content },
-          { onConflict: 'user_id,key' }
+          { onConflict: 'org_id,user_id,key' }
         )
     setSavingEmailPrompt(false)
     if (err) { alert(err.message); return }

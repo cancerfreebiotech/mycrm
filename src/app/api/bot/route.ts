@@ -149,7 +149,7 @@ async function setSession(telegramId: number, state: string, context: Record<str
   const supabase: OrgDb = orgScopedClient(systemOrgContext())
   await supabase.from('bot_sessions').upsert(
     { telegram_id: telegramId, state, context, updated_at: new Date().toISOString() },
-    { onConflict: 'telegram_id' }
+    { onConflict: 'org_id,telegram_id' }
   )
 }
 
@@ -158,7 +158,7 @@ async function clearSession(telegramId: number) {
   const supabase: OrgDb = orgScopedClient(systemOrgContext())
   await supabase.from('bot_sessions').upsert(
     { telegram_id: telegramId, state: null, context: null, updated_at: new Date().toISOString() },
-    { onConflict: 'telegram_id' }
+    { onConflict: 'org_id,telegram_id' }
   )
 }
 
@@ -166,7 +166,7 @@ async function updateLastContact(telegramId: number, contactId: string) {
   const supabase: OrgDb = orgScopedClient(systemOrgContext())
   await supabase.from('bot_sessions').upsert(
     { telegram_id: telegramId, last_contact_id: contactId, updated_at: new Date().toISOString() },
-    { onConflict: 'telegram_id' }
+    { onConflict: 'org_id,telegram_id' }
   )
 }
 

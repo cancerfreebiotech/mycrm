@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { logAdminAction } from '@/lib/adminAudit'
+import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // POST /api/admin/notify-release
 //
@@ -99,7 +100,8 @@ export async function POST(req: Request) {
   }
 
   // Auth is a shared RELEASE_NOTIFY_TOKEN (no user identity) → actor is unknown.
-  await logAdminAction(createServiceClient(), {
+  // Phase 2+: 逐 org 迭代／由 payload 解析 org
+  await logAdminAction(orgScopedClient(systemOrgContext()), {
     actorEmail: 'unknown',
     action: 'notify_release',
     target: version,

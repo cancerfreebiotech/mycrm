@@ -34,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!body.testOnly) {
       const { data: campaign } = await db
         .from('newsletter_campaigns').select('title').eq('id', campaignId).maybeSingle()
-      await logAdminAction(service, {
+      await logAdminAction(db, {
         actorEmail: authUser.email,
         action: 'newsletter_send',
         target: campaign?.title ?? campaignId,

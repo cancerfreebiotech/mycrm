@@ -38,13 +38,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const admin = await requireSuperAdmin()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
-  const service = createServiceClient()
   const ctx = await getOrgContext()
   const db = orgScopedClient(ctx)
   const { error } = await db.from('agent_tokens').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  await logAdminAction(service, {
+  await logAdminAction(db, {
     actorEmail: admin.email ?? 'unknown',
     action: 'mcp_token_revoke',
     target: id,

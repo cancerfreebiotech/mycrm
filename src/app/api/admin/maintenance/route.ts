@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { logAdminAction } from '@/lib/adminAudit'
+import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 async function requireSuperAdmin() {
   const supabase = await createClient()
@@ -62,7 +63,8 @@ export async function POST(req: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  await logAdminAction(auth.service, {
+  // Phase 2+: 逐 org 迭代／由 payload 解析 org
+  await logAdminAction(orgScopedClient(systemOrgContext()), {
     actorEmail: auth.actorEmail ?? 'unknown',
     action: 'maintenance_toggle',
     detail: { enabled: body.enabled },

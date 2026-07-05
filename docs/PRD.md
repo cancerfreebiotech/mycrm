@@ -4400,9 +4400,9 @@ create table public.usage_counters (
 - [x] **Task 178** — `scripts/lint-org-scope.mjs`（業務表清單解析自 `src/lib/orgTables.ts`）掛 `prebuild`：裸 client 字面存取業務表 → build 失敗；動態表名列警告。
 - [x] **Task 179** — bot 全檔業務表走 scoped client；`/api/mcp` 以 `agent_tokens.org_id` 建立 org 情境注入 agent-tools（token 認證本身在 org 已知前、留裸 client）。**刻意延後至 Phase 3**：`/start <org_code>` 綁定流程與未綁拒絕——單租戶期間新 session 由 DEFAULT 自動歸 default org（行為不變），拒絕只有摩擦、沒有隔離效益。
 
-**Phase 2 — 收緊 + RLS / Storage**
-- [ ] **Task 180** `[修改]` — 業務表 `org_id` SET NOT NULL + DEFAULT
-- [ ] **Task 181** `[修改]` — `rls_security.sql` 重寫：`current_org_id()` / `is_org_member()`、policy `USING(true)` → `org_id = current_org_id()`、`has_feature()` 改查 member
+**Phase 2 — 收緊 + RLS / Storage**（180/181 完成 2026-07-06 v7.9.2；182 待做）
+- [x] **Task 180** — 43 張業務表 `org_id` SET NOT NULL（DEFAULT 已於 Phase 0 設定；⚠️ Phase 3 開放 onboarding 前 DROP DEFAULT）。
+- [x] **Task 181** — `current_org_id()`（JWT claim 優先 + email membership fallback——**hook 未啟用也正確**，claim 是效能最佳化）與 `is_org_member()` 已建；43 張業務表的所有 authenticated/public policy 以 AND 疊加 `org_id = current_org_id()`（原 has_feature/owner 檢查保留）。附帶修復既存的 tasks ↔ task_assignees policy 互相 EXISTS 造成的 42P17 遞迴（security definer 函式斷循環）。角色模擬測試：成員全可見、非成員 0 列 ✓。**偏差（刻意）**：`has_feature()` 仍讀 `users.granted_features`——切換到 member 版需同步改管理端寫入路徑，與多 org 授權一起留到 Phase 3。並存策略後半完成：全部 onConflict 改複合鍵、單欄 UNIQUE 已 DROP（bot_sessions/newsletter_*×4/prompts/tags/user_assistants/user_prompts）。audit 呼叫（logAdminAction/checkSuppression）全數改傳 org-scoped client。
 - [ ] **Task 182** `[修改]` — Storage：上傳路徑加 `{org_id}/` 前綴、bucket 轉 private、改 signed URL（存 storage_path 即時簽名）、加 storage RLS
 
 **Phase 3 — Onboarding / Auth 開放**

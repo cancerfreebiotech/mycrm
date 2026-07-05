@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { logAdminAction } from '@/lib/adminAudit'
-import { DEFAULT_ORG_ID } from '@/lib/orgContext'
+import { DEFAULT_ORG_ID, getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // Super Admin (per CLAUDE.md) must never be demoted or deleted.
 const SUPER_ADMIN_EMAIL = 'pohan.chen@cancerfree.io'
@@ -123,8 +123,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
   }
 
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
   if ('role' in updates) {
-    await logAdminAction(service, {
+    await logAdminAction(db, {
       actorEmail: user.email,
       action: 'set_role',
       target: target.email,
@@ -132,7 +134,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     })
   }
   if ('granted_features' in updates) {
-    await logAdminAction(service, {
+    await logAdminAction(db, {
       actorEmail: user.email,
       action: 'set_features',
       target: target.email,
@@ -140,7 +142,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     })
   }
   if (statusChange) {
-    await logAdminAction(service, {
+    await logAdminAction(db, {
       actorEmail: user.email,
       action: 'set_status',
       target: target.email,

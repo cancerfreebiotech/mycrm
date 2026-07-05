@@ -71,7 +71,7 @@ export async function DELETE(
   // 防復活：把 email 寫入 erasure 名單，避免隔天被 inbound capture / hunter 重建
   const tombstoned = await addErasureTombstones(service, [contact.email, contact.second_email])
 
-  await logAdminAction(service, {
+  await logAdminAction(db, {
     actorEmail: user.email ?? 'unknown',
     action: 'permanent_delete_contact',
     target: id,

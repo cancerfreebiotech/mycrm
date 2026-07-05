@@ -26,7 +26,6 @@ const VALID_EMAIL = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
 // suppression verdict for the queried address.
 export async function GET(req: NextRequest) {
   const auth = await requireSuperAdmin(); if ('error' in auth) return auth.error
-  const service = createServiceClient()
   const ctx = await getOrgContext()
   const db = orgScopedClient(ctx)
 
@@ -36,7 +35,7 @@ export async function GET(req: NextRequest) {
   const email = emailParam.toLowerCase()
 
   // Audit every lookup — DSARs touch personal data and must be traceable.
-  await logAdminAction(service, { actorEmail: auth.email, action: 'dsar_lookup', target: email })
+  await logAdminAction(db, { actorEmail: auth.email, action: 'dsar_lookup', target: email })
 
   // Include soft-deleted contacts: a data subject request must surface all
   // records tied to the address, trashed or not.
@@ -52,7 +51,7 @@ export async function GET(req: NextRequest) {
     .returns<{ id: string; name: string | null; company: string | null; created_at: string; deleted_at: string | null; users: { display_name: string | null } | { display_name: string | null }[] | null }[]>()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const verdict = await checkSuppression(service, email)
+  const verdict = await checkSuppression(db, email)
 
   const rows = await Promise.all((contacts ?? []).map(async (c) => {
     const [logs, cards, recips] = await Promise.all([

@@ -127,7 +127,7 @@ async function runImport() {
       if (blacklistRows.length > 0) {
         const { error } = await db
           .from('newsletter_blacklist')
-          .upsert(dedupeByEmail(blacklistRows), { onConflict: 'email' })
+          .upsert(dedupeByEmail(blacklistRows), { onConflict: 'org_id,email' })
         if (error) throw new Error(error.message)
       }
 
@@ -166,7 +166,7 @@ async function runImport() {
       if (blacklistRows.length > 0) {
         const { error } = await db
           .from('newsletter_blacklist')
-          .upsert(dedupeByEmail(blacklistRows), { onConflict: 'email' })
+          .upsert(dedupeByEmail(blacklistRows), { onConflict: 'org_id,email' })
         if (error) throw new Error(error.message)
       }
 
@@ -196,7 +196,7 @@ async function runImport() {
       }))
       const { error } = await db
         .from('newsletter_unsubscribes')
-        .upsert(dedupeByEmail(rows), { onConflict: 'email' })
+        .upsert(dedupeByEmail(rows), { onConflict: 'org_id,email' })
       if (error) throw new Error(error.message)
 
       const emails = rows.map((r) => r.email)
@@ -235,7 +235,7 @@ async function runImport() {
       const contactEmails = new Set(((matchingContacts ?? []) as { email: string }[]).map((c) => c.email.toLowerCase().trim()))
       const blacklistRows = rows.filter((r) => !contactEmails.has(r.email))
       if (blacklistRows.length > 0) {
-        const { error } = await db.from('newsletter_blacklist').upsert(dedupeByEmail(blacklistRows), { onConflict: 'email' })
+        const { error } = await db.from('newsletter_blacklist').upsert(dedupeByEmail(blacklistRows), { onConflict: 'org_id,email' })
         if (error) throw new Error(error.message)
       }
 
@@ -266,7 +266,7 @@ async function runImport() {
         reason: 'SendGrid spam report (recipient marked as spam)',
         unsubscribed_at: new Date(s.created * 1000).toISOString(),
       }))
-      const { error } = await db.from('newsletter_unsubscribes').upsert(dedupeByEmail(unsubRows), { onConflict: 'email' })
+      const { error } = await db.from('newsletter_unsubscribes').upsert(dedupeByEmail(unsubRows), { onConflict: 'org_id,email' })
       if (error) throw new Error(error.message)
 
       const emailToInfo = new Map(spam.map((s) => [

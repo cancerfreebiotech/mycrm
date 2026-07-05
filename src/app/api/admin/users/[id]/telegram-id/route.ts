@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { hasFeature } from '@/lib/features'
 import { logAdminAction } from '@/lib/adminAudit'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // POST /api/admin/users/[id]/telegram-id
 // super_admin updates a teammate's telegram_id. Body: { telegramId: number | null }
@@ -46,7 +47,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  await logAdminAction(service, {
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+  await logAdminAction(db, {
     actorEmail: user.email ?? 'unknown',
     action: 'set_telegram_id',
     target: targetUserId,

@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
         reason: reason || null,
         source: 'manual',
       },
-      { onConflict: 'email' }
+      { onConflict: 'org_id,email' }
     )
 
   return NextResponse.json({ ok: true })

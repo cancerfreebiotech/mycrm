@@ -63,7 +63,6 @@ export async function POST(req: NextRequest) {
   const token_hash = createHash('sha256').update(plaintext).digest('hex')
   const prefix = plaintext.slice(0, 12)
 
-  const service = createServiceClient()
   const ctx = await getOrgContext()
   const db = orgScopedClient(ctx)
   const { data, error } = await db
@@ -83,7 +82,7 @@ export async function POST(req: NextRequest) {
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  await logAdminAction(service, {
+  await logAdminAction(db, {
     actorEmail: admin.email ?? 'unknown',
     action: 'mcp_token_create',
     target: data.id,

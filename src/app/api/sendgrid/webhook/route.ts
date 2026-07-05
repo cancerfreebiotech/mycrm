@@ -84,11 +84,11 @@ async function markSuppressed(
   if (status === 'unsubscribed') {
     await supabase
       .from('newsletter_unsubscribes')
-      .upsert({ email: normalized, source: 'webhook', reason }, { onConflict: 'email' })
+      .upsert({ email: normalized, source: 'webhook', reason }, { onConflict: 'org_id,email' })
   } else {
     await supabase
       .from('newsletter_blacklist')
-      .upsert({ email: normalized, reason, status }, { onConflict: 'email' })
+      .upsert({ email: normalized, reason, status }, { onConflict: 'org_id,email' })
   }
 }
 

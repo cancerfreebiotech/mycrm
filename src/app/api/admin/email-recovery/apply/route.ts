@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
       .is('deleted_at', null)
   }
 
-  await logAdminAction(service, {
+  await logAdminAction(db, {
     actorEmail: user.email ?? 'unknown',
     action: 'email_recovery_apply',
     target: body.bad_contact_id,

@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## v7.9.2 — feat(orgs): v8.0 Phase 2 資料層收緊 + RLS org 隔離（2026-07-06）
+
+> 內部基礎設施、使用者無感；單租戶下所有改動行為等價。Task 182（Storage 隔離）為 Phase 2 剩餘項目，另批進行。
+
+### 變更項目
+- **43 張業務表 `org_id` SET NOT NULL**（Task 180）。
+- **RLS org 隔離**（Task 181）：新增 `current_org_id()`（JWT claim 優先、email membership fallback）與 `is_org_member()`；業務表全部 policy 以 AND 疊加 `org_id = current_org_id()`，原 has_feature/owner 檢查保留。角色模擬驗證：org 成員全可見、非成員 0 列。
+- **修復既存 RLS 遞迴**：tasks ↔ task_assignees 兩條 policy 互相 EXISTS，任何 anon 查詢實際觸發即 42P17（過去因 tasks 全走 service API 未曝光）——以 security definer 函式斷開循環，語意不變。
+- **唯一鍵切換為 per-org**：17 處 upsert 的 onConflict 改複合鍵（`org_id,email` / `org_id,telegram_id` / `org_id,key` 等），部署後移除 9 個單欄 UNIQUE——跨租戶撞鍵問題（PRD 風險 #4）正式解除。
+- **稽核寫入 org 歸屬**：`logAdminAction`/`checkSuppression` 全部 call site（含 3 個 session-less 端點）改傳 org-scoped client。
+
 ## v7.9.1 — feat(orgs): v8.0 Phase 1 API 層 org 注入（2026-07-05）
 
 > 內部基礎設施、使用者無感；單租戶下所有改動行為等價（org 過濾匹配所有現存列、insert 補的 org_id 與 DB DEFAULT 相同）。

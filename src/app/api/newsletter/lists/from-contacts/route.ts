@@ -228,7 +228,7 @@ export async function POST(req: NextRequest) {
     const chunk = toCreate.slice(i, i + INSERT_BATCH)
     const { error: insErr } = await db
       .from('newsletter_subscribers')
-      .upsert(chunk, { onConflict: 'email', ignoreDuplicates: true })
+      .upsert(chunk, { onConflict: 'org_id,email', ignoreDuplicates: true })
     if (insErr) {
       errors.push(`bulk upsert subscribers (batch ${i / INSERT_BATCH}): ${insErr.message}`)
     }

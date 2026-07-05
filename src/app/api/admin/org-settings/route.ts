@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { logAdminAction } from '@/lib/adminAudit'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { ORG_SETTING_KEYS, ORG_SETTING_KEY_LIST, type OrgSettingKey } from '@/lib/orgSettings'
 
 // /api/admin/* is exempted from the auth middleware (src/middleware.ts), so this
@@ -68,7 +69,9 @@ export async function POST(req: NextRequest) {
   const { error } = await supabase.from('system_settings').upsert(rows, { onConflict: 'key' })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  await logAdminAction(supabase, {
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+  await logAdminAction(db, {
     actorEmail: auth.email,
     action: 'org_settings_change',
     detail: { keys: rows.map((r) => r.key) },
