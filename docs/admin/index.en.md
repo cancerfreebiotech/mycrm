@@ -12,7 +12,7 @@ has_children: true
 
 **Reports** is open to all members, who each manage their own schedules; super_admin can see all schedules.
 
-**Super_admin only:** AI Models, System Health, MCP Activity, MCP Tokens, Email Recovery, Shared Emails, Feedback.
+**Super_admin only:** AI Models, System Health, MCP Activity, MCP Tokens, Email Recovery, Shared Emails, Feedback, Suppressions, DSAR Lookup, Newsletter Overview.
 
 | Feature | Description |
 |---------|-------------|
@@ -35,5 +35,8 @@ has_children: true
 | [System Health](health.md) | View the health status of external services and system components |
 | [MCP Activity Log](mcp-activity.md) | View AI assistant (MCP) operation logs |
 | [MCP Tokens](mcp-tokens.md) | Manage access tokens for external agents (plaintext shown only once) |
-| [Audit Log](audit-log.md) | View the audit log of privileged actions such as role changes and deletions |
-| [Org Settings & Branding](org-settings.md) | Company-wide name, login domains and newsletter branding |
+| [Audit Log](audit-log.md) | View the audit log of privileged actions such as role changes and deletions; filter by actor / action / date and export to CSV |
+| [Org Settings & Branding](org-settings.md) | Company-wide name, login domains, newsletter branding, feedback-notification recipient, and module toggles (kill-switches for Hunter enrichment and the AI assistant) |
+| Suppressions | Enter any email to instantly see "can we send, and why not", aggregating five suppression sources (unsubscribes, blacklist, bounces, etc.) |
+| DSAR Lookup | Aggregate all related contacts (including deleted) and personal-data footprint by email; export in one click, with every lookup audited |
+| Newsletter Overview | Open/click trend of the last 12 sends, per-list health (incl. 180-day non-openers), and subscriber / unsubscribe / blacklist totals |

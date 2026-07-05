@@ -108,7 +108,7 @@ Items below the divider (Tag Management, Unassigned Notes, Email Templates, Prom
 
 **super_admin only:**
 
-Org Settings, AI Model Management, System Health, MCP Tokens, MCP Activity, Audit Log, and Feedback Management are visible only to super_admin.
+Org Settings, AI Model Management, System Health, MCP Tokens, MCP Activity, Audit Log, Suppressions, DSAR Lookup, Newsletter Overview, and Feedback Management are visible only to super_admin.
 
 ---
 

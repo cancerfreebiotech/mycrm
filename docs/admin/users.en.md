@@ -43,6 +43,20 @@ Click a member's "Promote to Super Admin" / "Demote to Member" button to switch 
 
 ---
 
+## Account Suspension / Offboarding
+
+> Super_admin only.
+
+Next to each member's role badge, an account-status badge shows **Active** (green) or **Suspended** (red).
+
+Click a member's "Suspend" button to suspend their account (requires confirmation); a suspended member can be restored with "Reactivate".
+
+- Suspension **takes effect at the member's next login**: they are signed out and blocked from the system, unable to use any feature.
+- An already-active session is not cut off immediately; it lasts until it naturally expires (up to 7 days).
+- The **Super Admin (`pohan.chen@cancerfree.io`) cannot be suspended**.
+
+---
+
 ## Feature Grants
 
 > Super_admin only, and shown only for member accounts.

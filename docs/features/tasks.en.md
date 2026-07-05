@@ -113,3 +113,19 @@ The digest is only sent to members who have linked Telegram; anyone with no over
 Each member receives their **own** tasks, with recipients determined by:
 - Assignees always receive their tasks
 - The task creator is included only for self-reminders (tasks with no assignees); a creator who assigned the task to others is not additionally reminded
+
+### Acting on Tasks Directly in the Digest
+
+Each task in the digest has two buttons you can tap without opening the web:
+- **✅ Complete** — mark that task as done immediately
+- **⏰ +1 day** — push the due date back by one day
+
+The buttons apply only to the first 8 tasks in the digest (overdue first, then due today); any remaining tasks still appear in the digest but must be handled on the task page or via the Teams card.
+
+### 🗓 Today's Meetings
+
+If you have completed **Microsoft login** on the myCRM website, the digest also includes a "Today's meetings" section:
+- Lists today's Outlook meetings (Taipei time), sorted by start time.
+- External attendees of each meeting (excluding the internal `@cancerfree.io` domain) are matched to CRM contacts, and matched ones get a direct **contact link**.
+- If that contact's pre-meeting briefing for today is already prepared, it is marked "📋 briefing ready".
+- Members with no linked Microsoft account do not get this section; the rest of the digest is unaffected.

@@ -108,7 +108,7 @@ myCRM 支援三種語言：**繁體中文**、**English**、**日本語**
 
 **super_admin 專屬：**
 
-組織設定、AI 模型管理、系統健康、MCP Tokens、MCP 活動、稽核日誌、回饋管理，僅 super_admin 可見。
+組織設定、AI 模型管理、系統健康、MCP Tokens、MCP 活動、稽核日誌、退訂管理、資料查詢 (DSAR)、電子報總覽、回饋管理，僅 super_admin 可見。
 
 ---
 

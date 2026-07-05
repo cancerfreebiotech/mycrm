@@ -12,7 +12,7 @@ nav_order: 2
 | `/lang [zh\|en\|ja]` | — | Switch the Bot reply language (Chinese / English / Japanese) |
 | `/search [keyword]` | `/s` | Search contacts (fuzzy match on name/Email) |
 | `/note [name]` | `/n` | Add an interaction note for a contact |
-| `/visit [name]` | `/v` | Add a visit record for a contact |
+| `/visit [name] [content]` | `/v` | Add a visit record for a contact; with content, AI logs it in one line |
 | `/a [name]` | — | Add a business card photo (OCR) for a contact; creates new contact if not found |
 | `/p [name]` | — | Add a group photo for a contact |
 | `/li` | `/linkedin` | Send a LinkedIn profile screenshot; AI parses it into a contact |
@@ -88,6 +88,21 @@ Each search result shows a business card photo with quick buttons:
 /v John Smith
 → Bot: Found, proceed directly to date/time entry
 ```
+
+**Method 3: One-shot (name followed by content)**
+```
+/v Dr. Wang Discussed collaboration in Taipei yesterday, met at 3pm
+→ Bot: 🤖 AI parsing...
+→ Bot: ✅ Visit logged (Dr. Wang)
+        📅 2026-06-25 15:00  📍 Taipei
+```
+
+Put a sentence after the name and AI (Gemini) parses the **date / time / location** from it and decides whether it is a note or a meeting, then writes the interaction log directly — no step-by-step entry needed. Depending on the search results:
+- **1 match** → logged immediately with a confirmation.
+- **Multiple** same-name matches → shows buttons to pick the person; logged only after you choose (the content is held).
+- **No match** → tells you the contact was not found and falls back to the step-by-step flow above.
+
+Typing just `/v` or `/v name` (no content) behaves the same as Method 1 and Method 2, unchanged.
 
 ---
 

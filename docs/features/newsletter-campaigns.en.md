@@ -72,7 +72,14 @@ The editor also offers export and sharing:
 
 ### A/B subject testing
 
-Fill in the "Subject B" field with a second subject and, at send time, the system splits recipients evenly in half — each half receives either subject A or subject B (test sends always use subject A). Leave it empty to disable A/B testing. The open rate of each variant is shown on the analytics page.
+Filling in the "Subject B" field enables A/B testing and reveals two more settings:
+
+- **Test group size (%)**: only this share of the list is emailed first as a test group (10–50%, default 20%); within the test group the two subjects are split evenly (A/B).
+- **Wait time**: 1 / 2 / 4 hours (default 2 hours).
+
+After the wait time elapses, the system (which checks every 10 minutes) compares the open rate of the two subjects within the test group and automatically sends the **higher-open-rate** subject to everyone else on the list (ties go to subject A). Test sends always use subject A; leave "Subject B" empty to disable A/B testing. Each variant's open rate and the winning subject are shown on the analytics page.
+
+> Legacy newsletters created before v7.8.0 that have a Subject B but no test group size keep the original whole-list 50/50 split.
 
 ---
 
@@ -116,12 +123,19 @@ Besides sending immediately, you can schedule a newsletter to go out automatical
 
 ---
 
+## Link UTM tagging
+
+Every outbound link to a website in a sent newsletter automatically gets UTM parameters (`utm_source=newsletter`, `utm_medium=email`, `utm_campaign=<campaign slug>`) so analytics tools like Google Analytics can attribute site traffic to this newsletter. Links that already carry their own `utm_*` parameters are kept as-is (never overwritten); unsubscribe links are not tagged.
+
+---
+
 ## Analytics
 
 For a sent (or partial failure) newsletter, click the **chart icon** on its row in the list page to open the analytics page:
 
 - **Summary numbers**: delivered, failed, opens (open rate), clicks (click rate)
-- **A/B open rates**: if A/B subject testing was used, the open rate of each of the A and B variants
+- **A/B subject test**: if enabled, the test-group size, the open rate of each of the A and B variants, and the winning subject (the winner is badged); a countdown note is shown while the winner is still pending
+- **Failure details**: if any sends failed, a list of each failed recipient's email and the specific error reason (up to 200 rows)
 - **Link clicks**: the number of clicks and unique clickers per link
 - **Open / click timeline**: opens and clicks distributed over time
 - **Other events**: counts of bounces, unsubscribes, and spam reports
@@ -146,7 +160,12 @@ Building one creates a new list (named "Newsletter title — Segment") and jumps
 
 ## Unsubscribe handling
 
-Every newsletter automatically includes an **unsubscribe link** in the footer (unique per recipient). When a recipient clicks it they are recorded as unsubscribed and no future newsletter is sent to them.
+Every newsletter automatically includes an **unsubscribe link** in the footer (unique per recipient). When a recipient opens it they can:
+
+- **Leave specific lists only**: the page shows the lists they currently subscribe to; they tick the ones to leave and keep receiving the rest.
+- **Unsubscribe from everything**: recorded as a global unsubscribe, and no future newsletter is sent to them.
+
+> Old unsubscribe links are fully compatible — their behavior is unchanged (they can still unsubscribe from everything directly).
 
 At send time the system automatically excludes the following so nothing goes to people it shouldn't:
 
@@ -165,3 +184,15 @@ The "Publish to RSS" button in the editor adds the newsletter to the public RSS 
 - The feed keeps only the **20 most recent** published newsletters, and automatically strips the email header, footer, and unsubscribe chrome, leaving just the article body
 - After publishing you can click "Unpublish RSS" to remove it from the feed
 - Once published you can also use "Substack link" to copy the public web-view link to share
+
+---
+
+## Newsletter overview dashboard
+
+Path: `/admin/newsletter/overview` (`super_admin` only)
+
+A cross-newsletter performance overview in three sections:
+
+- **Send performance trend**: the open and click rates of the last 12 sends, each linking to its analytics page.
+- **List health**: each recipient list's member count plus the number and share of **180-day non-openers** — a high share means the list needs cleaning.
+- **Totals**: total subscribers, unsubscribed, and blacklist counts.
