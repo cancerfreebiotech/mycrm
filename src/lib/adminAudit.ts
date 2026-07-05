@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { OrgDb } from '@/lib/orgContext'
 
 // Privileged-action audit log helper.
 // Inserts one row into `admin_actions` (RLS: service-role only).
@@ -12,7 +12,7 @@ interface AdminActionInput {
 }
 
 export async function logAdminAction(
-  service: SupabaseClient,
+  service: OrgDb,
   { actorEmail, action, target = null, detail = null }: AdminActionInput,
 ): Promise<void> {
   const { error } = await service.from('admin_actions').insert({

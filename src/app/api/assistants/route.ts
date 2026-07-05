@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const service = createServiceClient()
-  const { data } = await service
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+  const { data } = await db
     .from('user_assistants')
     .select('id, assistant_email, users!user_assistants_assistant_email_fkey(display_name)')
     .eq('manager_email', user.email!)
@@ -21,6 +23,8 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
   const { assistant_email } = await req.json()
 
   if (!assistant_email?.trim()) return NextResponse.json({ error: '請輸入 Email' }, { status: 400 })
@@ -35,7 +39,7 @@ export async function POST(req: NextRequest) {
 
   if (!assistantUser) return NextResponse.json({ error: '找不到此使用者' }, { status: 404 })
 
-  const { error } = await service
+  const { error } = await db
     .from('user_assistants')
     .insert({ manager_email: user.email!, assistant_email: assistant_email.trim() })
 
@@ -52,10 +56,11 @@ export async function DELETE(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
   const { assistant_email } = await req.json()
 
-  await service
+  await db
     .from('user_assistants')
     .delete()
     .eq('manager_email', user.email!)

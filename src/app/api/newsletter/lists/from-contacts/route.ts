@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { hasFeature } from '@/lib/features'
+import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 
 // POST /api/newsletter/lists/from-contacts
 // Create a NEW newsletter list from a set of contact IDs.
@@ -53,6 +54,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden — newsletter permission required' }, { status: 403 })
   }
 
+  const ctx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(ctx)
+
   const body = (await req.json().catch(() => ({}))) as {
     name?: string
     description?: string
@@ -69,7 +73,7 @@ export async function POST(req: NextRequest) {
   // Resolve key
   let key = body.key?.trim() || slugify(name)
   // Ensure uniqueness — append stamp on collision
-  const { data: existing } = await service
+  const { data: existing } = await db
     .from('newsletter_lists')
     .select('id')
     .eq('key', key)
@@ -77,7 +81,7 @@ export async function POST(req: NextRequest) {
   if (existing) key = `${key}-${Date.now().toString(36)}`
 
   // Create list
-  const { data: created, error: createErr } = await service
+  const { data: created, error: createErr } = await db
     .from('newsletter_lists')
     .insert({ key, name, description: body.description?.trim() || null })
     .select('id, key, name')
@@ -94,7 +98,7 @@ export async function POST(req: NextRequest) {
   const fetchedRows: ContactRow[] = []
   for (let i = 0; i < body.contactIds.length; i += FETCH_BATCH) {
     const batch = body.contactIds.slice(i, i + FETCH_BATCH)
-    const { data, error } = await service
+    const { data, error } = await db
       .from('contacts')
       .select('id, email, email_opt_out, email_status, name, name_en, name_local, company, contact_tags(tags(is_email_blacklist))')
       .in('id', batch)
@@ -116,7 +120,7 @@ export async function POST(req: NextRequest) {
   const unsubEmails = new Set<string>()
   for (let i = 0; i < allRowEmails.length; i += QUERY_BATCH) {
     const batch = allRowEmails.slice(i, i + QUERY_BATCH)
-    const { data } = await service
+    const { data } = await db
       .from('newsletter_unsubscribes')
       .select('email')
       .in('email', batch)
@@ -158,7 +162,7 @@ export async function POST(req: NextRequest) {
   const subscriberContactIdById = new Map<string, string | null>()
   for (let i = 0; i < emailLookup.length; i += QUERY_BATCH) {
     const batch = emailLookup.slice(i, i + QUERY_BATCH)
-    const { data } = await service
+    const { data } = await db
       .from('newsletter_subscribers')
       .select('id, email, contact_id')
       .in('email', batch)
@@ -184,7 +188,7 @@ export async function POST(req: NextRequest) {
   }
   // Per-row update (no bulk-update primitive in supabase-js); usually small (<100)
   for (const link of orphanLinks) {
-    const { error } = await service
+    const { error } = await db
       .from('newsletter_subscribers')
       .update({ contact_id: link.contact_id })
       .eq('id', link.id)
@@ -222,7 +226,7 @@ export async function POST(req: NextRequest) {
   const INSERT_BATCH = 500
   for (let i = 0; i < toCreate.length; i += INSERT_BATCH) {
     const chunk = toCreate.slice(i, i + INSERT_BATCH)
-    const { error: insErr } = await service
+    const { error: insErr } = await db
       .from('newsletter_subscribers')
       .upsert(chunk, { onConflict: 'email', ignoreDuplicates: true })
     if (insErr) {
@@ -237,7 +241,7 @@ export async function POST(req: NextRequest) {
   subscriberIdByEmail.clear()
   for (let i = 0; i < allEmails.length; i += QUERY_BATCH) {
     const batch = allEmails.slice(i, i + QUERY_BATCH)
-    const { data } = await service
+    const { data } = await db
       .from('newsletter_subscribers')
       .select('id, email')
       .in('email', batch)
@@ -265,7 +269,7 @@ export async function POST(req: NextRequest) {
   let added = 0
   for (let i = 0; i < linkRows.length; i += INSERT_BATCH) {
     const chunk = linkRows.slice(i, i + INSERT_BATCH)
-    const { error: linkErr } = await service
+    const { error: linkErr } = await db
       .from('newsletter_subscriber_lists')
       .insert(chunk)
     if (linkErr) {

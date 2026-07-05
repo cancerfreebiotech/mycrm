@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // GET /api/contacts/shared-emails
 //
@@ -26,7 +27,8 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   // Pull all active contacts with email; group in JS (data is small enough,
   // ~5k rows max even with 3 langs).
@@ -34,7 +36,7 @@ export async function GET() {
   let from = 0
   const BATCH = 1000
   while (true) {
-    const { data, error } = await service
+    const { data, error } = await db
       .from('contacts')
       .select('id, email, name, company, job_title')
       .is('deleted_at', null)

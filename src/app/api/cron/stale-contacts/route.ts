@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { sendTelegramMessage } from '@/lib/telegram'
 import { recordCronRun } from '@/lib/cronHeartbeat'
 
@@ -42,6 +43,9 @@ export async function GET(req: NextRequest) {
   }
   const startMs = Date.now()
   const service = createServiceClient()
+  // Phase 2+: 逐 org 迭代／由 payload 解析 org
+  const ctx = systemOrgContext()
+  const db = orgScopedClient(ctx)
   const now = Date.now()
   const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
 
@@ -62,7 +66,7 @@ export async function GET(req: NextRequest) {
   let notified = 0
   try {
     for (const u of users ?? []) {
-      const { data: contacts, error: cErr } = await service
+      const { data: contacts, error: cErr } = await db
         .from('contacts')
         .select('id, name, company, importance, last_activity_at, created_at')
         .eq('created_by', u.id)
@@ -85,7 +89,7 @@ export async function GET(req: NextRequest) {
 
       // Exclude contacts that already have an open (pending) task.
       const staleIds = stale.map((x) => x.c.id)
-      const { data: openTasks, error: tErr } = await service
+      const { data: openTasks, error: tErr } = await db
         .from('tasks')
         .select('contact_id')
         .eq('status', 'pending')

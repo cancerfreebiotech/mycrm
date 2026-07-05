@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkDuplicates, type CheckDuplicatesInput } from '@/lib/duplicate'
+import { getOrgContext } from '@/lib/orgContext'
 
 /**
  * POST /api/contacts/check-duplicates
@@ -30,7 +31,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await checkDuplicates(body)
+    const ctx = await getOrgContext()
+    const result = await checkDuplicates(body, ctx)
     return NextResponse.json(result)
   } catch (e) {
     return NextResponse.json(

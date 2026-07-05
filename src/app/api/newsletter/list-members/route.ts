@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 
 // POST — add a contact to a list
 export async function POST(req: NextRequest) {
@@ -12,12 +13,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'list_id and contact_id or email required' }, { status: 400 })
   }
 
-  const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(ctx)
 
   let subscriber: { id: string } | null = null
 
   if (body.contact_id) {
-    const { data: contact } = await service
+    const { data: contact } = await db
       .from('contacts')
       .select('id, email, name, name_en, name_local')
       .eq('id', body.contact_id)
@@ -27,7 +29,7 @@ export async function POST(req: NextRequest) {
     if (!contact) return NextResponse.json({ error: '找不到聯絡人' }, { status: 404 })
     if (!contact.email) return NextResponse.json({ error: '此聯絡人沒有 email，無法加入名單' }, { status: 422 })
 
-    const { data: byContactId } = await service
+    const { data: byContactId } = await db
       .from('newsletter_subscribers')
       .select('id')
       .eq('contact_id', body.contact_id)
@@ -35,7 +37,7 @@ export async function POST(req: NextRequest) {
     subscriber = byContactId
 
     if (!subscriber) {
-      const { data: byEmail } = await service
+      const { data: byEmail } = await db
         .from('newsletter_subscribers')
         .select('id')
         .eq('email', contact.email)
@@ -45,7 +47,7 @@ export async function POST(req: NextRequest) {
 
     if (!subscriber) {
       const displayName = (contact.name || contact.name_en || contact.name_local || '').split(' ')
-      const { data: created, error: createErr } = await service
+      const { data: created, error: createErr } = await db
         .from('newsletter_subscribers')
         .insert({
           email: contact.email,
@@ -57,7 +59,7 @@ export async function POST(req: NextRequest) {
         .select('id')
         .single()
       if (createErr || !created) return NextResponse.json({ error: '建立訂閱者失敗' }, { status: 500 })
-      subscriber = created
+      subscriber = created as { id: string }
     }
   } else {
     // Email-only path
@@ -66,7 +68,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '請輸入有效的 email 格式' }, { status: 422 })
     }
 
-    const { data: byEmail } = await service
+    const { data: byEmail } = await db
       .from('newsletter_subscribers')
       .select('id')
       .ilike('email', email)
@@ -74,18 +76,18 @@ export async function POST(req: NextRequest) {
     subscriber = byEmail
 
     if (!subscriber) {
-      const { data: created, error: createErr } = await service
+      const { data: created, error: createErr } = await db
         .from('newsletter_subscribers')
         .insert({ email, source: 'manual' })
         .select('id')
         .single()
       if (createErr || !created) return NextResponse.json({ error: '建立訂閱者失敗' }, { status: 500 })
-      subscriber = created
+      subscriber = created as { id: string }
     }
   }
 
   // Check already in list
-  const { data: existing } = await service
+  const { data: existing } = await db
     .from('newsletter_subscriber_lists')
     .select('subscriber_id')
     .eq('list_id', body.list_id)
@@ -94,7 +96,7 @@ export async function POST(req: NextRequest) {
 
   if (existing) return NextResponse.json({ error: '此聯絡人已在名單中' }, { status: 409 })
 
-  const { error: insertErr } = await service
+  const { error: insertErr } = await db
     .from('newsletter_subscriber_lists')
     .insert({ list_id: body.list_id, subscriber_id: subscriber.id })
 
@@ -114,8 +116,9 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'list_id and subscriber_id required' }, { status: 400 })
   }
 
-  const service = createServiceClient()
-  const { error } = await service
+  const ctx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(ctx)
+  const { error } = await db
     .from('newsletter_subscriber_lists')
     .delete()
     .eq('list_id', body.list_id)

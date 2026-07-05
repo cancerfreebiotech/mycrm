@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { recordCronRun } from '@/lib/cronHeartbeat'
 import { getOrgSetting } from '@/lib/orgSettings'
@@ -59,6 +60,9 @@ export async function GET(req: NextRequest) {
 
   const startMs = Date.now()
   const service = createServiceClient()
+  // Phase 2+: 逐 org 迭代／由 payload 解析 org
+  const ctx = systemOrgContext()
+  const db = orgScopedClient(ctx)
 
   const sgKey = process.env.SENDGRID_API_KEY
   const fromEmail = process.env.SENDGRID_FROM_EMAIL
@@ -72,7 +76,7 @@ export async function GET(req: NextRequest) {
   const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.cancerfree.io'
 
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  const { data, error } = await service
+  const { data, error } = await db
     .from('feedback')
     .select('type, status, title, description, created_at, creator:created_by(display_name)')
     .gte('created_at', since)

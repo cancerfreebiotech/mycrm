@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // POST /api/photo-faces — 手動把一位聯絡人標記到一張照片（一張照片可標多人）
 // body: { photo_id: string, contact_id: string, bbox?: {x,y,w,h} }
@@ -16,8 +17,9 @@ export async function POST(req: NextRequest) {
   }
   const bbox = body?.bbox
 
-  const service = createServiceClient()
-  const { data, error } = await service
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+  const { data, error } = await db
     .from('photo_faces')
     .insert({
       photo_id: photoId,

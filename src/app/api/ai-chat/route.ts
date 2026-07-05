@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 import { TOOLS, TOOL_BY_NAME, executeTool } from '@/lib/agent-tools'
 import { getOrgSetting } from '@/lib/orgSettings'
 
@@ -34,10 +35,9 @@ async function resolveActingUser(email: string): Promise<{ id: string; display_n
   return data ? { id: data.id as string, display_name: (data.display_name as string) ?? null } : null
 }
 
-async function auditChat(toolName: string, args: unknown, succeeded: boolean, errMsg: string | null, actingAs: string) {
+async function auditChat(db: OrgDb, toolName: string, args: unknown, succeeded: boolean, errMsg: string | null, actingAs: string) {
   try {
-    const service = createServiceClient()
-    await service.from('agent_actions').insert({
+    await db.from('agent_actions').insert({
       tool_name: toolName,
       arguments: args ?? null,
       result_summary: succeeded ? 'ok (chatbot)' : null,
@@ -52,12 +52,11 @@ async function auditChat(toolName: string, args: unknown, succeeded: boolean, er
 // chatbot 端工具執行：request_social_briefing 自己處理，其餘委派共用 executeTool。
 // authUserId = auth.users.id：contact_briefings.created_by 的 FK 指向 auth.users，
 // 不可用 actingAs（那是 public.users.id，與 FK 不符會 insert 失敗）。
-async function executeChatTool(name: string, args: Record<string, unknown>, actingAs: string, authUserId: string): Promise<unknown> {
+async function executeChatTool(db: OrgDb, name: string, args: Record<string, unknown>, actingAs: string, authUserId: string): Promise<unknown> {
   if (name === 'request_social_briefing') {
     const contactId = args.contact_id as string | undefined
     if (!contactId) throw new Error('contact_id required')
-    const service = createServiceClient()
-    const { data, error } = await service
+    const { data, error } = await db
       .from('contact_briefings')
       .insert({ contact_id: contactId, trigger: 'nl_command', created_by: authUserId })
       .select('id')
@@ -83,6 +82,9 @@ export async function POST(req: NextRequest) {
 
   const acting = await resolveActingUser(user.email)
   if (!acting) return NextResponse.json({ error: 'No mycrm profile for this user' }, { status: 403 })
+
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'AI 未設定（缺 GEMINI_API_KEY）' }, { status: 500 })
@@ -126,13 +128,13 @@ export async function POST(req: NextRequest) {
         let ok = true
         let errMsg: string | null = null
         try {
-          out = await executeChatTool(call.name, (call.args ?? {}) as Record<string, unknown>, acting.id, user.id)
+          out = await executeChatTool(db, call.name, (call.args ?? {}) as Record<string, unknown>, acting.id, user.id)
         } catch (e) {
           ok = false
           errMsg = e instanceof Error ? e.message : String(e)
           out = { error: errMsg }
         }
-        await auditChat(call.name, call.args, ok, errMsg, acting.id)
+        await auditChat(db, call.name, call.args, ok, errMsg, acting.id)
         responses.push({ functionResponse: { name: call.name, response: { result: out } } })
       }
       result = await chat.sendMessage(responses)

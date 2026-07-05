@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { hasFeature } from '@/lib/features'
+import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 
 // GET /api/newsletter/drafts/export?period=2026-05
 //
@@ -28,8 +29,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'period required (YYYY-MM)' }, { status: 400 })
   }
 
-  const service = createServiceClient()
-  const { data, error } = await service
+  const ctx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(ctx)
+  const { data, error } = await db
     .from('newsletter_drafts')
     .select('id, section, title, content, event_date, event_date_end, photo_urls, links, position')
     .eq('period', period)

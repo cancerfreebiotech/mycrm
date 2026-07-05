@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { sendCampaign, SendCampaignError } from '@/lib/newsletter-send-worker'
 import { logAdminAction } from '@/lib/adminAudit'
 
@@ -16,11 +17,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: me } = await service.from('users').select('id').ilike('email', authUser.email).maybeSingle()
   const actorUserId = me?.id ?? null
 
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+
   // Optional: allow overrides in body (testOnly flag to send only to self)
   const body = (await req.json().catch(() => ({}))) as { testOnly?: boolean; testEmail?: string; resend?: boolean }
 
   try {
-    const result = await sendCampaign(service, campaignId, {
+    const result = await sendCampaign(db, campaignId, {
       testOnly: body.testOnly,
       testEmail: body.testEmail,
       resend: body.resend,
@@ -28,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })
     // Audit real sends (not tests). logAdminAction swallows its own failures.
     if (!body.testOnly) {
-      const { data: campaign } = await service
+      const { data: campaign } = await db
         .from('newsletter_campaigns').select('title').eq('id', campaignId).maybeSingle()
       await logAdminAction(service, {
         actorEmail: authUser.email,

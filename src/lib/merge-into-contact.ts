@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { OrgDb } from '@/lib/orgContext'
 
 // Shared merge-card-into-existing-contact logic for three surfaces:
 //   1. Telegram bot sync flow (src/app/api/bot/route.ts merge_/replace_ callbacks)
@@ -59,7 +59,7 @@ export interface MergeIntoContactResult {
 }
 
 export async function mergeIntoContact(
-  supabase: SupabaseClient,
+  supabase: OrgDb,
   input: MergeIntoContactInput,
 ): Promise<MergeIntoContactResult> {
   const cols = ['id', 'name', ...Object.keys(MERGE_FIELDS).filter((c) => c !== 'name')].join(', ')

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { generateCardFilename } from '@/lib/cardFilename'
 
 const OCR_TO_CONTACT: Record<string, string> = {
@@ -73,7 +74,10 @@ export async function POST(
     }
   }
 
-  const { data: pending, error: fetchErr } = await supabase
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+
+  const { data: pending, error: fetchErr } = await db
     .from('camcard_pending')
     .select('*')
     .eq('id', id)
@@ -118,7 +122,7 @@ export async function POST(
   if (pending.card_img_url) contactData.card_img_url = pending.card_img_url
   if (pending.back_img_url) contactData.card_img_back_url = pending.back_img_url
 
-  const { data: contact, error: insertErr } = await supabase
+  const { data: contact, error: insertErr } = await db
     .from('contacts')
     .insert(contactData)
     .select('id')
@@ -130,7 +134,7 @@ export async function POST(
 
   // Apply tags
   if (tagIds.length > 0) {
-    await supabase.from('contact_tags').insert(
+    await db.from('contact_tags').insert(
       tagIds.map((tagId) => ({ contact_id: contact.id, tag_id: tagId }))
     )
   }
@@ -145,7 +149,7 @@ export async function POST(
     const { error: moveErr } = await supabase.storage.from('cards').move(pending.storage_path, frontPath)
     if (!moveErr) {
       const { data: urlData } = supabase.storage.from('cards').getPublicUrl(frontPath)
-      await supabase.from('contacts').update({ card_img_url: urlData.publicUrl }).eq('id', contact.id)
+      await db.from('contacts').update({ card_img_url: urlData.publicUrl }).eq('id', contact.id)
     }
   }
   if (pending.back_storage_path) {
@@ -154,20 +158,20 @@ export async function POST(
     const { error: moveErr } = await supabase.storage.from('cards').move(pending.back_storage_path, backPath)
     if (!moveErr) {
       const { data: urlData } = supabase.storage.from('cards').getPublicUrl(backPath)
-      await supabase.from('contacts').update({ card_img_back_url: urlData.publicUrl }).eq('id', contact.id)
+      await db.from('contacts').update({ card_img_back_url: urlData.publicUrl }).eq('id', contact.id)
     }
   }
 
   // Write system log
   const confirmedNote = confirmedByName ? `，由 ${confirmedByName} 確認` : ''
-  await supabase.from('interaction_logs').insert({
+  await db.from('interaction_logs').insert({
     contact_id: contact.id,
     type: 'system',
     content: `從名片王匯入（${pending.image_filename ?? ''}）${confirmedNote}`,
   })
 
   // Mark pending as confirmed
-  await supabase
+  await db
     .from('camcard_pending')
     .update({ status: 'confirmed' })
     .eq('id', id)

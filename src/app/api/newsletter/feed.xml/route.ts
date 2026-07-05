@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // GET /api/newsletter/feed.xml — public RSS 2.0 feed for Substack RSS importer
 // Serves campaigns where published_at IS NOT NULL, newest first, up to 20.
@@ -47,10 +47,12 @@ function toRFC822(d: Date): string {
 }
 
 export async function GET() {
-  const service = createServiceClient()
+  // Phase 2+: 逐 org 迭代／由 payload 解析 org
+  const ctx = systemOrgContext()
+  const db = orgScopedClient(ctx)
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.cancerfree.io'
 
-  const { data, error } = await service
+  const { data, error } = await db
     .from('newsletter_campaigns')
     .select('id, title, subject, preview_text, content_html, published_at, slug')
     .not('published_at', 'is', null)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Portkey from 'portkey-ai'
-import { createClient, createServiceClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 export const maxDuration = 60
 
@@ -52,18 +53,20 @@ export async function POST(req: NextRequest) {
   let contactIdA: string | undefined = body?.contactIdA
   let contactIdB: string | undefined = body?.contactIdB
 
-  const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   if (pairId) {
-    const { data: pair, error } = await service
+    const { data: pair, error } = await db
       .from('duplicate_pairs')
       .select('contact_id_a, contact_id_b')
       .eq('id', pairId)
       .maybeSingle()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     if (!pair) return NextResponse.json({ error: '找不到重複配對' }, { status: 404 })
-    contactIdA = pair.contact_id_a as string
-    contactIdB = pair.contact_id_b as string
+    const pairRow = pair as unknown as { contact_id_a: string; contact_id_b: string }
+    contactIdA = pairRow.contact_id_a
+    contactIdB = pairRow.contact_id_b
   }
 
   if (!contactIdA || !contactIdB) {
@@ -71,8 +74,8 @@ export async function POST(req: NextRequest) {
   }
 
   const [{ data: a }, { data: b }] = await Promise.all([
-    service.from('contacts').select(CONTACT_FIELDS).eq('id', contactIdA).is('deleted_at', null).maybeSingle(),
-    service.from('contacts').select(CONTACT_FIELDS).eq('id', contactIdB).is('deleted_at', null).maybeSingle(),
+    db.from('contacts').select(CONTACT_FIELDS).eq('id', contactIdA).is('deleted_at', null).maybeSingle(),
+    db.from('contacts').select(CONTACT_FIELDS).eq('id', contactIdB).is('deleted_at', null).maybeSingle(),
   ])
   if (!a || !b) return NextResponse.json({ error: '找不到聯絡人' }, { status: 404 })
 

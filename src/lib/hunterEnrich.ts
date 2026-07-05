@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { fetchApiKey } from './hunter'
 import { isEmailErased } from './erasureTombstone'
 import { getOrgSetting } from './orgSettings'
+import { systemOrgContext, orgScopedClient } from './orgContext'
 
 const FREE_DOMAINS = new Set([
   'gmail.com', 'googlemail.com',
@@ -39,6 +40,9 @@ export async function hunterEnrich(
   email: string,
   userId: string | null,
 ): Promise<void> {
+  // Phase 2+: 呼叫端解析 org；單租戶期間 default org 匹配所有列。`supabase` 仍為裸
+  // service client，供 getOrgSetting 使用（其參數型別為 SupabaseClient，非 OrgDb）。
+  const db = orgScopedClient(systemOrgContext())
   // Module kill-switch (org-settings). `supabase` here is a service-role client,
   // so it can read system_settings; getOrgSetting is 60s-cached so this is cheap.
   if ((await getOrgSetting(supabase, 'hunter_enabled')) === 'false') {
@@ -51,7 +55,7 @@ export async function hunterEnrich(
 
   const norm = email.trim().toLowerCase()
   // 防復活：曾被永久刪除（erasure）的 email 不再補全
-  if (await isEmailErased(supabase, norm)) return
+  if (await isEmailErased(db, norm)) return
   const domain = norm.split('@')[1]
   if (!domain || FREE_DOMAINS.has(domain)) return
 
@@ -72,7 +76,7 @@ export async function hunterEnrich(
 
   if (!found && !org) return
 
-  const { data: contact } = await supabase
+  const { data: contact } = await db
     .from('contacts')
     .select('name, email, company, job_title, linkedin_url, phone')
     .eq('id', contactId)
@@ -110,8 +114,8 @@ export async function hunterEnrich(
 
   if (Object.keys(updates).length === 0) return
 
-  await supabase.from('contacts').update(updates).eq('id', contactId)
-  await supabase.from('interaction_logs').insert({
+  await db.from('contacts').update(updates).eq('id', contactId)
+  await db.from('interaction_logs').insert({
     contact_id: contactId,
     type: 'system',
     content: `Hunter.io 自動補全：${enriched.join('、')}`,

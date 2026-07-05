@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { hasFeature } from '@/lib/features'
+import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 
 // GET /api/newsletter/period-meta?period=YYYY-MM
 //   Returns the meta row for the period, or default-shaped object if none.
@@ -33,8 +34,9 @@ export async function GET(req: NextRequest) {
   if (!period || !/^\d{4}-\d{2}$/.test(period)) {
     return NextResponse.json({ error: 'period required (YYYY-MM)' }, { status: 400 })
   }
-  const service = createServiceClient()
-  const { data } = await service
+  const ctx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(ctx)
+  const { data } = await db
     .from('newsletter_period_meta')
     .select('period, label_last, label_next, updated_at')
     .eq('period', period)
@@ -61,7 +63,8 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'period required (YYYY-MM)' }, { status: 400 })
   }
 
-  const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(ctx)
 
   // Build patch with only the fields the caller actually sent. undefined means
   // "don't touch"; null means "clear back to default".
@@ -69,13 +72,13 @@ export async function PATCH(req: NextRequest) {
   if (body.label_last !== undefined) patch.label_last = body.label_last
   if (body.label_next !== undefined) patch.label_next = body.label_next
 
-  const { error } = await service.from('newsletter_period_meta').upsert(patch, { onConflict: 'period' })
+  const { error } = await db.from('newsletter_period_meta').upsert(patch, { onConflict: 'period' })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Invalidate compose cache for this period so the next preview reflects the new meta
-  await service.from('newsletter_compose_cache').delete().eq('period', period)
+  await db.from('newsletter_compose_cache').delete().eq('period', period)
 
-  const { data } = await service
+  const { data } = await db
     .from('newsletter_period_meta')
     .select('period, label_last, label_next, updated_at')
     .eq('period', period)

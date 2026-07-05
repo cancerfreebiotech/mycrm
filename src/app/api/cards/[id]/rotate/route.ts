@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
 import sharp from 'sharp'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 export async function POST(
   req: NextRequest,
@@ -12,9 +12,10 @@ export async function POST(
     return NextResponse.json({ error: 'invalid_deg' }, { status: 400 })
   }
 
-  const supabase = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
-  const { data: card, error: fetchErr } = await supabase
+  const { data: card, error: fetchErr } = await db
     .from('contact_cards')
     .select('id, card_img_url, card_img_back_url, storage_path')
     .eq('id', id)
@@ -41,7 +42,7 @@ export async function POST(
   }
 
   // Download from storage
-  const { data: fileData, error: dlErr } = await supabase.storage
+  const { data: fileData, error: dlErr } = await db.raw.storage
     .from('cards')
     .download(storagePath)
 
@@ -54,7 +55,7 @@ export async function POST(
   const rotated = await sharp(buffer).rotate(deg).jpeg({ quality: 90 }).toBuffer()
 
   // Re-upload (upsert)
-  const { error: uploadErr } = await supabase.storage
+  const { error: uploadErr } = await db.raw.storage
     .from('cards')
     .upload(storagePath, rotated, { contentType: 'image/jpeg', upsert: true })
 
@@ -67,7 +68,7 @@ export async function POST(
 
   // Update DB field
   const updateField = isFront ? { card_img_url: newUrl } : { card_img_back_url: newUrl }
-  await supabase.from('contact_cards').update(updateField).eq('id', id)
+  await db.from('contact_cards').update(updateField).eq('id', id)
 
   return NextResponse.json({ ok: true, url: newUrl })
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { simpleParser, type AddressObject, type ParsedMail } from 'mailparser'
 import { createServiceClient } from '@/lib/supabase'
+import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { findOrCreateContactByEmail } from '@/lib/findOrCreateContactByEmail'
 import {
   buildHeaderBlock,
@@ -137,6 +138,9 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = createServiceClient()
+  // Phase 2+: 由 payload（org 收件人 email）解析 org
+  const ctx = systemOrgContext()
+  const db = orgScopedClient(ctx)
 
   // Determine which org user to attribute the interaction to:
   // - outbound / forward: the From address (org user who sent)
@@ -228,7 +232,7 @@ export async function POST(req: NextRequest) {
       })
       // erasure tombstone → 跳過，不重建也不留紀錄
       if (!result) continue
-      const { error: logErr } = await supabase.from('interaction_logs').insert({
+      const { error: logErr } = await db.from('interaction_logs').insert({
         contact_id: result.id,
         type: 'email',
         direction,

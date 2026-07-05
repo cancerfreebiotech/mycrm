@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { hasFeature } from '@/lib/features'
+import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 import { randomBytes } from 'node:crypto'
 
 async function authorize() {
@@ -38,7 +39,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (!ALLOWED_MIME.has(file.type)) return NextResponse.json({ error: 'unsupported mime type' }, { status: 400 })
 
   const service = createServiceClient()
-  const { data: draft } = await service
+  const orgCtx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(orgCtx)
+  const { data: draft } = await db
     .from('newsletter_drafts').select('period, photo_urls').eq('id', id).single()
   if (!draft) return NextResponse.json({ error: 'draft not found' }, { status: 404 })
 
@@ -53,7 +56,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   const url = service.storage.from(BUCKET).getPublicUrl(key).data.publicUrl
   const updated = [...(draft.photo_urls ?? []), url]
-  await service.from('newsletter_drafts').update({ photo_urls: updated }).eq('id', id)
+  await db.from('newsletter_drafts').update({ photo_urls: updated }).eq('id', id)
 
   return NextResponse.json({ url, photo_urls: updated })
 }
@@ -65,11 +68,12 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
   const target = req.nextUrl.searchParams.get('url')
   if (!target) return NextResponse.json({ error: 'url required' }, { status: 400 })
 
-  const service = createServiceClient()
-  const { data: draft } = await service
+  const orgCtx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(orgCtx)
+  const { data: draft } = await db
     .from('newsletter_drafts').select('photo_urls').eq('id', id).single()
   if (!draft) return NextResponse.json({ error: 'not found' }, { status: 404 })
   const next = (draft.photo_urls ?? []).filter((u: string) => u !== target)
-  await service.from('newsletter_drafts').update({ photo_urls: next }).eq('id', id)
+  await db.from('newsletter_drafts').update({ photo_urls: next }).eq('id', id)
   return NextResponse.json({ photo_urls: next })
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 /**
  * POST /api/camcard/[id]/skip
@@ -10,9 +10,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
-  const { error } = await supabase
+  const { error } = await db
     .from('camcard_pending')
     .update({ status: 'skipped' })
     .eq('id', id)

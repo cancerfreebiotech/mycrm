@@ -1,13 +1,15 @@
 {
   "name": "mycrm",
-  "version": "7.9.0",
+  "version": "7.9.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "npm run lint:org",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "lint:org": "node scripts/lint-org-ready.mjs"
+    "lint:org": "node scripts/lint-org-scope.mjs",
+    "lint:org:ready": "node scripts/lint-org-ready.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

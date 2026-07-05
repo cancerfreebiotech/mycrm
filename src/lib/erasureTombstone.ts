@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { OrgDb } from '@/lib/orgContext'
 
 // GDPR erasure tombstones.
 // When a contact is permanently deleted (right to erasure), we record its
@@ -16,7 +16,7 @@ const ERASURE_STATUS = 'recipient_blocked'
 
 // True if the email has an active erasure tombstone.
 export async function isEmailErased(
-  supabase: SupabaseClient,
+  supabase: OrgDb,
   email: string | null | undefined,
 ): Promise<boolean> {
   const norm = email?.trim().toLowerCase()
@@ -36,7 +36,7 @@ export async function isEmailErased(
 // suppressed address keeps its original reason/status.
 // Returns true if at least one non-empty email was submitted.
 export async function addErasureTombstones(
-  service: SupabaseClient,
+  service: OrgDb,
   emails: (string | null | undefined)[],
 ): Promise<boolean> {
   const norm = [

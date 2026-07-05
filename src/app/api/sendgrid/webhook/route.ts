@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { systemOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 import { createPublicKey, createVerify } from 'crypto'
 
 // Verify SendGrid Event Webhook signature.
@@ -63,7 +63,7 @@ type SuppressStatus =
 // for non-CRM emails → write to newsletter_blacklist (or unsubscribes).
 // Mirrors the policy enforced in /api/sendgrid/import-suppressions (v4.2.1).
 async function markSuppressed(
-  supabase: ReturnType<typeof createServiceClient>,
+  supabase: OrgDb,
   email: string,
   status: SuppressStatus,
   reason: string,
@@ -159,7 +159,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const supabase = createServiceClient()
+  // Phase 2+: 由 payload（X-Campaign-Id / X-Recipient-Id）解析 org
+  const ctx = systemOrgContext()
+  const db = orgScopedClient(ctx)
 
   // Persist every event durably (incl. click URLs, which the per-recipient
   // clicked_at update below discards) — the raw feed campaign analytics need.
@@ -174,7 +176,7 @@ export async function POST(req: NextRequest) {
       occurred_at: new Date(ev.timestamp * 1000).toISOString(),
     }))
   if (eventRows.length > 0) {
-    const { error: evErr } = await supabase.from('newsletter_events').insert(eventRows)
+    const { error: evErr } = await db.from('newsletter_events').insert(eventRows)
     if (evErr) console.error('[sendgrid-webhook] newsletter_events insert failed:', evErr.message)
   }
 
@@ -184,7 +186,7 @@ export async function POST(req: NextRequest) {
     switch (ev.event) {
       case 'open':
         if (recipientId) {
-          await supabase
+          await db
             .from('newsletter_recipients')
             .update({ opened_at: new Date(ev.timestamp * 1000).toISOString() })
             .eq('id', recipientId)
@@ -194,7 +196,7 @@ export async function POST(req: NextRequest) {
 
       case 'click':
         if (recipientId) {
-          await supabase
+          await db
             .from('newsletter_recipients')
             .update({ clicked_at: new Date(ev.timestamp * 1000).toISOString() })
             .eq('id', recipientId)
@@ -203,7 +205,7 @@ export async function POST(req: NextRequest) {
         break
 
       case 'unsubscribe':
-        await markSuppressed(supabase, ev.email, 'unsubscribed', 'SendGrid webhook unsubscribe')
+        await markSuppressed(db, ev.email, 'unsubscribed', 'SendGrid webhook unsubscribe')
         break
 
       case 'bounce': {
@@ -213,9 +215,9 @@ export async function POST(req: NextRequest) {
         const status = reason
           ? classifyByReason(reason)
           : (ev.type === 'blocked' ? 'recipient_blocked' : 'bounced')
-        await markSuppressed(supabase, ev.email, status, `${ev.type ?? 'bounce'}: ${reason}`.slice(0, 200))
+        await markSuppressed(db, ev.email, status, `${ev.type ?? 'bounce'}: ${reason}`.slice(0, 200))
         if (recipientId) {
-          await supabase.from('newsletter_recipients').update({ status: 'failed' }).eq('id', recipientId)
+          await db.from('newsletter_recipients').update({ status: 'failed' }).eq('id', recipientId)
         }
         break
       }
@@ -224,16 +226,16 @@ export async function POST(req: NextRequest) {
         // Pre-send drop — classify by reason
         const reason = ev.reason ?? 'dropped'
         const status = classifyByReason(reason)
-        await markSuppressed(supabase, ev.email, status, `dropped: ${reason}`.slice(0, 200))
+        await markSuppressed(db, ev.email, status, `dropped: ${reason}`.slice(0, 200))
         if (recipientId) {
-          await supabase.from('newsletter_recipients').update({ status: 'failed' }).eq('id', recipientId)
+          await db.from('newsletter_recipients').update({ status: 'failed' }).eq('id', recipientId)
         }
         break
       }
 
       case 'spamreport':
         // Recipient marked as spam — sender-side reputation issue
-        await markSuppressed(supabase, ev.email, 'sender_blocked', 'spam_report')
+        await markSuppressed(db, ev.email, 'sender_blocked', 'spam_report')
         break
     }
   }

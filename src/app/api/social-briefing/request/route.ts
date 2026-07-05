@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { processPendingBriefings } from '@/lib/social-briefing-worker'
 
 export const maxDuration = 300
@@ -19,6 +20,8 @@ export async function POST(req: NextRequest) {
   const meetingAt = body?.meeting_at ?? null
 
   const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   // created_by（FK → auth.users）維持 auth user.id；notify_user_id 需要 public.users.id，
   // 以 email 對應（auth.users.id ≠ public.users.id）。找不到就不通知（null）。
@@ -32,7 +35,7 @@ export async function POST(req: NextRequest) {
     notifyUserId = publicUser?.id ?? null
   }
 
-  const { data, error } = await service
+  const { data, error } = await db
     .from('contact_briefings')
     .insert({ contact_id: contactId, trigger, meeting_at: meetingAt, created_by: user.id, notify_user_id: notifyUserId })
     .select('id')

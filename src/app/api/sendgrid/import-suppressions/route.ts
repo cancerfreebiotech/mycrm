@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { systemOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 import { recordCronRun } from '@/lib/cronHeartbeat'
 
 const SG_BASE = 'https://api.sendgrid.com/v3'
@@ -46,7 +47,7 @@ async function sgFetchAll<T>(path: string, apiKey: string, extraParams = ''): Pr
  * Only creates logs for contacts that exist in CRM (no-match emails are ignored).
  */
 async function createSendGridLogs(
-  supabase: ReturnType<typeof createServiceClient>,
+  supabase: OrgDb,
   emailToInfo: Map<string, { created: number; content: string }>,
   contentPrefix: string,
 ) {
@@ -59,7 +60,7 @@ async function createSendGridLogs(
     .from('contacts')
     .select('id, email')
     .in('email', emails)
-    .is('deleted_at', null)
+    .is('deleted_at', null) as { data: { id: string; email: string | null }[] | null }
   if (!contacts || contacts.length === 0) return 0
 
   const contactIds = contacts.map((c) => c.id)
@@ -70,7 +71,7 @@ async function createSendGridLogs(
     .select('contact_id')
     .in('contact_id', contactIds)
     .eq('type', 'system')
-    .ilike('content', `${contentPrefix}%`)
+    .ilike('content', `${contentPrefix}%`) as { data: { contact_id: string }[] | null }
 
   const alreadyLogged = new Set((existingLogs ?? []).map((l) => l.contact_id))
 
@@ -99,7 +100,9 @@ async function runImport() {
     return NextResponse.json({ error: 'SENDGRID_API_KEY not configured' }, { status: 500 })
   }
 
-  const supabase = createServiceClient()
+  // Phase 2+: 逐 org 迭代／由 payload 解析 org
+  const ctx = systemOrgContext()
+  const db = orgScopedClient(ctx)
   const result = { bounces: 0, invalidEmails: 0, unsubscribes: 0, blocks: 0, spamReports: 0, logsCreated: 0, errors: [] as string[] }
 
   // 1. Hard bounces → blacklist + contacts + logs
@@ -113,16 +116,16 @@ async function runImport() {
       const emails = rows.map((r) => r.email)
 
       // Update contacts.email_status for CRM contacts (canonical source for contacts)
-      await supabase.from('contacts').update({ email_status: 'bounced' }).in('email', emails).is('deleted_at', null)
+      await db.from('contacts').update({ email_status: 'bounced' }).in('email', emails).is('deleted_at', null)
 
       // Find which emails have matching CRM contacts — those skip blacklist (status is enough)
-      const { data: matchingContacts } = await supabase
+      const { data: matchingContacts } = await db
         .from('contacts').select('email').in('email', emails).is('deleted_at', null)
       const contactEmails = new Set(((matchingContacts ?? []) as { email: string }[]).map((c) => c.email.toLowerCase().trim()))
       const blacklistRows = rows.filter((r) => !contactEmails.has(r.email))
 
       if (blacklistRows.length > 0) {
-        const { error } = await supabase
+        const { error } = await db
           .from('newsletter_blacklist')
           .upsert(dedupeByEmail(blacklistRows), { onConflict: 'email' })
         if (error) throw new Error(error.message)
@@ -136,7 +139,7 @@ async function runImport() {
           content: `SendGrid 硬退信：${(b.reason ?? b.status ?? '').slice(0, 200)}`,
         },
       ]))
-      result.logsCreated += await createSendGridLogs(supabase, emailToInfo, 'SendGrid 硬退信')
+      result.logsCreated += await createSendGridLogs(db, emailToInfo, 'SendGrid 硬退信')
       result.bounces = rows.length
     }
   } catch (e) {
@@ -153,15 +156,15 @@ async function runImport() {
       }))
       const emails = rows.map((r) => r.email)
 
-      await supabase.from('contacts').update({ email_status: 'invalid' }).in('email', emails).is('deleted_at', null)
+      await db.from('contacts').update({ email_status: 'invalid' }).in('email', emails).is('deleted_at', null)
 
-      const { data: matchingContacts } = await supabase
+      const { data: matchingContacts } = await db
         .from('contacts').select('email').in('email', emails).is('deleted_at', null)
       const contactEmails = new Set(((matchingContacts ?? []) as { email: string }[]).map((c) => c.email.toLowerCase().trim()))
       const blacklistRows = rows.filter((r) => !contactEmails.has(r.email))
 
       if (blacklistRows.length > 0) {
-        const { error } = await supabase
+        const { error } = await db
           .from('newsletter_blacklist')
           .upsert(dedupeByEmail(blacklistRows), { onConflict: 'email' })
         if (error) throw new Error(error.message)
@@ -174,7 +177,7 @@ async function runImport() {
           content: `SendGrid 無效信箱：${(i.error ?? '').slice(0, 200)}`,
         },
       ]))
-      result.logsCreated += await createSendGridLogs(supabase, emailToInfo, 'SendGrid 無效信箱')
+      result.logsCreated += await createSendGridLogs(db, emailToInfo, 'SendGrid 無效信箱')
       result.invalidEmails = rows.length
     }
   } catch (e) {
@@ -191,13 +194,13 @@ async function runImport() {
         reason: 'SendGrid global unsubscribe',
         unsubscribed_at: new Date(u.created * 1000).toISOString(),
       }))
-      const { error } = await supabase
+      const { error } = await db
         .from('newsletter_unsubscribes')
         .upsert(dedupeByEmail(rows), { onConflict: 'email' })
       if (error) throw new Error(error.message)
 
       const emails = rows.map((r) => r.email)
-      await supabase.from('contacts').update({ email_status: 'unsubscribed' }).in('email', emails).is('deleted_at', null)
+      await db.from('contacts').update({ email_status: 'unsubscribed' }).in('email', emails).is('deleted_at', null)
 
       const emailToInfo = new Map(unsubs.map((u) => [
         u.email.toLowerCase().trim(),
@@ -206,7 +209,7 @@ async function runImport() {
           content: 'SendGrid 已退訂：global unsubscribe',
         },
       ]))
-      result.logsCreated += await createSendGridLogs(supabase, emailToInfo, 'SendGrid 已退訂')
+      result.logsCreated += await createSendGridLogs(db, emailToInfo, 'SendGrid 已退訂')
       result.unsubscribes = rows.length
     }
   } catch (e) {
@@ -225,14 +228,14 @@ async function runImport() {
       }))
       const emails = rows.map((r) => r.email)
 
-      await supabase.from('contacts').update({ email_status: 'recipient_blocked' }).in('email', emails).is('deleted_at', null)
+      await db.from('contacts').update({ email_status: 'recipient_blocked' }).in('email', emails).is('deleted_at', null)
 
-      const { data: matchingContacts } = await supabase
+      const { data: matchingContacts } = await db
         .from('contacts').select('email').in('email', emails).is('deleted_at', null)
       const contactEmails = new Set(((matchingContacts ?? []) as { email: string }[]).map((c) => c.email.toLowerCase().trim()))
       const blacklistRows = rows.filter((r) => !contactEmails.has(r.email))
       if (blacklistRows.length > 0) {
-        const { error } = await supabase.from('newsletter_blacklist').upsert(dedupeByEmail(blacklistRows), { onConflict: 'email' })
+        const { error } = await db.from('newsletter_blacklist').upsert(dedupeByEmail(blacklistRows), { onConflict: 'email' })
         if (error) throw new Error(error.message)
       }
 
@@ -240,7 +243,7 @@ async function runImport() {
         b.email.toLowerCase().trim(),
         { created: b.created, content: `SendGrid 被擋下：${(b.reason ?? b.status ?? '').slice(0, 200)}` },
       ]))
-      result.logsCreated += await createSendGridLogs(supabase, emailToInfo, 'SendGrid 被擋下')
+      result.logsCreated += await createSendGridLogs(db, emailToInfo, 'SendGrid 被擋下')
       result.blocks = rows.length
     }
   } catch (e) {
@@ -255,7 +258,7 @@ async function runImport() {
     if (spam.length > 0) {
       const emails = spam.map((s) => s.email.toLowerCase().trim())
 
-      await supabase.from('contacts').update({ email_status: 'spam_report' }).in('email', emails).is('deleted_at', null)
+      await db.from('contacts').update({ email_status: 'spam_report' }).in('email', emails).is('deleted_at', null)
 
       const unsubRows = spam.map((s) => ({
         email: s.email.toLowerCase().trim(),
@@ -263,14 +266,14 @@ async function runImport() {
         reason: 'SendGrid spam report (recipient marked as spam)',
         unsubscribed_at: new Date(s.created * 1000).toISOString(),
       }))
-      const { error } = await supabase.from('newsletter_unsubscribes').upsert(dedupeByEmail(unsubRows), { onConflict: 'email' })
+      const { error } = await db.from('newsletter_unsubscribes').upsert(dedupeByEmail(unsubRows), { onConflict: 'email' })
       if (error) throw new Error(error.message)
 
       const emailToInfo = new Map(spam.map((s) => [
         s.email.toLowerCase().trim(),
         { created: s.created, content: 'SendGrid 垃圾信檢舉：recipient marked as spam' },
       ]))
-      result.logsCreated += await createSendGridLogs(supabase, emailToInfo, 'SendGrid 垃圾信檢舉')
+      result.logsCreated += await createSendGridLogs(db, emailToInfo, 'SendGrid 垃圾信檢舉')
       result.spamReports = emails.length
     }
   } catch (e) {

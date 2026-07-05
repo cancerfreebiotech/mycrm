@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // PATCH /api/photo-faces/[id] — 接受 / 拒絕 AI 建議，或改指認的聯絡人
 // body: { action?: 'accept' | 'reject', contact_id?: string }
@@ -12,17 +13,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params
   const body = await req.json().catch(() => null)
-  const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   if (body?.action === 'accept') {
-    const { data: face } = await service
+    const { data: face } = await db
       .from('photo_faces')
       .select('suggested_contact_id, contact_id')
       .eq('id', id)
       .single()
     const target = body?.contact_id ?? face?.contact_id ?? face?.suggested_contact_id
     if (!target) return NextResponse.json({ error: 'no_contact_to_confirm' }, { status: 400 })
-    const { error } = await service
+    const { error } = await db
       .from('photo_faces')
       .update({ status: 'confirmed', contact_id: target })
       .eq('id', id)
@@ -34,13 +36,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   if (body?.action === 'reject') {
-    const { error } = await service.from('photo_faces').update({ status: 'rejected' }).eq('id', id)
+    const { error } = await db.from('photo_faces').update({ status: 'rejected' }).eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true })
   }
 
   if (body?.contact_id) {
-    const { error } = await service
+    const { error } = await db
       .from('photo_faces')
       .update({ contact_id: body.contact_id, status: 'confirmed' })
       .eq('id', id)
@@ -61,8 +63,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  const service = createServiceClient()
-  const { error } = await service.from('photo_faces').delete().eq('id', id)
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+  const { error } = await db.from('photo_faces').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }

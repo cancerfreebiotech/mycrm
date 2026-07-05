@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { logAdminAction } from '@/lib/adminAudit'
 import { addErasureTombstones } from '@/lib/erasureTombstone'
 
@@ -28,8 +29,11 @@ export async function DELETE(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+
   // 確認聯絡人存在且已軟刪除（只能永久刪除回收區的聯絡人）
-  const { data: contact } = await service
+  const { data: contact } = await db
     .from('contacts')
     .select('id, email, second_email')
     .eq('id', id)
@@ -42,8 +46,8 @@ export async function DELETE(
 
   // 刪除 Storage 圖片（contact_cards + contact_photos，兩者皆存於 'cards' bucket）
   const [{ data: cards }, { data: photos }] = await Promise.all([
-    service.from('contact_cards').select('storage_path').eq('contact_id', id),
-    service.from('contact_photos').select('storage_path').eq('contact_id', id),
+    db.from('contact_cards').select('storage_path').eq('contact_id', id),
+    db.from('contact_photos').select('storage_path').eq('contact_id', id),
   ])
 
   const paths = [...(cards ?? []), ...(photos ?? [])]
@@ -55,7 +59,7 @@ export async function DELETE(
   }
 
   // 永久刪除（CASCADE 會自動清除 contact_cards、contact_tags、interaction_logs 等）
-  const { error } = await service
+  const { error } = await db
     .from('contacts')
     .delete()
     .eq('id', id)

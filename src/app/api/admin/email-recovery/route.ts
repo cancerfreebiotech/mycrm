@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // GET /api/admin/email-recovery
 // List all contacts with email_status set (bounced/invalid/unsubscribed/etc.)
@@ -34,10 +35,11 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   // Step 1: all contacts with non-null email_status (= some kind of email problem)
-  const { data: bad } = await service
+  const { data: bad } = await db
     .from('contacts')
     .select('id, name, name_en, name_local, company, email, email_status, created_at')
     .not('email_status', 'is', null)
@@ -57,13 +59,14 @@ export async function GET() {
   const eventByContact = new Map<string, { at: string; reason: string }>()
   for (let i = 0; i < badIds.length; i += QUERY_BATCH) {
     const batch = badIds.slice(i, i + QUERY_BATCH)
-    const { data: events } = await service
+    const { data: events } = await db
       .from('interaction_logs')
       .select('contact_id, content, created_at')
       .in('contact_id', batch)
       .eq('type', 'system')
       .or('content.ilike.%bounce%,content.ilike.%退信%,content.ilike.%invalid%,content.ilike.%suppression%')
       .order('created_at', { ascending: false })
+      .returns<{ contact_id: string; content: string | null; created_at: string }[]>()
     for (const e of events ?? []) {
       const cid = e.contact_id as string
       if (!eventByContact.has(cid)) {
@@ -90,7 +93,7 @@ export async function GET() {
     for (let i = 0; i < namesArr.length; i += QUERY_BATCH) {
       const batch = namesArr.slice(i, i + QUERY_BATCH)
       // Pull all candidates whose name matches; we'll filter further client-side.
-      const { data: cands } = await service
+      const { data: cands } = await db
         .from('contacts')
         .select('id, name, name_en, name_local, company, email, email_status, created_at')
         .or(

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { hasFeature } from '@/lib/features'
+import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 
 async function authorize() {
   const supabase = await createClient()
@@ -29,6 +30,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   const auth = await authorize()
   if (!auth) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await ctx.params
+  const orgCtx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(orgCtx)
 
   const body = await req.json() as Record<string, unknown>
   const patch: Record<string, unknown> = {}
@@ -46,16 +49,14 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
   // Don't allow moving 'used' drafts (already became campaigns) unless super_admin
   if (patch.status !== 'used' && (patch.period || patch.section)) {
-    const service = createServiceClient()
-    const { data: existing } = await service
+    const { data: existing } = await db
       .from('newsletter_drafts').select('status').eq('id', id).single()
     if (existing?.status === 'used' && auth.role !== 'super_admin') {
       return NextResponse.json({ error: 'Cannot move a used draft' }, { status: 400 })
     }
   }
 
-  const service = createServiceClient()
-  const { data, error } = await service
+  const { data, error } = await db
     .from('newsletter_drafts')
     .update(patch).eq('id', id)
     .select().single()
@@ -67,9 +68,9 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: str
   const auth = await authorize()
   if (!auth) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await ctx.params
-
-  const service = createServiceClient()
-  const { error } = await service
+  const orgCtx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(orgCtx)
+  const { error } = await db
     .from('newsletter_drafts')
     .update({ status: 'deleted' })
     .eq('id', id)

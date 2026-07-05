@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
 import { verifyOptOutToken } from '@/lib/email-optout'
+import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 export async function POST(req: NextRequest) {
   const { token } = await req.json()
@@ -9,9 +9,11 @@ export async function POST(req: NextRequest) {
   const decoded = verifyOptOutToken(token)
   if (!decoded) return NextResponse.json({ error: '無效或已過期的連結' }, { status: 400 })
 
-  const supabase = createServiceClient()
+  // Phase 2+: 由 payload（opt-out token）解析 org
+  const ctx = systemOrgContext()
+  const db = orgScopedClient(ctx)
 
-  const { error } = await supabase
+  const { error } = await db
     .from('contacts')
     .update({ email_opt_out: true })
     .eq('id', decoded.contactId)

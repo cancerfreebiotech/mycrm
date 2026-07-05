@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 // /api/admin/* is exempted from the auth middleware (src/middleware.ts), so every
@@ -17,7 +18,7 @@ async function requireSuperAdmin() {
 interface RecentItem { id: string; error: string | null; at: string | null; meta?: string }
 interface TableReport { table: string; failed: number; recent: RecentItem[] }
 
-async function pendingContacts(sb: SupabaseClient): Promise<TableReport> {
+async function pendingContacts(sb: OrgDb): Promise<TableReport> {
   const { count } = await sb
     .from('pending_contacts')
     .select('id', { count: 'exact', head: true })
@@ -28,7 +29,7 @@ async function pendingContacts(sb: SupabaseClient): Promise<TableReport> {
     .eq('status', 'failed')
     .order('created_at', { ascending: false })
     .limit(5)
-  const recent: RecentItem[] = (data ?? []).map((r) => ({
+  const recent: RecentItem[] = (data ?? []).map((r: { id: string; error_message: string | null; processed_at: string | null; created_at: string | null }) => ({
     id: r.id as string,
     error: (r.error_message as string | null) ?? null,
     at: (r.processed_at as string | null) ?? (r.created_at as string | null) ?? null,
@@ -36,7 +37,7 @@ async function pendingContacts(sb: SupabaseClient): Promise<TableReport> {
   return { table: 'pending_contacts', failed: count ?? 0, recent }
 }
 
-async function contactBriefings(sb: SupabaseClient): Promise<TableReport> {
+async function contactBriefings(sb: OrgDb): Promise<TableReport> {
   const { count } = await sb
     .from('contact_briefings')
     .select('id', { count: 'exact', head: true })
@@ -47,7 +48,7 @@ async function contactBriefings(sb: SupabaseClient): Promise<TableReport> {
     .eq('status', 'failed')
     .order('created_at', { ascending: false })
     .limit(5)
-  const recent: RecentItem[] = (data ?? []).map((r) => ({
+  const recent: RecentItem[] = (data ?? []).map((r: { id: string; error_message: string | null; processed_at: string | null; created_at: string | null }) => ({
     id: r.id as string,
     error: (r.error_message as string | null) ?? null,
     at: (r.processed_at as string | null) ?? (r.created_at as string | null) ?? null,
@@ -55,7 +56,7 @@ async function contactBriefings(sb: SupabaseClient): Promise<TableReport> {
   return { table: 'contact_briefings', failed: count ?? 0, recent }
 }
 
-async function newsletterRecipients(sb: SupabaseClient): Promise<TableReport> {
+async function newsletterRecipients(sb: OrgDb): Promise<TableReport> {
   const { count } = await sb
     .from('newsletter_recipients')
     .select('id', { count: 'exact', head: true })
@@ -67,7 +68,7 @@ async function newsletterRecipients(sb: SupabaseClient): Promise<TableReport> {
     .eq('status', 'failed')
     .order('sent_at', { ascending: false })
     .limit(5)
-  const recent: RecentItem[] = (data ?? []).map((r) => ({
+  const recent: RecentItem[] = (data ?? []).map((r: { email: string | null; sent_at: string | null }) => ({
     id: (r.email as string | null) ?? '',
     error: null,
     at: (r.sent_at as string | null) ?? null,
@@ -75,7 +76,7 @@ async function newsletterRecipients(sb: SupabaseClient): Promise<TableReport> {
   return { table: 'newsletter_recipients', failed: count ?? 0, recent }
 }
 
-async function failedScans(sb: SupabaseClient): Promise<TableReport> {
+async function failedScans(sb: OrgDb): Promise<TableReport> {
   // failed_scans is itself the dead-letter table — every row is a failure.
   const { count } = await sb
     .from('failed_scans')
@@ -85,7 +86,7 @@ async function failedScans(sb: SupabaseClient): Promise<TableReport> {
     .select('id, note, created_at')
     .order('created_at', { ascending: false })
     .limit(5)
-  const recent: RecentItem[] = (data ?? []).map((r) => ({
+  const recent: RecentItem[] = (data ?? []).map((r: { id: string; note: string | null; created_at: string | null }) => ({
     id: r.id as string,
     error: (r.note as string | null) ?? null,
     at: (r.created_at as string | null) ?? null,
@@ -117,12 +118,14 @@ async function botErrors(sb: SupabaseClient): Promise<TableReport> {
 // GET — aggregate failed/dead-letter counts across the 5 async pipelines.
 export async function GET() {
   const denied = await requireSuperAdmin(); if (denied) return denied
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
   const sb = createServiceClient()
   const tables = await Promise.all([
-    pendingContacts(sb),
-    contactBriefings(sb),
-    newsletterRecipients(sb),
-    failedScans(sb),
+    pendingContacts(db),
+    contactBriefings(db),
+    newsletterRecipients(db),
+    failedScans(db),
     botErrors(sb),
   ])
   return NextResponse.json({ tables })

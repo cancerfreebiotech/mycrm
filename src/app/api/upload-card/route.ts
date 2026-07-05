@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 export async function POST(req: NextRequest) {
   try {
@@ -7,6 +8,8 @@ export async function POST(req: NextRequest) {
     if (!contactId || !base64) return NextResponse.json({ error: '缺少參數' }, { status: 400 })
 
     const supabase = createServiceClient()
+    const ctx = await getOrgContext()
+    const db = orgScopedClient(ctx)
     const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
     const blob = new Blob([bytes], { type: 'image/jpeg' })
     const filename = `cards/${contactId}_${Date.now()}_${index}.jpg`
@@ -17,7 +20,7 @@ export async function POST(req: NextRequest) {
     const { data: urlData } = supabase.storage.from('cards').getPublicUrl(filename)
     const label = index === 0 ? '正面' : `第 ${index + 1} 張`
 
-    const { error: insertErr } = await supabase.from('contact_cards').insert({
+    const { error: insertErr } = await db.from('contact_cards').insert({
       contact_id: contactId,
       card_img_url: urlData.publicUrl,
       storage_path: filename,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { hasFeature } from '@/lib/features'
+import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 
 // GET /api/newsletter/drafts?period=2026-05
 //   List all drafts for a period, grouped by section, ordered by position + event_date.
@@ -33,8 +34,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'period required (YYYY-MM)' }, { status: 400 })
   }
 
-  const service = createServiceClient()
-  const { data, error } = await service
+  const ctx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(ctx)
+  const { data, error } = await db
     .from('newsletter_drafts')
     .select('*, creator:created_by(id, email, display_name)')
     .eq('period', period)
@@ -68,10 +70,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "section must be 'last_month', 'next_month' or 'highlight'" }, { status: 400 })
   }
 
-  const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(ctx)
 
   // Auto-position: append after last in same section/period
-  const { data: existing } = await service
+  const { data: existing } = await db
     .from('newsletter_drafts')
     .select('position')
     .eq('period', body.period)
@@ -85,7 +88,7 @@ export async function POST(req: NextRequest) {
   const eventDateEnd = body.event_date_end && body.event_date && body.event_date_end < body.event_date
     ? null : (body.event_date_end ?? null)
 
-  const { data, error } = await service
+  const { data, error } = await db
     .from('newsletter_drafts')
     .insert({
       period: body.period,

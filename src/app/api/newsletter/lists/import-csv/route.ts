@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { hasFeature } from '@/lib/features'
+import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 import { parseCsv } from '@/lib/csv'
 
 // POST /api/newsletter/lists/import-csv
@@ -59,6 +60,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden — newsletter permission required' }, { status: 403 })
   }
 
+  const ctx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(ctx)
+
   const form = await req.formData().catch(() => null)
   if (!form) return NextResponse.json({ error: 'invalid form data' }, { status: 400 })
   const file = form.get('file')
@@ -114,9 +118,9 @@ export async function POST(req: NextRequest) {
   for (let i = 0; i < acceptedEmails.length; i += QUERY_BATCH) {
     const batch = acceptedEmails.slice(i, i + QUERY_BATCH)
     const [{ data: bl }, { data: us }, { data: subs }] = await Promise.all([
-      service.from('newsletter_blacklist').select('email').in('email', batch),
-      service.from('newsletter_unsubscribes').select('email').in('email', batch),
-      service
+      db.from('newsletter_blacklist').select('email').in('email', batch),
+      db.from('newsletter_unsubscribes').select('email').in('email', batch),
+      db
         .from('newsletter_subscribers')
         .select('email, unsubscribed_at')
         .in('email', batch)
@@ -130,14 +134,14 @@ export async function POST(req: NextRequest) {
   // Allocate list (with key collision handling)
   const listName = sanitizeListName(file.name)
   let listKey = sanitizeListKey(file.name)
-  const { data: existing } = await service
+  const { data: existing } = await db
     .from('newsletter_lists')
     .select('id')
     .eq('key', listKey)
     .maybeSingle()
   if (existing) listKey = `${listKey}-${Date.now().toString(36)}`
 
-  const { data: created, error: createErr } = await service
+  const { data: created, error: createErr } = await db
     .from('newsletter_lists')
     .insert({ key: listKey, name: listName, description: null })
     .select('id, key, name')
@@ -157,7 +161,7 @@ export async function POST(req: NextRequest) {
   const errors: string[] = []
   for (let i = 0; i < subscriberPayload.length; i += INSERT_BATCH) {
     const chunk = subscriberPayload.slice(i, i + INSERT_BATCH)
-    const { error } = await service
+    const { error } = await db
       .from('newsletter_subscribers')
       .upsert(chunk, { onConflict: 'email', ignoreDuplicates: true })
     if (error) errors.push(`upsert subscribers batch ${i / INSERT_BATCH}: ${error.message}`)
@@ -167,7 +171,7 @@ export async function POST(req: NextRequest) {
   const subscriberIdByEmail = new Map<string, string>()
   for (let i = 0; i < acceptedEmails.length; i += QUERY_BATCH) {
     const batch = acceptedEmails.slice(i, i + QUERY_BATCH)
-    const { data } = await service
+    const { data } = await db
       .from('newsletter_subscribers')
       .select('id, email')
       .in('email', batch)
@@ -188,7 +192,7 @@ export async function POST(req: NextRequest) {
   let imported = 0
   for (let i = 0; i < linkRows.length; i += INSERT_BATCH) {
     const chunk = linkRows.slice(i, i + INSERT_BATCH)
-    const { error } = await service.from('newsletter_subscriber_lists').insert(chunk)
+    const { error } = await db.from('newsletter_subscriber_lists').insert(chunk)
     if (error) {
       errors.push(`insert link rows batch ${i / INSERT_BATCH}: ${error.message}`)
       continue

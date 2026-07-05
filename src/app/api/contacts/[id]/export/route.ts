@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { hasFeature } from '@/lib/features'
 import { logAdminAction } from '@/lib/adminAudit'
 
@@ -32,7 +33,10 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: 'Forbidden — export permission required' }, { status: 403 })
   }
 
-  const { data: contact, error: contactErr } = await service
+  const orgCtx = await getOrgContext()
+  const db = orgScopedClient(orgCtx)
+
+  const { data: contact, error: contactErr } = await db
     .from('contacts')
     .select('*')
     .eq('id', id)
@@ -67,10 +71,10 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   }
 
   const [cards, photos, logs, tasks, recipients, events] = await Promise.all([
-    service.from('contact_cards').select('*').eq('contact_id', id),
-    service.from('contact_photos').select('*').eq('contact_id', id),
-    service.from('interaction_logs').select('*').eq('contact_id', id).order('created_at', { ascending: true }),
-    service.from('tasks').select('*').eq('contact_id', id),
+    db.from('contact_cards').select('*').eq('contact_id', id),
+    db.from('contact_photos').select('*').eq('contact_id', id),
+    db.from('interaction_logs').select('*').eq('contact_id', id).order('created_at', { ascending: true }),
+    db.from('tasks').select('*').eq('contact_id', id),
     collectByContactOrEmail('newsletter_recipients'),
     collectByContactOrEmail('email_events'),
   ])

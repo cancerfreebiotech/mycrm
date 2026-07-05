@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { systemOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 import { createHmac } from 'crypto'
 import { emailTokenSecret } from '@/lib/emailTokenSecret'
 
@@ -27,9 +27,11 @@ export async function GET(req: NextRequest) {
   const decoded = verifyToken(token)
   if (!decoded) return NextResponse.json({ error: '無效或已過期的連結' }, { status: 400 })
 
-  const supabase = createServiceClient()
+  // Phase 2+: 逐 org 迭代／由 payload（token 的 campaignId）解析 org
+  const ctx = systemOrgContext()
+  const db: OrgDb = orgScopedClient(ctx)
 
-  const { data: subscriber } = await supabase
+  const { data: subscriber } = await db
     .from('newsletter_subscribers')
     .select('id')
     .eq('email', decoded.email)
@@ -37,7 +39,7 @@ export async function GET(req: NextRequest) {
 
   if (!subscriber) return NextResponse.json({ email: decoded.email, lists: [] })
 
-  const { data: memberships } = await supabase
+  const { data: memberships } = await db
     .from('newsletter_subscriber_lists')
     .select('newsletter_lists(id, name)')
     .eq('subscriber_id', subscriber.id)
@@ -62,7 +64,9 @@ export async function POST(req: NextRequest) {
   const decoded = verifyToken(token)
   if (!decoded) return NextResponse.json({ error: '無效或已過期的連結' }, { status: 400 })
 
-  const supabase = createServiceClient()
+  // Phase 2+: 逐 org 迭代／由 payload（token 的 campaignId）解析 org
+  const ctx = systemOrgContext()
+  const db: OrgDb = orgScopedClient(ctx)
 
   if (mode === 'lists') {
     if (
@@ -73,7 +77,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '缺少 list_ids' }, { status: 400 })
     }
 
-    const { data: subscriber } = await supabase
+    const { data: subscriber } = await db
       .from('newsletter_subscribers')
       .select('id')
       .eq('email', decoded.email)
@@ -81,7 +85,7 @@ export async function POST(req: NextRequest) {
 
     if (!subscriber) return NextResponse.json({ error: '找不到訂閱資料' }, { status: 404 })
 
-    const { error } = await supabase
+    const { error } = await db
       .from('newsletter_subscriber_lists')
       .delete()
       .eq('subscriber_id', subscriber.id)
@@ -93,13 +97,13 @@ export async function POST(req: NextRequest) {
   }
 
   // mode 'all' (default) — original all-or-nothing behavior, unchanged.
-  const { data: contact } = await supabase
+  const { data: contact } = await db
     .from('contacts')
     .select('id')
     .eq('email', decoded.email)
     .maybeSingle()
 
-  await supabase
+  await db
     .from('newsletter_unsubscribes')
     .upsert(
       {

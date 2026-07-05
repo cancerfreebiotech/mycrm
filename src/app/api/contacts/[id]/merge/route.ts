@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { logAdminAction } from '@/lib/adminAudit'
 
 const MERGE_FIELDS = [
@@ -46,11 +47,13 @@ export async function POST(
   // the session, so use the route client purely for actor identity/audit.
   const authClient = await createClient()
   const { data: { user } } = await authClient.auth.getUser()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   // Load both contacts
   const [{ data: keepContact }, { data: sourceContact }] = await Promise.all([
-    supabase.from('contacts').select('*').eq('id', keepId).single(),
-    supabase.from('contacts').select('*').eq('id', sourceId).single(),
+    db.from('contacts').select('*').eq('id', keepId).single(),
+    db.from('contacts').select('*').eq('id', sourceId).single(),
   ])
 
   if (!keepContact || !sourceContact) {
@@ -67,36 +70,36 @@ export async function POST(
 
   // 1. Update keep contact with merged fields
   if (Object.keys(updates).length > 0) {
-    await supabase.from('contacts').update(updates).eq('id', keepId)
+    await db.from('contacts').update(updates).eq('id', keepId)
   }
 
   // 2. Move contact_cards from source to keep
-  await supabase.from('contact_cards').update({ contact_id: keepId }).eq('contact_id', sourceId)
+  await db.from('contact_cards').update({ contact_id: keepId }).eq('contact_id', sourceId)
 
   // 3. Move contact_photos from source to keep
-  await supabase.from('contact_photos').update({ contact_id: keepId }).eq('contact_id', sourceId)
+  await db.from('contact_photos').update({ contact_id: keepId }).eq('contact_id', sourceId)
 
   // 3b. Move photo_faces (v7.1 多人標記) from source to keep.
   //     UNIQUE(photo_id, contact_id)：先刪掉同一張照片已標記 keep 的 source 列避免衝突，再搬其餘。
   {
-    const { data: keepFaces } = await supabase
+    const { data: keepFaces } = await db
       .from('photo_faces').select('photo_id').eq('contact_id', keepId)
     const keepPhotoIds = (keepFaces ?? []).map(f => f.photo_id)
     if (keepPhotoIds.length > 0) {
-      await supabase.from('photo_faces').delete()
+      await db.from('photo_faces').delete()
         .eq('contact_id', sourceId).in('photo_id', keepPhotoIds)
     }
-    await supabase.from('photo_faces').update({ contact_id: keepId }).eq('contact_id', sourceId)
+    await db.from('photo_faces').update({ contact_id: keepId }).eq('contact_id', sourceId)
   }
 
   // 4. Move interaction_logs from source to keep
-  await supabase.from('interaction_logs').update({ contact_id: keepId }).eq('contact_id', sourceId)
+  await db.from('interaction_logs').update({ contact_id: keepId }).eq('contact_id', sourceId)
 
   // 5. Move tasks from source to keep
-  await supabase.from('tasks').update({ contact_id: keepId }).eq('contact_id', sourceId)
+  await db.from('tasks').update({ contact_id: keepId }).eq('contact_id', sourceId)
 
   // 6. Move email_events from source to keep
-  await supabase.from('email_events').update({ contact_id: keepId }).eq('contact_id', sourceId)
+  await db.from('email_events').update({ contact_id: keepId }).eq('contact_id', sourceId)
 
   // 7. Move newsletter tables to keep by re-pointing contact_id. (Previously an
   //    upsert-with-source-PK + delete, which hit ON CONFLICT DO NOTHING and
@@ -115,7 +118,7 @@ export async function POST(
   }
 
   // 8. Merge contact_tags (union — upsert ignores conflicts)
-  const { data: sourceTags } = await supabase
+  const { data: sourceTags } = await db
     .from('contact_tags')
     .select('tag_id')
     .eq('contact_id', sourceId)
@@ -125,23 +128,23 @@ export async function POST(
       contact_id: keepId,
       tag_id: t.tag_id,
     }))
-    await supabase.from('contact_tags').upsert(tagInserts, { onConflict: 'contact_id,tag_id' })
+    await db.from('contact_tags').upsert(tagInserts, { onConflict: 'contact_id,tag_id' })
   }
 
   // 9. Remove all duplicate_pairs involving source contact
-  await supabase.from('duplicate_pairs').delete().or(`contact_id_a.eq.${sourceId},contact_id_b.eq.${sourceId}`)
+  await db.from('duplicate_pairs').delete().or(`contact_id_a.eq.${sourceId},contact_id_b.eq.${sourceId}`)
 
   // 10. Write system interaction_log
   const sourceName = sourceContact.name || sourceContact.name_en || sourceId
   const sourceCompany = sourceContact.company || sourceContact.company_en || ''
-  await supabase.from('interaction_logs').insert({
+  await db.from('interaction_logs').insert({
     contact_id: keepId,
     type: 'system',
     content: `合併聯絡人：${sourceName}${sourceCompany ? `（${sourceCompany}）` : ''}`,
   })
 
   // 11. Delete source contact (cascades contact_tags)
-  await supabase.from('contacts').delete().eq('id', sourceId)
+  await db.from('contacts').delete().eq('id', sourceId)
 
   // Caller identity from the session cookie (route client above); the proxy
   // guarantees a session exists, so 'unknown' only appears for edge cases.

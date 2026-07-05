@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // POST /api/contacts/[id]/restore — 還原已軟刪除的聯絡人（僅 super_admin）
 export async function POST(
@@ -26,8 +27,11 @@ export async function POST(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+
   // 確認聯絡人存在且已軟刪除
-  const { data: contact } = await service
+  const { data: contact } = await db
     .from('contacts')
     .select('id')
     .eq('id', id)
@@ -38,7 +42,7 @@ export async function POST(
     return NextResponse.json({ error: 'Contact not found in trash' }, { status: 404 })
   }
 
-  const { error } = await service
+  const { error } = await db
     .from('contacts')
     .update({ deleted_at: null, deleted_by: null })
     .eq('id', id)

@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { OrgDb } from './orgContext'
 import { tldToCountryCode, countryCodeToLanguage } from './emailDomainToCountry'
 import { isEmailErased } from './erasureTombstone'
 
@@ -19,7 +19,7 @@ export interface FindOrCreateContactResult {
 // Returns null when the email carries a GDPR erasure tombstone — the caller must
 // skip it so an erased contact is never recreated from the same address.
 export async function findOrCreateContactByEmail(
-  supabase: SupabaseClient,
+  supabase: OrgDb,
   { email, name, createdBy }: FindOrCreateContactInput
 ): Promise<FindOrCreateContactResult | null> {
   const norm = email.trim().toLowerCase()

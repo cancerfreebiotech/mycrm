@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
-import type { SupabaseClient } from '@supabase/supabase-js'
+import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 import { escapeLikePattern } from '@/lib/likeEscape'
 
 // /api/admin/* is exempted from the auth middleware (src/middleware.ts), so this
@@ -51,7 +51,7 @@ export interface SuppressionVerdict {
 // unsubscribes tables suppresses. Additionally honors email_opt_out (the CRM
 // direct-send path in /api/email/send) and per-subscriber unsubscribed_at, so
 // the verdict is the strict union of every suppression signal.
-export async function checkSuppression(service: SupabaseClient, rawEmail: string): Promise<SuppressionVerdict> {
+export async function checkSuppression(db: OrgDb, rawEmail: string): Promise<SuppressionVerdict> {
   const email = rawEmail.trim().toLowerCase()
   // ilike is used as case-insensitive exact match, so escape LIKE wildcards
   // (%, _). Unescaped, they would let one address's verdict be computed from a
@@ -59,13 +59,13 @@ export async function checkSuppression(service: SupabaseClient, rawEmail: string
   const escaped = escapeLikePattern(email)
 
   const [contactsRes, blRes, unsubRes, subRes] = await Promise.all([
-    service.from('contacts')
+    db.from('contacts')
       .select('email_opt_out, email_status')
       .or(`email.ilike.${escaped},second_email.ilike.${escaped}`)
       .is('deleted_at', null),
-    service.from('newsletter_blacklist').select('status, reason').ilike('email', escaped).limit(1),
-    service.from('newsletter_unsubscribes').select('reason, unsubscribed_at').ilike('email', escaped).limit(1),
-    service.from('newsletter_subscribers').select('unsubscribed_at').ilike('email', escaped)
+    db.from('newsletter_blacklist').select('status, reason').ilike('email', escaped).limit(1),
+    db.from('newsletter_unsubscribes').select('reason, unsubscribed_at').ilike('email', escaped).limit(1),
+    db.from('newsletter_subscribers').select('unsubscribed_at').ilike('email', escaped)
       .not('unsubscribed_at', 'is', null).limit(1),
   ])
 
@@ -110,22 +110,23 @@ interface RecentEntry {
 //   (no param)    → summary counts per source + recent 50 suppressed entries
 export async function GET(req: NextRequest) {
   const auth = await requireSuperAdmin(); if ('error' in auth) return auth.error
-  const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   const emailParam = req.nextUrl.searchParams.get('email')?.trim()
   if (emailParam) {
     if (!VALID_EMAIL.test(emailParam)) return NextResponse.json({ error: 'invalid email' }, { status: 400 })
-    const verdict = await checkSuppression(service, emailParam)
+    const verdict = await checkSuppression(db, emailParam)
     return NextResponse.json({ verdict })
   }
 
   // ── Summary counts per source ──
   const [optOutC, statusC, blC, unsubC, subC] = await Promise.all([
-    service.from('contacts').select('id', { count: 'exact', head: true }).eq('email_opt_out', true).is('deleted_at', null),
-    service.from('contacts').select('id', { count: 'exact', head: true }).not('email_status', 'is', null).is('deleted_at', null),
-    service.from('newsletter_blacklist').select('id', { count: 'exact', head: true }),
-    service.from('newsletter_unsubscribes').select('id', { count: 'exact', head: true }),
-    service.from('newsletter_subscribers').select('id', { count: 'exact', head: true }).not('unsubscribed_at', 'is', null),
+    db.from('contacts').select('id', { count: 'exact', head: true }).eq('email_opt_out', true).is('deleted_at', null),
+    db.from('contacts').select('id', { count: 'exact', head: true }).not('email_status', 'is', null).is('deleted_at', null),
+    db.from('newsletter_blacklist').select('id', { count: 'exact', head: true }),
+    db.from('newsletter_unsubscribes').select('id', { count: 'exact', head: true }),
+    db.from('newsletter_subscribers').select('id', { count: 'exact', head: true }).not('unsubscribed_at', 'is', null),
   ])
 
   const summary = {
@@ -138,15 +139,15 @@ export async function GET(req: NextRequest) {
 
   // ── Recent 50 suppressed entries (union across sources, newest first) ──
   const [blRows, unsubRows, subRows, statusRows, optOutRows] = await Promise.all([
-    service.from('newsletter_blacklist').select('email, status, reason, created_at')
+    db.from('newsletter_blacklist').select('email, status, reason, created_at')
       .order('created_at', { ascending: false }).limit(50),
-    service.from('newsletter_unsubscribes').select('email, reason, unsubscribed_at')
+    db.from('newsletter_unsubscribes').select('email, reason, unsubscribed_at')
       .order('unsubscribed_at', { ascending: false }).limit(50),
-    service.from('newsletter_subscribers').select('email, unsubscribed_at')
+    db.from('newsletter_subscribers').select('email, unsubscribed_at')
       .not('unsubscribed_at', 'is', null).order('unsubscribed_at', { ascending: false }).limit(50),
-    service.from('contacts').select('email, email_status, created_at')
+    db.from('contacts').select('email, email_status, created_at')
       .not('email_status', 'is', null).is('deleted_at', null).order('created_at', { ascending: false }).limit(50),
-    service.from('contacts').select('email, created_at')
+    db.from('contacts').select('email, created_at')
       .eq('email_opt_out', true).is('deleted_at', null).order('created_at', { ascending: false }).limit(50),
   ])
 

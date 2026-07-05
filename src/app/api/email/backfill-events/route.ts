@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // SendGrid Email Activity API — requires "Email Activity" feature enabled on account
 // Docs: https://docs.sendgrid.com/api-reference/e-mail-activity-feed/filter-messages-by-query
@@ -29,10 +29,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'SendGrid not configured' }, { status: 500 })
   }
 
-  const supabase = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   // Get all contacts that received this campaign
-  const { data: logs } = await supabase
+  const { data: logs } = await db
     .from('interaction_logs')
     .select('contact_id')
     .eq('campaign_id', campaignId)
@@ -42,14 +43,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No interaction logs found for campaign' }, { status: 404 })
   }
 
-  const contactIds = logs.map(l => l.contact_id)
-  const { data: contacts } = await supabase
+  const contactIds = (logs as { contact_id: string }[]).map(l => l.contact_id)
+  const { data: contacts } = await db
     .from('contacts')
     .select('id, email')
     .in('id', contactIds)
 
   const emailToContactId = new Map<string, string>(
-    (contacts ?? []).map(c => [c.email!.toLowerCase(), c.id])
+    ((contacts ?? []) as { id: string; email: string | null }[]).map(c => [c.email!.toLowerCase(), c.id])
   )
 
   // Query SendGrid Activity API filtered by campaign_id in unique_args
@@ -116,19 +117,19 @@ export async function POST(req: NextRequest) {
   }
 
   // Upsert (ignore duplicates by checking existing)
-  const { data: existing } = await supabase
+  const { data: existing } = await db
     .from('email_events')
     .select('email, event')
     .eq('campaign_id', campaignId)
 
-  const existingSet = new Set((existing ?? []).map(e => `${e.email}::${e.event}`))
+  const existingSet = new Set(((existing ?? []) as { email: string; event: string }[]).map(e => `${e.email}::${e.event}`))
   const newRows = rows.filter(r => !existingSet.has(`${r.email}::${r.event}`))
 
   if (newRows.length === 0) {
     return NextResponse.json({ ok: true, inserted: 0, messages: messages.length, note: 'All events already exist' })
   }
 
-  const { error } = await supabase.from('email_events').insert(newRows)
+  const { error } = await db.from('email_events').insert(newRows)
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }

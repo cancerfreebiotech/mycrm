@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 async function getUserProfile(service: ReturnType<typeof createServiceClient>, email: string) {
   const { data } = await service
@@ -19,7 +20,10 @@ export async function GET() {
   const profile = await getUserProfile(service, user.email!)
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  let query = service
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+
+  let query = db
     .from('report_schedules')
     .select('*')
     .order('created_at', { ascending: false })
@@ -42,6 +46,9 @@ export async function POST(req: NextRequest) {
   const profile = await getUserProfile(service, user.email!)
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+
   const body = await req.json()
   const { name, frequency, cron_expr, date_range_days, recipients } = body
 
@@ -49,7 +56,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '請填寫所有欄位' }, { status: 400 })
   }
 
-  const { data, error } = await service
+  const { data, error } = await db
     .from('report_schedules')
     .insert({
       name,

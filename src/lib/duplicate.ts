@@ -1,4 +1,4 @@
-import { createServiceClient } from './supabase'
+import { orgScopedClient, systemOrgContext, type OrgContext } from '@/lib/orgContext'
 import { escapeLikePattern } from '@/lib/likeEscape'
 
 export interface Contact {
@@ -47,8 +47,11 @@ function normalizeName(n: string | null | undefined): string | null {
  * Returns exact matches (high confidence) and similar matches (fuzzy).
  * Similar excludes any IDs already in exact.
  */
-export async function checkDuplicates(input: CheckDuplicatesInput): Promise<DuplicateResult> {
-  const supabase = createServiceClient()
+export async function checkDuplicates(
+  input: CheckDuplicatesInput,
+  ctx: OrgContext = systemOrgContext(),
+): Promise<DuplicateResult> {
+  const supabase = orgScopedClient(ctx)
 
   // --- Exact match: email or second_email (case-insensitive) ---
   const emails: string[] = []

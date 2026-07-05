@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { sendTeamsTaskNotification } from '@/lib/teams'
 
 export async function GET(req: NextRequest) {
@@ -7,12 +8,13 @@ export async function GET(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   // Contact-scoped view: all tasks linked to a contact (used by the contact detail task panel)
   const contactId = req.nextUrl.searchParams.get('contact_id')
   if (contactId) {
-    const { data } = await service
+    const { data } = await db
       .from('tasks')
       .select(`id, task_number, title, description, due_at, status, created_by, completed_by, completed_at, created_at, contact_id, task_assignees(assignee_email, users(display_name)), contacts(id, name, company)`)
       .eq('contact_id', contactId)
@@ -25,7 +27,7 @@ export async function GET(req: NextRequest) {
   let tasks
   if (tab === 'mine') {
     // Tasks I created where I'm the sole assignee (self-reminders)
-    const { data } = await service
+    const { data } = await db
       .from('tasks')
       .select(`id, task_number, title, description, due_at, status, created_by, completed_by, completed_at, created_at, contact_id, task_assignees(assignee_email, users(display_name)), contacts(id, name, company)`)
       .eq('created_by', user.email!)
@@ -36,7 +38,7 @@ export async function GET(req: NextRequest) {
     })
   } else if (tab === 'assigned') {
     // Tasks I created with other assignees
-    const { data } = await service
+    const { data } = await db
       .from('tasks')
       .select(`id, task_number, title, description, due_at, status, created_by, completed_by, completed_at, created_at, contact_id, task_assignees(assignee_email, users(display_name)), contacts(id, name, company)`)
       .eq('created_by', user.email!)
@@ -47,7 +49,7 @@ export async function GET(req: NextRequest) {
     })
   } else {
     // Tasks assigned to me (not created by me)
-    const { data: assigneeRows } = await service
+    const { data: assigneeRows } = await db
       .from('task_assignees')
       .select('task_id')
       .eq('assignee_email', user.email!)
@@ -55,7 +57,7 @@ export async function GET(req: NextRequest) {
     if (ids.length === 0) {
       return NextResponse.json({ tasks: [] })
     }
-    const { data } = await service
+    const { data } = await db
       .from('tasks')
       .select(`id, task_number, title, description, due_at, status, created_by, completed_by, completed_at, created_at, contact_id, task_assignees(assignee_email, users(display_name)), contacts(id, name, company)`)
       .in('id', ids)
@@ -73,11 +75,13 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
   const { title, description, due_at, assignee_emails, contact_id } = await req.json()
 
   if (!title?.trim()) return NextResponse.json({ error: '標題必填' }, { status: 400 })
 
-  const { data: task, error } = await service
+  const { data: task, error } = await db
     .from('tasks')
     .insert({ title: title.trim(), description: description ?? null, due_at: due_at ?? null, created_by: user.email!, contact_id: contact_id ?? null })
     .select('id')
@@ -87,7 +91,7 @@ export async function POST(req: NextRequest) {
 
   const emails: string[] = assignee_emails?.length ? assignee_emails : [user.email!]
   for (const email of emails) {
-    await service.from('task_assignees').insert({ task_id: task.id, assignee_email: email })
+    await db.from('task_assignees').insert({ task_id: task.id, assignee_email: email })
   }
 
   // Send Teams notifications to assignees (skip self-reminders)

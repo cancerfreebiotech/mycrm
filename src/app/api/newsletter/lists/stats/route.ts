@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 
 interface ListStat { total: number; eligible: number }
 
@@ -14,7 +15,8 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(ctx)
 
   // Paginate memberships fetch — PostgREST default caps at 1000 rows; a single
   // list with 1937 members + others would silently truncate, making the stats
@@ -24,7 +26,7 @@ export async function GET() {
   const BATCH = 1000
   let mFrom = 0
   while (true) {
-    const { data, error } = await service
+    const { data, error } = await db
       .from('newsletter_subscriber_lists')
       .select('list_id, newsletter_subscribers(id, email, contact_id, unsubscribed_at)')
       .range(mFrom, mFrom + BATCH - 1)
@@ -39,7 +41,7 @@ export async function GET() {
   const blRows: { email: string }[] = []
   let bFrom = 0
   while (true) {
-    const { data } = await service.from('newsletter_blacklist').select('email').range(bFrom, bFrom + BATCH - 1)
+    const { data } = await db.from('newsletter_blacklist').select('email').range(bFrom, bFrom + BATCH - 1)
     if (!data || data.length === 0) break
     blRows.push(...(data as { email: string }[]))
     if (data.length < BATCH) break
@@ -48,7 +50,7 @@ export async function GET() {
   const unsubRows: { email: string }[] = []
   let uFrom = 0
   while (true) {
-    const { data } = await service.from('newsletter_unsubscribes').select('email').range(uFrom, uFrom + BATCH - 1)
+    const { data } = await db.from('newsletter_unsubscribes').select('email').range(uFrom, uFrom + BATCH - 1)
     if (!data || data.length === 0) break
     unsubRows.push(...(data as { email: string }[]))
     if (data.length < BATCH) break
@@ -66,7 +68,7 @@ export async function GET() {
   const ID_BATCH = 200
   for (let i = 0; i < contactIds.length; i += ID_BATCH) {
     const slice = contactIds.slice(i, i + ID_BATCH)
-    const { data: badContacts } = await service
+    const { data: badContacts } = await db
       .from('contacts').select('id').in('id', slice).not('email_status', 'is', null)
     for (const c of (badContacts ?? []) as { id: string }[]) badContactIds.add(c.id)
   }

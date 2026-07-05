@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // SendGrid merges custom_args into each event object at the top level
 interface SGEvent {
@@ -53,8 +53,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, inserted: 0 })
   }
 
-  const supabase = createServiceClient()
-  const { error } = await supabase.from('email_events').insert(rows)
+  // Phase 2+: 由 payload（custom_args campaign_id）解析 org
+  const ctx = systemOrgContext()
+  const db = orgScopedClient(ctx)
+  const { error } = await db.from('email_events').insert(rows)
 
   if (error) {
     console.error('[email/webhook] insert error:', error.message)
@@ -65,7 +67,7 @@ export async function POST(req: NextRequest) {
   const statusUpdates = rows.filter(r => r.contact_id && (r.event === 'bounce' || r.event === 'spamreport' || r.event === 'unsubscribe'))
   for (const ev of statusUpdates) {
     const newStatus = ev.event === 'bounce' ? 'bounced' : 'unsubscribed'
-    await supabase.from('contacts').update({ email_status: newStatus }).eq('id', ev.contact_id!)
+    await db.from('contacts').update({ email_status: newStatus }).eq('id', ev.contact_id!)
   }
 
   return NextResponse.json({ ok: true, inserted: rows.length })

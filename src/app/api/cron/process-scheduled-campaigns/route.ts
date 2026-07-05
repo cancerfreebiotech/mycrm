@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { recordCronRun } from '@/lib/cronHeartbeat'
 import { sendCampaign } from '@/lib/newsletter-send-worker'
 
@@ -37,9 +38,12 @@ export async function GET(req: NextRequest) {
 
   const startMs = Date.now()
   const service = createServiceClient()
+  // Phase 2+: 逐 org 迭代／由 payload 解析 org
+  const ctx = systemOrgContext()
+  const db = orgScopedClient(ctx)
 
   const nowIso = new Date().toISOString()
-  const { data: due, error } = await service
+  const { data: due, error } = await db
     .from('newsletter_campaigns')
     .select('id')
     .eq('status', 'scheduled')
@@ -56,7 +60,7 @@ export async function GET(req: NextRequest) {
   for (const c of due ?? []) {
     // Atomic claim: flip scheduled → sending. If a concurrent run already
     // claimed it, the guarded update matches no row and we skip.
-    const { data: claimed } = await service
+    const { data: claimed } = await db
       .from('newsletter_campaigns')
       .update({ status: 'sending' })
       .eq('id', c.id)
@@ -69,7 +73,7 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-      const r = await sendCampaign(service, c.id, { resend: false, actorUserId: null })
+      const r = await sendCampaign(db, c.id, { resend: false, actorUserId: null })
       results.push({ id: c.id, ok: r.ok, sent: r.sent, total: r.total })
     } catch (e) {
       // sendCampaign throws only for pre-send validation/config failures (nothing
@@ -77,7 +81,7 @@ export async function GET(req: NextRequest) {
       // run / admin inspection. The status guard means an already-finished send
       // (now 'sent'/'partial') is never reverted, and resume-dedup prevents any
       // double-send if some chunks did go out before an unexpected throw.
-      await service
+      await db
         .from('newsletter_campaigns')
         .update({ status: 'scheduled' })
         .eq('id', c.id)
@@ -93,7 +97,7 @@ export async function GET(req: NextRequest) {
   // stamped but whose remainder send timed out mid-loop must be retried, so the
   // pickup covers every not-yet-fully-sent A/B holdout campaign and completion is
   // decided in JS (PostgREST can't compare sent_at against ab_decided_at).
-  const { data: pending } = await service
+  const { data: pending } = await db
     .from('newsletter_campaigns')
     .select('id, sent_at, ab_wait_minutes, ab_winner, ab_decided_at')
     .not('subject_b', 'is', null)
@@ -120,7 +124,7 @@ export async function GET(req: NextRequest) {
 
       // Per-variant open rates from newsletter_recipients (head counts only).
       const variantCount = (variant: 'a' | 'b') =>
-        service.from('newsletter_recipients').select('*', { count: 'exact', head: true })
+        db.from('newsletter_recipients').select('*', { count: 'exact', head: true })
           .eq('campaign_id', c.id).eq('variant', variant)
       const [aSentR, aOpenR, bSentR, bOpenR] = await Promise.all([
         variantCount('a').eq('status', 'sent'),
@@ -135,7 +139,7 @@ export async function GET(req: NextRequest) {
       // Atomic claim: stamp the winner guarded on ab_winner still being null so
       // overlapping runs never decide twice. ab_decided_at is the fence the
       // completion check above compares sent_at against.
-      const { data: claimed } = await service
+      const { data: claimed } = await db
         .from('newsletter_campaigns')
         .update({ ab_winner: winner, ab_decided_at: new Date().toISOString() })
         .eq('id', c.id)
@@ -149,7 +153,7 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-      const r = await sendCampaign(service, c.id, { abFinal: true, actorUserId: null })
+      const r = await sendCampaign(db, c.id, { abFinal: true, actorUserId: null })
       abResults.push({ id: c.id, winner, ok: r.ok, sent: r.sent, total: r.total })
     } catch (e) {
       // A campaign only reaches phase 2 after its cohort send passed every pre-send
@@ -157,7 +161,7 @@ export async function GET(req: NextRequest) {
       // after filters" — the cohort already covered everyone and nothing is left.
       // Bump sent_at past ab_decided_at so the completion check treats this as done
       // and the pickup above stops re-selecting it every run (no infinite retry).
-      await service
+      await db
         .from('newsletter_campaigns')
         .update({ sent_at: new Date().toISOString() })
         .eq('id', c.id)

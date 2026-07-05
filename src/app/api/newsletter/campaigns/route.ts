@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // POST — create a new blank campaign draft
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   const body = (await req.json().catch(() => ({}))) as {
     title?: string
@@ -19,7 +23,7 @@ export async function POST(req: NextRequest) {
   const { data: me } = await service.from('users').select('id').ilike('email', user.email).maybeSingle()
   const userId = me?.id ?? null
 
-  const { data, error } = await service
+  const { data, error } = await db
     .from('newsletter_campaigns')
     .insert({
       title: body.title ?? '未命名電子報',

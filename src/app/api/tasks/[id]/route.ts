@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -7,20 +8,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   // Verify user has access to this task (creator or assignee or assistant)
-  const { data: task } = await service.from('tasks').select('created_by').eq('id', id).single()
+  const { data: task } = await db.from('tasks').select('created_by').eq('id', id).single()
   if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const { data: assignee } = await service
+  const { data: assignee } = await db
     .from('task_assignees')
     .select('id')
     .eq('task_id', id)
     .eq('assignee_email', user.email!)
     .maybeSingle()
 
-  const { data: asAssistant } = await service
+  const { data: asAssistant } = await db
     .from('user_assistants')
     .select('id')
     .eq('assistant_email', user.email!)
@@ -47,7 +49,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     update.completed_at = new Date().toISOString()
   }
 
-  const { error } = await service.from('tasks').update(update).eq('id', id)
+  const { error } = await db.from('tasks').update(update).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
@@ -58,11 +60,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const service = createServiceClient()
-  const { data: task } = await service.from('tasks').select('created_by').eq('id', id).single()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+  const { data: task } = await db.from('tasks').select('created_by').eq('id', id).single()
   if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (task.created_by !== user.email!) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  await service.from('tasks').delete().eq('id', id)
+  await db.from('tasks').delete().eq('id', id)
   return NextResponse.json({ ok: true })
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { enrichContactEmail } from '@/lib/hunter'
 
 // POST /api/hunter/enrich — enrich a single contact via Hunter (if email empty)
@@ -21,8 +22,11 @@ export async function POST(req: NextRequest) {
   }
   if (!body.contactId) return NextResponse.json({ error: 'contactId required' }, { status: 400 })
 
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+
   // Fetch contact to ensure still no email + get name/company
-  const { data: contact } = await supabase
+  const { data: contact } = await db
     .from('contacts')
     .select('id, name, name_en, company, email')
     .eq('id', body.contactId)

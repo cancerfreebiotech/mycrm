@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v7.9.1 — feat(orgs): v8.0 Phase 1 API 層 org 注入（2026-07-05）
+
+> 內部基礎設施、使用者無感；單租戶下所有改動行為等價（org 過濾匹配所有現存列、insert 補的 org_id 與 DB DEFAULT 相同）。
+
+### 變更項目
+- **`orgScopedClient()` 生效**（隔離主防線）：對 43 張業務表，select/update/delete 自動追加 `.eq('org_id')`、insert/upsert 自動補 org_id；「忘記過濾」從預設不安全變預設安全。全域表直通、`.raw` 為顯式逃生口。
+- **125 個 API route + 共用 lib 全數遷移**：使用者 route 經 `getOrgContext()`（session → email → membership 解析，支援 `active_org_id` cookie 並驗 membership 防偽造）；cron/webhook/公開端點經 `systemOrgContext()`。
+- **CI gate（Task 178）**：`npm run lint:org` 掛 `prebuild`——裸 client 存取業務表直接擋 build（本機與 Vercel 皆生效）。
+- **Auth Hook（Task 176）**：`custom_access_token_hook` 函式進 prod + repo migration（JWT 注入 org_id claim，供 Phase 2 RLS 使用；Dashboard 啟用留待 Phase 2）。
+- **bot / MCP（Task 179）**：Telegram bot 全部業務表存取走 org-scoped client；`/api/mcp` 依 `agent_tokens.org_id` 注入 org 情境；`/start <org_code>` 綁定流程刻意延後至 Phase 3。
+- 型別工程：wrapper 以 probe 推導 builder 型別，避免 supabase-js 型別層在上百個 call site 展開造成 tsc OOM。
+
 ## v7.9.0 — feat(db/orgs): v8.0 Phase 0 多租戶基礎設施收尾（2026-07-05）
 
 > 純基礎設施、零行為改變（使用者無感）。自本版起 schema 改動進 repo `supabase/migrations/`，並同步以 migration 歷史記錄於正式 DB。

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 
 // Super-admin only (same guard pattern as /api/admin/hunter).
 // Returns { error } on denial, else { email } of the authenticated super_admin.
@@ -42,10 +43,11 @@ const norm = (email: string) => email.toLowerCase().trim()
 //   totals    — subscribers / unsubscribed / blacklist
 export async function GET() {
   const auth = await requireSuperAdmin(); if ('error' in auth) return auth.error
-  const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(ctx)
 
   // ── (a) last 12 sent campaigns ──
-  const { data: campaignRows, error: campaignErr } = await service
+  const { data: campaignRows, error: campaignErr } = await db
     .from('newsletter_campaigns')
     .select('id, title, sent_at, sent_count')
     .not('sent_at', 'is', null)
@@ -57,7 +59,7 @@ export async function GET() {
   // with no SELECT policy — the SECURITY DEFINER RPC (granted to authenticated)
   // exposes only aggregate counts; call it with the session client.
   const engagementById = new Map<string, { recipients: number; opened: number; clicked: number }>()
-  const campaignIds = (campaignRows ?? []).map((c) => c.id)
+  const campaignIds = (campaignRows ?? []).map((c: Record<string, unknown>) => c.id as string)
   if (campaignIds.length > 0) {
     const sessionClient = await createClient()
     const { data: eng } = await sessionClient.rpc('get_campaign_engagement', { p_campaign_ids: campaignIds })
@@ -66,7 +68,7 @@ export async function GET() {
     }
   }
 
-  const campaigns: CampaignOverview[] = (campaignRows ?? []).map((c) => {
+  const campaigns: CampaignOverview[] = ((campaignRows ?? []) as Record<string, any>[]).map((c) => {
     const e = engagementById.get(c.id) ?? { recipients: 0, opened: 0, clicked: 0 }
     const denom = e.recipients || c.sent_count || 0
     return {
@@ -83,7 +85,7 @@ export async function GET() {
   })
 
   // ── (b) per-list health: member count + 180-day non-openers ──
-  const { data: listRows, error: listErr } = await service
+  const { data: listRows, error: listErr } = await db
     .from('newsletter_lists')
     .select('id, name')
     .order('name')
@@ -93,7 +95,7 @@ export async function GET() {
   const cutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString()
   const openerEmails = new Set<string>()
   for (let from = 0; ; from += BATCH) {
-    const { data, error } = await service
+    const { data, error } = await db
       .from('newsletter_recipients')
       .select('email')
       .gte('opened_at', cutoff)
@@ -109,7 +111,7 @@ export async function GET() {
   type Membership = { list_id: string; newsletter_subscribers: { email: string } | null }
   const memberships: Membership[] = []
   for (let from = 0; ; from += BATCH) {
-    const { data, error } = await service
+    const { data, error } = await db
       .from('newsletter_subscriber_lists')
       .select('list_id, newsletter_subscribers(email)')
       .order('list_id')
@@ -133,16 +135,16 @@ export async function GET() {
     if (!email || !openerEmails.has(norm(email))) h.nonOpeners++
   }
 
-  const lists: ListHealth[] = (listRows ?? []).map((l) => {
+  const lists: ListHealth[] = ((listRows ?? []) as Record<string, any>[]).map((l) => {
     const h = healthById.get(l.id) ?? { members: 0, nonOpeners: 0 }
     return { id: l.id, name: l.name, members: h.members, nonOpeners180d: h.nonOpeners }
   })
 
   // ── (c) totals ──
   const [subsR, unsubR, blR] = await Promise.all([
-    service.from('newsletter_subscribers').select('*', { count: 'exact', head: true }),
-    service.from('newsletter_subscribers').select('*', { count: 'exact', head: true }).not('unsubscribed_at', 'is', null),
-    service.from('newsletter_blacklist').select('*', { count: 'exact', head: true }),
+    db.from('newsletter_subscribers').select('*', { count: 'exact', head: true }),
+    db.from('newsletter_subscribers').select('*', { count: 'exact', head: true }).not('unsubscribed_at', 'is', null),
+    db.from('newsletter_blacklist').select('*', { count: 'exact', head: true }),
   ])
 
   return NextResponse.json({

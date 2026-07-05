@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // GET /api/admin/audit-log — privileged-action audit log (super_admin only).
 // /api/admin/* is exempted from the auth middleware, so this handler self-guards.
@@ -67,10 +68,11 @@ export async function GET(req: NextRequest) {
   const toDate = (searchParams.get('to') ?? '').trim()
   const format = searchParams.get('format')
 
-  const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   const buildQuery = () => {
-    let q = service
+    let q = db
       .from('admin_actions')
       .select('id, actor_email, action, target, detail, created_at', { count: 'exact' })
       .order('created_at', { ascending: false })

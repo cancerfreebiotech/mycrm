@@ -4394,11 +4394,11 @@ create table public.usage_counters (
 - [x] **Task 174** — 完成（2026-07-05）。**並存策略**：新增 11 個 `UNIQUE(org_id, x)` 唯一索引，既有 `UNIQUE(x)` 保留（全部 `onConflict` 程式碼依賴它們）；Phase 2 改完 onConflict 目標後才 DROP 單欄版。不建複合版：`agent_tokens(token_hash)`（全域 secret）、`photo_faces`/`task_assignees`（鍵首欄已是 org 所屬 FK）。
 - [x] **Task 175** — 完成（2026-07-04 鷹架；Phase 1 接線 `orgScopedClient()` 注入）。
 
-**Phase 1 — API 層 org 注入（隔離主防線）**
-- [ ] **Task 176** `[新增]` — Supabase Auth Hook `custom_access_token_hook` 注入 org_id claim；`active_org_id` cookie 機制
-- [ ] **Task 177** `[修改]` — 逐批改 81 個 route 導入 `getOrgContext()` + `.eq('org_id')` + insert 帶 org_id（優先 contacts / newsletter / tasks 等高敏感）
-- [ ] **Task 178** `[新增]` — CI lint 規則：禁止業務表用裸 `createServiceClient()` 而不經 `getOrgContext`
-- [ ] **Task 179** `[修改]` — bot 加 org 綁定（`bot_sessions.org_id`、`/start <org_code>`、未綁拒絕）；`agent_tokens` 加 org_id 並於 `/api/mcp` 注入
+**Phase 1 — API 層 org 注入（隔離主防線）** ✅ **已完成（2026-07-05，v7.9.1）**
+- [x] **Task 176** — hook 函式已進 prod + repo（`supabase/migrations/20260705001000`，security definer）；`getOrgContext()` 已讀 `active_org_id` cookie 並驗 membership（防偽造）。**待辦**：hook 的啟用需在 Dashboard（Auth → Hooks）手動開——Phase 1 的 API 層隔離不依賴 claim，留待 Phase 2 接 RLS 前開啟；cookie 的「寫入端」（org switcher）是 Phase 3（Task 184）。
+- [x] **Task 177** — 全部 **125 個 route**（規格撰寫時為 81）+ 共用 lib 完成遷移：`orgScopedClient()` 對 43 張業務表自動注入 `.eq('org_id')`（讀）與 org_id（寫）；使用者 route 用 `getOrgContext()`、系統行為者（cron/webhook/公開端點）用 `systemOrgContext()`（Phase 2+ 改逐 org 迭代／由 payload 解析）。residual：`logAdminAction`/`checkSuppression` 約 18 個 call site 仍傳裸 client（org_id 由 DB DEFAULT 補、單租戶等價）——Phase 2 隨 onConflict 改造一併切換。
+- [x] **Task 178** — `scripts/lint-org-scope.mjs`（業務表清單解析自 `src/lib/orgTables.ts`）掛 `prebuild`：裸 client 字面存取業務表 → build 失敗；動態表名列警告。
+- [x] **Task 179** — bot 全檔業務表走 scoped client；`/api/mcp` 以 `agent_tokens.org_id` 建立 org 情境注入 agent-tools（token 認證本身在 org 已知前、留裸 client）。**刻意延後至 Phase 3**：`/start <org_code>` 綁定流程與未綁拒絕——單租戶期間新 session 由 DEFAULT 自動歸 default org（行為不變），拒絕只有摩擦、沒有隔離效益。
 
 **Phase 2 — 收緊 + RLS / Storage**
 - [ ] **Task 180** `[修改]` — 業務表 `org_id` SET NOT NULL + DEFAULT

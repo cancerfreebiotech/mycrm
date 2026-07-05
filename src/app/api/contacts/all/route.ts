@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 const SELECT_FIELDS = 'id, name, company, job_title, email, phone, country_code, met_at, met_date, created_at, last_activity_at, importance, language, email_status, email_opt_out, created_by, users!created_by(display_name), contact_tags(tags(id, name, is_email_blacklist))'
 const BATCH_SIZE = 1000
@@ -18,10 +18,11 @@ interface ContactRow {
 // Derives `email_status='unsubscribed'` from `newsletter_unsubscribes` when
 // the contact's own `email_status` is NULL.
 export async function GET() {
-  const supabase = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   // 1) Get total count (cheap) so we can parallelize range fetches.
-  const { count: totalCount, error: countErr } = await supabase
+  const { count: totalCount, error: countErr } = await db
     .from('contacts')
     .select('id', { count: 'exact', head: true })
     .is('deleted_at', null)
@@ -33,7 +34,7 @@ export async function GET() {
   const pagePromises: Array<Promise<{ data: unknown[] | null; error: { message: string } | null }>> = []
   for (let i = 0; i < pageCount; i++) {
     const from = i * BATCH_SIZE
-    const p = supabase
+    const p = db
       .from('contacts')
       .select(SELECT_FIELDS)
       .is('deleted_at', null)
@@ -44,7 +45,7 @@ export async function GET() {
   }
 
   // 3) In parallel, fetch ALL newsletter_unsubscribes (small table — typically tens of rows).
-  const unsubsPromise = supabase
+  const unsubsPromise = db
     .from('newsletter_unsubscribes')
     .select('email')
 

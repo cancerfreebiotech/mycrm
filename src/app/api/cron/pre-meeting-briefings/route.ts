@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { listUpcomingEvents } from '@/lib/graph'
 import { getValidProviderToken } from '@/lib/graph-server'
 import { sendTelegramMessage } from '@/lib/telegram'
@@ -33,6 +34,9 @@ export async function GET(req: NextRequest) {
   }
 
   const service = createServiceClient()
+  // Phase 2+: 逐 org 迭代／由 payload 解析 org
+  const ctx = systemOrgContext()
+  const db = orgScopedClient(ctx)
   const startMs = Date.now()
 
   try {
@@ -67,7 +71,7 @@ export async function GET(req: NextRequest) {
             const p = escapeLikePattern(e)
             orParts.push(`email.ilike.${p}`, `second_email.ilike.${p}`)
           }
-          const { data: matched } = await service
+          const { data: matched } = await db
             .from('contacts')
             .select('id')
             .is('deleted_at', null)
@@ -77,7 +81,7 @@ export async function GET(req: NextRequest) {
           if (contactIds.length === 0) continue
 
           // 去重：同場會議（meeting_at）＋同一聯絡人已有 pre_meeting 列就跳過
-          const { data: existing } = await service
+          const { data: existing } = await db
             .from('contact_briefings')
             .select('contact_id')
             .eq('trigger', 'pre_meeting')
@@ -101,7 +105,7 @@ export async function GET(req: NextRequest) {
             }))
           if (toInsert.length === 0) continue
 
-          const { error: insErr } = await service.from('contact_briefings').insert(toInsert)
+          const { error: insErr } = await db.from('contact_briefings').insert(toInsert)
           if (insErr) {
             console.error('[pre-meeting-briefings] insert failed', user.id, insErr.message)
             continue
@@ -136,7 +140,7 @@ export async function GET(req: NextRequest) {
     try {
       const nowIso = new Date().toISOString()
       const windowStartIso = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
-      const { data: dueOutcome } = await service
+      const { data: dueOutcome } = await db
         .from('contact_briefings')
         .select('id, notify_user_id, contacts(name, name_en)')
         .eq('trigger', 'pre_meeting')
@@ -163,7 +167,7 @@ export async function GET(req: NextRequest) {
             const text = `🤝 你與 <b>${nameEsc}</b> 的會議應已結束 — 回覆 /v ${nameEsc} 加上重點，一句話記錄成果`
             await sendTelegramMessage(telegramId, text)
           }
-          await service
+          await db
             .from('contact_briefings')
             .update({ outcome_prompted_at: new Date().toISOString() })
             .eq('id', row.id)

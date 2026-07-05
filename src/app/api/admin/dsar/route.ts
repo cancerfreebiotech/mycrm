@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { logAdminAction } from '@/lib/adminAudit'
 import { checkSuppression } from '@/app/api/admin/suppressions/route'
 import { escapeLikePattern } from '@/lib/likeEscape'
@@ -26,6 +27,8 @@ const VALID_EMAIL = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
 export async function GET(req: NextRequest) {
   const auth = await requireSuperAdmin(); if ('error' in auth) return auth.error
   const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   const emailParam = req.nextUrl.searchParams.get('email')?.trim()
   if (!emailParam) return NextResponse.json({ error: 'email required' }, { status: 400 })
@@ -41,20 +44,21 @@ export async function GET(req: NextRequest) {
   // (%, _) — VALID_EMAIL permits them, and unescaped they would match OTHER
   // data subjects' records inside this .or() filter.
   const escaped = escapeLikePattern(email)
-  const { data: contacts, error } = await service
+  const { data: contacts, error } = await db
     .from('contacts')
     .select('id, name, company, created_at, deleted_at, users!created_by(display_name)')
     .or(`email.ilike.${escaped},second_email.ilike.${escaped}`)
     .order('created_at', { ascending: false })
+    .returns<{ id: string; name: string | null; company: string | null; created_at: string; deleted_at: string | null; users: { display_name: string | null } | { display_name: string | null }[] | null }[]>()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const verdict = await checkSuppression(service, email)
 
   const rows = await Promise.all((contacts ?? []).map(async (c) => {
     const [logs, cards, recips] = await Promise.all([
-      service.from('interaction_logs').select('id', { count: 'exact', head: true }).eq('contact_id', c.id),
-      service.from('contact_cards').select('id', { count: 'exact', head: true }).eq('contact_id', c.id),
-      service.from('newsletter_recipients').select('id', { count: 'exact', head: true }).eq('contact_id', c.id),
+      db.from('interaction_logs').select('id', { count: 'exact', head: true }).eq('contact_id', c.id),
+      db.from('contact_cards').select('id', { count: 'exact', head: true }).eq('contact_id', c.id),
+      db.from('newsletter_recipients').select('id', { count: 'exact', head: true }).eq('contact_id', c.id),
     ])
     // users!created_by embed may come back as an object or a single-element array
     // depending on FK inference — normalize to a name string.

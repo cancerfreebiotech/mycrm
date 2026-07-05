@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { hasFeature } from '@/lib/features'
+import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 
 // PATCH /api/newsletter/drafts/reorder
 //   Body: { items: Array<{ id, section, position }> }
@@ -39,12 +40,13 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(ctx)
   // Scope each update to the viewed period and to movable statuses — 'used' drafts
   // (already turned into campaigns) and 'deleted' must not be reshuffled here, matching
   // the single-draft PATCH guard.
   const results = await Promise.all(items.map((it) =>
-    service.from('newsletter_drafts')
+    db.from('newsletter_drafts')
       .update({ section: it.section, position: it.position })
       .eq('id', it.id)
       .eq('period', period)

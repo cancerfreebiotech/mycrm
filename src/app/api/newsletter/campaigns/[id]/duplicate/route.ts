@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // POST — duplicate a campaign into a fresh draft
 //
@@ -16,7 +17,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const { data: me } = await service.from('users').select('id').ilike('email', user.email).maybeSingle()
   const userId = me?.id ?? null
 
-  const { data: src, error: fetchErr } = await service
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+
+  const { data: src, error: fetchErr } = await db
     .from('newsletter_campaigns')
     .select('title, subject, preview_text, content_html, list_ids')
     .eq('id', id)
@@ -25,7 +29,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 })
   if (!src) return NextResponse.json({ error: 'source not found' }, { status: 404 })
 
-  const { data: dup, error: insertErr } = await service
+  const { data: dup, error: insertErr } = await db
     .from('newsletter_campaigns')
     .insert({
       title: `${src.title ?? ''} (副本)`,

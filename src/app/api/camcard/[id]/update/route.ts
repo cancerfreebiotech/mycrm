@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -10,9 +10,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'ocr_data required' }, { status: 400 })
   }
 
-  const supabase = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
   // Preserve import-time metadata that the edit form doesn't include
-  const { data: existing } = await supabase
+  const { data: existing } = await db
     .from('camcard_pending')
     .select('ocr_data')
     .eq('id', id)
@@ -23,7 +24,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   for (const k of PRESERVE) {
     if (existingOcr[k]) preserved[k] = existingOcr[k]
   }
-  const { error } = await supabase
+  const { error } = await db
     .from('camcard_pending')
     .update({ ocr_data: { ...ocr_data, ...preserved } })
     .eq('id', id)

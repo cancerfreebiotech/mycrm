@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { hasFeature } from '@/lib/features'
 import { refineProseZh, translateStory, generatePromoText } from '@/lib/newsletter-ai'
 import { composeNewsletter, type NewsletterStory } from '@/lib/newsletter-compose'
@@ -125,12 +126,14 @@ export async function POST(req: NextRequest) {
   }
 
   const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   // ── action='commit': read cached preview, INSERT campaigns, mark drafts used
   if (action === 'commit') {
     // Atomically CLAIM the freshest recent cache row (delete-returning) so two
     // concurrent commits can't both insert campaigns from the same preview.
-    const { data: claimedRows, error: cacheErr } = await service
+    const { data: claimedRows, error: cacheErr } = await db
       .from('newsletter_compose_cache')
       .delete()
       .eq('period', period)
@@ -147,7 +150,7 @@ export async function POST(req: NextRequest) {
     }
     // Re-check the drafts: refuse to commit if any story was deleted or removed
     // since the preview (otherwise deleted content ships and its status flips to used).
-    const { data: liveDrafts } = await service
+    const { data: liveDrafts } = await db
       .from('newsletter_drafts').select('id, status').in('id', payload.story_ids)
     const liveOk = new Set((liveDrafts ?? []).filter((d) => d.status !== 'deleted').map((d) => d.id as string))
     if (payload.story_ids.some((id) => !liveOk.has(id))) {
@@ -162,17 +165,17 @@ export async function POST(req: NextRequest) {
       status: 'draft' as const,
       created_by: auth.userId,
     }))
-    const { data: created, error: insErr } = await service
+    const { data: created, error: insErr } = await db
       .from('newsletter_campaigns').insert(rows).select('id, title')
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
-    const { error: usedErr } = await service
+    const { error: usedErr } = await db
       .from('newsletter_drafts').update({ status: 'used' }).in('id', payload.story_ids).neq('status', 'deleted')
     if (usedErr) console.error('[compose commit] mark-used failed:', usedErr.message)
     return NextResponse.json({ campaigns: created, story_count: payload.story_ids.length })
   }
 
   // ── action='preview' ────────────────────────────────────────────────────
-  const { data: drafts, error } = await service
+  const { data: drafts, error } = await db
     .from('newsletter_drafts')
     .select('id, section, title, content, event_date, event_date_end, photo_urls, links, position')
     .eq('period', period)
@@ -198,7 +201,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Load period meta (custom section labels). Falls back to defaults below.
-  const { data: meta } = await service
+  const { data: meta } = await db
     .from('newsletter_period_meta')
     .select('label_last, label_next')
     .eq('period', period)
@@ -211,7 +214,7 @@ export async function POST(req: NextRequest) {
   // `force: true` bypasses the cache for explicit "regenerate".
   if (!force) {
     const validIdsSorted = valid.map((d) => d.id).sort().join(',')
-    const { data: existingCache } = await service
+    const { data: existingCache } = await db
       .from('newsletter_compose_cache')
       .select('id, payload, created_at')
       .eq('period', period)
@@ -228,7 +231,7 @@ export async function POST(req: NextRequest) {
       if (cachedIdsSorted === validIdsSorted) {
         // Refresh timestamp so commit (which also requires < 30 min) sees a
         // fresh row even if the user takes their time reviewing the preview.
-        await service.from('newsletter_compose_cache')
+        await db.from('newsletter_compose_cache')
           .update({ created_at: new Date().toISOString() })
           .eq('id', existingCache.id)
         return NextResponse.json({
@@ -350,7 +353,7 @@ export async function POST(req: NextRequest) {
     story_ids: valid.map((d) => d.id),
     preview: { 'zh-TW': zh, en, ja },
   }
-  const { error: cacheInsertErr } = await service
+  const { error: cacheInsertErr } = await db
     .from('newsletter_compose_cache')
     .insert({
       period,

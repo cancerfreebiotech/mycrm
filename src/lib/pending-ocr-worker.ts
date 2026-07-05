@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { analyzeBusinessCard } from '@/lib/gemini'
 import { checkDuplicates } from '@/lib/duplicate'
 import { sendTelegramMessage } from '@/lib/telegram'
+import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 interface PendingRow {
   id: string
@@ -32,8 +33,10 @@ export async function processOnePending(
   row: PendingRow,
   aiModelId: string | null,
 ): Promise<{ ok: boolean; error?: string }> {
+  // Phase 2+: 逐 org 迭代／由 payload 解析 org。storage 仍走裸 supabase client。
+  const db = orgScopedClient(systemOrgContext())
   if (!row.storage_path) {
-    await supabase
+    await db
       .from('pending_contacts')
       .update({ status: 'failed', error_message: 'no storage_path' })
       .eq('id', row.id)
@@ -44,7 +47,7 @@ export async function processOnePending(
   // time so the stuck-row unstick can key off "how long since claimed" — NOT
   // created_at (immutable), which would re-rescue any row older than the cutoff
   // on every run and cause genuine double-processing of the backlog.
-  const { error: claimErr, data: claimed } = await supabase
+  const { error: claimErr, data: claimed } = await db
     .from('pending_contacts')
     .update({ status: 'processing', processed_at: new Date().toISOString() })
     .eq('id', row.id)
@@ -67,12 +70,12 @@ export async function processOnePending(
 
     if (!cardData.name) {
       // No name → move image to failed_scans, drop pending row
-      await supabase.from('failed_scans').insert({
+      await db.from('failed_scans').insert({
         user_id: row.created_by,
         storage_path: row.storage_path,
         card_img_url: getPublicUrl(supabase, row.storage_path),
       })
-      await supabase.from('pending_contacts').delete().eq('id', row.id)
+      await db.from('pending_contacts').delete().eq('id', row.id)
       return { ok: false, error: 'no name detected' }
     }
 
@@ -97,7 +100,7 @@ export async function processOnePending(
     let batchDupOfId: string | null = null
     let batchDupOfName: string | null = null
     if (cardData.email || cardData.name) {
-      const { data: peers } = await supabase
+      const { data: peers } = await db
         .from('pending_contacts')
         .select('id, data')
         .eq('created_by', row.created_by)
@@ -133,7 +136,7 @@ export async function processOnePending(
       _batch_dup_of_name: batchDupOfName,
     }
 
-    await supabase
+    await db
       .from('pending_contacts')
       .update({
         data: updatedData,
@@ -148,7 +151,7 @@ export async function processOnePending(
     const msg = err instanceof Error ? err.message : String(err)
     const newRetryCount = row.retry_count + 1
     const finalStatus = newRetryCount >= MAX_RETRY ? 'failed' : 'pending'
-    await supabase
+    await db
       .from('pending_contacts')
       .update({
         status: finalStatus,
@@ -166,7 +169,9 @@ export async function processPendingForUser(
   userId: string,
   telegramId: number | null,
 ): Promise<{ done: number; failed: number; total: number }> {
-  const { data: rows } = await supabase
+  // Phase 2+: 逐 org 迭代／由 payload 解析 org。storage 仍走裸 supabase client。
+  const db = orgScopedClient(systemOrgContext())
+  const { data: rows } = await db
     .from('pending_contacts')
     .select('id, storage_path, data, status, retry_count, created_by')
     .eq('created_by', userId)
@@ -218,10 +223,12 @@ export async function summarizeBatchAndNotify(
 ): Promise<void> {
   if (pendingIds.length === 0) return
 
+  // Phase 2+: 逐 org 迭代／由 payload 解析 org。storage 仍走裸 supabase client。
+  const db = orgScopedClient(systemOrgContext())
   const start = Date.now()
   let rows: Array<{ id: string; status: string }> = []
   while (Date.now() - start < SUMMARY_POLL_TIMEOUT_MS) {
-    const { data } = await supabase
+    const { data } = await db
       .from('pending_contacts')
       .select('id, status')
       .in('id', pendingIds)
@@ -249,11 +256,13 @@ export async function summarizeBatchAndNotify(
 export async function processPendingBatchAcrossUsers(
   supabase: SupabaseClient
 ): Promise<{ users_processed: number; total: number; unstuck: number }> {
+  // Phase 2+: 逐 org 迭代／由 payload 解析 org。storage 仍走裸 supabase client。
+  const db = orgScopedClient(systemOrgContext())
   // First: rescue rows stuck in 'processing' (worker claimed but died mid-OCR
   // due to function timeout / crash / deploy). After 10 min in 'processing'
   // it's safe to assume the worker is gone and reset to 'pending'.
   const stuckCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString()
-  const { data: stuckRows } = await supabase
+  const { data: stuckRows } = await db
     .from('pending_contacts')
     .update({ status: 'pending' })
     .eq('status', 'processing')
@@ -267,7 +276,7 @@ export async function processPendingBatchAcrossUsers(
 
   // Cron-mode: pick stale pending rows (>2 min old) across all users, group by user
   const cutoffIso = new Date(Date.now() - 2 * 60 * 1000).toISOString()
-  const { data: rows } = await supabase
+  const { data: rows } = await db
     .from('pending_contacts')
     .select('created_by')
     .eq('status', 'pending')

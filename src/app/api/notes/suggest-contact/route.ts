@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Portkey from 'portkey-ai'
-import { createClient, createServiceClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase'
 import { executeTool } from '@/lib/agent-tools'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 export const maxDuration = 60
 
@@ -66,8 +67,9 @@ export async function POST(req: NextRequest) {
   const noteId: string | undefined = body?.noteId
   if (!noteId) return NextResponse.json({ error: '缺少 noteId' }, { status: 400 })
 
-  const service = createServiceClient()
-  const { data: note, error } = await service
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+  const { data: note, error } = await db
     .from('interaction_logs')
     .select('id, content')
     .eq('id', noteId)

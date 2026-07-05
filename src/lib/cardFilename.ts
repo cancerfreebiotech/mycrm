@@ -1,10 +1,14 @@
 import { createServiceClient } from './supabase'
+import type { OrgDb } from './orgContext'
 
 /**
  * 命名規則：yymmdd_hhmmss-{流水號}-{姓名}-{front|back}.jpg
  * 流水號每天從 001 開始
  */
-export async function generateCardFilename(opts?: { name?: string; side?: 'front' | 'back' }): Promise<string> {
+export async function generateCardFilename(
+  opts?: { name?: string; side?: 'front' | 'back' },
+  db: OrgDb = createServiceClient(),
+): Promise<string> {
   const now = new Date()
 
   const yy = String(now.getFullYear()).slice(2)
@@ -16,11 +20,10 @@ export async function generateCardFilename(opts?: { name?: string; side?: 'front
 
   const datePrefix = `${yy}${mm}${dd}`
 
-  const supabase = createServiceClient()
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
   const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString()
 
-  const { count } = await supabase
+  const { count } = await db
     .from('contacts')
     .select('*', { count: 'exact', head: true })
     .gte('created_at', startOfDay)

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { logAdminAction } from '@/lib/adminAudit'
 
 // POST /api/admin/email-recovery/apply
@@ -39,6 +40,8 @@ export async function POST(req: NextRequest) {
   }
 
   const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   const { data: me } = await service
     .from('users')
@@ -47,12 +50,12 @@ export async function POST(req: NextRequest) {
     .maybeSingle()
   const userId = me?.id ?? null
 
-  const { data: bad } = await service
+  const { data: bad } = await db
     .from('contacts')
     .select('id, email, email_status, notes, name')
     .eq('id', body.bad_contact_id)
     .is('deleted_at', null)
-    .maybeSingle()
+    .maybeSingle<{ id: string; email: string | null; email_status: string | null; notes: string | null; name: string | null }>()
   if (!bad) return NextResponse.json({ error: 'bad_contact_id not found' }, { status: 404 })
 
   const oldEmail = bad.email ?? '(empty)'
@@ -64,7 +67,7 @@ export async function POST(req: NextRequest) {
     : notesAddon
 
   // Apply update
-  const { error: updErr } = await service
+  const { error: updErr } = await db
     .from('contacts')
     .update({
       email: newEmail,
@@ -75,7 +78,7 @@ export async function POST(req: NextRequest) {
   if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
 
   // Audit log
-  await service.from('interaction_logs').insert({
+  await db.from('interaction_logs').insert({
     contact_id: body.bad_contact_id,
     type: 'system',
     content: `Email recovery: 舊 ${oldEmail} (${oldStatus}) → 新 ${newEmail}`,
@@ -84,7 +87,7 @@ export async function POST(req: NextRequest) {
 
   // Optional: soft-delete the merge-from duplicate
   if (body.merge_from_contact_id) {
-    await service
+    await db
       .from('contacts')
       .update({ deleted_at: new Date().toISOString(), deleted_by: userId })
       .eq('id', body.merge_from_contact_id)

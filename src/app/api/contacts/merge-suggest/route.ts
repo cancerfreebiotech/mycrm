@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { suggestMergePlan, type ContactRow } from '@/lib/mergeSuggest'
 
 export const maxDuration = 60
@@ -22,10 +23,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '缺少聯絡人 ID' }, { status: 400 })
   }
 
-  const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
   const [{ data: a }, { data: b }] = await Promise.all([
-    service.from('contacts').select(CONTACT_FIELDS).eq('id', contactIdA).is('deleted_at', null).maybeSingle(),
-    service.from('contacts').select(CONTACT_FIELDS).eq('id', contactIdB).is('deleted_at', null).maybeSingle(),
+    db.from('contacts').select(CONTACT_FIELDS).eq('id', contactIdA).is('deleted_at', null).maybeSingle(),
+    db.from('contacts').select(CONTACT_FIELDS).eq('id', contactIdB).is('deleted_at', null).maybeSingle(),
   ])
   if (!a || !b) return NextResponse.json({ error: '找不到聯絡人' }, { status: 404 })
 

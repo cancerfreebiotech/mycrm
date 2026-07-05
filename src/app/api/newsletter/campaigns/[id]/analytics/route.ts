@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 interface ClickByUrl {
   url: string
@@ -44,11 +45,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   // ── Summary from newsletter_recipients (head counts, no rows transferred) ──
   const recipientCount = () =>
-    service.from('newsletter_recipients').select('*', { count: 'exact', head: true }).eq('campaign_id', id)
+    db.from('newsletter_recipients').select('*', { count: 'exact', head: true }).eq('campaign_id', id)
 
   const [totalR, sentR, failedR, openedR, clickedR] = await Promise.all([
     recipientCount(),
@@ -69,7 +71,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   // ── Delivery-issue event counts from newsletter_events (head counts) ──
   const eventCount = () =>
-    service.from('newsletter_events').select('*', { count: 'exact', head: true }).eq('campaign_id', id)
+    db.from('newsletter_events').select('*', { count: 'exact', head: true }).eq('campaign_id', id)
 
   const [bouncesR, unsubscribesR, spamreportsR, anyEventR] = await Promise.all([
     eventCount().eq('event', 'bounce'),
@@ -84,7 +86,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const events: EngagementEvent[] = []
   const PAGE = 1000
   for (let from = 0; ; from += PAGE) {
-    const { data } = await service
+    const { data } = await db
       .from('newsletter_events')
       .select('event, url, email, occurred_at')
       .eq('campaign_id', id)
@@ -133,7 +135,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   // ── A/B variant breakdown (only when the campaign used subject_b) ──
   const variantCount = (variant: 'a' | 'b') =>
-    service.from('newsletter_recipients').select('*', { count: 'exact', head: true })
+    db.from('newsletter_recipients').select('*', { count: 'exact', head: true })
       .eq('campaign_id', id).eq('variant', variant)
   const [aSentR, aOpenR, bSentR, bOpenR] = await Promise.all([
     variantCount('a').eq('status', 'sent'),

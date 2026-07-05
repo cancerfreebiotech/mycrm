@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // GET — fetch campaign details for quick-send page
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -8,8 +9,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const service = createServiceClient()
-  const { data, error } = await service
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+  const { data, error } = await db
     .from('newsletter_campaigns')
     .select('id, title, subject, subject_b, preview_text, content_html, list_ids, status, slug, published_at, sent_at, sent_count, total_recipients, created_at, promo_text, scheduled_at, ab_test_pct, ab_wait_minutes, ab_winner, ab_decided_at')
     .eq('id', id)
@@ -56,14 +58,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     update.ab_wait_minutes = body.ab_wait_minutes
   }
 
-  const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   // Scheduling: only the draft<->scheduled transition is editable here; sending/
   // sent/partial are owned by the send worker. Guard on CURRENT status too —
   // otherwise PATCH status:'draft' on a sent campaign would bypass the delete
   // protection above.
   if (body.scheduled_at !== undefined || body.status === 'scheduled' || body.status === 'draft') {
-    const { data: cur } = await service
+    const { data: cur } = await db
       .from('newsletter_campaigns').select('status').eq('id', id).maybeSingle()
     if (cur && (cur.status === 'draft' || cur.status === 'scheduled')) {
       if (body.scheduled_at !== undefined) update.scheduled_at = body.scheduled_at
@@ -72,7 +75,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   if (Object.keys(update).length === 0) return NextResponse.json({ ok: true, noChange: true })
-  const { error } = await service.from('newsletter_campaigns').update(update).eq('id', id)
+  const { error } = await db.from('newsletter_campaigns').update(update).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
@@ -84,8 +87,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const service = createServiceClient()
-  const { data: campaign } = await service
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+  const { data: campaign } = await db
     .from('newsletter_campaigns')
     .select('id, status')
     .eq('id', id)
@@ -94,7 +98,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!campaign) return NextResponse.json({ error: 'not found' }, { status: 404 })
   if (campaign.status === 'sent' || campaign.status === 'partial') return NextResponse.json({ error: '已寄送的電子報不可刪除' }, { status: 400 })
 
-  const { error } = await service.from('newsletter_campaigns').delete().eq('id', id)
+  const { error } = await db.from('newsletter_campaigns').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }

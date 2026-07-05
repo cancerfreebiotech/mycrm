@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { hasFeature } from '@/lib/features'
+import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 
 // DELETE /api/newsletter/lists/[id]
 //
@@ -29,8 +30,11 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     return NextResponse.json({ error: 'Forbidden — newsletter permission required' }, { status: 403 })
   }
 
+  const orgCtx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(orgCtx)
+
   // Verify list exists
-  const { data: existing } = await service
+  const { data: existing } = await db
     .from('newsletter_lists')
     .select('id, name')
     .eq('id', id)
@@ -40,27 +44,27 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
   }
 
   // Strip from any campaigns that reference this list
-  const { data: refCampaigns } = await service
+  const { data: refCampaigns } = await db
     .from('newsletter_campaigns')
     .select('id, list_ids')
     .contains('list_ids', [id])
   for (const c of refCampaigns ?? []) {
     const remaining = ((c.list_ids as string[]) ?? []).filter((x) => x !== id)
-    await service
+    await db
       .from('newsletter_campaigns')
       .update({ list_ids: remaining })
       .eq('id', c.id)
   }
 
   // Delete subscriber_list rows for this list (subscribers themselves remain)
-  const { error: linkErr } = await service
+  const { error: linkErr } = await db
     .from('newsletter_subscriber_lists')
     .delete()
     .eq('list_id', id)
   if (linkErr) return NextResponse.json({ error: `failed to remove members: ${linkErr.message}` }, { status: 500 })
 
   // Delete the list row
-  const { error: delErr } = await service
+  const { error: delErr } = await db
     .from('newsletter_lists')
     .delete()
     .eq('id', id)
@@ -98,6 +102,9 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     return NextResponse.json({ error: 'Forbidden — newsletter permission required' }, { status: 403 })
   }
 
+  const orgCtx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(orgCtx)
+
   const body = (await req.json().catch(() => ({}))) as { name?: string; description?: string | null }
   const patch: { name?: string; description?: string | null } = {}
   if (typeof body.name === 'string') {
@@ -112,7 +119,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     return NextResponse.json({ error: 'no fields to update' }, { status: 400 })
   }
 
-  const { data: updated, error } = await service
+  const { data: updated, error } = await db
     .from('newsletter_lists')
     .update(patch)
     .eq('id', id)

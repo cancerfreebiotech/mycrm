@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { hasFeature } from '@/lib/features'
+import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 
 // POST /api/newsletter/lists/from-engagement
 // Create a NEW newsletter list from a campaign's engagement segment.
@@ -52,6 +53,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden — newsletter permission required' }, { status: 403 })
   }
 
+  const ctx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(ctx)
+
   const body = (await req.json().catch(() => ({}))) as {
     campaignId?: string
     segment?: Segment
@@ -63,7 +67,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'invalid segment' }, { status: 400 })
   }
 
-  const { data: campaign } = await service
+  const { data: campaign } = await db
     .from('newsletter_campaigns')
     .select('id, title, subject')
     .eq('id', campaignId)
@@ -75,7 +79,7 @@ export async function POST(req: NextRequest) {
   const PAGE_SIZE = 1000
   const emailSet = new Set<string>()
   for (let offset = 0; ; offset += PAGE_SIZE) {
-    let q = service
+    let q = db
       .from('newsletter_recipients')
       .select('email')
       .eq('campaign_id', campaignId)
@@ -98,14 +102,14 @@ export async function POST(req: NextRequest) {
   const baseTitle = campaign.title?.trim() || campaign.subject?.trim() || 'Campaign'
   const name = `${baseTitle} — ${SEGMENT_LABEL[segment]}`
   let key = slugify(name)
-  const { data: existing } = await service
+  const { data: existing } = await db
     .from('newsletter_lists')
     .select('id')
     .eq('key', key)
     .maybeSingle()
   if (existing) key = `${key}-${Date.now().toString(36)}`
 
-  const { data: created, error: createErr } = await service
+  const { data: created, error: createErr } = await db
     .from('newsletter_lists')
     .insert({ key, name, description: null })
     .select('id, key, name')
@@ -123,7 +127,7 @@ export async function POST(req: NextRequest) {
   const subscriberPayload = emails.map((email) => ({ email, source }))
   for (let i = 0; i < subscriberPayload.length; i += INSERT_BATCH) {
     const chunk = subscriberPayload.slice(i, i + INSERT_BATCH)
-    const { error } = await service
+    const { error } = await db
       .from('newsletter_subscribers')
       .upsert(chunk, { onConflict: 'email', ignoreDuplicates: true })
     if (error) errors.push(`upsert subscribers batch ${i / INSERT_BATCH}: ${error.message}`)
@@ -133,7 +137,7 @@ export async function POST(req: NextRequest) {
   const subscriberIdByEmail = new Map<string, string>()
   for (let i = 0; i < emails.length; i += QUERY_BATCH) {
     const batch = emails.slice(i, i + QUERY_BATCH)
-    const { data } = await service
+    const { data } = await db
       .from('newsletter_subscribers')
       .select('id, email')
       .in('email', batch)
@@ -154,7 +158,7 @@ export async function POST(req: NextRequest) {
   let count = 0
   for (let i = 0; i < linkRows.length; i += INSERT_BATCH) {
     const chunk = linkRows.slice(i, i + INSERT_BATCH)
-    const { error } = await service.from('newsletter_subscriber_lists').insert(chunk)
+    const { error } = await db.from('newsletter_subscriber_lists').insert(chunk)
     if (error) {
       errors.push(`insert link rows batch ${i / INSERT_BATCH}: ${error.message}`)
       continue

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { hasFeature } from '@/lib/features'
 
 // POST /api/newsletter/campaigns/[id]/promo-batch
@@ -36,6 +37,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: 'Forbidden — newsletter permission required' }, { status: 403 })
   }
 
+  const orgCtx = await getOrgContext()
+  const db = orgScopedClient(orgCtx)
+
   const body = (await req.json().catch(() => ({}))) as {
     promo?: { 'zh-TW'?: string | null; en?: string | null; ja?: string | null }
   }
@@ -45,7 +49,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   }
 
   // Fetch current campaign, derive period + stamp from slug
-  const { data: current } = await service
+  const { data: current } = await db
     .from('newsletter_campaigns')
     .select('id, slug')
     .eq('id', id)
@@ -73,7 +77,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       continue
     }
     const targetSlug = `${period}-${LANG_TO_SLUG[lang]}-${stamp}`
-    const { error } = await service
+    const { error } = await db
       .from('newsletter_campaigns')
       .update({ promo_text: text.trim() || null })
       .eq('slug', targetSlug)

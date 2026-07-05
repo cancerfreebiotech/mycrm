@@ -1,12 +1,10 @@
-import { createServiceClient } from '@/lib/supabase'
-
-type ServiceClient = ReturnType<typeof createServiceClient>
+import type { OrgDb } from '@/lib/orgContext'
 
 // Build a context paragraph from a contact's profile, tags, recent interactions and
 // latest completed social briefing. Prepended to the AI email description so the draft
 // is grounded in the CRM relationship. Returns null if the contact can't be found.
 // Shared by /api/ai-email and the summarize_relationship agent tool (agent-tools.ts).
-export async function buildContactContext(service: ServiceClient, contactId: string): Promise<string | null> {
+export async function buildContactContext(service: OrgDb, contactId: string): Promise<string | null> {
   const [{ data: contact }, { data: logs }, { data: briefing }] = await Promise.all([
     service
       .from('contacts')

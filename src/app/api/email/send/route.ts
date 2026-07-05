@@ -4,6 +4,7 @@ import { getValidProviderToken } from '@/lib/graph-server'
 import { sendMail } from '@/lib/graph'
 import { generateOptOutToken } from '@/lib/email-optout'
 import { recordUsage } from '@/lib/usage'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.cancerfree.io'
 
@@ -107,6 +108,8 @@ export async function POST(req: NextRequest) {
   const authClient = await createClient()
   const { data: { user: authUser } } = await authClient.auth.getUser()
   if (!authUser?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
   const { data: senderProfile } = await supabase.from('users').select('id').ilike('email', authUser.email).maybeSingle()
   const userId = senderProfile?.id
 
@@ -120,14 +123,14 @@ export async function POST(req: NextRequest) {
   const fetchedContacts: { id: string; name: string | null; email: string | null; company: string | null; job_title: string | null; email_opt_out: boolean | null; email_status: string | null }[] = []
   for (let i = 0; i < contactIds.length; i += FETCH_BATCH) {
     const batch = contactIds.slice(i, i + FETCH_BATCH)
-    const { data: chunk, error: cErr } = await supabase
+    const { data: chunk, error: cErr } = await db
       .from('contacts')
       .select('id, name, email, company, job_title, email_opt_out, email_status, contact_tags(tags(is_email_blacklist))')
       .in('id', batch)
       .is('deleted_at', null)
       .not('email', 'is', null)
     if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 })
-    fetchedContacts.push(...(chunk ?? []))
+    fetchedContacts.push(...((chunk ?? []) as unknown as { id: string; name: string | null; email: string | null; company: string | null; job_title: string | null; email_opt_out: boolean | null; email_status: string | null }[]))
   }
   const contacts = fetchedContacts
 
@@ -139,11 +142,11 @@ export async function POST(req: NextRequest) {
   const UNSUB_BATCH = 200
   for (let i = 0; i < allEmails.length; i += UNSUB_BATCH) {
     const batch = allEmails.slice(i, i + UNSUB_BATCH)
-    const { data: unsubs } = await supabase
+    const { data: unsubs } = await db
       .from('newsletter_unsubscribes')
       .select('email')
       .in('email', batch)
-    for (const u of unsubs ?? []) {
+    for (const u of (unsubs ?? []) as { email: string | null }[]) {
       if (u.email) unsubEmails.add((u.email as string).toLowerCase())
     }
   }
@@ -184,7 +187,7 @@ export async function POST(req: NextRequest) {
   method = chosenMethod
 
   // ── Create campaign record ──
-  const { data: campaign } = await supabase
+  const { data: campaign } = await db
     .from('email_campaigns')
     .insert({
       subject,
@@ -423,7 +426,7 @@ export async function POST(req: NextRequest) {
     }))
 
     for (let i = 0; i < logRows.length; i += 500) {
-      await supabase.from('interaction_logs').insert(logRows.slice(i, i + 500))
+      await db.from('interaction_logs').insert(logRows.slice(i, i + 500))
     }
   }
 

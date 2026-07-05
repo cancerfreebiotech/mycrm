@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { logAdminAction } from '@/lib/adminAudit'
 
 // PATCH  /api/admin/mcp-tokens/[id]  — enable / disable a token
@@ -23,11 +24,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
   const body = await req.json().catch(() => ({})) as { disabled?: boolean; reason?: string }
-  const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
   const patch = body.disabled
     ? { disabled_at: new Date().toISOString(), disabled_reason: body.reason?.trim() || null }
     : { disabled_at: null, disabled_reason: null }
-  const { error } = await service.from('agent_tokens').update(patch).eq('id', id)
+  const { error } = await db.from('agent_tokens').update(patch).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
@@ -37,7 +39,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
   const service = createServiceClient()
-  const { error } = await service.from('agent_tokens').delete().eq('id', id)
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+  const { error } = await db.from('agent_tokens').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   await logAdminAction(service, {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // DELETE /api/contacts/[id] — 軟刪除聯絡人（建立者或 super_admin）
 export async function DELETE(
@@ -16,6 +17,8 @@ export async function DELETE(
   }
 
   const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   // 查詢使用者資料（role）
   const { data: profile } = await service
@@ -29,7 +32,7 @@ export async function DELETE(
   }
 
   // 查詢聯絡人（確認存在且未被刪除）
-  const { data: contact } = await service
+  const { data: contact } = await db
     .from('contacts')
     .select('id, created_by')
     .eq('id', id)
@@ -49,7 +52,7 @@ export async function DELETE(
   }
 
   // 軟刪除：設定 deleted_at / deleted_by
-  const { error: updateError } = await service
+  const { error: updateError } = await db
     .from('contacts')
     .update({
       deleted_at: new Date().toISOString(),

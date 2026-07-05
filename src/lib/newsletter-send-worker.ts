@@ -1,10 +1,9 @@
-import type { createServiceClient } from '@/lib/supabase'
+import { createServiceClient } from '@/lib/supabase'
+import type { OrgDb } from '@/lib/orgContext'
 import { createHmac } from 'crypto'
 import { emailTokenSecret } from '@/lib/emailTokenSecret'
 import { recordUsage } from '@/lib/usage'
 import { getOrgSettings } from '@/lib/orgSettings'
-
-type ServiceClient = ReturnType<typeof createServiceClient>
 
 const SG_SEND_URL = 'https://api.sendgrid.com/v3/mail/send'
 
@@ -115,13 +114,18 @@ export interface SendCampaignResult {
 // emailed). Once sending starts, per-chunk errors are collected and returned
 // (ok=false) rather than thrown.
 export async function sendCampaign(
-  service: ServiceClient,
+  db: OrgDb,
   campaignId: string,
   opts: SendCampaignOpts = {},
 ): Promise<SendCampaignResult> {
   const userId = opts.actorUserId ?? null
 
-  const { data: campaign } = await service
+  // getOrgSettings (system_settings, global) and recordUsage (increment_usage
+  // RPC) require a raw SupabaseClient — the org-scoped `db` wrapper only exposes
+  // .from(). Neither is org-scoped, so a plain service client is equivalent.
+  const service = createServiceClient()
+
+  const { data: campaign } = await db
     .from('newsletter_campaigns')
     .select('id, subject, subject_b, preview_text, content_html, list_ids, sent_at, slug, ab_test_pct, ab_winner')
     .eq('id', campaignId)
@@ -176,7 +180,7 @@ export async function sendCampaign(
     const PAGE = 1000
     const allMembership: { subscriber_id: string }[] = []
     for (let from = 0; ; from += PAGE) {
-      const { data: page } = await service
+      const { data: page } = await db
         .from('newsletter_subscriber_lists')
         .select('subscriber_id')
         .in('list_id', listIds)
@@ -206,7 +210,7 @@ export async function sendCampaign(
     ): Promise<T[]> {
       const out: T[] = []
       for (let i = 0; i < values.length; i += BATCH) {
-        let q = service.from(table).select(select).in(column, values.slice(i, i + BATCH))
+        let q = db.from(table).select(select).in(column, values.slice(i, i + BATCH))
         if (extraFilter) q = extraFilter(q)
         const { data } = await q
         if (data) out.push(...(data as T[]))
@@ -361,7 +365,7 @@ export async function sendCampaign(
         sent_at: new Date().toISOString(),
         variant: abMode === 'final' ? 'w' : abAlternate ? variantByEmail.get(r.email.toLowerCase().trim()) : null,
       }))
-      const { data: inserted, error: recErr } = await service
+      const { data: inserted, error: recErr } = await db
         .from('newsletter_recipients')
         .insert(recipientRows)
         .select('id, email')
@@ -425,7 +429,7 @@ export async function sendCampaign(
         // accurate and the resume dedup will retry these recipients next run.
         // error carries the SendGrid status + trimmed body for the 失敗明細 table.
         if (chunkRecipientIds.length > 0) {
-          await service
+          await db
             .from('newsletter_recipients')
             .update({ status: 'failed', error: `${res.status} ${errText.trim()}`.slice(0, 500) })
             .in('id', chunkRecipientIds)
@@ -462,7 +466,7 @@ export async function sendCampaign(
           const LOG_BATCH = 200
           for (let j = 0; j < chunkLogs.length; j += LOG_BATCH) {
             const logSlice = chunkLogs.slice(j, j + LOG_BATCH)
-            const { error: logErr } = await service.from('interaction_logs').insert(logSlice)
+            const { error: logErr } = await db.from('interaction_logs').insert(logSlice)
             if (logErr) {
               const msg = `chunk ${i} log write [${j}-${j + logSlice.length}]: ${logErr.message}`
               errors.push(msg)
@@ -475,7 +479,7 @@ export async function sendCampaign(
       const msg = e instanceof Error ? e.message : String(e)
       errors.push(`chunk ${i}: ${msg}`)
       if (chunkRecipientIds.length > 0) {
-        await service
+        await db
           .from('newsletter_recipients')
           .update({ status: 'failed', error: msg.slice(0, 500) })
           .in('id', chunkRecipientIds)
@@ -508,7 +512,7 @@ export async function sendCampaign(
       const hasSentByEmail = new Map<string, boolean>()
       const PAGE = 1000
       for (let from = 0; ; from += PAGE) {
-        const { data: page, error: pageErr } = await service
+        const { data: page, error: pageErr } = await db
           .from('newsletter_recipients')
           .select('email, status')
           .eq('campaign_id', campaignId)
@@ -535,7 +539,7 @@ export async function sendCampaign(
         failedCount = totalRecipients - sentCount
       }
     }
-    await service
+    await db
       .from('newsletter_campaigns')
       .update({
         status: errors.length > 0 || sent === 0 ? 'partial' : 'sent',

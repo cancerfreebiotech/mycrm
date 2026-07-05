@@ -1,5 +1,6 @@
 import { NextResponse, after } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { processPendingForUser } from '@/lib/pending-ocr-worker'
 
 // User-triggered rescue: re-processes the caller's pending rows.
@@ -8,6 +9,9 @@ export async function POST() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   const service = createServiceClient()
   const { data: u } = await service
@@ -21,14 +25,14 @@ export async function POST() {
   // Age-gate on claim time (processed_at) so a rescue click can't reset a row a
   // worker just claimed seconds ago → that would itself cause double-processing.
   const stuckCutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString()
-  await service
+  await db
     .from('pending_contacts')
     .update({ status: 'pending' })
     .eq('created_by', u.id)
     .eq('status', 'processing')
     .or(`processed_at.is.null,processed_at.lt.${stuckCutoff}`)
 
-  const { count } = await service
+  const { count } = await db
     .from('pending_contacts')
     .select('*', { count: 'exact', head: true })
     .eq('created_by', u.id)
@@ -39,7 +43,7 @@ export async function POST() {
   }
 
   // Reset retry_count so previously-failed rows get another chance
-  await service
+  await db
     .from('pending_contacts')
     .update({ retry_count: 0, error_message: null })
     .eq('created_by', u.id)

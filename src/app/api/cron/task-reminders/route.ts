@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { sendTelegramMessage, type InlineKeyboardMarkup } from '@/lib/telegram'
 import { getValidProviderToken } from '@/lib/graph-server'
 import { recordCronRun } from '@/lib/cronHeartbeat'
@@ -87,6 +88,9 @@ export async function GET(req: NextRequest) {
   }
   const startMs = Date.now()
   const service = createServiceClient()
+  // Phase 2+: 逐 org 迭代／由 payload 解析 org
+  const ctx = systemOrgContext()
+  const db = orgScopedClient(ctx)
 
   // "Today" in Taipei, expressed as a UTC window
   const now = new Date()
@@ -107,7 +111,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: uErr.message }, { status: 500 })
   }
 
-  const { data: tasks, error: tErr } = await service
+  const { data: tasks, error: tErr } = await db
     .from('tasks')
     .select('id, title, due_at, status, created_by, contacts(name), task_assignees(assignee_email)')
     .neq('status', 'done')
@@ -172,7 +176,7 @@ export async function GET(req: NextRequest) {
               const p = escapeLikePattern(e)
               orParts.push(`email.ilike.${p}`, `second_email.ilike.${p}`)
             }
-            const { data: matched } = await service
+            const { data: matched } = await db
               .from('contacts')
               .select('id, name')
               .is('deleted_at', null)
@@ -182,7 +186,7 @@ export async function GET(req: NextRequest) {
             if (contacts.length > 0) {
               const contactIds = contacts.map((c) => c.id)
               // Briefings already prepared for these contacts, for a meeting today
-              const { data: briefed } = await service
+              const { data: briefed } = await db
                 .from('contact_briefings')
                 .select('contact_id')
                 .eq('status', 'done')

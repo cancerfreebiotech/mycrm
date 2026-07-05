@@ -13,6 +13,7 @@ import { signCardUrl } from '@/lib/cardImageUrl'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { TOOLS, TOOL_BY_NAME, executeTool } from '@/lib/agent-tools'
 import { getOrgSetting } from '@/lib/orgSettings'
+import { systemOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 
 function countryToLanguage(code: string | null | undefined): string {
   if (code === 'TW' || code === 'CN') return 'chinese'
@@ -135,7 +136,7 @@ async function editMessageText(chatId: number, messageId: number, text: string, 
 // ── Session helpers ───────────────────────────────────────────────────────────
 
 async function getSession(telegramId: number) {
-  const supabase = createServiceClient()
+  const supabase: OrgDb = orgScopedClient(systemOrgContext())
   const { data } = await supabase
     .from('bot_sessions')
     .select('state, context, last_contact_id')
@@ -145,7 +146,7 @@ async function getSession(telegramId: number) {
 }
 
 async function setSession(telegramId: number, state: string, context: Record<string, unknown>) {
-  const supabase = createServiceClient()
+  const supabase: OrgDb = orgScopedClient(systemOrgContext())
   await supabase.from('bot_sessions').upsert(
     { telegram_id: telegramId, state, context, updated_at: new Date().toISOString() },
     { onConflict: 'telegram_id' }
@@ -154,7 +155,7 @@ async function setSession(telegramId: number, state: string, context: Record<str
 
 async function clearSession(telegramId: number) {
   // Upsert with null state/context to preserve last_contact_id
-  const supabase = createServiceClient()
+  const supabase: OrgDb = orgScopedClient(systemOrgContext())
   await supabase.from('bot_sessions').upsert(
     { telegram_id: telegramId, state: null, context: null, updated_at: new Date().toISOString() },
     { onConflict: 'telegram_id' }
@@ -162,7 +163,7 @@ async function clearSession(telegramId: number) {
 }
 
 async function updateLastContact(telegramId: number, contactId: string) {
-  const supabase = createServiceClient()
+  const supabase: OrgDb = orgScopedClient(systemOrgContext())
   await supabase.from('bot_sessions').upsert(
     { telegram_id: telegramId, last_contact_id: contactId, updated_at: new Date().toISOString() },
     { onConflict: 'telegram_id' }
@@ -239,7 +240,7 @@ const REQUEST_BRIEFING_TOOL = {
 // 稽核到 agent_actions（欄位與 ai-agent.ts / ai-chat 相同）。永不讓稽核失敗中斷主流程。
 async function auditBotTool(toolName: string, args: unknown, succeeded: boolean, errMsg: string | null, actingAs: string): Promise<void> {
   try {
-    await createServiceClient().from('agent_actions').insert({
+    await orgScopedClient(systemOrgContext()).from('agent_actions').insert({
       tool_name: toolName,
       arguments: args ?? null,
       result_summary: succeeded ? 'ok (bot)' : null,
@@ -258,7 +259,7 @@ async function executeBotTool(name: string, args: Record<string, unknown>, actin
   if (name === 'request_social_briefing') {
     const contactId = args.contact_id as string | undefined
     if (!contactId) throw new Error('contact_id required')
-    const service = createServiceClient()
+    const service: OrgDb = orgScopedClient(systemOrgContext())
     // Dedup：同一聯絡人已有 pending/processing 的 briefing 就不重複排程
     const { data: existing } = await service
       .from('contact_briefings')
@@ -368,15 +369,26 @@ async function handleAiAgent(
 
 // ── Search contacts ───────────────────────────────────────────────────────────
 
-async function searchContacts(query: string) {
-  const supabase = createServiceClient()
+interface ContactHit {
+  id: string
+  name: string | null
+  company: string | null
+  job_title: string | null
+  email: string | null
+  phone: string | null
+  card_img_url: string | null
+  card_img_back_url: string | null
+}
+
+async function searchContacts(query: string): Promise<ContactHit[]> {
+  const supabase: OrgDb = orgScopedClient(systemOrgContext())
   const { data } = await supabase
     .from('contacts')
     .select('id, name, company, job_title, email, phone, card_img_url, card_img_back_url')
     .is('deleted_at', null)
     .or(`name.ilike.%${query}%,company.ilike.%${query}%,email.ilike.%${query}%`)
     .limit(5)
-  return data ?? []
+  return (data ?? []) as ContactHit[]
 }
 
 // ── Meeting helpers ────────────────────────────────────────────────────────────
@@ -401,6 +413,7 @@ async function handleMeet(
   lang: BotLang,
 ) {
   const supabase = createServiceClient()
+  const db: OrgDb = orgScopedClient(systemOrgContext())
   if (!text.trim()) {
     await sendMessage(chatId, m.meetUsage)
     return
@@ -443,7 +456,7 @@ async function handleMeet(
 
   // Insert draft
   const endIso = new Date(new Date(parsed.start_iso).getTime() + parsed.duration_minutes * 60000).toISOString()
-  const { data: draft, error: draftErr } = await supabase
+  const { data: draft, error: draftErr } = await db
     .from('meeting_drafts')
     .insert({
       created_by: user.id,
@@ -563,11 +576,12 @@ async function processAddCardPhoto(
 ) {
   const _m = m ?? BOT_MESSAGES.zh
   const supabase = createServiceClient()
+  const db: OrgDb = orgScopedClient(systemOrgContext())
   try {
     const imgBuffer = await downloadTelegramPhoto(fileId)
     let compressed = await processCardImage(imgBuffer)
 
-    const { data: existing } = await supabase
+    const { data: existing } = await db
       .from('contacts')
       .select('name, name_en, name_local, company, job_title, email, phone, second_phone, address, website')
       .eq('id', contactId)
@@ -666,7 +680,7 @@ async function applyCardDiff(
   apply: boolean,
   m: BotMessages,
 ) {
-  const supabase = createServiceClient()
+  const supabase: OrgDb = orgScopedClient(systemOrgContext())
   try {
     const session = await getSession(fromId)
     const ctx = session?.context ?? {}
@@ -732,6 +746,7 @@ async function processPersonalPhoto(
 ) {
   const _m = m ?? BOT_MESSAGES.zh
   const supabase = createServiceClient()
+  const db: OrgDb = orgScopedClient(systemOrgContext())
   try {
     let uploaded = 0
     for (const fileId of fileIds) {
@@ -743,7 +758,7 @@ async function processPersonalPhoto(
         .from('cards').upload(filename, compressed, { contentType: 'image/jpeg', upsert: false })
       if (uploadError) throw new Error(uploadError.message)
       const { data: publicUrlData } = supabase.storage.from('cards').getPublicUrl(filename)
-      const { data: photoRow, error: photoErr } = await supabase.from('contact_photos').insert({
+      const { data: photoRow, error: photoErr } = await db.from('contact_photos').insert({
         contact_id: contactId,
         photo_url: publicUrlData.publicUrl,
         storage_path: filename,
@@ -755,7 +770,7 @@ async function processPersonalPhoto(
       }).select('id').single()
       if (photoErr || !photoRow) throw new Error(photoErr?.message ?? 'photo insert failed')
       // 多對多：同步建立一筆已確認的人臉標記（photo ↔ contact）
-      const { error: faceErr } = await supabase.from('photo_faces').insert({
+      const { error: faceErr } = await db.from('photo_faces').insert({
         photo_id: photoRow.id,
         contact_id: contactId,
         source: 'manual',
@@ -766,7 +781,7 @@ async function processPersonalPhoto(
     }
 
     if (note) {
-      await supabase.from('interaction_logs').insert({
+      await db.from('interaction_logs').insert({
         contact_id: contactId,
         type: 'system',
         content: `【合照附註】${note}`,
@@ -798,6 +813,7 @@ async function handlePhoto(
   lang: BotLang = 'zh',
 ) {
   const supabase = createServiceClient()
+  const db: OrgDb = orgScopedClient(systemOrgContext())
 
   // /a: Add card flow — confirmation step
   if (session?.state === 'waiting_for_add_card') {
@@ -877,7 +893,7 @@ async function handlePhoto(
       if (met?.met_date) initialData.met_date = met.met_date
       if (met?.referred_by) initialData.referred_by = met.referred_by
 
-      const { data: pending, error: pendingError } = await supabase
+      const { data: pending, error: pendingError } = await db
         .from('pending_contacts')
         .insert({ data: initialData, created_by: user.id, storage_path: storagePath, status: 'pending' })
         .select('id')
@@ -924,9 +940,9 @@ async function handlePhoto(
       })
       if (upErr) throw new Error(upErr.message)
       const url = sb.storage.from('newsletter-assets').getPublicUrl(key).data.publicUrl
-      const { data: cur } = await sb.from('newsletter_drafts').select('photo_urls').eq('id', draftId).single()
+      const { data: cur } = await db.from('newsletter_drafts').select('photo_urls').eq('id', draftId).single()
       const updated = [...(cur?.photo_urls ?? []), url]
-      await sb.from('newsletter_drafts').update({ photo_urls: updated }).eq('id', draftId)
+      await db.from('newsletter_drafts').update({ photo_urls: updated }).eq('id', draftId)
       await sendMessage(chatId, m.newsPhotoAdded(updated.length))
     } catch (e) {
       await sendMessage(chatId, m.newsPhotoFailed(e instanceof Error ? e.message : m.unknownError))
@@ -965,7 +981,7 @@ async function handlePhoto(
 
 
   // New card scan — check pending limit
-  const { count: pendingCount } = await supabase
+  const { count: pendingCount } = await db
     .from('pending_contacts')
     .select('*', { count: 'exact', head: true })
     .eq('created_by', user.id)
@@ -1022,7 +1038,7 @@ async function handlePhoto(
 
     // If no name detected at all, save as failed scan and notify user
     if (!cardData.name) {
-      await supabase.from('failed_scans').insert({
+      await db.from('failed_scans').insert({
         user_id: user.id,
         storage_path: storagePath,
         card_img_url: cardImgUrl,
@@ -1057,7 +1073,7 @@ async function handlePhoto(
     // 同名偵測：若既有 contact 的 email 已是 bounced/invalid，且新名片有不同 email，
     // 標示出來鼓勵 user 點「換工作」按鈕（avoid 沿用壞 email）
     if (mergeTargetId) {
-      const { data: targetRow } = await supabase
+      const { data: targetRow } = await db
         .from('contacts')
         .select('email, email_status')
         .eq('id', mergeTargetId)
@@ -1079,7 +1095,7 @@ async function handlePhoto(
       // hidden field for "merge to existing" flow; stripped before INSERT contacts
       _merge_target_id: mergeTargetId,
     }
-    const { data: pending, error: pendingError } = await supabase
+    const { data: pending, error: pendingError } = await db
       .from('pending_contacts')
       .insert({ data: contactPayload, created_by: user.id, storage_path: storagePath })
       .select('id')
@@ -1156,7 +1172,7 @@ async function handlePhoto(
     console.error('[bot] photo processing error msg:', msg)
     // Save to failed_scans if image was already uploaded
     if (storagePath && cardImgUrl) {
-      const { error: fsErr } = await supabase.from('failed_scans').insert({
+      const { error: fsErr } = await db.from('failed_scans').insert({
         user_id: user.id,
         storage_path: storagePath,
         card_img_url: cardImgUrl,
@@ -1180,6 +1196,7 @@ async function handleWork(
   lang: BotLang,
 ) {
   const supabase = createServiceClient()
+  const db: OrgDb = orgScopedClient(systemOrgContext())
   await sendMessage(chatId, m.taskParsing)
 
   let parsed
@@ -1196,7 +1213,7 @@ async function handleWork(
   let contactCompany: string | undefined
 
   if (parsed.contact_name) {
-    const { data: found } = await supabase
+    const { data: found } = await db
       .from('contacts')
       .select('id, name, company')
       .ilike('name', `%${parsed.contact_name}%`)
@@ -1210,7 +1227,7 @@ async function handleWork(
   }
 
   if (!contactName && resolvedContactId) {
-    const { data: contact } = await supabase
+    const { data: contact } = await db
       .from('contacts').select('name, company').eq('id', resolvedContactId).single()
     if (contact?.name) {
       contactName = contact.name
@@ -1244,7 +1261,7 @@ async function handleWork(
   }
 
   // Create task
-  const { data: task, error } = await supabase
+  const { data: task, error } = await db
     .from('tasks')
     .insert({
       title: parsed.title,
@@ -1262,7 +1279,7 @@ async function handleWork(
 
   // Create task_assignees
   for (const email of assigneeEmails) {
-    await supabase.from('task_assignees').insert({ task_id: task.id, assignee_email: email })
+    await db.from('task_assignees').insert({ task_id: task.id, assignee_email: email })
   }
 
   // Notify assignees via Telegram + Teams
@@ -1340,7 +1357,7 @@ async function handleMet(
   description: string,
   m: BotMessages = BOT_MESSAGES.zh
 ) {
-  const supabase = createServiceClient()
+  const supabase: OrgDb = orgScopedClient(systemOrgContext())
   const nowIso = new Date().toISOString()
 
   await sendMessage(chatId, m.aiAnalyzing)
@@ -1354,12 +1371,13 @@ async function handleMet(
   }
 
   // Fetch most recent N contacts created by this user
-  const { data: contacts } = await supabase
+  const { data } = await supabase
     .from('contacts')
     .select('id, name, company')
     .eq('created_by', user.id)
     .order('created_at', { ascending: false })
     .limit(count)
+  const contacts = (data ?? []) as { id: string; name: string | null; company: string | null }[]
 
   if (!contacts || contacts.length === 0) {
     await sendMessage(chatId, m.metContactNotFound)
@@ -1407,7 +1425,7 @@ async function logVisitOneShot(
   noteText: string,
   m: BotMessages,
 ) {
-  const supabase = createServiceClient()
+  const supabase: OrgDb = orgScopedClient(systemOrgContext())
   await sendMessage(chatId, m.aiAnalyzing)
 
   let logType: 'note' | 'meeting' = 'meeting'
@@ -1447,7 +1465,7 @@ async function handleTasks(
   m: BotMessages,
   lang: BotLang,
 ) {
-  const supabase = createServiceClient()
+  const supabase: OrgDb = orgScopedClient(systemOrgContext())
 
   // Tasks assigned to me
   const { data: assignedRows } = await supabase
@@ -1455,7 +1473,7 @@ async function handleTasks(
     .select('task_id')
     .eq('assignee_email', user.email)
 
-  const assignedIds = (assignedRows ?? []).map(r => r.task_id)
+  const assignedIds = (assignedRows ?? []).map((r: { task_id: string }) => r.task_id)
 
   // Query tasks: assigned to me OR created by me, status = pending
   const { data: tasks } = await supabase
@@ -1505,6 +1523,7 @@ async function handleText(
   lang: BotLang,
 ) {
   const supabase = createServiceClient()
+  const db: OrgDb = orgScopedClient(systemOrgContext())
 
   const cmd = text.trim()
 
@@ -1585,7 +1604,7 @@ async function handleText(
   if (cmd === '/email' || cmd === '/e') {
     const lastContactId = session?.last_contact_id
     if (lastContactId) {
-      const { data: lastContact } = await supabase
+      const { data: lastContact } = await db
         .from('contacts').select('id, name, company, email').eq('id', lastContactId).single()
       if (lastContact) {
         await sendMessage(chatId,
@@ -1746,7 +1765,7 @@ async function handleText(
       meetingLocation = parsed.meeting_location ?? null
     } catch { /* fall back to plain note */ }
 
-    await supabase.from('interaction_logs').insert({
+    await db.from('interaction_logs').insert({
       contact_id: contactId ?? null,
       type: logType,
       content: text.trim(),
@@ -1837,7 +1856,7 @@ async function handleText(
       meeting_time: string | null
       meeting_location: string | null
     }
-    await supabase.from('interaction_logs').insert({
+    await db.from('interaction_logs').insert({
       contact_id: ctx.contact_id ?? null,
       type: 'meeting',
       content: text.trim(),
@@ -1895,7 +1914,7 @@ async function handleText(
       await sendMessage(chatId, m.taskPostponeFormatBad)
       return
     }
-    await supabase.from('tasks').update({ due_at: new Date(parsed).toISOString() }).eq('id', taskId)
+    await db.from('tasks').update({ due_at: new Date(parsed).toISOString() }).eq('id', taskId)
     await clearSession(fromId)
     await sendMessage(chatId, m.taskPostponed(new Date(parsed).toLocaleString(dateLocale(lang), { timeZone: 'Asia/Taipei' })))
     return
@@ -1923,7 +1942,7 @@ async function handleText(
   if (cmd === '/note' || cmd === '/n') {
     const lastContactId = session?.last_contact_id
     if (lastContactId) {
-      const { data: lastContact } = await supabase
+      const { data: lastContact } = await db
         .from('contacts').select('id, name, company').eq('id', lastContactId).single()
       if (lastContact) {
         await sendMessage(chatId,
@@ -2001,7 +2020,7 @@ async function handleText(
   if (cmd === '/visit' || cmd === '/v') {
     const lastContactId = session?.last_contact_id
     if (lastContactId) {
-      const { data: lastContact } = await supabase
+      const { data: lastContact } = await db
         .from('contacts').select('id, name, company').eq('id', lastContactId).single()
       if (lastContact) {
         await sendMessage(chatId,
@@ -2023,7 +2042,7 @@ async function handleText(
   if (cmd === '/a') {
     const lastContactId = session?.last_contact_id
     if (lastContactId) {
-      const { data: lastContact } = await supabase.from('contacts').select('id, name, company').eq('id', lastContactId).single()
+      const { data: lastContact } = await db.from('contacts').select('id, name, company').eq('id', lastContactId).single()
       if (lastContact) {
         await setSession(fromId, 'waiting_for_add_card', { contact_id: lastContactId, contact_name: lastContact.name })
         await sendMessage(chatId, m.addCardLastContact(lastContact.name ?? '', lastContact.company ?? ''), {
@@ -2074,7 +2093,7 @@ async function handleText(
   if (cmd === '/p') {
     const lastContactId = session?.last_contact_id
     if (lastContactId) {
-      const { data: lastContact } = await supabase.from('contacts').select('id, name, company').eq('id', lastContactId).single()
+      const { data: lastContact } = await db.from('contacts').select('id, name, company').eq('id', lastContactId).single()
       if (lastContact) {
         await setSession(fromId, 'waiting_for_photo', { contact_id: lastContactId, contact_name: lastContact.name })
         await sendMessage(chatId, m.personPhotoLastContact(lastContact.name ?? '', lastContact.company ?? ''))
@@ -2145,7 +2164,7 @@ async function handleText(
     let contactName: string | undefined
     if (contacts.length === 1) {
       contactId = contacts[0].id
-      contactName = contacts[0].name
+      contactName = contacts[0].name ?? undefined
     } else if (contacts.length === 0) {
       contactId = null
     } else {
@@ -2155,7 +2174,7 @@ async function handleText(
       return
     }
 
-    await supabase.from('interaction_logs').insert({
+    await db.from('interaction_logs').insert({
       contact_id: contactId,
       type: 'note',
       content,
@@ -2215,7 +2234,7 @@ async function handleText(
     // /done can finish: batch_mode (existing) OR news_collecting (new)
     if (session?.state === 'news_collecting') {
       const draftId = session.context.draft_id as string
-      const sb = createServiceClient()
+      const sb: OrgDb = orgScopedClient(systemOrgContext())
       const { data: d } = await sb.from('newsletter_drafts')
         .select('title, content, photo_urls, event_date, section, period')
         .eq('id', draftId).single()
@@ -2268,7 +2287,7 @@ async function handleText(
     const cur = currentPeriod()
     const nxt = nextPeriod()
     // Pull custom labels for both periods (if user has renamed sections on the web)
-    const sb = createServiceClient()
+    const sb: OrgDb = orgScopedClient(systemOrgContext())
     const { data: metas } = await sb
       .from('newsletter_period_meta')
       .select('period, label_last, label_next')
@@ -2324,7 +2343,7 @@ async function handleText(
       return
     }
     // Create the draft now so subsequent photos/text can append
-    const sb = createServiceClient()
+    const sb: OrgDb = orgScopedClient(systemOrgContext())
     const { data: existing } = await sb
       .from('newsletter_drafts')
       .select('position')
@@ -2361,7 +2380,7 @@ async function handleText(
   if (session?.state === 'news_collecting') {
     if (cmd.startsWith('/')) { await clearSession(fromId) } else {
     const draftId = session.context.draft_id as string
-    const sb = createServiceClient()
+    const sb: OrgDb = orgScopedClient(systemOrgContext())
     const { data: cur } = await sb.from('newsletter_drafts')
       .select('content').eq('id', draftId).single()
     const merged = (cur?.content ? cur.content + '\n\n' : '') + text.trim()
@@ -2418,11 +2437,14 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     rawUpdate = body
     const supabase = createServiceClient()
+    // Phase 1 單租戶：bot 為系統行為者，固定 default org（見 orgContext.ts 路線圖）。
+    // Phase 3：由 /start org 綁定流程從 bot_sessions／使用者解析所屬 org。
+    const db: OrgDb = orgScopedClient(systemOrgContext())
 
     // --- Deduplication: skip already-processed updates ---
     const updateId = body.update_id as number | undefined
     if (updateId) {
-      const { error: dedupError } = await supabase
+      const { error: dedupError } = await db
         .from('telegram_dedup')
         .insert({ update_id: updateId })
       if (dedupError) {
@@ -2448,7 +2470,7 @@ export async function POST(req: NextRequest) {
         // ── Save card ─────────────────────────────────────────────────────────
         if (data?.startsWith('save_')) {
           const pendingId = data.replace('save_', '')
-          const { data: pending } = await supabase
+          const { data: pending } = await db
             .from('pending_contacts')
             .select('data, storage_path')
             .eq('id', pendingId)
@@ -2466,14 +2488,14 @@ export async function POST(req: NextRequest) {
           // (multi-card support stores them in contact_cards instead — writing
           // both makes the detail page show the same image twice)
           const { rotation: _r, _merge_target_id: _mt, card_img_url: _ci, card_img_back_url: _cb, ...contactFields } = pending.data as Record<string, unknown>
-          const { data: inserted, error } = await supabase
+          const { data: inserted, error } = await db
             .from('contacts')
             .insert({ ...contactFields, created_by: user.id })
             .select('id')
             .single()
           if (error || !inserted) throw new Error(error?.message ?? m.insertFailedFallback)
 
-          await supabase.from('interaction_logs').insert({
+          await db.from('interaction_logs').insert({
             contact_id: inserted.id,
             type: 'system',
             content: '透過 Telegram Bot 新增名片',
@@ -2485,7 +2507,7 @@ export async function POST(req: NextRequest) {
           if (pendingData.card_img_url) {
             const now = new Date()
             const cardLabel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-            await supabase.from('contact_cards').insert({
+            await db.from('contact_cards').insert({
               contact_id: inserted.id,
               card_img_url: pendingData.card_img_url,
               storage_path: pending.storage_path,
@@ -2493,7 +2515,7 @@ export async function POST(req: NextRequest) {
             })
           }
 
-          await supabase.from('pending_contacts').delete().eq('id', pendingId)
+          await db.from('pending_contacts').delete().eq('id', pendingId)
           await updateLastContact(from.id, inserted.id)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
@@ -2528,7 +2550,7 @@ export async function POST(req: NextRequest) {
           const isReplace = data.startsWith('replace_')
           const mode: MergeMode = isReplace ? 'replace' : 'fill'
           const pendingId = data.replace(/^(merge_|replace_)/, '')
-          const { data: pending } = await supabase
+          const { data: pending } = await db
             .from('pending_contacts')
             .select('data, storage_path')
             .eq('id', pendingId)
@@ -2567,7 +2589,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ ok: true })
           }
 
-          await supabase.from('pending_contacts').delete().eq('id', pendingId)
+          await db.from('pending_contacts').delete().eq('id', pendingId)
           await updateLastContact(from.id, targetId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
 
@@ -2585,7 +2607,7 @@ export async function POST(req: NextRequest) {
         // ── Cancel card ───────────────────────────────────────────────────────
         else if (data?.startsWith('cancel_')) {
           const pendingId = data.replace('cancel_', '')
-          const { data: pending } = await supabase
+          const { data: pending } = await db
             .from('pending_contacts')
             .select('storage_path')
             .eq('id', pendingId)
@@ -2593,7 +2615,7 @@ export async function POST(req: NextRequest) {
           if (pending?.storage_path) {
             await supabase.storage.from('cards').remove([pending.storage_path])
           }
-          await supabase.from('pending_contacts').delete().eq('id', pendingId)
+          await db.from('pending_contacts').delete().eq('id', pendingId)
           await answerCallbackQuery(callbackQueryId, m.cbCardCancelled)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await sendMessage(from.id, m.cardCancelled)
@@ -2602,7 +2624,7 @@ export async function POST(req: NextRequest) {
         // ── Meet confirm ──────────────────────────────────────────────────────
         else if (data?.startsWith('meet_confirm_')) {
           const draftId = data.replace('meet_confirm_', '')
-          const { data: draft } = await supabase
+          const { data: draft } = await db
             .from('meeting_drafts')
             .select('*')
             .eq('id', draftId)
@@ -2632,7 +2654,7 @@ export async function POST(req: NextRequest) {
               attendeeEmails,
               location: draft.location ?? undefined,
             })
-            await supabase.from('meeting_drafts').delete().eq('id', draftId)
+            await db.from('meeting_drafts').delete().eq('id', draftId)
             await answerCallbackQuery(callbackQueryId, m.cbMeetConfirmed)
             await editMessageReplyMarkup(message.chat.id, message.message_id)
             const timeLabel = formatTaipeiRange(draft.start_at, draft.duration_minutes, m, lang)
@@ -2647,7 +2669,7 @@ export async function POST(req: NextRequest) {
         // ── Meet cancel ───────────────────────────────────────────────────────
         else if (data?.startsWith('meet_cancel_')) {
           const draftId = data.replace('meet_cancel_', '')
-          await supabase.from('meeting_drafts').delete().eq('id', draftId)
+          await db.from('meeting_drafts').delete().eq('id', draftId)
           await answerCallbackQuery(callbackQueryId, m.cbMeetCancelled)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await sendMessage(from.id, m.meetCancelled)
@@ -2656,7 +2678,7 @@ export async function POST(req: NextRequest) {
         // ── /visit: use last contact ─────────────────────────────────────────
         else if (data?.startsWith('use_last_visit_')) {
           const contactId = data.replace('use_last_visit_', '')
-          const { data: contact } = await supabase
+          const { data: contact } = await db
             .from('contacts').select('id, name').eq('id', contactId).single()
           await setSession(from.id, 'waiting_for_visit_datetime', { contact_id: contactId, contact_name: contact?.name })
           await answerCallbackQuery(callbackQueryId)
@@ -2675,7 +2697,7 @@ export async function POST(req: NextRequest) {
         // ── /visit: select contact from search results ───────────────────────
         else if (data?.startsWith('select_visit_contact_')) {
           const contactId = data.replace('select_visit_contact_', '')
-          const { data: contact } = await supabase
+          const { data: contact } = await db
             .from('contacts').select('id, name').eq('id', contactId).single()
           await setSession(from.id, 'waiting_for_visit_datetime', { contact_id: contactId, contact_name: contact?.name })
           await answerCallbackQuery(callbackQueryId)
@@ -2696,7 +2718,7 @@ export async function POST(req: NextRequest) {
           if (!noteText) {
             await sendMessage(from.id, m.visitNoteMissing)
           } else {
-            const { data: contact } = await supabase
+            const { data: contact } = await db
               .from('contacts').select('id, name').eq('id', contactId).single()
             await logVisitOneShot(from.id, user, contactId, contact?.name ?? null, noteText, m)
           }
@@ -2705,7 +2727,7 @@ export async function POST(req: NextRequest) {
         // ── Select contact for note ───────────────────────────────────────────
         else if (data?.startsWith('select_contact_')) {
           const contactId = data.replace('select_contact_', '')
-          const { data: contact } = await supabase
+          const { data: contact } = await db
             .from('contacts')
             .select('id, name')
             .eq('id', contactId)
@@ -2715,7 +2737,7 @@ export async function POST(req: NextRequest) {
 
           if (session?.state === 'waiting_for_note_content_after_select') {
             const content = session.context.content as string
-            await supabase.from('interaction_logs').insert({
+            await db.from('interaction_logs').insert({
               contact_id: contactId,
               type: 'note',
               content,
@@ -2736,7 +2758,7 @@ export async function POST(req: NextRequest) {
         // ── Select contact for /a add card ───────────────────────────────────
         else if (data?.startsWith('select_add_card_')) {
           const contactId = data.replace('select_add_card_', '')
-          const { data: contact } = await supabase.from('contacts').select('id, name').eq('id', contactId).single()
+          const { data: contact } = await db.from('contacts').select('id, name').eq('id', contactId).single()
           await setSession(from.id, 'waiting_for_add_card', { contact_id: contactId, contact_name: contact?.name })
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
@@ -2785,7 +2807,7 @@ export async function POST(req: NextRequest) {
           } else {
             const insertPayload: Record<string, unknown> = { name: nameQuery, created_by: user.id }
             if (companyQuery) insertPayload.company = companyQuery
-            const { data: inserted, error } = await supabase
+            const { data: inserted, error } = await db
               .from('contacts')
               .insert(insertPayload)
               .select('id')
@@ -2793,7 +2815,7 @@ export async function POST(req: NextRequest) {
             if (error || !inserted) {
               await sendMessage(from.id, m.addCardCreateFailed(error?.message ?? m.unknownError))
             } else {
-              await supabase.from('interaction_logs').insert({
+              await db.from('interaction_logs').insert({
                 contact_id: inserted.id,
                 type: 'system',
                 content: companyQuery
@@ -2898,7 +2920,7 @@ export async function POST(req: NextRequest) {
           } else {
             const insertPayload: Record<string, unknown> = { name: nameQuery, created_by: user.id }
             if (companyQuery) insertPayload.company = companyQuery
-            const { data: inserted, error } = await supabase
+            const { data: inserted, error } = await db
               .from('contacts')
               .insert(insertPayload)
               .select('id')
@@ -2906,7 +2928,7 @@ export async function POST(req: NextRequest) {
             if (error || !inserted) {
               await sendMessage(from.id, m.addCardCreateFailed(error?.message ?? m.unknownError))
             } else {
-              await supabase.from('interaction_logs').insert({
+              await db.from('interaction_logs').insert({
                 contact_id: inserted.id,
                 type: 'system',
                 content: companyQuery
@@ -2941,7 +2963,7 @@ export async function POST(req: NextRequest) {
         // ── Select contact for /p photo ───────────────────────────────────────
         else if (data?.startsWith('select_photo_')) {
           const contactId = data.replace('select_photo_', '')
-          const { data: contact } = await supabase.from('contacts').select('id, name').eq('id', contactId).single()
+          const { data: contact } = await db.from('contacts').select('id, name').eq('id', contactId).single()
           await setSession(from.id, 'waiting_for_photo', { contact_id: contactId, contact_name: contact?.name })
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
@@ -3034,7 +3056,7 @@ export async function POST(req: NextRequest) {
           } else {
             // Name fallback: use English name if no local language name
             const contactName = parsed.name || parsed.name_en || null
-            const { data: inserted, error } = await supabase
+            const { data: inserted, error } = await db
               .from('contacts')
               .insert({
                 name: contactName,
@@ -3062,14 +3084,14 @@ export async function POST(req: NextRequest) {
                     .from('cards').upload(storagePath, compressed, { contentType: 'image/jpeg', upsert: false })
                   if (!uploadError) {
                     const { data: publicUrlData } = supabase.storage.from('cards').getPublicUrl(storagePath)
-                    await supabase.from('contacts').update({ card_img_url: publicUrlData.publicUrl }).eq('id', inserted.id)
+                    await db.from('contacts').update({ card_img_url: publicUrlData.publicUrl }).eq('id', inserted.id)
                   }
                 } catch {
                   // Screenshot upload failure is non-fatal
                 }
               }
               if (parsed.notes) {
-                await supabase.from('interaction_logs').insert({
+                await db.from('interaction_logs').insert({
                   contact_id: inserted.id,
                   type: 'note',
                   content: parsed.notes,
@@ -3113,7 +3135,7 @@ export async function POST(req: NextRequest) {
         // ── /search: quick email from contact ────────────────────────────────
         else if (data?.startsWith('email_contact_')) {
           const contactId = data.replace('email_contact_', '')
-          const { data: contact } = await supabase
+          const { data: contact } = await db
             .from('contacts')
             .select('id, name, email')
             .eq('id', contactId)
@@ -3137,7 +3159,7 @@ export async function POST(req: NextRequest) {
         // ── /search: quick note from contact ─────────────────────────────────
         else if (data?.startsWith('note_contact_')) {
           const contactId = data.replace('note_contact_', '')
-          const { data: contact } = await supabase
+          const { data: contact } = await db
             .from('contacts')
             .select('id, name')
             .eq('id', contactId)
@@ -3151,7 +3173,7 @@ export async function POST(req: NextRequest) {
         // ── /email: select contact from list ─────────────────────────────────
         else if (data?.startsWith('select_email_contact_')) {
           const contactId = data.replace('select_email_contact_', '')
-          const { data: contact } = await supabase
+          const { data: contact } = await db
             .from('contacts')
             .select('id, name, email')
             .eq('id', contactId)
@@ -3175,7 +3197,7 @@ export async function POST(req: NextRequest) {
         // ── /email: method choice 1 (template) ───────────────────────────────
         else if (data === 'email_method_1') {
           const session = await getSession(from.id)
-          const { data: templates } = await supabase
+          const { data: templates } = await db
             .from('email_templates')
             .select('id, title, subject')
             .order('created_at', { ascending: false })
@@ -3187,7 +3209,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ ok: true })
           }
 
-          const buttons = templates.map((t) => [{
+          const buttons = templates.map((t: { id: string; title: string }) => [{
             text: t.title,
             callback_data: `select_email_tpl_${t.id}`,
           }])
@@ -3209,7 +3231,7 @@ export async function POST(req: NextRequest) {
         // ── /email: select template ───────────────────────────────────────────
         else if (data?.startsWith('select_email_tpl_')) {
           const templateId = data.replace('select_email_tpl_', '')
-          const { data: tpl } = await supabase
+          const { data: tpl } = await db
             .from('email_templates')
             .select('id, title, subject, body_content')
             .eq('id', templateId)
@@ -3253,7 +3275,7 @@ export async function POST(req: NextRequest) {
               subject,
               body: bodyHtml,
             })
-            await supabase.from('interaction_logs').insert({
+            await db.from('interaction_logs').insert({
               contact_id: contactId,
               type: 'email',
               content: bodyHtml,
@@ -3277,9 +3299,9 @@ export async function POST(req: NextRequest) {
           const offset = parseInt(parts[parts.length - 1], 10) || 0
           const contactId = parts.slice(2, parts.length - 1).join('_')
 
-          const { data: contact } = await supabase
+          const { data: contact } = await db
             .from('contacts').select('name').eq('id', contactId).single()
-          const { data: logs } = await supabase
+          const { data: logs } = await db
             .from('interaction_logs')
             .select('type, content, created_at')
             .eq('contact_id', contactId)
@@ -3298,7 +3320,7 @@ export async function POST(req: NextRequest) {
               if (t === 'system') return m.logTypeSystem
               return t
             }
-            const lines = logs.map((l) => {
+            const lines = logs.map((l: { type: string; created_at: string; content: string | null }) => {
               const label = typeLabel(l.type)
               const date = new Date(l.created_at).toLocaleDateString(dateLocale(lang))
               const preview = (l.content ?? '').replace(/<[^>]+>/g, '').slice(0, 80)
@@ -3320,7 +3342,7 @@ export async function POST(req: NextRequest) {
         // ── /note: use last contact ───────────────────────────────────────────
         else if (data?.startsWith('use_last_note_')) {
           const contactId = data.replace('use_last_note_', '')
-          const { data: contact } = await supabase
+          const { data: contact } = await db
             .from('contacts').select('id, name').eq('id', contactId).single()
           await setSession(from.id, 'waiting_for_note_content', { contact_id: contactId, contact_name: contact?.name })
           await answerCallbackQuery(callbackQueryId)
@@ -3339,7 +3361,7 @@ export async function POST(req: NextRequest) {
         // ── /email: use last contact ──────────────────────────────────────────
         else if (data?.startsWith('use_last_email_')) {
           const contactId = data.replace('use_last_email_', '')
-          const { data: contact } = await supabase
+          const { data: contact } = await db
             .from('contacts').select('id, name, email').eq('id', contactId).single()
           await setSession(from.id, 'waiting_email_method', {
             contact_id: contactId,
@@ -3382,13 +3404,13 @@ export async function POST(req: NextRequest) {
             const ctx = session?.context as { contact_ids: string[]; met_at: string | null; met_date: string; referred_by: string | null } | undefined
             if (!ctx?.contact_ids?.length) throw new Error(m.metApplyMissing)
             const { contact_ids, met_at, met_date, referred_by } = ctx
-            await supabase.from('contacts').update({
+            await db.from('contacts').update({
               met_at: met_at ?? null,
               met_date: met_date ?? null,
               referred_by: referred_by ?? null,
             }).in('id', contact_ids)
             const logContent = m.metLogContent(met_at ?? m.cardEmptyValue, met_date, referred_by ?? '')
-            await supabase.from('interaction_logs').insert(
+            await db.from('interaction_logs').insert(
               contact_ids.map((contact_id) => ({ contact_id, type: 'meeting', content: logContent, created_by: user.id }))
             )
             await clearSession(from.id)
@@ -3409,12 +3431,12 @@ export async function POST(req: NextRequest) {
         // ── /tasks: mark done ─────────────────────────────────────────────────
         else if (data?.startsWith('task_done_')) {
           const taskId = data.replace('task_done_', '')
-          const { data: task } = await supabase
+          const { data: task } = await db
             .from('tasks')
             .select('title, created_by, task_assignees(assignee_email)')
             .eq('id', taskId)
             .single()
-          await supabase.from('tasks').update({
+          await db.from('tasks').update({
             status: 'done',
             completed_by: user.email,
             completed_at: new Date().toISOString(),
@@ -3467,8 +3489,8 @@ export async function POST(req: NextRequest) {
         // ── /tasks: cancel task ───────────────────────────────────────────────
         else if (data?.startsWith('task_cancel_')) {
           const taskId = data.replace('task_cancel_', '')
-          const { data: task } = await supabase.from('tasks').select('title').eq('id', taskId).single()
-          await supabase.from('tasks').update({ status: 'cancelled' }).eq('id', taskId)
+          const { data: task } = await db.from('tasks').select('title').eq('id', taskId).single()
+          await db.from('tasks').update({ status: 'cancelled' }).eq('id', taskId)
           await answerCallbackQuery(callbackQueryId, m.taskCancelCallback)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await sendMessage(from.id, m.taskCancelledNotice(task?.title ?? ''))
@@ -3478,13 +3500,13 @@ export async function POST(req: NextRequest) {
         // 不清掉原訊息的 reply_markup：digest 一則訊息可能帶多個任務的按鈕。
         else if (data?.startsWith('trdone_')) {
           const taskId = data.replace('trdone_', '')
-          const { data: task } = await supabase
+          const { data: task } = await db
             .from('tasks').select('id, title').eq('id', taskId).maybeSingle()
           if (!task) {
             await answerCallbackQuery(callbackQueryId, m.taskNotFound)
             return NextResponse.json({ ok: true })
           }
-          await supabase.from('tasks').update({
+          await db.from('tasks').update({
             status: 'done',
             completed_by: user.email,
             completed_at: new Date().toISOString(),
@@ -3496,14 +3518,14 @@ export async function POST(req: NextRequest) {
         // ── Task digest reminder: snooze 1 day (trsnooze_<taskId>) ───────────
         else if (data?.startsWith('trsnooze_')) {
           const taskId = data.replace('trsnooze_', '')
-          const { data: task } = await supabase
+          const { data: task } = await db
             .from('tasks').select('id').eq('id', taskId).maybeSingle()
           if (!task) {
             await answerCallbackQuery(callbackQueryId, m.taskNotFound)
             return NextResponse.json({ ok: true })
           }
           const newDueIso = new Date(Date.now() + 86_400_000).toISOString()
-          await supabase.from('tasks').update({ due_at: newDueIso }).eq('id', taskId)
+          await db.from('tasks').update({ due_at: newDueIso }).eq('id', taskId)
           await answerCallbackQuery(callbackQueryId)
           await sendMessage(from.id, m.taskPostponed(
             new Date(newDueIso).toLocaleString(dateLocale(lang), { timeZone: 'Asia/Taipei' })
@@ -3519,12 +3541,12 @@ export async function POST(req: NextRequest) {
           const contactId = rest.slice(0, sep)
           const days = parseInt(rest.slice(sep + 1), 10)
 
-          const { data: contact } = await supabase
+          const { data: contact } = await db
             .from('contacts').select('name').eq('id', contactId).single()
           const contactName = contact?.name ?? m.cardThisContact
 
           const dueAt = new Date(Date.now() + days * 86_400_000).toISOString()
-          const { data: task, error } = await supabase
+          const { data: task, error } = await db
             .from('tasks')
             .insert({
               title: m.followupTaskTitle(contactName),
@@ -3539,7 +3561,7 @@ export async function POST(req: NextRequest) {
             await sendMessage(from.id, m.taskSaveFailed)
             return NextResponse.json({ ok: true })
           }
-          await supabase.from('task_assignees').insert({ task_id: task.id, assignee_email: user.email })
+          await db.from('task_assignees').insert({ task_id: task.id, assignee_email: user.email })
 
           await answerCallbackQuery(callbackQueryId, m.followupCbCreated)
           await editMessageReplyMarkup(message.chat.id, message.message_id)

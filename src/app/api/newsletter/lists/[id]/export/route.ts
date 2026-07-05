@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { hasFeature } from '@/lib/features'
+import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 
 // GET /api/newsletter/lists/[id]/export
 //
@@ -28,7 +29,10 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: 'Forbidden — newsletter permission required' }, { status: 403 })
   }
 
-  const { data: list } = await service
+  const orgCtx = await getOrgContext()
+  const db: OrgDb = orgScopedClient(orgCtx)
+
+  const { data: list } = await db
     .from('newsletter_lists')
     .select('id, key, name')
     .eq('id', id)
@@ -50,7 +54,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   let from = 0
   const BATCH = 1000
   while (true) {
-    const { data, error } = await service
+    const { data, error } = await db
       .from('newsletter_subscriber_lists')
       .select('added_at, newsletter_subscribers(email, first_name, last_name, company, source)')
       .eq('list_id', id)
@@ -74,7 +78,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   const QUERY_BATCH = 200
   for (let i = 0; i < emails.length; i += QUERY_BATCH) {
     const batch = emails.slice(i, i + QUERY_BATCH)
-    const { data } = await service
+    const { data } = await db
       .from('newsletter_unsubscribes')
       .select('email')
       .in('email', batch)

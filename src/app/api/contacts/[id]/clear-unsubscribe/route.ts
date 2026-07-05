@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // POST /api/contacts/[id]/clear-unsubscribe
 // Comprehensively un-suppress this contact's email so they can receive
@@ -18,6 +19,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
   const { data: me } = await service
     .from('users')
     .select('id')
@@ -25,7 +28,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     .maybeSingle()
   const userId = me?.id ?? null
 
-  const { data: contact } = await service
+  const { data: contact } = await db
     .from('contacts')
     .select('id, name, email, email_status')
     .eq('id', id)
@@ -39,13 +42,13 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   // 1. Clear email_status on contact
   if (oldStatus) {
-    await service.from('contacts').update({ email_status: null }).eq('id', id)
+    await db.from('contacts').update({ email_status: null }).eq('id', id)
     summary.push(`contacts.email_status (${oldStatus}→null)`)
   }
 
   // 2. Remove from global blocklist
   if (email) {
-    const { count: unsubCount } = await service
+    const { count: unsubCount } = await db
       .from('newsletter_unsubscribes')
       .delete({ count: 'exact' })
       .eq('email', email)
@@ -56,14 +59,14 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   // 3. Reset per-list subscriber state (case-insensitive)
   if (email) {
-    const { data: subRows } = await service
+    const { data: subRows } = await db
       .from('newsletter_subscribers')
       .select('id')
       .ilike('email', email)
       .not('unsubscribed_at', 'is', null)
     const subIds = (subRows ?? []).map((s: { id: string }) => s.id)
     if (subIds.length > 0) {
-      await service
+      await db
         .from('newsletter_subscribers')
         .update({ unsubscribed_at: null })
         .in('id', subIds)
@@ -72,7 +75,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
 
   if (summary.length > 0) {
-    await service.from('interaction_logs').insert({
+    await db.from('interaction_logs').insert({
       contact_id: id,
       type: 'system',
       content: `手動清除退訂/退信狀態：${summary.join('; ')}`,

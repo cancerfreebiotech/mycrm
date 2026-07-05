@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // GET — distinct assignee_label values in status='pending' rows (for filter dropdown)
 export async function GET() {
   const supabase = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   const [{ data: rpcData, error }, { count: unassigned }] = await Promise.all([
     supabase.rpc('get_camcard_assignee_counts'),
-    supabase.from('camcard_pending').select('id', { count: 'exact', head: true }).eq('status', 'pending').is('assignee_label', null),
+    db.from('camcard_pending').select('id', { count: 'exact', head: true }).eq('status', 'pending').is('assignee_label', null),
   ])
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -23,13 +26,14 @@ export async function GET() {
 // PATCH — bulk update assignee_label
 // Body: { ids: string[], assignee_label: string | null }
 export async function PATCH(request: Request) {
-  const supabase = createServiceClient()
   const body = await request.json() as { ids?: string[]; assignee_label?: string | null }
   if (!Array.isArray(body.ids) || body.ids.length === 0) {
     return NextResponse.json({ error: 'ids required' }, { status: 400 })
   }
   const label = body.assignee_label?.trim() || null
-  const { error, data } = await supabase
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+  const { error, data } = await db
     .from('camcard_pending')
     .update({ assignee_label: label })
     .in('id', body.ids)

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { generateCardFilename } from '@/lib/cardFilename'
 import { mergeIntoContact, type MergeMode } from '@/lib/merge-into-contact'
 
@@ -60,9 +61,12 @@ export async function POST(
     }
   }
 
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+
   const [{ data: pending }, { data: contact }] = await Promise.all([
-    supabase.from('camcard_pending').select('*').eq('id', id).single(),
-    supabase.from('contacts').select('id, name, name_en, extra_data, card_img_back_url').eq('id', contactId).single(),
+    db.from('camcard_pending').select('*').eq('id', id).single(),
+    db.from('contacts').select('id, name, name_en, extra_data, card_img_back_url').eq('id', contactId).single(),
   ])
 
   if (!pending) return NextResponse.json({ error: 'Pending not found' }, { status: 404 })
@@ -96,7 +100,7 @@ export async function POST(
       const { data: urlData } = supabase.storage.from('cards').getPublicUrl(backPath)
       finalBackUrl = urlData.publicUrl
       if (!contact.card_img_back_url) {
-        await supabase.from('contacts').update({ card_img_back_url: urlData.publicUrl }).eq('id', contactId)
+        await db.from('contacts').update({ card_img_back_url: urlData.publicUrl }).eq('id', contactId)
       }
     }
   }
@@ -112,7 +116,7 @@ export async function POST(
     if (v && !KNOWN_CONTACT_KEYS.has(k) && !OCR_TO_CONTACT[k] && !extraData[k]) extraData[k] = v
   }
   if (Object.keys(extraData).length > 0) {
-    await supabase.from('contacts').update({ extra_data: extraData }).eq('id', contactId)
+    await db.from('contacts').update({ extra_data: extraData }).eq('id', contactId)
   }
 
   const confirmedNote = confirmedByName ? `，由 ${confirmedByName} 確認` : ''
@@ -134,7 +138,7 @@ export async function POST(
 
   if (!result.ok) return NextResponse.json({ error: result.error ?? 'Merge failed' }, { status: 500 })
 
-  await supabase.from('camcard_pending').update({ status: 'confirmed' }).eq('id', id)
+  await db.from('camcard_pending').update({ status: 'confirmed' }).eq('id', id)
 
   return NextResponse.json({
     ok: true,

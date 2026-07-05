@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // GET /api/contacts/trash — 列出所有軟刪除聯絡人（僅 super_admin）
 export async function GET() {
@@ -21,7 +22,10 @@ export async function GET() {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { data, error } = await service
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+
+  const { data, error } = await db
     .from('contacts')
     .select(`
       id, name, name_en, company, email, deleted_at,

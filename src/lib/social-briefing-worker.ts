@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { OrgDb } from './orgContext'
 import { generateContactBriefing, type BriefingContactInput } from './briefing'
 import { sendTelegramMessage } from './telegram'
 
@@ -43,7 +43,7 @@ export interface BriefingBatchResult {
   requeued: number
 }
 
-export async function processPendingBriefings(supabase: SupabaseClient): Promise<BriefingBatchResult> {
+export async function processPendingBriefings(supabase: OrgDb): Promise<BriefingBatchResult> {
   let processed = 0
   let failed = 0
 

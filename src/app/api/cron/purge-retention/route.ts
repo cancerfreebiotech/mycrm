@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { recordCronRun } from '@/lib/cronHeartbeat'
 
 /**
@@ -35,6 +36,9 @@ export async function GET(req: NextRequest) {
 
   const startMs = Date.now()
   const service = createServiceClient()
+  // Phase 2+: 逐 org 迭代／由 payload 解析 org
+  const ctx = systemOrgContext()
+  const db = orgScopedClient(ctx)
   const result = {
     contacts_purged: 0,
     storage_files_removed: 0,
@@ -51,7 +55,7 @@ export async function GET(req: NextRequest) {
   // → 刪 storage 檔案 → 再刪 contacts 列（CASCADE 清子表）。
   // 一次最多 MAX_CONTACTS_PER_RUN 筆，剩餘的留待隔日續清。
   {
-    const { data: stale, error } = await service
+    const { data: stale, error } = await db
       .from('contacts')
       .select('id')
       .not('deleted_at', 'is', null)
@@ -65,8 +69,8 @@ export async function GET(req: NextRequest) {
     const ids = (stale ?? []).map((c) => c.id as string)
     if (ids.length > 0) {
       const [{ data: cards }, { data: photos }] = await Promise.all([
-        service.from('contact_cards').select('storage_path').in('contact_id', ids),
-        service.from('contact_photos').select('storage_path').in('contact_id', ids),
+        db.from('contact_cards').select('storage_path').in('contact_id', ids),
+        db.from('contact_photos').select('storage_path').in('contact_id', ids),
       ])
       const paths = [...(cards ?? []), ...(photos ?? [])]
         .map((c: { storage_path: string | null }) => c.storage_path)
@@ -76,7 +80,7 @@ export async function GET(req: NextRequest) {
         if (rmErr) console.error('[purge-retention] storage remove failed:', rmErr.message)
         else result.storage_files_removed = paths.length
       }
-      const { error: delErr } = await service.from('contacts').delete().in('id', ids)
+      const { error: delErr } = await db.from('contacts').delete().in('id', ids)
       if (delErr) {
         console.error('[purge-retention] delete contacts failed:', delErr.message)
         await recordCronRun(service, 'purge-retention', 'error', { error: delErr.message }, Date.now() - startMs)
@@ -90,7 +94,7 @@ export async function GET(req: NextRequest) {
   // schema: scripts/supabase-migration/artifacts/source-migrations.json
   //   → create table bot_sessions (... updated_at timestamptz default now())
   {
-    const { count, error } = await service
+    const { count, error } = await db
       .from('bot_sessions')
       .delete({ count: 'exact' })
       .lt('updated_at', daysAgo(BOT_SESSION_DAYS))
@@ -102,7 +106,7 @@ export async function GET(req: NextRequest) {
   // schema: scripts/supabase-migration/artifacts/source-migrations.json
   //   → create table telegram_dedup (update_id bigint pk, processed_at timestamptz ...)
   {
-    const { count, error } = await service
+    const { count, error } = await db
       .from('telegram_dedup')
       .delete({ count: 'exact' })
       .lt('processed_at', daysAgo(TELEGRAM_DEDUP_DAYS))
@@ -114,7 +118,7 @@ export async function GET(req: NextRequest) {
   // schema: supabase/mcp_v2_agent_tokens.sql → expires_at TIMESTAMPTZ (NULL = never).
   // NULL 的 token 不會被 .lt 命中，故永不刪除。
   {
-    const { count, error } = await service
+    const { count, error } = await db
       .from('agent_tokens')
       .delete({ count: 'exact' })
       .lt('expires_at', daysAgo(AGENT_TOKEN_EXPIRED_DAYS))
@@ -125,7 +129,7 @@ export async function GET(req: NextRequest) {
   // ── 5. newsletter_compose_cache：created_at 逾 1 天 ────────────────────────
   // schema: src/app/api/newsletter/compose-from-drafts/route.ts 使用 created_at 過濾。
   {
-    const { count, error } = await service
+    const { count, error } = await db
       .from('newsletter_compose_cache')
       .delete({ count: 'exact' })
       .lt('created_at', daysAgo(COMPOSE_CACHE_DAYS))

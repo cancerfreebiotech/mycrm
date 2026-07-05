@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 export async function GET(request: Request) {
-  const supabase = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
   const url = new URL(request.url)
   const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '50'), 100)
   const offset = Math.max(parseInt(url.searchParams.get('offset') ?? '0'), 0)
@@ -13,12 +14,12 @@ export async function GET(request: Request) {
   const assignee = (url.searchParams.get('assignee') ?? '').trim()  // exact label; special '__unassigned__' for NULL
   const sort = url.searchParams.get('sort') ?? 'newest'
 
-  let countQ = supabase
+  let countQ = db
     .from('camcard_pending')
     .select('id', { count: 'exact', head: true })
     .eq('status', 'pending')
 
-  let dataQ = supabase
+  let dataQ = db
     .from('camcard_pending')
     .select('id, image_filename, card_img_url, back_img_url, ocr_data, status, duplicate_contact_id, match_type, created_at, assignee_label')
     .eq('status', 'pending')
@@ -61,7 +62,7 @@ export async function GET(request: Request) {
   const dupIds = [...new Set((data ?? []).map((r) => r.duplicate_contact_id).filter(Boolean))]
   let dupMap: Record<string, { id: string; name: string | null; name_en: string | null; company: string | null; email: string | null }> = {}
   if (dupIds.length > 0) {
-    const { data: dups } = await supabase
+    const { data: dups } = await db
       .from('contacts')
       .select('id, name, name_en, company, email')
       .in('id', dupIds as string[])

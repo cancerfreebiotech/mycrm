@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { logAdminAction } from '@/lib/adminAudit'
 import { addErasureTombstones } from '@/lib/erasureTombstone'
 
@@ -24,20 +25,23 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+
   const body = await req.json().catch(() => ({})) as { ids?: string[]; all?: boolean }
 
   type TargetRow = { id: string; email: string | null; second_email: string | null }
   let targets: TargetRow[] = []
 
   if (body.all === true) {
-    const { data: allTrashed } = await service
+    const { data: allTrashed } = await db
       .from('contacts')
       .select('id, email, second_email')
       .not('deleted_at', 'is', null)
     targets = (allTrashed ?? []) as TargetRow[]
   } else if (Array.isArray(body.ids) && body.ids.length > 0) {
     // 驗證這些 ID 都確實在回收區（避免誤刪未軟刪除的聯絡人）
-    const { data: verified } = await service
+    const { data: verified } = await db
       .from('contacts')
       .select('id, email, second_email')
       .in('id', body.ids)
@@ -55,12 +59,12 @@ export async function DELETE(req: NextRequest) {
 
   // 收集要刪的 Storage 圖片（contact_cards + contact_photos，兩者皆存於 'cards' bucket）
   const [{ data: cards }, { data: photos }] = await Promise.all([
-    service.from('contact_cards').select('storage_path').in('contact_id', targetIds),
-    service.from('contact_photos').select('storage_path').in('contact_id', targetIds),
+    db.from('contact_cards').select('storage_path').in('contact_id', targetIds),
+    db.from('contact_photos').select('storage_path').in('contact_id', targetIds),
   ])
 
-  const paths = [...(cards ?? []), ...(photos ?? [])]
-    .map((c: { storage_path: string | null }) => c.storage_path)
+  const paths = ([...(cards ?? []), ...(photos ?? [])] as { storage_path: string | null }[])
+    .map((c) => c.storage_path)
     .filter(Boolean) as string[]
 
   if (paths.length > 0) {
@@ -68,7 +72,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   // 永久刪除（CASCADE 清 contact_cards、contact_tags、interaction_logs）
-  const { error } = await service
+  const { error } = await db
     .from('contacts')
     .delete()
     .in('id', targetIds)

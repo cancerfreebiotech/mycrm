@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 import { checkDuplicates } from '@/lib/duplicate'
 import { mergeIntoContact, type MergeMode } from '@/lib/merge-into-contact'
 
@@ -17,9 +18,8 @@ async function getAuthUserId(): Promise<{ userId: string; userEmail: string; isS
   return { userId: data.id, userEmail: user.email, isSuperAdmin: data.role === 'super_admin' }
 }
 
-async function fetchOwnedPending(pendingId: string, userId: string, isSuperAdmin: boolean) {
-  const service = createServiceClient()
-  const { data } = await service
+async function fetchOwnedPending(db: OrgDb, pendingId: string, userId: string, isSuperAdmin: boolean) {
+  const { data } = await db
     .from('pending_contacts')
     .select('id, data, storage_path, created_by, status')
     .eq('id', pendingId)
@@ -33,10 +33,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const auth = await getAuthUserId()
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+
   const body = await req.json().catch(() => ({}))
   const action = body.action as 'save' | 'merge' | undefined
 
-  const pending = await fetchOwnedPending(id, auth.userId, auth.isSuperAdmin)
+  const pending = await fetchOwnedPending(db, id, auth.userId, auth.isSuperAdmin)
   if (!pending) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (pending.status !== 'done') {
     return NextResponse.json({ error: 'Pending row is not ready for review (status=' + pending.status + ')' }, { status: 400 })
@@ -57,7 +60,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         name: pdata.name as string | null | undefined,
         nameEn: pdata.name_en as string | null | undefined,
         nameLocal: pdata.name_local as string | null | undefined,
-      })
+      }, ctx)
       if (exact.length > 0) {
         return NextResponse.json({
           error: 'duplicate_exact',
@@ -73,7 +76,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const tagIds = Array.isArray(_ti) ? (_ti as string[]) : []
     // Default importance to 'medium' if user didn't explicitly choose
     if (!contactFields.importance) contactFields.importance = 'medium'
-    const { data: inserted, error } = await service
+    const { data: inserted, error } = await db
       .from('contacts')
       .insert({ ...contactFields, created_by: auth.userId })
       .select('id, name')
@@ -82,7 +85,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: error?.message ?? 'Insert failed' }, { status: 500 })
     }
 
-    await service.from('interaction_logs').insert({
+    await db.from('interaction_logs').insert({
       contact_id: inserted.id,
       type: 'system',
       content: '從 Pending 區確認新增名片',
@@ -90,7 +93,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })
 
     if (tagIds.length > 0) {
-      await service.from('contact_tags').insert(
+      await db.from('contact_tags').insert(
         tagIds.map((tagId) => ({ contact_id: inserted.id, tag_id: tagId }))
       )
     }
@@ -98,7 +101,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (pdata.card_img_url) {
       const now = new Date()
       const cardLabel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-      await service.from('contact_cards').insert({
+      await db.from('contact_cards').insert({
         contact_id: inserted.id,
         card_img_url: pdata.card_img_url as string,
         storage_path: pending.storage_path,
@@ -106,7 +109,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       })
     }
 
-    await service.from('pending_contacts').delete().eq('id', id)
+    await db.from('pending_contacts').delete().eq('id', id)
     return NextResponse.json({ ok: true, contact_id: inserted.id, name: inserted.name })
   }
 
@@ -137,7 +140,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     if (!result.ok) return NextResponse.json({ error: result.error ?? 'Merge failed' }, { status: 500 })
 
-    await service.from('pending_contacts').delete().eq('id', id)
+    await db.from('pending_contacts').delete().eq('id', id)
     return NextResponse.json({
       ok: true,
       contact_id: result.contact_id,
@@ -155,13 +158,16 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const auth = await getAuthUserId()
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const pending = await fetchOwnedPending(id, auth.userId, auth.isSuperAdmin)
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+
+  const pending = await fetchOwnedPending(db, id, auth.userId, auth.isSuperAdmin)
   if (!pending) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const service = createServiceClient()
   if (pending.storage_path) {
     await service.storage.from('cards').remove([pending.storage_path])
   }
-  await service.from('pending_contacts').delete().eq('id', id)
+  await db.from('pending_contacts').delete().eq('id', id)
   return NextResponse.json({ ok: true })
 }

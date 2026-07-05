@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { hasFeature } from '@/lib/features'
 
 // POST /api/newsletter/import
@@ -285,6 +286,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden — newsletter permission required' }, { status: 403 })
   }
 
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+
   // Parse JSON body
   let body: unknown
   try {
@@ -331,7 +335,7 @@ export async function POST(req: NextRequest) {
   // Load skeletons only for present langs
   const skeletonsByLang: Partial<Record<Lang, string>> = {}
   for (const lang of presentLangs) {
-    const { data } = await service
+    const { data } = await db
       .from('email_templates')
       .select('body_content')
       .eq('title', SKELETON_TITLE[lang])
@@ -345,7 +349,7 @@ export async function POST(req: NextRequest) {
   // Default lists per present lang
   const listIdsByLang: Partial<Record<Lang, string[]>> = {}
   for (const lang of presentLangs) {
-    const { data: listRow } = await service
+    const { data: listRow } = await db
       .from('newsletter_lists')
       .select('id')
       .eq('key', lang)
@@ -372,7 +376,7 @@ export async function POST(req: NextRequest) {
 
       const slug = `${manifest.period}-${lang === 'zh-TW' ? 'zh-tw' : lang}-${importStamp}`
 
-      const { data: inserted, error } = await service
+      const { data: inserted, error } = await db
         .from('newsletter_campaigns')
         .insert({
           title: TITLE_BY_LANG[lang](manifest.period),

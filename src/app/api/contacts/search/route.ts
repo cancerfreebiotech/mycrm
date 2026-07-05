@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // Lightweight contact search for pickers (e.g. pending merge to existing).
 // Returns up to 10 matches by name / name_en / company / email (ilike).
@@ -11,8 +12,10 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q')?.trim() ?? ''
   if (q.length < 1) return NextResponse.json({ results: [] })
 
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
   const escaped = q.replace(/[%_\\]/g, '\\$&')
-  const { data } = await supabase
+  const { data } = await db
     .from('contacts')
     .select('id, name, name_en, company, email')
     .is('deleted_at', null)

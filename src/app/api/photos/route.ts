@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 interface FaceContactRow {
   id: string
@@ -23,6 +24,8 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const service = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
   const q = req.nextUrl.searchParams.get('q')?.trim().toLowerCase() ?? ''
   const sortParam = req.nextUrl.searchParams.get('sort') ?? 'created_at'
   const sort: 'created_at' | 'taken_at' | 'name' =
@@ -32,7 +35,7 @@ export async function GET(req: NextRequest) {
   // 為避免無上限的全表載入，設一個防禦性上限並回報是否被截斷，而非靜默丟資料。
   const MAX_PHOTOS = 1000
 
-  let query = service
+  let query = db
     .from('contact_photos')
     .select('id, photo_url, storage_path, note, taken_at, location_name, latitude, longitude, created_at', { count: 'exact' })
     .limit(MAX_PHOTOS)
@@ -52,7 +55,7 @@ export async function GET(req: NextRequest) {
 
   // 一張照片可對應多位聯絡人 → 從 photo_faces 取每張照片框到的人（排除已拒絕的建議）。
   // contact_id 與 suggested_contact_id 都指向 contacts，故用 contacts:contact_id 明確指定 FK 以消歧義。
-  const { data: faceRows, error: faceErr } = await service
+  const { data: faceRows, error: faceErr } = await db
     .from('photo_faces')
     .select('id, photo_id, contact_id, status, source, confidence, bbox_x, bbox_y, bbox_w, bbox_h, contacts:contact_id(id, name, name_en, deleted_at)')
     .neq('status', 'rejected')

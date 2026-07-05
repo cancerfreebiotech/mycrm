@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase'
+import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { getOrgSetting } from '@/lib/orgSettings'
 
 // Hunter.io Email Finder integration
@@ -88,6 +89,8 @@ export async function enrichContactEmail(
   company: string | null | undefined,
 ): Promise<EnrichResult> {
   const supabase = createServiceClient()
+  // Phase 2+: 呼叫端解析 org；單租戶期間 default org 匹配所有 contacts 列
+  const db = orgScopedClient(systemOrgContext())
   // Module kill-switch (org-settings) — mirrors hunterEnrich.ts so hunter_enabled=false
   // also stops single-contact lookups from spending Hunter credits.
   if ((await getOrgSetting(supabase, 'hunter_enabled')) === 'false') {
@@ -111,21 +114,21 @@ export async function enrichContactEmail(
   try {
     const res = await fetch(`${HUNTER_BASE}/email-finder?${params}`)
     if (!res.ok) {
-      await supabase.from('contacts').update({ hunter_searched_at: new Date().toISOString() }).eq('id', contactId)
+      await db.from('contacts').update({ hunter_searched_at: new Date().toISOString() }).eq('id', contactId)
       return { status: 'error', email: null }
     }
     const data = await res.json()
     const email: string | null = data?.data?.email ?? null
 
     if (email && email.includes('@')) {
-      await supabase
+      await db
         .from('contacts')
         .update({ email, hunter_searched_at: new Date().toISOString() })
         .eq('id', contactId)
       return { status: 'found', email }
     }
 
-    await supabase.from('contacts').update({ hunter_searched_at: new Date().toISOString() }).eq('id', contactId)
+    await db.from('contacts').update({ hunter_searched_at: new Date().toISOString() }).eq('id', contactId)
     return { status: 'not_found', email: null }
   } catch {
     return { status: 'error', email: null }
@@ -188,6 +191,8 @@ export async function runHunterBatch(opts: BatchOptions = {}): Promise<BatchResu
   const remainingBuffer = opts.remainingBuffer ?? 5
 
   const supabase = createServiceClient()
+  // Phase 2+: cron 逐 org 迭代；單租戶期間 default org 匹配所有 contacts 列
+  const db = orgScopedClient(systemOrgContext())
   // Module kill-switch (org-settings) — mirrors hunterEnrich.ts. Stops the
   // scheduled cron and admin batch from spending Hunter credits when disabled.
   if ((await getOrgSetting(supabase, 'hunter_enabled')) === 'false') {
@@ -213,7 +218,7 @@ export async function runHunterBatch(opts: BatchOptions = {}): Promise<BatchResu
   }
 
   const cooldownCutoff = new Date(Date.now() - cooldownDays * 24 * 60 * 60 * 1000).toISOString()
-  const { data: contacts } = await supabase
+  const { data: contacts } = await db
     .from('contacts')
     .select('id, name, name_en, company')
     .is('email', null)

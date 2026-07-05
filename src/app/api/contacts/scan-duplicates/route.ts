@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 export async function POST(req: NextRequest) {
-  const supabase = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   // Delete previous non-ignored scan results
-  const { error: delErr } = await supabase
+  const { error: delErr } = await db
     .from('duplicate_pairs')
     .delete()
     .eq('is_ignored', false)
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 1. Exact email duplicates
-  const { data: emailDups, error: emailErr } = await supabase.rpc('find_email_duplicates') as {
+  const { data: emailDups, error: emailErr } = await db.rpc('find_email_duplicates') as {
     data: Array<{ id_a: string; id_b: string }> | null
     error: { message: string } | null
   }
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 2. Exact name duplicates (full table, no limit — finds same canonical name across all contacts)
-  const { data: exactNameDups, error: exactNameErr } = await supabase.rpc('find_exact_name_duplicates') as {
+  const { data: exactNameDups, error: exactNameErr } = await db.rpc('find_exact_name_duplicates') as {
     data: Array<{ id_a: string; id_b: string }> | null
     error: { message: string } | null
   }
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 3. Similar name duplicates (pg_trgm, full table, excludes exact matches)
-  const { data: nameDups, error: nameErr } = await supabase.rpc('find_name_duplicates') as {
+  const { data: nameDups, error: nameErr } = await db.rpc('find_name_duplicates') as {
     data: Array<{ id_a: string; id_b: string; score: number }> | null
     error: { message: string } | null
   }
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (inserts.length > 0) {
-    const { error: insertErr } = await supabase.from('duplicate_pairs').insert(inserts)
+    const { error: insertErr } = await db.from('duplicate_pairs').insert(inserts)
     if (insertErr) {
       return NextResponse.json({ error: `寫入失敗：${insertErr.message}` }, { status: 500 })
     }

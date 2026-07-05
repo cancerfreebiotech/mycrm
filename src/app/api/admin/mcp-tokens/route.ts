@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { createHash, randomBytes } from 'node:crypto'
 import { logAdminAction } from '@/lib/adminAudit'
 
@@ -24,8 +25,9 @@ async function requireSuperAdmin() {
 export async function GET() {
   const admin = await requireSuperAdmin()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  const service = createServiceClient()
-  const { data, error } = await service
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+  const { data, error } = await db
     .from('agent_tokens')
     .select('id, name, description, assigned_to, prefix, scopes, created_at, expires_at, last_used_at, disabled_at, disabled_reason, assignee:assigned_to(display_name, email)')
     .order('created_at', { ascending: false })
@@ -62,7 +64,9 @@ export async function POST(req: NextRequest) {
   const prefix = plaintext.slice(0, 12)
 
   const service = createServiceClient()
-  const { data, error } = await service
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+  const { data, error } = await db
     .from('agent_tokens')
     .insert({
       name,

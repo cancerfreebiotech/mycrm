@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { TOOLS, TOOL_BY_NAME, executeTool, type Scope } from '@/lib/agent-tools'
+import { orgScopedClient, systemOrgContext, DEFAULT_ORG_ID, type OrgDb } from '@/lib/orgContext'
 
 // Model Context Protocol (MCP) server for mycrm — v2.
 // JSON-RPC 2.0 over HTTP POST.
@@ -48,17 +49,20 @@ interface TokenContext {
   legacy: boolean
   assignedTo: string | null     // the user this token is bound to (null for legacy)
   allowAnyActor: boolean         // if false, X-Acting-User is forced to assignedTo
+  orgId: string                  // org this token belongs to (DEFAULT_ORG_ID for legacy/null)
 }
 
 const LEGACY_SCOPES: Scope[] = ['read:contacts', 'read:newsletter', 'read:tags']
 
 async function resolveToken(bearer: string): Promise<TokenContext | null> {
   const envToken = process.env.MCP_AGENT_TOKEN
+  // token 認證發生在 org 已知之前——org 正是由此查詢的 token 決定，因此這裡
+  // 用裸 service client 跨 org 查 token_hash（不能走 orgScopedClient）。
   const supabase = createServiceClient()
   const hash = createHash('sha256').update(bearer).digest('hex')
   const { data: row } = await supabase
     .from('agent_tokens')
-    .select('id, scopes, disabled_at, expires_at, assigned_to, allow_any_actor')
+    .select('id, scopes, disabled_at, expires_at, assigned_to, allow_any_actor, org_id')
     .eq('token_hash', hash)
     .maybeSingle()
   if (row) {
@@ -70,11 +74,12 @@ async function resolveToken(bearer: string): Promise<TokenContext | null> {
       legacy: false,
       assignedTo: (row.assigned_to as string) ?? null,
       allowAnyActor: !!row.allow_any_actor,
+      orgId: (row.org_id as string) ?? DEFAULT_ORG_ID,
     }
   }
   // Legacy env fallback — read-only, timing-safe comparison
   if (envToken && timingSafeStrEqual(bearer, envToken)) {
-    return { tokenId: null, scopes: LEGACY_SCOPES, legacy: true, assignedTo: null, allowAnyActor: false }
+    return { tokenId: null, scopes: LEGACY_SCOPES, legacy: true, assignedTo: null, allowAnyActor: false, orgId: DEFAULT_ORG_ID }
   }
   return null
 }
@@ -86,10 +91,9 @@ async function resolveActingUser(email: string | null): Promise<string | null> {
   return (data?.id as string) ?? null
 }
 
-async function checkRateLimit(tokenId: string): Promise<boolean> {
-  const supabase = createServiceClient()
+async function checkRateLimit(db: OrgDb, tokenId: string): Promise<boolean> {
   const since = new Date(Date.now() - 60_000).toISOString()
-  const { count } = await supabase
+  const { count } = await db
     .from('agent_actions')
     .select('id', { count: 'exact', head: true })
     .eq('token_id', tokenId)
@@ -97,10 +101,9 @@ async function checkRateLimit(tokenId: string): Promise<boolean> {
   return (count ?? 0) < RATE_LIMIT_PER_MIN
 }
 
-async function logAction(toolName: string, args: unknown, succeeded: boolean, errMsg: string | null, tokenId: string | null, actingAs: string | null) {
+async function logAction(db: OrgDb, toolName: string, args: unknown, succeeded: boolean, errMsg: string | null, tokenId: string | null, actingAs: string | null) {
   try {
-    const supabase = createServiceClient()
-    await supabase.from('agent_actions').insert({
+    await db.from('agent_actions').insert({
       tool_name: toolName,
       arguments: args ?? null,
       result_summary: succeeded ? 'ok' : null,
@@ -112,11 +115,10 @@ async function logAction(toolName: string, args: unknown, succeeded: boolean, er
   } catch { /* never let logging break the call */ }
 }
 
-async function touchToken(tokenId: string | null) {
+async function touchToken(db: OrgDb, tokenId: string | null) {
   if (!tokenId) return
   try {
-    const supabase = createServiceClient()
-    await supabase.from('agent_tokens').update({ last_used_at: new Date().toISOString() }).eq('id', tokenId)
+    await db.from('agent_tokens').update({ last_used_at: new Date().toISOString() }).eq('id', tokenId)
   } catch { /* ignore */ }
 }
 
@@ -130,6 +132,9 @@ export async function POST(req: NextRequest) {
   if (!ctx) {
     return NextResponse.json({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unauthorized — invalid/disabled/expired token' } }, { status: 401 })
   }
+  // 系統行為者：org 由已驗證的 token 決定（token.org_id，legacy/null → default org）。
+  // Phase 2+: 逐 org 迭代／由 payload 解析 org。
+  const db = orgScopedClient(systemOrgContext(ctx.orgId))
 
   let msg: JsonRpcRequest
   try {
@@ -185,16 +190,16 @@ export async function POST(req: NextRequest) {
         }
         // rate limit (real tokens only)
         if (ctx.tokenId) {
-          const ok = await checkRateLimit(ctx.tokenId)
+          const ok = await checkRateLimit(db, ctx.tokenId)
           if (!ok) {
             error = { code: -32002, message: `Rate limit exceeded (${RATE_LIMIT_PER_MIN}/min). Retry shortly.` }
-            await logAction(toolName, toolArgs, false, error.message, ctx.tokenId, actingAs)
+            await logAction(db, toolName, toolArgs, false, error.message, ctx.tokenId, actingAs)
             break
           }
         }
-        const out = await executeTool(toolName, toolArgs, actingAs)
-        await touchToken(ctx.tokenId)
-        await logAction(toolName, toolArgs, true, null, ctx.tokenId, actingAs)
+        const out = await executeTool(toolName, toolArgs, actingAs, db)
+        await touchToken(db, ctx.tokenId)
+        await logAction(db, toolName, toolArgs, true, null, ctx.tokenId, actingAs)
         result = { content: [{ type: 'text', text: JSON.stringify(out, null, 2) }] }
         break
       }
@@ -209,7 +214,7 @@ export async function POST(req: NextRequest) {
     error = { code: -32000, message: errMsg }
     if (msg.method === 'tools/call') {
       const params = (msg.params ?? {}) as { name?: string; arguments?: Record<string, unknown> }
-      await logAction(params.name ?? 'unknown', params.arguments ?? {}, false, errMsg, ctx.tokenId, actingAs)
+      await logAction(db, params.name ?? 'unknown', params.arguments ?? {}, false, errMsg, ctx.tokenId, actingAs)
     }
   }
 

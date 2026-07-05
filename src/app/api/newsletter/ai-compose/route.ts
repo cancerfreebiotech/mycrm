@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Portkey from 'portkey-ai'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 
 // POST /api/newsletter/ai-compose
 //
@@ -109,23 +110,21 @@ ${introZh}
 - 不要重複故事細節（細節在下面的段落會寫）`
 }
 
-async function loadToneSamples(lang: Lang): Promise<string[]> {
-  const service = createServiceClient()
-  const { data } = await service
+async function loadToneSamples(lang: Lang, db: OrgDb): Promise<string[]> {
+  const { data } = await db
     .from('newsletter_tone_samples')
     .select('plain_text')
     .eq('language', lang)
     .order('period', { ascending: false })
     .limit(2)
-  return (data ?? [])
-    .map((r: { plain_text: string }) => r.plain_text)
+  return ((data ?? []) as { plain_text: string }[])
+    .map((r) => r.plain_text)
     .filter((t) => t && t.length > 100)
     .map((t) => t.slice(0, 3000)) // cap per sample to control token count
 }
 
-async function loadSkeleton(lang: Lang): Promise<string> {
-  const service = createServiceClient()
-  const { data } = await service
+async function loadSkeleton(lang: Lang, db: OrgDb): Promise<string> {
+  const { data } = await db
     .from('email_templates')
     .select('body_content')
     .eq('title', SKELETON_TITLE[lang])
@@ -167,9 +166,10 @@ async function generateLangCampaign(
   lang: Lang,
   req: ComposeRequest,
   userId: string | null,
+  db: OrgDb,
 ): Promise<string> {
-  const toneSamples = await loadToneSamples(lang)
-  const skeleton = await loadSkeleton(lang)
+  const toneSamples = await loadToneSamples(lang, db)
+  const skeleton = await loadSkeleton(lang, db)
   const periodLabel = lang === 'zh-TW' && req.period_label_zh
     ? req.period_label_zh
     : PERIOD_LABEL_FMT[lang](req.period)
@@ -212,8 +212,7 @@ async function generateLangCampaign(
 
   // Map language → default list (by seed keys)
   const listKeyByLang: Record<Lang, string> = { 'zh-TW': 'zh-TW', 'en': 'en', 'ja': 'ja' }
-  const service = createServiceClient()
-  const { data: listRow } = await service
+  const { data: listRow } = await db
     .from('newsletter_lists')
     .select('id')
     .eq('key', listKeyByLang[lang])
@@ -222,7 +221,7 @@ async function generateLangCampaign(
 
   const slug = `${req.period}-${lang === 'zh-TW' ? 'zh-tw' : lang}`
 
-  const { data: inserted, error } = await service
+  const { data: inserted, error } = await db
     .from('newsletter_campaigns')
     .insert({
       title: titleByLang[lang],
@@ -264,12 +263,15 @@ export async function POST(req: NextRequest) {
   const { data: me } = await service.from('users').select('id').ilike('email', user.email).maybeSingle()
   const userId = me?.id ?? null
 
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+
   const langs: Lang[] = body.translate === false ? ['zh-TW'] : ['zh-TW', 'en', 'ja']
   const results: { lang: Lang; id: string; error?: string }[] = []
 
   for (const lang of langs) {
     try {
-      const id = await generateLangCampaign(lang, body, userId)
+      const id = await generateLangCampaign(lang, body, userId, db)
       results.push({ lang, id })
     } catch (e) {
       results.push({ lang, id: '', error: e instanceof Error ? e.message : String(e) })

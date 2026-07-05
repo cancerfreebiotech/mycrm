@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // POST — toggle published_at; body: { published: boolean }
 // Published campaigns appear in /api/newsletter/feed.xml for Substack RSS importer.
@@ -12,8 +13,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const body = (await req.json().catch(() => ({}))) as { published?: boolean }
   const published = body.published !== false // default true
 
-  const service = createServiceClient()
-  const { data, error } = await service
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+  const { data, error } = await db
     .from('newsletter_campaigns')
     .update({ published_at: published ? new Date().toISOString() : null })
     .eq('id', id)

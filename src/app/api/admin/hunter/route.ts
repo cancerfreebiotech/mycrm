@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { runHunterBatch } from '@/lib/hunter'
 import { logAdminAction } from '@/lib/adminAudit'
 
@@ -20,27 +21,29 @@ async function requireSuperAdmin(): Promise<{ error: NextResponse } | { email: s
 export async function GET() {
   const auth = await requireSuperAdmin(); if ('error' in auth) return auth.error
   const supabase = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
 
   const now = new Date()
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
   const [totalRes, neverRes, notFoundRes, thisMonthRes, apiKeyRes] = await Promise.all([
-    supabase.from('contacts')
+    db.from('contacts')
       .select('id', { count: 'exact', head: true })
       .is('email', null)
       .is('deleted_at', null),
-    supabase.from('contacts')
+    db.from('contacts')
       .select('id', { count: 'exact', head: true })
       .is('email', null)
       .is('hunter_searched_at', null)
       .is('deleted_at', null),
-    supabase.from('contacts')
+    db.from('contacts')
       .select('id', { count: 'exact', head: true })
       .is('email', null)
       .not('hunter_searched_at', 'is', null)
       .is('deleted_at', null),
-    supabase.from('contacts')
+    db.from('contacts')
       .select('id', { count: 'exact', head: true })
       .is('email', null)
       .gte('hunter_searched_at', startOfMonth)
@@ -52,7 +55,7 @@ export async function GET() {
   ])
 
   // pending = never searched + searched > 30 days ago
-  const pendingRes = await supabase
+  const pendingRes = await db
     .from('contacts')
     .select('id', { count: 'exact', head: true })
     .is('email', null)
@@ -127,8 +130,10 @@ export async function POST() {
 export async function DELETE() {
   const auth = await requireSuperAdmin(); if ('error' in auth) return auth.error
   const supabase = createServiceClient()
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
   // select('id') on an update returns the affected rows — row count is data.length.
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('contacts')
     .update({ hunter_searched_at: null })
     .is('email', null)

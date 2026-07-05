@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createPublicKey, createVerify, type JsonWebKeyInput } from 'crypto'
 import { createServiceClient } from '@/lib/supabase'
+import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { parseMeetingCommand } from '@/lib/gemini'
 import { createCalendarEvent } from '@/lib/graph'
 import { getValidProviderToken } from '@/lib/graph-server'
@@ -239,6 +240,9 @@ export async function POST(req: NextRequest) {
   const from = body.from as Record<string, string> | undefined
   const aadId = from?.aadObjectId ?? ''
   const supabase = createServiceClient()
+  // Phase 2+: webhook 由 payload 解析 org（conversation / teams_user → org）
+  const ctx = systemOrgContext()
+  const db = orgScopedClient(ctx)
 
   // ── conversationUpdate: user added/messaged the bot for the first time ───
   if (activityType === 'conversationUpdate') {
@@ -296,7 +300,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (userRow?.email) {
-        const { data: taskRow, error: updateErr } = await supabase
+        const { data: taskRow, error: updateErr } = await db
           .from('tasks')
           .update({ status: 'done', completed_by: userRow.email, completed_at: new Date().toISOString() })
           .eq('id', task_id)
@@ -338,14 +342,14 @@ export async function POST(req: NextRequest) {
       }
 
       if (action === 'meet_cancel') {
-        if (draft_id) await supabase.from('meeting_drafts').delete().eq('id', draft_id)
+        if (draft_id) await db.from('meeting_drafts').delete().eq('id', draft_id)
         if (conversationId && serviceUrl) await sendToTeams(serviceUrl, conversationId, '已取消，行程未建立。')
         return NextResponse.json({ type: 'invokeResponse', value: { status: 200 } })
       }
 
       // meet_confirm
       if (!draft_id) return NextResponse.json({ type: 'invokeResponse', value: { status: 200 } })
-      const { data: draft } = await supabase.from('meeting_drafts').select('*').eq('id', draft_id).single()
+      const { data: draft } = await db.from('meeting_drafts').select('*').eq('id', draft_id).single()
       if (!draft) {
         if (conversationId && serviceUrl) await sendToTeams(serviceUrl, conversationId, '⚠️ 行程草稿已過期。')
         return NextResponse.json({ type: 'invokeResponse', value: { status: 200 } })
@@ -370,7 +374,7 @@ export async function POST(req: NextRequest) {
           attendeeEmails,
           location: draft.location ?? undefined,
         })
-        await supabase.from('meeting_drafts').delete().eq('id', draft_id)
+        await db.from('meeting_drafts').delete().eq('id', draft_id)
         const timeLabel = formatTaipeiRange(draft.start_at, draft.duration_minutes)
         const msg = `✅ 行程已建立！\n📅 ${draft.title}\n🕐 ${timeLabel}${webLink ? `\n🔗 ${webLink}` : ''}`
         if (conversationId && serviceUrl) await sendToTeams(serviceUrl, conversationId, msg)
@@ -432,7 +436,7 @@ export async function POST(req: NextRequest) {
             }
           }
         }
-        const { data: draft } = await supabase.from('meeting_drafts').insert({
+        const { data: draft } = await db.from('meeting_drafts').insert({
           created_by: userData?.id,
           title: parsed.title,
           start_at: parsed.start_iso,

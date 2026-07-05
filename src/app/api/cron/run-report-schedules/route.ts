@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { recordCronRun } from '@/lib/cronHeartbeat'
 
 /**
@@ -74,7 +75,10 @@ export async function GET(req: NextRequest) {
 
   const startMs = Date.now()
   const service = createServiceClient()
-  const { data: schedules, error } = await service
+  // Phase 2+: 逐 org 迭代／由 payload 解析 org
+  const ctx = systemOrgContext()
+  const db = orgScopedClient(ctx)
+  const { data: schedules, error } = await db
     .from('report_schedules')
     .select('id, name, cron_expr, is_active, last_run_at')
     .eq('is_active', true)
@@ -112,7 +116,7 @@ export async function GET(req: NextRequest) {
       status = `error: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200)
       failures.push(schedule.name)
     }
-    await service
+    await db
       .from('report_schedules')
       .update({ last_run_at: new Date().toISOString(), last_status: status })
       .eq('id', schedule.id)

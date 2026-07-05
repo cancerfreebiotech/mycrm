@@ -1,5 +1,5 @@
 import Portkey from 'portkey-ai'
-import { createServiceClient } from '@/lib/supabase'
+import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 export interface ServiceStatus {
   name: string
@@ -11,8 +11,9 @@ export interface ServiceStatus {
 export async function checkSupabase(): Promise<ServiceStatus> {
   const start = Date.now()
   try {
-    const supabase = createServiceClient()
-    const { error } = await supabase.from('contacts').select('id').limit(1)
+    // Phase 2+: 逐 org 迭代／由 payload 解析 org
+    const db = orgScopedClient(systemOrgContext())
+    const { error } = await db.from('contacts').select('id').limit(1)
     if (error) throw new Error(error.message)
     return { name: 'Supabase', status: 'ok', latencyMs: Date.now() - start }
   } catch (e) {
