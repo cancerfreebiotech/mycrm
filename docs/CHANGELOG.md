@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v7.9.5 — feat(admin/ops/test): 品質批次——測試基建、停權即時生效、預算門檻 UI、稽核標籤、schema 回填（2026-07-06）
+
+### 變更項目
+- **測試基建落地**：vitest + `npm run test`；核心 util 單元測試 7 檔 64 條全綠——`orgScopedClient`（org 注入/直通/不覆寫）、`orgSettings`（三層解析鏈/快取/錯誤 fallback）、`likeEscape`、`hasFeature`、`cardPathFromUrl`、`addUtmTags`、`orgUploadPrefix`。
+- **停權即時生效**：新增 `is_suspended()` RPC，proxy 每個受守衛請求檢查——停權後下一個請求即註銷 session 並導回登入頁（過去既有 session 最長可再活 7 天）。RPC 異常 fail-open，登入時的 callback gate 仍為最終防線。
+- **用量預算門檻 UI**：/admin/health 的用量區塊可直接編輯各項月上限（AI 呼叫/tokens、Email、電子報），空值＝不設限；設限後顯示用量進度條（綠 <80%／黃 80–99%／紅 ≥100%，對齊 watchdog 告警階梯）。讀寫與告警邏輯同一組 `system_settings.usage_limit_*`。
+- **稽核日誌補齊 4 個既存動作標籤**：`gdpr_export`、`set_role`、`set_features`、`org_settings_change` 加入篩選與三語標籤——19 個 action 與寫入點 1:1 對齊，無漏網。
+- **v7.7.2／v7.8.0 時代 prod-only schema 回填 repo migrations**（bot_errors、contact_briefings/newsletter_campaigns/newsletter_recipients 新欄、protect_super_admin trigger）——migrations 目錄自此可完整重放。
+
 ## v7.9.4 — feat(orgs): v8.0 Phase 3 Batch A——Task 185 設定搬遷 + 多租戶前置收斂（2026-07-06）
 
 > 內部基礎設施；單租戶行為等價（所有新設定的預設值＝原寫死值）。

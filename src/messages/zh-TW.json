@@ -1615,7 +1615,15 @@
     "usageAiTokensOut": "AI 輸出 tokens",
     "usageEmailSent": "Email 寄送",
     "usageNewsletterSent": "電子報寄送",
-    "usageLastMonth": "上月 {value}"
+    "usageLastMonth": "上月 {value}",
+    "usageOfCap": "上限 {cap}",
+    "budgetCapLabel": "月上限",
+    "budgetNoLimit": "不設限",
+    "budgetHint": "設定每月用量上限；達 80% / 100% 時透過監控自動通知擁有者。留空為不設限。",
+    "budgetSave": "儲存門檻",
+    "budgetSaving": "儲存中…",
+    "budgetSaved": "門檻已儲存",
+    "budgetSaveError": "儲存失敗"
   },
   "permission": {
     "noPermission": "沒有權限",
@@ -2088,7 +2096,11 @@
       "contact_merge": "合併聯絡人",
       "dsar_lookup": "DSAR 資料查詢",
       "set_status": "設定帳號狀態",
-      "newsletter_send": "發送電子報"
+      "newsletter_send": "發送電子報",
+      "gdpr_export": "GDPR 資料匯出",
+      "set_role": "設定角色",
+      "set_features": "設定功能權限",
+      "org_settings_change": "組織設定變更"
     },
     "filterActorPlaceholder": "搜尋操作者 email",
     "filterActionAll": "所有動作",

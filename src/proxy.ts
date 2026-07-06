@@ -73,6 +73,22 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
+  // 停權即時生效（v7.9.5）：is_suspended() 為 security definer RPC（email →
+  // organization_members.status），命中即註銷 session 並導回登入頁。過去只在
+  // auth/callback 登入時擋，既有 session 最長可再活 7 天。RPC 失敗時 fail-open
+  //（維持既有行為；登入時的 callback gate 仍是最終防線）。
+  if (user && !isLoginPage && !isMaintenancePage) {
+    try {
+      const { data: suspended } = await supabase.rpc('is_suspended')
+      if (suspended === true) {
+        await supabase.auth.signOut()
+        return NextResponse.redirect(new URL('/login?error=suspended', request.url))
+      }
+    } catch {
+      // fail-open：不因 RPC 異常鎖住全站
+    }
+  }
+
   // MFA AAL check for authenticated users (skip for login/maintenance/mfa/docs pages)
   if (user && !isLoginPage && !isMaintenancePage && !isDocsPage) {
     const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()

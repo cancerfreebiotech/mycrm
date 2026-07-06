@@ -35,6 +35,10 @@ const KNOWN_ACTIONS = [
   'dsar_lookup',
   'set_status',
   'newsletter_send',
+  'gdpr_export',
+  'set_role',
+  'set_features',
+  'org_settings_change',
 ]
 
 export default function AuditLogPage() {

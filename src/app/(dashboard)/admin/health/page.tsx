@@ -61,6 +61,7 @@ interface UsageData {
   period: string
   metrics: Record<string, number>
   previous: { period: string; metrics: Record<string, number> }
+  limits: Record<string, number>
 }
 
 type SectionState = 'loading' | 'error' | 'ready'
@@ -565,13 +566,25 @@ function UsageSection() {
   const t = useTranslations('health')
   const [state, setState] = useState<SectionState>('loading')
   const [data, setData] = useState<UsageData | null>(null)
+  const [limitForm, setLimitForm] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState(false)
 
   const load = useCallback(async () => {
     setState('loading')
     try {
       const res = await fetch('/api/admin/usage')
       if (!res.ok) throw new Error()
-      setData(await res.json())
+      const json: UsageData = await res.json()
+      setData(json)
+      // Seed the editable cap inputs from the persisted limits (blank = no limit).
+      const form: Record<string, string> = {}
+      for (const m of USAGE_METRICS) {
+        const cap = json.limits?.[m.key]
+        form[m.key] = cap ? String(cap) : ''
+      }
+      setLimitForm(form)
       setState('ready')
     } catch {
       setState('error')
@@ -580,9 +593,36 @@ function UsageSection() {
 
   useEffect(() => { load() }, [load])
 
+  // Show a card for every non-optional metric, and for optional ones only when
+  // they carry usage this/last month or already have a budget cap configured.
   const cards = data
-    ? USAGE_METRICS.filter((m) => !m.optional || m.key in (data.metrics ?? {}) || m.key in (data.previous?.metrics ?? {}))
+    ? USAGE_METRICS.filter((m) =>
+        !m.optional ||
+        m.key in (data.metrics ?? {}) ||
+        m.key in (data.previous?.metrics ?? {}) ||
+        m.key in (data.limits ?? {}))
     : []
+
+  const saveLimits = async () => {
+    setSaving(true); setSaved(false); setSaveError(false)
+    try {
+      const limits: Record<string, string> = {}
+      for (const m of USAGE_METRICS) limits[m.key] = limitForm[m.key] ?? ''
+      const res = await fetch('/api/admin/usage', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limits }),
+      })
+      if (!res.ok) throw new Error()
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+      await load()
+    } catch {
+      setSaveError(true)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mt-6">
@@ -599,19 +639,72 @@ function UsageSection() {
       {state === 'loading' && <SectionSkeleton />}
       {state === 'error' && <SectionError onRetry={load} />}
       {state === 'ready' && data && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {cards.map((m) => {
-            const cur = data.metrics?.[m.key] ?? 0
-            const prev = data.previous?.metrics?.[m.key] ?? 0
-            return (
-              <div key={m.key} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                <p className="text-xs text-gray-500 mb-1">{t(m.labelKey)}</p>
-                <p className="text-2xl font-bold text-gray-800 dark:text-gray-200">{cur.toLocaleString()}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{t('usageLastMonth', { value: prev.toLocaleString() })}</p>
-              </div>
-            )
-          })}
-        </div>
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {cards.map((m) => {
+              const cur = data.metrics?.[m.key] ?? 0
+              const prev = data.previous?.metrics?.[m.key] ?? 0
+              const capStr = limitForm[m.key] ?? ''
+              const capNum = Number(capStr)
+              const hasCap = capStr.trim() !== '' && Number.isFinite(capNum) && capNum > 0
+              const pct = hasCap ? Math.floor((cur / capNum) * 100) : null
+              // Thresholds mirror the health-watchdog alert tiers (80% / 100%).
+              const barColor = pct == null ? '' : pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-yellow-400' : 'bg-green-400'
+              const pctColor = pct == null ? '' : pct >= 100 ? 'text-red-600 dark:text-red-400' : pct >= 80 ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-400'
+              return (
+                <div key={m.key} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 flex flex-col">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <p className="text-xs text-gray-500">{t(m.labelKey)}</p>
+                    {pct != null && <span className={`text-xs font-semibold ${pctColor}`}>{pct}%</span>}
+                  </div>
+                  <p className="text-2xl font-bold text-gray-800 dark:text-gray-200">{cur.toLocaleString()}</p>
+                  {hasCap ? (
+                    <>
+                      <div className="mt-1.5 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${Math.min(100, pct ?? 0)}%` }} />
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">{t('usageOfCap', { cap: capNum.toLocaleString() })}</p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-gray-400 mt-0.5">{t('usageLastMonth', { value: prev.toLocaleString() })}</p>
+                  )}
+                  <div className="mt-2">
+                    <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">{t('budgetCapLabel')}</label>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      value={limitForm[m.key] ?? ''}
+                      onChange={(e) => { setLimitForm((p) => ({ ...p, [m.key]: e.target.value })); setSaved(false) }}
+                      placeholder={t('budgetNoLimit')}
+                      className="w-full px-2.5 py-2 text-base border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
+            <p className="text-xs text-gray-400 max-w-md">{t('budgetHint')}</p>
+            <div className="flex items-center gap-3 ml-auto">
+              {saveError && <span className="text-xs text-red-600 dark:text-red-400">{t('budgetSaveError')}</span>}
+              {saved && (
+                <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                  <CheckCircle2 size={13} className="shrink-0" /> {t('budgetSaved')}
+                </span>
+              )}
+              <button
+                onClick={saveLimits}
+                disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 min-h-[44px]"
+              >
+                {saving && <Loader2 size={14} className="animate-spin" />}
+                {saving ? t('budgetSaving') : t('budgetSave')}
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   )
