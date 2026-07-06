@@ -26,7 +26,7 @@ nav_order: 2
 | `/tasks` | `/t` | List your pending tasks |
 | `/meet [meeting info]` | `/m` | AI parses natural language to schedule a meeting and write it to your calendar |
 | `/user` | `/u` | List all organization members |
-| `/ai` | — | Show the AI model you are currently using |
+| `/ai [question]` | — | AI agent Q&A over your CRM in plain language; bare `/ai` shows the current AI model |
 | `/stop` | — | (Super Admin) Enable maintenance mode; type `/stop off` to disable |
 
 ---
@@ -289,9 +289,19 @@ Only affects the Bot's reply language; the setting is saved to your account.
 
 ---
 
-### `/ai` — Show Current AI Model
+### `/ai` — AI Agent Q&A
 
-Shows the name and source of the AI model you are currently using; when unset, the system default model (gemini-2.5-flash) is used.
+`/ai <question>` asks in plain language; the AI agent queries or maintains your CRM data and answers — the same assistant as the web [AI Assistant](../features/ai-assistant.md), right inside Telegram.
+
+```
+/ai Which contacts are at NTU?
+/ai Mark Chen Xiaoming as important
+/ai I'm meeting Mr. Wang next week — help me get up to speed on him
+```
+
+- Capabilities and write-safety match the web AI Assistant: look up / update contacts, add notes, tags, newsletter lists, and schedule a pre-meeting briefing. Everything runs as **you** and is audited.
+- Up to 6 consecutive rounds of tool operations per request; if the AI Assistant is disabled, it replies that the assistant is off.
+- Bare `/ai` (no question) keeps the old behavior: it shows the name and source of the AI model you are currently using; when unset, the system default model (gemini-2.5-flash) is used.
 
 ---
 

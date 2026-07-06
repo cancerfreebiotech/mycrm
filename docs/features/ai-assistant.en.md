@@ -18,8 +18,9 @@ The AI Assistant is a conversational interface that lets you query and maintain 
 |-------------|-------------|
 | **Floating button (bottom-right)** | Every page has a blue round chat button in the bottom-right corner. Tap it to slide out the chat drawer from the right — available anywhere |
 | **Full-page mode** | Open `/ai-assistant` for the full page, better suited to longer conversations |
+| **Telegram Bot `/ai`** | Send `/ai <question>` to the Bot on Telegram; the same assistant answers right in the chat (see [Command List](../bot/commands.md)) |
 
-Both entry points share the same assistant with identical capabilities.
+All three entry points share the same assistant with identical capabilities.
 
 ---
 

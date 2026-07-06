@@ -54,6 +54,8 @@
 * [MCP 活動紀錄](admin/mcp-activity.md)
 * [稽核日誌](admin/audit-log.md)
 * [組織設定與品牌](admin/org-settings.md)
+* [退訂與寄送資格](admin/suppressions.md)
+* [資料主體查詢 (DSAR)](admin/dsar.md)
 
 ## 其他
 

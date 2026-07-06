@@ -20,6 +20,18 @@ Path: `/contacts`
 - **Other sorts**: Click column headers (Name / Company / Title / Email / Tags / Created at)
 - **Pagination**: 20 per page, with page navigation at the bottom
 
+### Saved Views
+
+Save the search and filters you have applied as a named view, then re-apply it with one tap instead of rebuilding it each time. Views are **private to each user** — only you see your own.
+
+Your saved views appear as rounded chips above the list (up to 10):
+
+- **Apply**: tap a view's name to apply that filter set immediately and update the URL
+- **Save view**: tap the dashed "🔖 Save view" chip, enter a name, and the current filters (keyword, where-met, Tags, countries, importance, language, Email status, creators, created/met date ranges, etc.) are saved as a view
+- **Delete**: tap the ✕ on a chip and confirm to remove it
+
+> A view stores only the filter conditions, not sorting or the page number; applying one returns you to page 1.
+
 ### Export
 
 Click the "Excel" or "CSV" button to download the current filtered results (not limited by pagination).
@@ -225,6 +237,33 @@ Users can still see the full send history in the interaction log timeline — it
 ### UI hint
 When `/email/compose` is switched to SendGrid, a purple badge appears:
 > ⚠ SendGrid sends do NOT count toward the contact's last-activity time (interaction log is still written)
+
+---
+
+## Stale-Relationship Nudge (weekly Telegram push)
+
+Every Monday (02:00 UTC), the system checks the contacts you own, gathers those you haven't interacted with for too long into a single list, and proactively nudges you on Telegram that it's time to reach out. Only members who have **linked Telegram** receive it.
+
+### Rules
+
+- **Scope**: contacts whose `created_by` is you (the ones you created), excluding deleted ones
+- **Going-stale threshold**: measured from "last activity" (`last_activity_at`, falling back to created-at when there is no record) — **high-importance after 30 days**, everyone else after **90 days** without interaction counts as stale
+- **No duplicate nudge when already handled**: if a contact already has an open (`pending`) task, someone is already on it, so it is excluded
+- **At most 8 per message**: sorted by staleness (longest first), only the 8 most-overdue contacts are listed
+- **Nothing stale, nothing sent**: if no contact qualifies that week, you receive no message at all (no noise)
+
+### What the nudge looks like
+
+Each line shows the name (company) and "N days without interaction", with a link to the contact's page, and a closing hint that you can reply `/v <name> <note>` to log an interaction in one line (see [Command List](../bot/commands.md)).
+
+```
+🌿 Time to reach out
+
+• John Smith (ABC Corp) — 45 days without interaction
+  https://…/contacts/…
+
+Reply /v <name> <note> to log an interaction in one line
+```
 
 ---
 

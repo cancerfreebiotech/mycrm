@@ -112,6 +112,19 @@ Org Settings, AI Model Management, System Health, MCP Tokens, MCP Activity, Audi
 
 ---
 
+## Sending Feedback
+
+The **💬 Feedback** item in the sidebar (`/feedback`) lets you report issues or request features anytime:
+
+1. Choose a type: **Feature Request** or **Bug Report**
+2. Fill in a title and description (both required)
+3. Optionally attach a screenshot (recommended for bug reports)
+4. After you submit, an admin tracks and handles it on the backend **Feedback Management** page
+
+> A confirmation screen appears once submitted, and you can go straight back.
+
+---
+
 ## Role Descriptions
 
 myCRM has only two roles:
