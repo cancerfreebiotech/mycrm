@@ -82,7 +82,7 @@ export async function POST(
   let finalFrontPath: string | null = pending.storage_path
   if (pending.storage_path) {
     const frontFile = await generateCardFilename({ name: personName || undefined, side: 'front' })
-    const frontPath = `cards/${frontFile}`
+    const frontPath = `${ctx.orgId}/cards/${frontFile}`
     const { error: moveErr } = await supabase.storage.from('cards').move(pending.storage_path, frontPath)
     if (!moveErr) {
       const { data: urlData } = supabase.storage.from('cards').getPublicUrl(frontPath)
@@ -94,7 +94,7 @@ export async function POST(
   let finalBackUrl: string | null = pending.back_img_url ?? null
   if (pending.back_storage_path) {
     const backFile = await generateCardFilename({ name: personName || undefined, side: 'back' })
-    const backPath = `cards/${backFile}`
+    const backPath = `${ctx.orgId}/cards/${backFile}`
     const { error: moveErr } = await supabase.storage.from('cards').move(pending.back_storage_path, backPath)
     if (!moveErr) {
       const { data: urlData } = supabase.storage.from('cards').getPublicUrl(backPath)

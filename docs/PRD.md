@@ -4400,10 +4400,10 @@ create table public.usage_counters (
 - [x] **Task 178** — `scripts/lint-org-scope.mjs`（業務表清單解析自 `src/lib/orgTables.ts`）掛 `prebuild`：裸 client 字面存取業務表 → build 失敗；動態表名列警告。
 - [x] **Task 179** — bot 全檔業務表走 scoped client；`/api/mcp` 以 `agent_tokens.org_id` 建立 org 情境注入 agent-tools（token 認證本身在 org 已知前、留裸 client）。**刻意延後至 Phase 3**：`/start <org_code>` 綁定流程與未綁拒絕——單租戶期間新 session 由 DEFAULT 自動歸 default org（行為不變），拒絕只有摩擦、沒有隔離效益。
 
-**Phase 2 — 收緊 + RLS / Storage**（180/181 完成 2026-07-06 v7.9.2；182 待做）
+**Phase 2 — 收緊 + RLS / Storage** ✅ **全部完成（180/181 = v7.9.2；182 = v7.9.3，2026-07-06）**
 - [x] **Task 180** — 43 張業務表 `org_id` SET NOT NULL（DEFAULT 已於 Phase 0 設定；⚠️ Phase 3 開放 onboarding 前 DROP DEFAULT）。
 - [x] **Task 181** — `current_org_id()`（JWT claim 優先 + email membership fallback——**hook 未啟用也正確**，claim 是效能最佳化）與 `is_org_member()` 已建；43 張業務表的所有 authenticated/public policy 以 AND 疊加 `org_id = current_org_id()`（原 has_feature/owner 檢查保留）。附帶修復既存的 tasks ↔ task_assignees policy 互相 EXISTS 造成的 42P17 遞迴（security definer 函式斷循環）。角色模擬測試：成員全可見、非成員 0 列 ✓。**偏差（刻意）**：`has_feature()` 仍讀 `users.granted_features`——切換到 member 版需同步改管理端寫入路徑，與多 org 授權一起留到 Phase 3。並存策略後半完成：全部 onConflict 改複合鍵、單欄 UNIQUE 已 DROP（bot_sessions/newsletter_*×4/prompts/tags/user_assistants/user_prompts）。audit 呼叫（logAdminAction/checkSuppression）全數改傳 org-scoped client。
-- [ ] **Task 182** `[修改]` — Storage：上傳路徑加 `{org_id}/` 前綴、bucket 轉 private、改 signed URL（存 storage_path 即時簽名）、加 storage RLS
+- [x] **Task 182** — 完成（2026-07-06 v7.9.3）。盤點發現「private + signed URL」大半已於 v7.3.0 就位（cards/camcard/feedback 已 private、讀取全走 signCardUrl／createSignedUrl）。本輪：(a) 全部新上傳/move 目的地（server 8 站 + client 6 站）加 `{org_id}/` 前綴，client 端 orgId 由 `/api/me` 提供（`src/lib/orgUploadPrefix.ts`，取不到時優雅退回無前綴）；(b) **移除既存安全洞**「Public read cards」policy（anon key 可經 API 讀全部名片圖）；(c) `storage_org_ok()`：路徑第一段為 uuid → 驗 `is_org_member()`，舊路徑 grandfather 給 authenticated——14 條 storage policy 疊加；(d) template-attachments 補 `storage_path` 欄（舊列由 file_url 回填）、下載與 email 附件抓取改簽名、bucket 轉 private；(e) 清除 pending 頁已 404 的 public URL fallback。**newsletter-assets 刻意維持 public**：URL 烙進寄出的 email 與公開 RSS，永不能過期（僅做上傳前綴與寫入面 org policy）。
 
 **Phase 3 — Onboarding / Auth 開放**
 - [ ] **Task 183** `[修改]` — 移除 `auth/callback` 網域強制；登入後分流（member / invite / 新建 org）

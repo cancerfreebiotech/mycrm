@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { signCardUrls } from '@/lib/cardImageUrl'
+import { fetchOrgId, withOrgPrefix } from '@/lib/orgUploadPrefix'
 import { Upload, Loader2, AlertTriangle, CheckCircle, X, Save } from 'lucide-react'
 
 const MAX_FILES = 50
@@ -101,6 +102,9 @@ export default function BatchUploadPage() {
     if (rows.length === 0) return
     setProcessing(true)
 
+    // v8.0 Task 182 — org 前綴（取一次；失敗則退回無前綴，上傳不壞）
+    const orgId = await fetchOrgId()
+
     const queue = rows.map((_, i) => i)
     let idx = 0
 
@@ -112,7 +116,7 @@ export default function BatchUploadPage() {
         const base64 = await compressImage(rows[rowIdx].file)
 
         // Upload image to storage
-        const filename = `cards/batch_${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`
+        const filename = withOrgPrefix(orgId, `cards/batch_${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`)
         const buf = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
         const { error: uploadErr } = await supabase.storage.from('cards').upload(filename, buf, { contentType: 'image/jpeg' })
         if (uploadErr) throw new Error(uploadErr.message)

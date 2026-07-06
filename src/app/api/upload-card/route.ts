@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     const db = orgScopedClient(ctx)
     const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
     const blob = new Blob([bytes], { type: 'image/jpeg' })
-    const filename = `cards/${contactId}_${Date.now()}_${index}.jpg`
+    const filename = `${ctx.orgId}/cards/${contactId}_${Date.now()}_${index}.jpg`
 
     const { error: uploadErr } = await supabase.storage.from('cards').upload(filename, blob, { contentType: 'image/jpeg' })
     if (uploadErr) return NextResponse.json({ error: uploadErr.message }, { status: 500 })

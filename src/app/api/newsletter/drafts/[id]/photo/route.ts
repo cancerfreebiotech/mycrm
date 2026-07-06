@@ -46,7 +46,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (!draft) return NextResponse.json({ error: 'draft not found' }, { status: 404 })
 
   const ext = (file.name.match(/\.([a-zA-Z0-9]+)$/)?.[1] ?? 'jpg').toLowerCase()
-  const key = `drafts/${draft.period}/${randomBytes(8).toString('hex')}.${ext}`
+  const key = `${orgCtx.orgId}/drafts/${draft.period}/${randomBytes(8).toString('hex')}.${ext}`
   const buf = Buffer.from(await file.arrayBuffer())
 
   const { error: upErr } = await service.storage.from(BUCKET).upload(key, buf, {

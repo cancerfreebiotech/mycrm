@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext } from '@/lib/orgContext'
 
 // GET /api/me — returns current logged-in user's public.users profile.
 // WARNING: auth.users.id does NOT equal public.users.id in this project,
@@ -20,10 +21,13 @@ export async function GET() {
 
   if (!data) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
 
+  const ctx = await getOrgContext()
+
   return NextResponse.json({
     id: data.id as string,
     display_name: (data.display_name ?? '') as string,
     role: (data.role ?? '') as string,
     ai_model_id: (data.ai_model_id ?? null) as string | null,
+    org_id: ctx.orgId,
   })
 }

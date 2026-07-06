@@ -576,7 +576,8 @@ async function processAddCardPhoto(
 ) {
   const _m = m ?? BOT_MESSAGES.zh
   const supabase = createServiceClient()
-  const db: OrgDb = orgScopedClient(systemOrgContext())
+  const orgCtx = systemOrgContext()
+  const db: OrgDb = orgScopedClient(orgCtx)
   try {
     const imgBuffer = await downloadTelegramPhoto(fileId)
     let compressed = await processCardImage(imgBuffer)
@@ -598,7 +599,7 @@ async function processAddCardPhoto(
     // Upload card image
     const safeName = (existing?.name || cardData.name || cardData.name_en || '').replace(/[\s,./\\]/g, '')
     const filename = await generateCardFilename({ name: safeName || undefined, side: 'front' })
-    const storagePath = `cards/${filename}`
+    const storagePath = `${orgCtx.orgId}/cards/${filename}`
     const { error: uploadError } = await supabase.storage
       .from('cards').upload(storagePath, compressed, { contentType: 'image/jpeg', upsert: false })
     if (uploadError) throw new Error(uploadError.message ?? String(uploadError))
@@ -746,14 +747,15 @@ async function processPersonalPhoto(
 ) {
   const _m = m ?? BOT_MESSAGES.zh
   const supabase = createServiceClient()
-  const db: OrgDb = orgScopedClient(systemOrgContext())
+  const orgCtx = systemOrgContext()
+  const db: OrgDb = orgScopedClient(orgCtx)
   try {
     let uploaded = 0
     for (const fileId of fileIds) {
       const imgBuffer = await downloadTelegramPhoto(fileId)
       const compressed = await processPhotoWithExif(imgBuffer)
       const exif = await extractExif(imgBuffer)
-      const filename = `photos/${Date.now()}-${contactId.slice(0, 8)}-${uploaded}.jpg`
+      const filename = `${orgCtx.orgId}/photos/${Date.now()}-${contactId.slice(0, 8)}-${uploaded}.jpg`
       const { error: uploadError } = await supabase.storage
         .from('cards').upload(filename, compressed, { contentType: 'image/jpeg', upsert: false })
       if (uploadError) throw new Error(uploadError.message)
@@ -813,7 +815,8 @@ async function handlePhoto(
   lang: BotLang = 'zh',
 ) {
   const supabase = createServiceClient()
-  const db: OrgDb = orgScopedClient(systemOrgContext())
+  const orgCtx = systemOrgContext()
+  const db: OrgDb = orgScopedClient(orgCtx)
 
   // /a: Add card flow — confirmation step
   if (session?.state === 'waiting_for_add_card') {
@@ -879,7 +882,7 @@ async function handlePhoto(
       const imgBuffer = await downloadTelegramPhoto(photo.file_id)
       const compressed = await processCardImage(imgBuffer)
       const tmpFilename = await generateCardFilename()
-      const storagePath = `cards/${tmpFilename}`
+      const storagePath = `${orgCtx.orgId}/cards/${tmpFilename}`
       const { error: uploadError } = await supabase.storage
         .from('cards')
         .upload(storagePath, compressed, { contentType: 'image/jpeg', upsert: false })
@@ -934,7 +937,7 @@ async function handlePhoto(
       const buf = await downloadTelegramPhoto(photo.file_id)
       const compressed = await processCardImage(buf)
       const sb = createServiceClient()
-      const key = `drafts/${period}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`
+      const key = `${orgCtx.orgId}/drafts/${period}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`
       const { error: upErr } = await sb.storage.from('newsletter-assets').upload(key, compressed, {
         contentType: 'image/jpeg', upsert: false,
       })
@@ -999,7 +1002,7 @@ async function handlePhoto(
 
     // Upload with temp name first so image is preserved even if OCR fails
     const tmpFilename = await generateCardFilename()
-    storagePath = `cards/${tmpFilename}`
+    storagePath = `${orgCtx.orgId}/cards/${tmpFilename}`
     const { error: uploadError } = await supabase.storage
       .from('cards')
       .upload(storagePath, compressed, { contentType: 'image/jpeg', upsert: false })
@@ -1022,7 +1025,7 @@ async function handlePhoto(
     const personName = (cardData.name || cardData.name_en || '').replace(/[\s,./\\]/g, '')
     if (personName) {
       const namedFile = await generateCardFilename({ name: personName, side: 'front' })
-      const namedPath = `cards/${namedFile}`
+      const namedPath = `${orgCtx.orgId}/cards/${namedFile}`
       const { error: moveErr } = await supabase.storage.from('cards').move(storagePath, namedPath)
       if (!moveErr) {
         storagePath = namedPath
@@ -2439,7 +2442,8 @@ export async function POST(req: NextRequest) {
     const supabase = createServiceClient()
     // Phase 1 單租戶：bot 為系統行為者，固定 default org（見 orgContext.ts 路線圖）。
     // Phase 3：由 /start org 綁定流程從 bot_sessions／使用者解析所屬 org。
-    const db: OrgDb = orgScopedClient(systemOrgContext())
+    const orgCtx = systemOrgContext()
+    const db: OrgDb = orgScopedClient(orgCtx)
 
     // --- Deduplication: skip already-processed updates ---
     const updateId = body.update_id as number | undefined
@@ -3079,7 +3083,7 @@ export async function POST(req: NextRequest) {
                 try {
                   const imgBuffer = await downloadTelegramPhoto(liFileId)
                   const compressed = await processCardImage(imgBuffer)
-                  const storagePath = `cards/linkedin_${inserted.id}_${Date.now()}.jpg`
+                  const storagePath = `${orgCtx.orgId}/cards/linkedin_${inserted.id}_${Date.now()}.jpg`
                   const { error: uploadError } = await supabase.storage
                     .from('cards').upload(storagePath, compressed, { contentType: 'image/jpeg', upsert: false })
                   if (!uploadError) {

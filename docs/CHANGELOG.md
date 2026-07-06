@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v7.9.3 — feat(orgs/storage): v8.0 Task 182 Storage 隔離——Phase 2 完結（2026-07-06）
+
+> 內部基礎設施；單租戶行為等價。v8.0 Phase 0–2 至此全部完成。
+
+### 變更項目
+- **新上傳全面 org 前綴**：server 8 站（bot 名片/合照/批次/LinkedIn、upload-card、camcard move、newsletter 草稿相片）與 client 6 站（批次上傳、聯絡人詳情、newsletter 編輯器）之新物件路徑一律 `{org_id}/...`；client 端 orgId 由 `/api/me` 提供、取不到時優雅退回。既有物件與讀取端（signed URL）完全不受影響。
+- **修復既存安全洞**：移除「Public read cards」storage policy——先前任何持 anon key 者可經 storage API 下載全部名片圖（bucket 雖 private 形同虛設）。
+- **Storage RLS org 化**：`storage_org_ok()`（uuid 前綴驗 org membership、舊路徑 grandfather）疊加至 cards/camcard/newsletter-assets/template-attachments 的 14 條 policy。
+- **template-attachments 轉 private**：補 `storage_path` 欄（舊列回填）、admin 下載與外寄 email 附件抓取改走 60 秒簽名 URL——修掉盤點時發現的「email 附件在翻私有後會壞」隱患。
+- **newsletter-assets 維持 public**（設計決策）：其 URL 烙進已寄出 email 與公開 RSS，不可過期。
+- 清除 pending 頁一條 bucket 私有化後必 404 的 public URL fallback。
+
 ## v7.9.2 — feat(orgs): v8.0 Phase 2 資料層收緊 + RLS org 隔離（2026-07-06）
 
 > 內部基礎設施、使用者無感；單租戶下所有改動行為等價。Task 182（Storage 隔離）為 Phase 2 剩餘項目，另批進行。

@@ -37,14 +37,14 @@ function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString()
 }
 
-// OCR sets data.card_img_url; before then, derive public URL from storage_path
-// so users see the thumbnail right away rather than a placeholder.
+// OCR sets data.card_img_url; before then, fall back to the bare storage_path so
+// users see the thumbnail right away rather than a placeholder. The cards bucket is
+// private, so signCardUrls() signs whichever value we return (it accepts both a
+// public-form URL and a bare path) — never build a public URL here (it would 404).
 function deriveCardImg(row: PendingRow): string | undefined {
   const data = row.data ?? {}
   const fromData = data.card_img_url as string | undefined
-  return fromData ?? (row.storage_path
-    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/cards/${row.storage_path}`
-    : undefined)
+  return fromData ?? row.storage_path ?? undefined
 }
 
 export default function PendingReviewPage() {

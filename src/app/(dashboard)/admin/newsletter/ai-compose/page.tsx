@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { fetchOrgId, withOrgPrefix } from '@/lib/orgUploadPrefix'
 import { PermissionGate } from '@/components/PermissionGate'
 import { Loader2, Sparkles, Plus, X, ImageIcon, ArrowLeft, Wand2, CheckCircle2, AlertTriangle, Link as LinkIcon } from 'lucide-react'
 
@@ -81,7 +82,9 @@ export default function AiComposePage() {
       const safe = /[^\x00-\x7F]/.test(cleaned)
         ? `asset-${Date.now().toString(36)}${ext}`
         : `${cleaned}-${Date.now().toString(36)}${ext}`
-      const path = `${period}/${safe}`
+      // v8.0 Task 182 — org 前綴（取不到則退回無前綴，上傳不壞）
+      const orgId = await fetchOrgId()
+      const path = withOrgPrefix(orgId, `${period}/${safe}`)
       const { error: upErr } = await supabase.storage.from('newsletter-assets').upload(path, file, { contentType: file.type })
       if (upErr) throw upErr
       const { data: pub } = supabase.storage.from('newsletter-assets').getPublicUrl(path)

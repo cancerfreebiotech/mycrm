@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
+import { getOrgContext } from '@/lib/orgContext'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { processCardImage } from '@/lib/imageProcessor'
 
@@ -74,11 +75,12 @@ export async function POST(req: NextRequest) {
     if (!parsed.name && parsed.name_en) parsed.name = parsed.name_en
 
     // Upload screenshot to Storage
+    const ctx = await getOrgContext()
     let card_img_url: string | null = null
     try {
       const imgBuffer = Buffer.from(image, 'base64')
       const compressed = await processCardImage(imgBuffer)
-      const storagePath = `cards/linkedin_${user.id}_${Date.now()}.jpg`
+      const storagePath = `${ctx.orgId}/cards/linkedin_${user.id}_${Date.now()}.jpg`
       const { error: uploadError } = await service.storage
         .from('cards').upload(storagePath, compressed, { contentType: 'image/jpeg', upsert: false })
       if (!uploadError) {

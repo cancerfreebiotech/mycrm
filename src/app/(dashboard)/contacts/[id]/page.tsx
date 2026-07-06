@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { signCardUrl, signCardUrls } from '@/lib/cardImageUrl'
+import { withOrgPrefix } from '@/lib/orgUploadPrefix'
 import { sendMail } from '@/lib/graph'
 import { ArrowLeft, ImageIcon, Mail, X, Pencil, Loader2, Plus, Upload, Trash2, Copy, Check, Sparkles, Paperclip, ZoomIn, ZoomOut, Maximize2, ChevronDown, Merge, Search, RotateCw } from 'lucide-react'
 import Image from 'next/image'
@@ -85,7 +86,16 @@ interface CampaignEmailStatus {
   spam: boolean
   unsubscribed: boolean
 }
-interface TemplateAttachment { id: string; file_name: string; file_url: string; file_size: number }
+interface TemplateAttachment { id: string; file_name: string; file_url: string; file_size: number; storage_path: string | null }
+
+// template-attachments bucket 已轉 private：附件抓取需簽名。舊列無 storage_path
+// 時由 public-form file_url 反推 path（同 admin/templates 頁的 grandfather 手法）。
+const TEMPLATE_ATTACHMENT_PUBLIC_RE = /\/storage\/v1\/object\/public\/template-attachments\/(.+)$/
+function templateAttachmentPath(a: TemplateAttachment): string | null {
+  if (a.storage_path) return a.storage_path
+  const m = a.file_url.match(TEMPLATE_ATTACHMENT_PUBLIC_RE)
+  return m ? decodeURIComponent(m[1].split('?')[0]) : null
+}
 interface EmailTemplate { id: string; title: string; subject: string | null; body_content: string | null; attachments: TemplateAttachment[] }
 interface Recipient { email: string; label: string; contactId: string | null }
 interface ContactOption { id: string; name: string; email: string }
@@ -257,6 +267,7 @@ export default function ContactDetailPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
   const [aiModelId, setAiModelId] = useState<string | null>(null)
+  const [orgId, setOrgId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
   // Merge modal
@@ -430,10 +441,11 @@ export default function ContactDetailPage() {
     // in this project — client-side .eq('id', ...) silently returns null
     const meRes = await fetch('/api/me').catch(() => null)
     if (meRes?.ok) {
-      const me = await meRes.json() as { id: string; role: string; ai_model_id: string | null }
+      const me = await meRes.json() as { id: string; role: string; ai_model_id: string | null; org_id: string | null }
       setCurrentUserId(me.id)
       setCurrentUserRole(me.role || null)
       setAiModelId(me.ai_model_id ?? null)
+      setOrgId(me.org_id ?? null)
     } else {
       console.warn('[contact-detail] /api/me failed', meRes?.status)
     }
@@ -785,7 +797,7 @@ export default function ContactDetailPage() {
         stagedFiles.map(async (file, i) => {
           const base64 = await compressImage(file)
           const uint8 = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
-          const filename = `cards/${id}_${Date.now()}_${i}.jpg`
+          const filename = withOrgPrefix(orgId, `cards/${id}_${Date.now()}_${i}.jpg`)
           const { error: uploadErr } = await supabase.storage.from('cards').upload(filename, uint8, { contentType: 'image/jpeg' })
           if (uploadErr) throw uploadErr
           const { data: urlData } = supabase.storage.from('cards').getPublicUrl(filename)
@@ -863,7 +875,7 @@ export default function ContactDetailPage() {
 
         const base64 = await compressImage(file, 2048, 0.85)
         const uint8 = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
-        const filename = `photos/${id}_${Date.now()}.jpg`
+        const filename = withOrgPrefix(orgId, `photos/${id}_${Date.now()}.jpg`)
         const { error: uploadErr } = await supabase.storage.from('cards').upload(filename, uint8, { contentType: 'image/jpeg' })
         if (uploadErr) throw uploadErr
         const { data: urlData } = supabase.storage.from('cards').getPublicUrl(filename)
@@ -1021,7 +1033,7 @@ export default function ContactDetailPage() {
 
   async function openMailModal() {
     const [{ data: tplData }, { data: cData }] = await Promise.all([
-      supabase.from('email_templates').select('id, title, subject, body_content, template_attachments(id, file_name, file_url, file_size)').order('title'),
+      supabase.from('email_templates').select('id, title, subject, body_content, template_attachments(id, file_name, file_url, file_size, storage_path)').order('title'),
       supabase.from('contacts').select('id, name, name_en, email').is('deleted_at', null).not('email', 'is', null).order('name'),
     ])
     const tplList = (tplData ?? []).map((t: Record<string, unknown>) => ({
@@ -1173,7 +1185,16 @@ export default function ContactDetailPage() {
 
       for (const a of templateAttachments) {
         try {
-          const contentBytes = await urlToBase64(a.file_url)
+          // private bucket：先簽短效 URL 再抓；簽不到才退回 file_url（舊 public 物件）
+          const attPath = templateAttachmentPath(a)
+          let fetchUrl = a.file_url
+          if (attPath) {
+            const { data: signed } = await supabase.storage
+              .from('template-attachments')
+              .createSignedUrl(attPath, 60)
+            if (signed?.signedUrl) fetchUrl = signed.signedUrl
+          }
+          const contentBytes = await urlToBase64(fetchUrl)
           const ext = a.file_name.split('.').pop()?.toLowerCase() ?? ''
           const contentType = ext === 'pdf' ? 'application/pdf'
             : ['xlsx', 'xls'].includes(ext) ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

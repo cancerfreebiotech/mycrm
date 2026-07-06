@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { fetchOrgId, withOrgPrefix } from '@/lib/orgUploadPrefix'
 import { PermissionGate } from '@/components/PermissionGate'
 import { Loader2, Send, FileDown, Rss, Eye, Save, ArrowLeft, CheckCircle2, AlertTriangle, Code, Columns, ImageIcon, Pencil, Clock } from 'lucide-react'
 import { InlineEmailEditor, type InlineEmailEditorHandle } from '@/components/InlineEmailEditor'
@@ -239,7 +240,9 @@ export default function QuickSendPage() {
       const safeName = /[^\x00-\x7F]/.test(cleaned)
         ? `asset-${Date.now().toString(36)}${ext}`
         : `${cleaned}-${Date.now().toString(36)}${ext}`
-      const path = `${periodFolder()}/${safeName}`
+      // v8.0 Task 182 — org 前綴（取不到則退回無前綴，上傳不壞）
+      const orgId = await fetchOrgId()
+      const path = withOrgPrefix(orgId, `${periodFolder()}/${safeName}`)
 
       const { error: upErr } = await supabase.storage
         .from('newsletter-assets')

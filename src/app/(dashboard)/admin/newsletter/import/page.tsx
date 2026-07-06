@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import JSZip from 'jszip'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { fetchOrgId, withOrgPrefix } from '@/lib/orgUploadPrefix'
 import { PermissionGate } from '@/components/PermissionGate'
 import { ArrowLeft, Upload, Package, AlertTriangle, CheckCircle2, Loader2, FileArchive } from 'lucide-react'
 
@@ -132,6 +133,8 @@ export default function NewsletterImportPage() {
       const period = typeof manifest.period === 'string' ? manifest.period : 'unknown-period'
       const stamp = Date.now().toString(36)
       const imageMap: Record<string, string> = {}
+      // v8.0 Task 182 — org 前綴（取一次；取不到則退回無前綴，上傳不壞）
+      const orgId = await fetchOrgId()
 
       let i = 0
       for (const refPath of referenced) {
@@ -150,7 +153,7 @@ export default function NewsletterImportPage() {
         }
         setProgress({ done: i - 1, total: referenced.size, current: baseFilename })
         const buf = await entry.async('uint8array')
-        const storagePath = `${period}/imported/${stamp}-${baseFilename.toLowerCase()}`
+        const storagePath = withOrgPrefix(orgId, `${period}/imported/${stamp}-${baseFilename.toLowerCase()}`)
         const { error: upErr } = await supabase.storage
           .from('newsletter-assets')
           .upload(storagePath, buf, { contentType: contentTypeFromName(baseFilename), upsert: false })

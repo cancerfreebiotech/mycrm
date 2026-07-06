@@ -15,6 +15,19 @@ interface Attachment {
   file_name: string
   file_url: string
   file_size: number
+  storage_path: string | null
+}
+
+// template-attachments is being turned private. New rows store the relative
+// object path in `storage_path`; older rows only have the public-form `file_url`,
+// so fall back to extracting the path from it (mirrors src/lib/cardImageUrl.ts).
+const TEMPLATE_ATTACHMENT_PUBLIC_RE = /\/storage\/v1\/object\/public\/template-attachments\/(.+)$/
+
+function attachmentStoragePath(att: Attachment): string | null {
+  if (att.storage_path) return att.storage_path.split('?')[0]
+  const m = att.file_url.match(TEMPLATE_ATTACHMENT_PUBLIC_RE)
+  if (m) return m[1].split('?')[0]
+  return null
 }
 
 interface Template {
@@ -48,14 +61,25 @@ export default function AdminTemplatesPage() {
   const [aiDescription, setAiDescription] = useState('')
   const [aiGenerating, setAiGenerating] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
+  const [orgId, setOrgId] = useState<string | null>(null)
 
   useEffect(() => { fetchTemplates() }, [])
+
+  // Resolve the caller's org for upload path prefixing (storage RLS keys on the
+  // first path segment). Cached in state; fetched lazily if not yet loaded.
+  async function resolveOrgId(): Promise<string | null> {
+    if (orgId) return orgId
+    const me = await fetch('/api/me').then((r) => (r.ok ? r.json() : null)).catch(() => null)
+    const oid = (me?.org_id ?? null) as string | null
+    if (oid) setOrgId(oid)
+    return oid
+  }
 
   async function fetchTemplates() {
     setLoading(true)
     const { data } = await supabase
       .from('email_templates')
-      .select('id, title, subject, body_content, created_at, template_attachments(id, file_name, file_url, file_size)')
+      .select('id, title, subject, body_content, created_at, template_attachments(id, file_name, file_url, file_size, storage_path)')
       .order('created_at', { ascending: false })
 
     setTemplates((data ?? []).map((tpl) => ({
@@ -91,13 +115,17 @@ export default function AdminTemplatesPage() {
     if (files.length === 0) return
     setFileError(null)
 
+    const oid = await resolveOrgId()
+    if (!oid) { setFileError(tc('error')); return }
+
     for (const file of files) {
       if (file.size > MAX_FILE_SIZE) {
         setFileError(t('fileSizeErrorFile', { name: file.name }))
         continue
       }
       setUploading(true)
-      const path = `${Date.now()}_${file.name}`
+      // Prefix with org id so storage RLS can authorize by first path segment.
+      const path = `${oid}/${Date.now()}_${file.name}`
       const { error } = await supabase.storage.from('template-attachments').upload(path, file, { upsert: false })
       if (error) { setFileError(error.message); setUploading(false); continue }
       const { data: urlData } = supabase.storage.from('template-attachments').getPublicUrl(path)
@@ -106,13 +134,13 @@ export default function AdminTemplatesPage() {
         // Save directly to DB if editing existing template
         const { data: att } = await supabase
           .from('template_attachments')
-          .insert({ template_id: editing.id, file_name: file.name, file_url: urlData.publicUrl, file_size: file.size })
-          .select('id, file_name, file_url, file_size')
+          .insert({ template_id: editing.id, file_name: file.name, file_url: urlData.publicUrl, file_size: file.size, storage_path: path })
+          .select('id, file_name, file_url, file_size, storage_path')
           .single()
         if (att) setAttachments((prev) => [...prev, att as Attachment])
       } else {
         // Pending: store in local state until template is saved
-        setAttachments((prev) => [...prev, { id: `pending_${Date.now()}`, file_name: file.name, file_url: urlData.publicUrl, file_size: file.size }])
+        setAttachments((prev) => [...prev, { id: `pending_${Date.now()}`, file_name: file.name, file_url: urlData.publicUrl, file_size: file.size, storage_path: path }])
       }
       setUploading(false)
     }
@@ -164,7 +192,7 @@ export default function AdminTemplatesPage() {
         const pending = attachments.filter((a) => a.id.startsWith('pending_'))
         if (pending.length > 0) {
           await supabase.from('template_attachments').insert(
-            pending.map((a) => ({ template_id: created.id, file_name: a.file_name, file_url: a.file_url, file_size: a.file_size }))
+            pending.map((a) => ({ template_id: created.id, file_name: a.file_name, file_url: a.file_url, file_size: a.file_size, storage_path: a.storage_path }))
           )
         }
       }
@@ -178,6 +206,21 @@ export default function AdminTemplatesPage() {
     await supabase.from('email_templates').delete().eq('id', id)
     setTemplates((prev) => prev.filter((tpl) => tpl.id !== id))
     setConfirmDeleteId(null)
+  }
+
+  // Open an attachment via a short-lived signed URL (bucket is private). Open a
+  // blank tab up front so the async sign doesn't get caught by popup blockers.
+  async function openAttachment(att: Attachment) {
+    const win = window.open('about:blank', '_blank')
+    if (win) win.opener = null
+    const path = attachmentStoragePath(att)
+    let target = att.file_url
+    if (path) {
+      const { data } = await supabase.storage.from('template-attachments').createSignedUrl(path, 60)
+      if (data?.signedUrl) target = data.signedUrl
+    }
+    if (win) win.location.href = target
+    else window.open(target, '_blank', 'noopener,noreferrer')
   }
 
   function formatSize(bytes: number) {
@@ -345,9 +388,9 @@ export default function AdminTemplatesPage() {
                     {attachments.map((a) => (
                       <div key={a.id} className="flex items-center gap-2 text-sm bg-gray-50 dark:bg-gray-800 px-3 py-2 rounded-lg">
                         <Paperclip size={13} className="text-gray-400 shrink-0" />
-                        <a href={a.file_url} target="_blank" rel="noreferrer" className="flex-1 truncate text-blue-600 dark:text-blue-400 hover:underline text-xs">
+                        <button type="button" onClick={() => openAttachment(a)} className="flex-1 truncate text-left text-blue-600 dark:text-blue-400 hover:underline text-xs">
                           {a.file_name}
-                        </a>
+                        </button>
                         <span className="text-xs text-gray-400 shrink-0">{formatSize(a.file_size)}</span>
                         <button onClick={() => removeAttachment(a)} className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 shrink-0">
                           <X size={14} />
