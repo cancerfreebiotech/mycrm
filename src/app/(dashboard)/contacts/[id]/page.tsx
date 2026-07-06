@@ -791,6 +791,8 @@ export default function ContactDetailPage() {
 
   async function confirmCardSave() {
     if (stagedFiles.length === 0) return
+    // org_id 明確帶入（業務表即將 DROP DEFAULT）；取不到組織即中止，不帶 null 硬送
+    if (!orgId) { alert(tc('orgResolveFailed')); return }
     setCardSaving(true)
     try {
       await Promise.all(
@@ -801,7 +803,7 @@ export default function ContactDetailPage() {
           const { error: uploadErr } = await supabase.storage.from('cards').upload(filename, uint8, { contentType: 'image/jpeg' })
           if (uploadErr) throw uploadErr
           const { data: urlData } = supabase.storage.from('cards').getPublicUrl(filename)
-          await supabase.from('contact_cards').insert({ contact_id: id, card_img_url: urlData.publicUrl, storage_path: filename, label: null })
+          await supabase.from('contact_cards').insert({ contact_id: id, card_img_url: urlData.publicUrl, storage_path: filename, label: null, org_id: orgId })
         })
       )
       // Fill empty fields silently. Existing fields are never overwritten —
@@ -818,6 +820,7 @@ export default function ContactDetailPage() {
           contact_id: id,
           type: 'system',
           content: t('logCardUpdated', { content: noteLines }),
+          org_id: orgId,
         })
       }
       cancelCardUpload()
@@ -841,6 +844,8 @@ export default function ContactDetailPage() {
     const files = Array.from(e.target.files ?? [])
     if (files.length === 0) return
     if (e.target) e.target.value = ''
+    // org_id 明確帶入（業務表即將 DROP DEFAULT）；取不到組織即中止，不帶 null 硬送
+    if (!orgId) { alert(tc('orgResolveFailed')); return }
     setPhotoSaving(true)
     try {
       for (const file of files) {
@@ -888,6 +893,7 @@ export default function ContactDetailPage() {
           latitude,
           longitude,
           location_name: locationName,
+          org_id: orgId,
         }).select('id').single()
         if (photoErr || !photoRow) throw photoErr ?? new Error('photo insert failed')
         // 多對多：同步建立一筆已確認的人臉標記（photo ↔ contact）
@@ -896,6 +902,7 @@ export default function ContactDetailPage() {
           contact_id: id,
           source: 'manual',
           status: 'confirmed',
+          org_id: orgId,
         })
         if (faceErr) throw faceErr
       }
@@ -926,6 +933,8 @@ export default function ContactDetailPage() {
   }
 
   async function savePhotoNote(photoId: string, note: string) {
+    // org_id 明確帶入（業務表即將 DROP DEFAULT）；取不到組織即中止，不帶 null 硬送
+    if (!orgId) { alert(tc('orgResolveFailed')); return }
     const trimmed = note.trim()
     await supabase.from('contact_photos').update({ note: trimmed || null }).eq('id', photoId)
     if (trimmed) {
@@ -933,6 +942,7 @@ export default function ContactDetailPage() {
         contact_id: id,
         type: 'system',
         content: t('logPhotoNote', { content: trimmed }),
+        org_id: orgId,
       })
     }
     setEditingNoteId(null)
@@ -969,7 +979,9 @@ export default function ContactDetailPage() {
   // ── Tags ────────────────────────────────────────────────────────────────────
 
   async function addTag(tag: Tag) {
-    await supabase.from('contact_tags').upsert({ contact_id: id, tag_id: tag.id })
+    // org_id 明確帶入（業務表即將 DROP DEFAULT）；取不到組織即中止，不帶 null 硬送
+    if (!orgId) { alert(tc('orgResolveFailed')); return }
+    await supabase.from('contact_tags').upsert({ contact_id: id, tag_id: tag.id, org_id: orgId })
     setTagDropOpen(false); setTagInput(''); load()
   }
 
@@ -985,9 +997,11 @@ export default function ContactDetailPage() {
 
   async function handleAddLog() {
     if (!logContent.trim()) return
+    // org_id 明確帶入（業務表即將 DROP DEFAULT）；取不到組織即中止，不帶 null 硬送
+    if (!orgId) { alert(tc('orgResolveFailed')); return }
     setAddingLog(true)
     const { data } = await supabase.from('interaction_logs')
-      .insert({ contact_id: id, content: logContent.trim(), type: logType, meeting_date: logType === 'meeting' && logDate ? logDate : null, meeting_time: logType === 'meeting' && logTime ? logTime : null, meeting_location: logType === 'meeting' && logLocation.trim() ? logLocation.trim() : null, created_by: currentUserId })
+      .insert({ contact_id: id, content: logContent.trim(), type: logType, meeting_date: logType === 'meeting' && logDate ? logDate : null, meeting_time: logType === 'meeting' && logTime ? logTime : null, meeting_location: logType === 'meeting' && logLocation.trim() ? logLocation.trim() : null, created_by: currentUserId, org_id: orgId })
       .select('id, content, type, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, campaign_id, users(display_name)').single()
     if (data) {
       setLogs((prev) => [data as unknown as Log, ...prev])
@@ -1220,12 +1234,15 @@ export default function ContactDetailPage() {
       const attachmentNames = attachments.map(a => a.name)
       const logContent = t('logSentEmail', { subject: mailSubject })
       if (uniqueContactIds.length > 0) {
+        // org_id 明確帶入（業務表即將 DROP DEFAULT）；取不到組織即中止，不帶 null 硬送
+        if (!orgId) { setMailError(tc('orgResolveFailed')); return }
         const inserts = uniqueContactIds.map(cid => ({
           contact_id: cid, content: logContent, type: 'email', created_by: currentUserId,
           email_subject: mailSubject,
           email_body: mailBody || null,
           email_attachments: attachmentNames.length > 0 ? attachmentNames : null,
           send_method: 'outlook',
+          org_id: orgId,
         }))
         const { data: logRows } = await supabase.from('interaction_logs')
           .insert(inserts)

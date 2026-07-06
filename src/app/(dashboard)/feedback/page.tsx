@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { fetchOrgId } from '@/lib/orgUploadPrefix'
 import { MessageSquarePlus, Upload, X, CheckCircle } from 'lucide-react'
 
 export default function FeedbackPage() {
@@ -62,6 +63,10 @@ export default function FeedbackPage() {
     const { data: profile } = await supabase.from('users').select('id').eq('email', user.email!).single()
     if (!profile) { setError(tc('error')); setSubmitting(false); return }
 
+    // org_id 明確帶入（業務表即將 DROP DEFAULT）；取不到組織即中止，不帶 null 硬送
+    const oid = await fetchOrgId()
+    if (!oid) { setError(tc('orgResolveFailed')); setSubmitting(false); return }
+
     // 截圖存於 private bucket，欄位存儲存路徑，讀取時再簽短效 URL。
     let screenshotPath: string | null = null
 
@@ -87,6 +92,7 @@ export default function FeedbackPage() {
       description: description.trim(),
       screenshot_url: screenshotPath,
       created_by: profile.id,
+      org_id: oid,
     })
 
     if (insertError) {

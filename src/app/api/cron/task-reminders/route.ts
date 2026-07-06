@@ -5,6 +5,7 @@ import { sendTelegramMessage, type InlineKeyboardMarkup } from '@/lib/telegram'
 import { getValidProviderToken } from '@/lib/graph-server'
 import { recordCronRun } from '@/lib/cronHeartbeat'
 import { escapeLikePattern } from '@/lib/likeEscape'
+import { getOrgSetting } from '@/lib/orgSettings'
 
 /**
  * Vercel Cron — daily personal task digest via Telegram (09:00 Asia/Taipei).
@@ -19,7 +20,6 @@ import { escapeLikePattern } from '@/lib/likeEscape'
  */
 
 const TZ = 'Asia/Taipei'
-const INTERNAL_DOMAIN = '@cancerfree.io'
 
 interface TaskRow {
   id: string
@@ -91,6 +91,7 @@ export async function GET(req: NextRequest) {
   // Phase 2+: 逐 org 迭代／由 payload 解析 org
   const ctx = systemOrgContext()
   const db = orgScopedClient(ctx)
+  const internalDomain = '@' + (await getOrgSetting(service, 'internal_email_domain', ctx.orgId))
 
   // "Today" in Taipei, expressed as a UTC window
   const now = new Date()
@@ -168,7 +169,7 @@ export async function GET(req: NextRequest) {
           const externalEmails = [...new Set(
             ev.attendeeEmails
               .map((e) => e.trim().toLowerCase())
-              .filter((e) => e && !e.endsWith(INTERNAL_DOMAIN)),
+              .filter((e) => e && !e.endsWith(internalDomain)),
           )]
           if (externalEmails.length > 0) {
             const orParts: string[] = []

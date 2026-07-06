@@ -4405,11 +4405,11 @@ create table public.usage_counters (
 - [x] **Task 181** — `current_org_id()`（JWT claim 優先 + email membership fallback——**hook 未啟用也正確**，claim 是效能最佳化）與 `is_org_member()` 已建；43 張業務表的所有 authenticated/public policy 以 AND 疊加 `org_id = current_org_id()`（原 has_feature/owner 檢查保留）。附帶修復既存的 tasks ↔ task_assignees policy 互相 EXISTS 造成的 42P17 遞迴（security definer 函式斷循環）。角色模擬測試：成員全可見、非成員 0 列 ✓。**偏差（刻意）**：`has_feature()` 仍讀 `users.granted_features`——切換到 member 版需同步改管理端寫入路徑，與多 org 授權一起留到 Phase 3。並存策略後半完成：全部 onConflict 改複合鍵、單欄 UNIQUE 已 DROP（bot_sessions/newsletter_*×4/prompts/tags/user_assistants/user_prompts）。audit 呼叫（logAdminAction/checkSuppression）全數改傳 org-scoped client。
 - [x] **Task 182** — 完成（2026-07-06 v7.9.3）。盤點發現「private + signed URL」大半已於 v7.3.0 就位（cards/camcard/feedback 已 private、讀取全走 signCardUrl／createSignedUrl）。本輪：(a) 全部新上傳/move 目的地（server 8 站 + client 6 站）加 `{org_id}/` 前綴，client 端 orgId 由 `/api/me` 提供（`src/lib/orgUploadPrefix.ts`，取不到時優雅退回無前綴）；(b) **移除既存安全洞**「Public read cards」policy（anon key 可經 API 讀全部名片圖）；(c) `storage_org_ok()`：路徑第一段為 uuid → 驗 `is_org_member()`，舊路徑 grandfather 給 authenticated——14 條 storage policy 疊加；(d) template-attachments 補 `storage_path` 欄（舊列由 file_url 回填）、下載與 email 附件抓取改簽名、bucket 轉 private；(e) 清除 pending 頁已 404 的 public URL fallback。**newsletter-assets 刻意維持 public**：URL 烙進寄出的 email 與公開 RSS，永不能過期（僅做上傳前綴與寫入面 org policy）。
 
-**Phase 3 — Onboarding / Auth 開放**
-- [ ] **Task 183** `[修改]` — 移除 `auth/callback` 網域強制；登入後分流（member / invite / 新建 org）
+**Phase 3 — Onboarding / Auth 開放**（Batch A = Task 185 + 前置，完成 2026-07-06 v7.9.4；183/184/186 待做）
+- [ ] **Task 183** `[修改]` — 移除 `auth/callback` 網域強制；登入後分流（member / invite / 新建 org）。**設計註**：實作時以 `open_signup` 開關閘住（預設關＝行為不變），開啟＝8.0.0 發布決策；另 signInWithPassword 類登入不經 callback，網域/停權 gate 需先收斂到 proxy 層。
 - [ ] **Task 184** `[新增]` — `/onboarding` 建立 org 流程；邀請流程（`organization_invites` + 一次性連結）；header org switcher
-- [ ] **Task 185** `[修改]` — 26 處 hardcode 搬到 `organizations.settings` / `branding`，各 route 從 org 載入
-- [ ] **Task 186** `[修改]` — Azure AD 改 multi-tenant 或加開放 OAuth / email+password
+- [x] **Task 185** — 完成（2026-07-06 v7.9.4）。`orgSettings.ts` v2：解析鏈 organizations.settings（jsonb, per-org）→ system_settings（遺產 fallback）→ env/預設；admin org-settings 頁改寫 organizations.settings 並新增 7 欄（sender_name、internal_email_domain、org_email_domain、bcc_inbox_domain、postal_address、owner_email、app_url）。搬遷：寄件人顯示名 ×4、app URL fallback ×10+、INTERNAL_DOMAIN ×2、inbound-parse 網域 ×2 與無主 owner fallback、health-watchdog 告警收件人、notify-release Reply-To、skeleton 三語樣板（org_name／postal_address／website_url placeholder，CAN-SPAM 地址 follow-up 一併解）。**Phase 3 前置同批完成**：has_feature() 切換 organization_members（管理端雙寫）、client 端 24 個寫入明確帶 org_id（hard-fail）、業務表 DROP org_id DEFAULT、period_meta PK →（org_id, period）。保留寫死（刻意）：access route 的 SUPER_ADMIN_EMAIL 平台保護；i18n 內少數展示性文案待 183/184 一併處理。
+- [ ] **Task 186** `[修改]` — Azure AD 改 multi-tenant 或加開放 OAuth / email+password。**待決策**（見 45.5 註）：現況 Azure 單租戶即隱性網域閘；開 email+password 最省，但 MFA 強制沿用（proxy AAL gate provider 無關）。
 
 **Phase 4 — 計費 / Quota（已自 roadmap 移除，2026-07-05 決策：目前不做）**
 

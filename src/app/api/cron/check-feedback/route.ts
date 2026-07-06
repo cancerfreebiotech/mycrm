@@ -66,14 +66,14 @@ export async function GET(req: NextRequest) {
 
   const sgKey = process.env.SENDGRID_API_KEY
   const fromEmail = process.env.SENDGRID_FROM_EMAIL
-  const fromName = process.env.SENDGRID_FROM_NAME ?? 'CancerFree Biotech'
+  const fromName = await getOrgSetting(service, 'sender_name', ctx.orgId)
   if (!sgKey || !fromEmail) {
     await recordCronRun(service, 'check-feedback', 'error', { error: 'SendGrid not configured' }, Date.now() - startMs)
     return NextResponse.json({ error: 'SendGrid not configured (SENDGRID_API_KEY / SENDGRID_FROM_EMAIL)' }, { status: 500 })
   }
 
-  const recipient = (await getOrgSetting(service, 'feedback_recipient')) || 'pohan.chen@cancerfree.io'
-  const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.cancerfree.io'
+  const recipient = await getOrgSetting(service, 'feedback_recipient', ctx.orgId)
+  const appUrl = process.env.NEXTAUTH_URL ?? (await getOrgSetting(service, 'app_url', ctx.orgId))
 
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
   const { data, error } = await db

@@ -155,13 +155,14 @@ export async function sendCampaign(
 
   const sgKey = process.env.SENDGRID_API_KEY
   const fromEmail = process.env.SENDGRID_FROM_EMAIL
-  const fromName = process.env.SENDGRID_FROM_NAME ?? 'CancerFree Biotech'
   if (!sgKey || !fromEmail) {
     throw new SendCampaignError(500, { error: 'SendGrid not configured (SENDGRID_API_KEY / SENDGRID_FROM_EMAIL)' })
   }
-  // Reply-To comes from org settings (env fallback baked in) so replies route to
-  // the configured address rather than SendGrid's from-only default.
-  const { newsletter_reply_to: replyTo } = await getOrgSettings(service, ['newsletter_reply_to'])
+  // Reply-To, sender display name and app base URL come from org settings (env
+  // fallback baked in) so replies route to the configured address and links use
+  // the configured host rather than SendGrid's from-only default.
+  const { newsletter_reply_to: replyTo, sender_name: fromName, app_url: baseUrl } =
+    await getOrgSettings(service, ['newsletter_reply_to', 'sender_name', 'app_url'])
 
   // ── Gather recipients ──
   let recipients: Subscriber[] = []
@@ -320,8 +321,6 @@ export async function sendCampaign(
   const sendSubject: string = abMode === 'final' && campaign.ab_winner === 'b'
     ? (campaign.subject_b as string).trim()
     : campaign.subject
-
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.cancerfree.io'
 
   // Inbox preview text: inject a hidden preheader div right after <body> (the
   // standard technique — an X-Preview-Text header does nothing in any client).

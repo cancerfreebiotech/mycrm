@@ -15,6 +15,19 @@ import { TOOLS, TOOL_BY_NAME, executeTool } from '@/lib/agent-tools'
 import { getOrgSetting } from '@/lib/orgSettings'
 import { systemOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 
+// v8.0 Phase 3 (Task 185): app base URL for links in bot messages.
+// Env still wins (backward-compat); otherwise the org's configured app_url,
+// whose default resolves to the same hardcoded URL as before. The bot runs
+// entirely in the system / default-org context, so no orgId is threaded here.
+async function resolveAppUrl(): Promise<string> {
+  return (
+    process.env.NEXTAUTH_URL ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    (await getOrgSetting(createServiceClient(), 'app_url')) ??
+    ''
+  )
+}
+
 function countryToLanguage(code: string | null | undefined): string {
   if (code === 'TW' || code === 'CN') return 'chinese'
   if (code === 'JP') return 'japanese'
@@ -1156,7 +1169,7 @@ async function handlePhoto(
       }
       // URL button → open the existing contact so the user can review before
       // deciding which merge action to take. Telegram requires an absolute URL.
-      const baseUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.cancerfree.io'
+      const baseUrl = await resolveAppUrl()
       cardButtons.push([
         { text: m.btnViewExisting(mergeTargetName), url: `${baseUrl}/contacts/${mergeTargetId}` },
       ])
@@ -1291,7 +1304,7 @@ async function handleWork(
     .select('email, display_name, telegram_id, teams_conversation_id, teams_service_url')
     .in('email', assigneeEmails)
 
-  const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+  const appUrl = await resolveAppUrl()
 
   for (const au of notifyUsers ?? []) {
     if (au.email === user.email) continue
@@ -2226,7 +2239,7 @@ async function handleText(
       if (parts.length > 0) metInfo = m.batchMetInfo(parts.join('\n'))
     }
 
-    const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+    const appUrl = await resolveAppUrl()
     const link = appUrl ? `\n📋 <a href="${appUrl}/contacts/pending">${appUrl}/contacts/pending</a>` : ''
     await sendMessage(chatId, m.batchEntered(metInfo, link))
     return
@@ -2243,7 +2256,7 @@ async function handleText(
         .eq('id', draftId).single()
       await clearSession(fromId)
       if (!d) { await sendMessage(chatId, m.newsExited); return }
-      const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+      const appUrl = await resolveAppUrl()
       const link = appUrl ? `\n\n👀 <a href="${appUrl}/admin/newsletter/draft/${d.period}">${appUrl}/admin/newsletter/draft/${d.period}</a>` : ''
       const photos = d.photo_urls?.length ?? 0
       const charCount = (d.content ?? '').length
@@ -2522,7 +2535,7 @@ export async function POST(req: NextRequest) {
           await db.from('pending_contacts').delete().eq('id', pendingId)
           await updateLastContact(from.id, inserted.id)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
-          const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+          const appUrl = await resolveAppUrl()
           const contactLink = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">${m.cardViewContactLink}</a>` : ''
           await sendMessage(from.id, m.cardSavedWithLink(contactLink), {
             reply_markup: {
@@ -2602,7 +2615,7 @@ export async function POST(req: NextRequest) {
           if (isReplace && result.replaced > 0) summary.push(m.mergeReplaced(result.replaced))
           if (!isReplace && result.conflicts > 0) summary.push(m.mergeConflicts(result.conflicts))
           if (pdata.card_img_url) summary.push(m.mergeCardAdded)
-          const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+          const appUrl = await resolveAppUrl()
           const link = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${targetId}">${m.mergeViewLink(result.contact_name ?? '')}</a>` : ''
           const verb = isReplace ? m.mergeVerbUpdated : m.mergeVerbAddedTo
           await sendMessage(from.id, m.mergeResult(verb, result.contact_name ?? '', summary.join('\n'), link))
@@ -2829,7 +2842,7 @@ export async function POST(req: NextRequest) {
               })
               await updateLastContact(from.id, inserted.id)
               await setSession(from.id, 'waiting_for_add_card', { contact_id: inserted.id, contact_name: nameQuery })
-              const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+              const appUrl = await resolveAppUrl()
               const link = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">${m.cardViewContactLink}</a>` : ''
               const displayLine = companyQuery ? `<b>${nameQuery}</b>（${companyQuery}）` : `<b>${nameQuery}</b>`
               await sendMessage(from.id, m.addCardContactCreated(displayLine, link), {
@@ -2870,7 +2883,7 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackQueryId)
           await editMessageReplyMarkup(message.chat.id, message.message_id)
           await clearSession(from.id)
-          const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+          const appUrl = await resolveAppUrl()
           const link = (appUrl && skipContactId) ? `\n\n👤 <a href="${appUrl}/contacts/${skipContactId}">${m.cardViewContactLink}</a>` : ''
           const displayLine = skipContactName ? `<b>${skipContactName}</b>` : m.cardThisContact
           await sendMessage(from.id, m.addCardSkipped(displayLine, link))
@@ -2942,7 +2955,7 @@ export async function POST(req: NextRequest) {
               })
               await updateLastContact(from.id, inserted.id)
               await setSession(from.id, 'waiting_for_photo', { contact_id: inserted.id, contact_name: nameQuery })
-              const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+              const appUrl = await resolveAppUrl()
               const link = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">${m.cardViewContactLink}</a>` : ''
               const displayLine = companyQuery ? `<b>${nameQuery}</b>（${companyQuery}）` : `<b>${nameQuery}</b>`
               await sendMessage(from.id, m.personPhotoContactCreated(displayLine, link))
@@ -3103,7 +3116,7 @@ export async function POST(req: NextRequest) {
                 })
               }
               await updateLastContact(from.id, inserted.id)
-              const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+              const appUrl = await resolveAppUrl()
               const contactLink = appUrl ? `\n\n👤 <a href="${appUrl}/contacts/${inserted.id}">${m.cardViewContactLink}</a>` : ''
               const displayName = parsed.name || parsed.name_en || m.cardThisContact
               await sendMessage(from.id, m.liSavedWithLink(displayName, contactLink))

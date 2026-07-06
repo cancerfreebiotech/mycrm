@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { fetchOrgId } from '@/lib/orgUploadPrefix'
 import { SYSTEM_PROMPTS, type PromptKey } from '@/lib/prompt-constants'
 import { Check, RotateCcw } from 'lucide-react'
 import { useTranslations } from 'next-intl'
@@ -63,7 +64,10 @@ export default function AdminPromptsPage() {
       // Delete org override → fall back to system default
       await supabase.from('prompts').delete().eq('key', key)
     } else {
-      await supabase.from('prompts').upsert({ key, content }, { onConflict: 'org_id,key' })
+      // org_id 明確帶入（業務表即將 DROP DEFAULT）；取不到組織即中止，不帶 null 硬送
+      const oid = await fetchOrgId()
+      if (!oid) { setSaving(null); alert(tc('orgResolveFailed')); return }
+      await supabase.from('prompts').upsert({ key, content, org_id: oid }, { onConflict: 'org_id,key' })
     }
 
     setOrgPrompts((prev) => ({ ...prev, [key]: content }))

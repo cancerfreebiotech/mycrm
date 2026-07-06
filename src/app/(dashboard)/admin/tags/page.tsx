@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { fetchOrgId } from '@/lib/orgUploadPrefix'
 import { Plus, Pencil, Trash2, Check, X, ShieldOff, Shield } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
 
@@ -65,7 +66,10 @@ export default function TagsPage() {
     const name = newName.trim()
     if (!name) return
     setAdding(true); setError(null)
-    const { error: err } = await supabase.from('tags').insert({ name })
+    // org_id 明確帶入（業務表即將 DROP DEFAULT）；取不到組織即中止，不帶 null 硬送
+    const oid = await fetchOrgId()
+    if (!oid) { setError(tc('orgResolveFailed')); setAdding(false); return }
+    const { error: err } = await supabase.from('tags').insert({ name, org_id: oid })
     if (err) {
       setError(err.message.includes('unique') ? t('errorDuplicate') : err.message)
     } else {

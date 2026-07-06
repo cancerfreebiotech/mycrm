@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { fetchOrgId } from '@/lib/orgUploadPrefix'
 import { Search, Download, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Copy, Check, Loader2, X, Linkedin, Mail, Users, SlidersHorizontal, Bookmark } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -471,6 +472,9 @@ export default function ContactsPage() {
   async function handleBatchSave() {
     setBatchSaving(true)
     const supabase = createBrowserSupabaseClient()
+    // org_id 明確帶入（業務表即將 DROP DEFAULT）；取不到組織即中止，不帶 null 硬送
+    const oid = await fetchOrgId()
+    if (!oid) { alert(tc('orgResolveFailed')); setBatchSaving(false); return }
     const { data: { user } } = await supabase.auth.getUser()
     const { data: profile } = await supabase.from('users').select('id').eq('email', user!.email!).single()
     const ids = Array.from(selectedIds)
@@ -489,7 +493,7 @@ export default function ContactsPage() {
 
     if (batchForm._tag_ids.length > 0) {
       const tagInserts = ids.flatMap((contact_id) =>
-        batchForm._tag_ids.map((tag_id) => ({ contact_id, tag_id }))
+        batchForm._tag_ids.map((tag_id) => ({ contact_id, tag_id, org_id: oid }))
       )
       await supabase.from('contact_tags').upsert(tagInserts, { onConflict: 'contact_id,tag_id', ignoreDuplicates: true })
     }
@@ -499,7 +503,7 @@ export default function ContactsPage() {
         t('batchLogMet', { at: batchForm.met_at, date: batchForm.met_date }) +
         (batchForm.referred_by ? t('batchLogReferredBy', { name: batchForm.referred_by }) : '')
       await supabase.from('interaction_logs').insert(
-        ids.map((contact_id) => ({ contact_id, type: 'meeting', content: logContent, created_by: profile!.id }))
+        ids.map((contact_id) => ({ contact_id, type: 'meeting', content: logContent, created_by: profile!.id, org_id: oid }))
       )
     }
 

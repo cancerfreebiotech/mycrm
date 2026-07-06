@@ -5,8 +5,7 @@ import { sendMail } from '@/lib/graph'
 import { generateOptOutToken } from '@/lib/email-optout'
 import { recordUsage } from '@/lib/usage'
 import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
-
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.cancerfree.io'
+import { getOrgSettings } from '@/lib/orgSettings'
 
 function injectOptOutFooter(html: string, optOutUrl: string): string {
   const footer = `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;color:#9ca3af;">若您希望停止接收相關郵件，<a href="${optOutUrl}" style="color:#9ca3af;text-decoration:underline;">請點此告知我們</a>。<br>If you wish to unsubscribe, <a href="${optOutUrl}" style="color:#9ca3af;text-decoration:underline;">click here to let us know</a>.</div>`
@@ -234,11 +233,12 @@ export async function POST(req: NextRequest) {
     // ── SendGrid ──
     const sgKey = process.env.SENDGRID_API_KEY
     const fromEmail = process.env.SENDGRID_FROM_EMAIL
-    const fromName = process.env.SENDGRID_FROM_NAME ?? 'CancerFree Biotech'
 
     if (!sgKey || !fromEmail) {
       return NextResponse.json({ error: 'SendGrid 設定缺失' }, { status: 500 })
     }
+    // Sender display name + app base URL from org settings (env fallback baked in).
+    const { sender_name: fromName, app_url: APP_URL } = await getOrgSettings(supabase, ['sender_name', 'app_url'], ctx.orgId)
 
     const sgAttachments = attachments.length > 0
       ? attachments.map(a => ({

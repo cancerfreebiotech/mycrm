@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## v7.9.4 — feat(orgs): v8.0 Phase 3 Batch A——Task 185 設定搬遷 + 多租戶前置收斂（2026-07-06）
+
+> 內部基礎設施；單租戶行為等價（所有新設定的預設值＝原寫死值）。
+
+### 變更項目
+- **org 設定 per-org 化（Task 185）**：`organizations.settings`（jsonb）成為正式家，解析鏈 org → system_settings（遺產）→ env/預設；admin「組織設定」頁改寫入 organizations.settings，並新增寄件人顯示名、內部網域、組織信箱網域、BCC 網域、CAN-SPAM 地址、擁有者信箱、應用 URL 七欄（三語 i18n 同步）。
+- **寫死值搬遷**：SendGrid 寄件人名 ×4、app URL fallback ×10+、內部與會者網域 ×2、inbound-parse 網域與無主歸屬、健康告警收件人、發版通知 Reply-To、電子報 skeleton 三語樣板（公司名/實體地址/官網連結佔位符——CAN-SPAM 地址寫死的舊 follow-up 一併解決）。
+- **權限來源切換**：RLS 層 `has_feature()` 改讀 `organization_members.granted_features`（per-org 授權；super_admin 平台級不變）；管理端授權改為雙寫 users + members，兩來源恆一致。
+- **DROP org_id DEFAULT（開放 onboarding 前關鍵防呆）**：client 端 24 個寫入點全數明確帶 org_id（解析失敗顯式擋下）；此後漏帶 org_id 的寫入顯式失敗，不再靜默落入預設 org。
+- `newsletter_period_meta` 主鍵改（org_id, period），upsert 目標同步。
+
 ## v7.9.3 — feat(orgs/storage): v8.0 Task 182 Storage 隔離——Phase 2 完結（2026-07-06）
 
 > 內部基礎設施；單租戶行為等價。v8.0 Phase 0–2 至此全部完成。

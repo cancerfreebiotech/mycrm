@@ -72,7 +72,7 @@ export async function PATCH(req: NextRequest) {
   if (body.label_last !== undefined) patch.label_last = body.label_last
   if (body.label_next !== undefined) patch.label_next = body.label_next
 
-  const { error } = await db.from('newsletter_period_meta').upsert(patch, { onConflict: 'period' })
+  const { error } = await db.from('newsletter_period_meta').upsert(patch, { onConflict: 'org_id,period' })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Invalidate compose cache for this period so the next preview reflects the new meta

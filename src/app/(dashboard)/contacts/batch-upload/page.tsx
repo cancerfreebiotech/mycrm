@@ -195,6 +195,9 @@ export default function BatchUploadPage() {
 
   async function saveAll() {
     if (!userId) return
+    // org_id 明確帶入（業務表即將 DROP DEFAULT）；取不到組織即中止，不帶 null 硬送
+    const oid = await fetchOrgId()
+    if (!oid) return
     setSaving(true)
     let saved = 0
     let skipped = 0
@@ -211,15 +214,16 @@ export default function BatchUploadPage() {
         linkedin_url: row.linkedin_url || null, facebook_url: row.facebook_url || null,
         card_img_url: row.imgUrl,
         created_by: userId,
+        org_id: oid,
       }
 
       const { data: inserted } = await supabase.from('contacts').insert(payload).select('id').single()
       if (inserted) {
         // Add to contact_cards
         if (row.storagePath && row.imgUrl) {
-          await supabase.from('contact_cards').insert({ contact_id: inserted.id, card_img_url: row.imgUrl, storage_path: row.storagePath, label: tcnt('legacyCardFront') })
+          await supabase.from('contact_cards').insert({ contact_id: inserted.id, card_img_url: row.imgUrl, storage_path: row.storagePath, label: tcnt('legacyCardFront'), org_id: oid })
         }
-        await supabase.from('interaction_logs').insert({ contact_id: inserted.id, type: 'system', content: '透過批次上傳新增名片', created_by: userId })
+        await supabase.from('interaction_logs').insert({ contact_id: inserted.id, type: 'system', content: '透過批次上傳新增名片', created_by: userId, org_id: oid })
         // Hunter auto-enrich when OCR yielded no email (non-fatal)
         if (!row.email) {
           fetch('/api/hunter/enrich', {

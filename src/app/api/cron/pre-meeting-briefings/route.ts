@@ -6,6 +6,7 @@ import { getValidProviderToken } from '@/lib/graph-server'
 import { sendTelegramMessage } from '@/lib/telegram'
 import { recordCronRun } from '@/lib/cronHeartbeat'
 import { escapeLikePattern } from '@/lib/likeEscape'
+import { getOrgSetting } from '@/lib/orgSettings'
 
 /**
  * Vercel Cron — 會前自動 briefing（每 6 小時）。
@@ -20,7 +21,6 @@ import { escapeLikePattern } from '@/lib/likeEscape'
  */
 
 const HOURS_AHEAD = 24
-const INTERNAL_DOMAIN = '@cancerfree.io'
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
   // Phase 2+: 逐 org 迭代／由 payload 解析 org
   const ctx = systemOrgContext()
   const db = orgScopedClient(ctx)
+  const internalDomain = '@' + (await getOrgSetting(service, 'internal_email_domain', ctx.orgId))
   const startMs = Date.now()
 
   try {
@@ -62,7 +63,7 @@ export async function GET(req: NextRequest) {
           const externalEmails = [...new Set(
             ev.attendeeEmails
               .map((e) => e.trim().toLowerCase())
-              .filter((e) => e && !e.endsWith(INTERNAL_DOMAIN)),
+              .filter((e) => e && !e.endsWith(internalDomain)),
           )]
           if (externalEmails.length === 0) continue
 

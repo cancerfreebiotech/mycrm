@@ -134,7 +134,7 @@ export default function AdminTemplatesPage() {
         // Save directly to DB if editing existing template
         const { data: att } = await supabase
           .from('template_attachments')
-          .insert({ template_id: editing.id, file_name: file.name, file_url: urlData.publicUrl, file_size: file.size, storage_path: path })
+          .insert({ template_id: editing.id, file_name: file.name, file_url: urlData.publicUrl, file_size: file.size, storage_path: path, org_id: oid })
           .select('id, file_name, file_url, file_size, storage_path')
           .single()
         if (att) setAttachments((prev) => [...prev, att as Attachment])
@@ -184,15 +184,18 @@ export default function AdminTemplatesPage() {
     if (editing) {
       await supabase.from('email_templates').update({ title: form.title, subject: form.subject, body_content: form.body_content }).eq('id', editing.id)
     } else {
+      // org_id 明確帶入（業務表即將 DROP DEFAULT）；取不到組織即中止，不帶 null 硬送
+      const oid = await resolveOrgId()
+      if (!oid) { setFileError(tc('orgResolveFailed')); setSaving(false); return }
       const { data: created } = await supabase
         .from('email_templates')
-        .insert({ title: form.title, subject: form.subject, body_content: form.body_content })
+        .insert({ title: form.title, subject: form.subject, body_content: form.body_content, org_id: oid })
         .select('id').single()
       if (created) {
         const pending = attachments.filter((a) => a.id.startsWith('pending_'))
         if (pending.length > 0) {
           await supabase.from('template_attachments').insert(
-            pending.map((a) => ({ template_id: created.id, file_name: a.file_name, file_url: a.file_url, file_size: a.file_size, storage_path: a.storage_path }))
+            pending.map((a) => ({ template_id: created.id, file_name: a.file_name, file_url: a.file_url, file_size: a.file_size, storage_path: a.storage_path, org_id: oid }))
           )
         }
       }

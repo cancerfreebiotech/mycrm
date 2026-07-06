@@ -5,6 +5,7 @@ import { useTheme } from 'next-themes'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { fetchOrgId } from '@/lib/orgUploadPrefix'
 import { Sun, Moon, Check, RotateCcw, X, Plus, ChevronDown, ShieldCheck, ShieldOff, Loader2, Eye, EyeOff } from 'lucide-react'
 import QRCode from 'qrcode'
 import { SUPPORTED_LOCALES, type Locale } from '@/i18n/config'
@@ -243,10 +244,16 @@ export default function SettingsPage() {
     const { data: profile } = await supabase.from('users').select('id').eq('email', user.email).single()
     if (!profile) { setSavingEmailPrompt(false); alert(tc('error')); return }
     const content = emailPrompt.trim()
+    // org_id 明確帶入（業務表即將 DROP DEFAULT）；upsert 才需要，取不到組織即中止，不帶 null 硬送
+    let oid: string | null = null
+    if (content !== '') {
+      oid = await fetchOrgId()
+      if (!oid) { setSavingEmailPrompt(false); alert(tc('orgResolveFailed')); return }
+    }
     const { error: err } = content === ''
       ? await supabase.from('user_prompts').delete().eq('user_id', profile.id).eq('key', 'email_generate')
       : await supabase.from('user_prompts').upsert(
-          { user_id: profile.id, key: 'email_generate', content },
+          { user_id: profile.id, key: 'email_generate', content, org_id: oid },
           { onConflict: 'org_id,user_id,key' }
         )
     setSavingEmailPrompt(false)

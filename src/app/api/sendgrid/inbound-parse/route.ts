@@ -11,6 +11,7 @@ import {
   stripQuotedReply,
 } from '@/lib/parseEmailHeaders'
 import { hunterEnrich } from '@/lib/hunterEnrich'
+import { getOrgSettings } from '@/lib/orgSettings'
 
 // POST /api/sendgrid/inbound-parse?key=<INBOUND_PARSE_SECRET>
 // Receives mail forwarded by SendGrid Inbound Parse (multipart/form-data).
@@ -25,9 +26,6 @@ import { hunterEnrich } from '@/lib/hunterEnrich'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
-
-const ORG_DOMAIN = (process.env.ORG_EMAIL_DOMAIN ?? 'cancerfree.io').trim().toLowerCase()
-const BCC_INBOX_DOMAIN = (process.env.BCC_INBOX_DOMAIN ?? 'bcc.cancerfree.io').trim().toLowerCase()
 
 interface AddressEntry {
   name?: string
@@ -45,14 +43,6 @@ function flattenAddresses(field: AddressObject | AddressObject[] | undefined): A
     }
   }
   return out
-}
-
-function isOrgAddress(email: string): boolean {
-  return email.toLowerCase().endsWith('@' + ORG_DOMAIN)
-}
-
-function isBccInbox(email: string): boolean {
-  return email.toLowerCase().endsWith('@' + BCC_INBOX_DOMAIN)
 }
 
 function dedupeByEmail(list: AddressEntry[]): AddressEntry[] {
@@ -120,6 +110,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'no From address' }, { status: 400 })
   }
 
+  const supabase = createServiceClient()
+  // Phase 2+: 由 payload（org 收件人 email）解析 org
+  const ctx = systemOrgContext()
+  const db = orgScopedClient(ctx)
+
+  const { org_email_domain, bcc_inbox_domain, owner_email } = await getOrgSettings(
+    supabase,
+    ['org_email_domain', 'bcc_inbox_domain', 'owner_email'],
+    ctx.orgId,
+  )
+  const orgDomain = org_email_domain.trim().toLowerCase()
+  const bccDomain = bcc_inbox_domain.trim().toLowerCase()
+  const isOrgAddress = (email: string): boolean => email.toLowerCase().endsWith('@' + orgDomain)
+  const isBccInbox = (email: string): boolean => email.toLowerCase().endsWith('@' + bccDomain)
+
   const hasOrgFrom = isOrgAddress(fromAddr.email)
 
   // Accept external-sender emails only when our inbox address is explicitly
@@ -137,11 +142,6 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const supabase = createServiceClient()
-  // Phase 2+: 由 payload（org 收件人 email）解析 org
-  const ctx = systemOrgContext()
-  const db = orgScopedClient(ctx)
-
   // Determine which org user to attribute the interaction to:
   // - outbound / forward: the From address (org user who sent)
   // - inbound reply from external: the org recipient found above
@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
     const { data: superAdmin } = await supabase
       .from('users')
       .select('id')
-      .ilike('email', 'pohan.chen@cancerfree.io')
+      .ilike('email', owner_email)
       .maybeSingle()
     createdBy = superAdmin?.id ?? null
   }

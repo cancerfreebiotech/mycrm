@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { logAdminAction } from '@/lib/adminAudit'
 import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
+import { getOrgSetting } from '@/lib/orgSettings'
 
 // POST /api/admin/notify-release
 //
@@ -18,7 +19,6 @@ import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
 //   dryRun?    — if true, returns recipient list without sending
 //   testEmail? — if set, only sends to this single address (overrides MFA query)
 const SG_SEND_URL = 'https://api.sendgrid.com/v3/mail/send'
-const REPLY_TO_EMAIL = 'pohan.chen@cancerfree.io'
 const FROM_NAME = 'Po-Han Chen (myCRM)'
 
 interface RequestBody {
@@ -52,11 +52,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'SendGrid not configured (SENDGRID_API_KEY / SENDGRID_FROM_EMAIL)' }, { status: 500 })
   }
 
+  const supabase = createServiceClient()
+  const ctx = systemOrgContext()
   let recipients: string[]
   if (testEmail) {
     recipients = [testEmail]
   } else {
-    const supabase = createServiceClient()
     const { data: mfaRows, error: rpcErr } = await supabase.rpc('get_users_mfa_status')
     if (rpcErr) return NextResponse.json({ error: `mfa lookup failed: ${rpcErr.message}` }, { status: 500 })
     recipients = ((mfaRows ?? []) as { email: string; has_mfa: boolean }[])
@@ -72,11 +73,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ version, dryRun: true, recipients, count: recipients.length })
   }
 
+  // Reply-To comes from org settings (owner_email); env fallback baked into the setting.
+  const replyTo = await getOrgSetting(supabase, 'owner_email', ctx.orgId)
+
   // SendGrid: one personalization per recipient so each To: only contains
   // that recipient (no BCC leak). Capped at 1000 per call; we have ≤ 8.
   const payload = {
     from: { email: fromEmail, name: FROM_NAME },
-    reply_to: { email: REPLY_TO_EMAIL },
+    reply_to: { email: replyTo },
     subject,
     content: [{ type: 'text/html', value: bodyHtml }],
     personalizations: recipients.map((email) => ({ to: [{ email }] })),
@@ -101,7 +105,7 @@ export async function POST(req: Request) {
 
   // Auth is a shared RELEASE_NOTIFY_TOKEN (no user identity) → actor is unknown.
   // Phase 2+: 逐 org 迭代／由 payload 解析 org
-  await logAdminAction(orgScopedClient(systemOrgContext()), {
+  await logAdminAction(orgScopedClient(ctx), {
     actorEmail: 'unknown',
     action: 'notify_release',
     target: version,

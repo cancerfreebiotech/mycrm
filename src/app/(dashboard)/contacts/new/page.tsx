@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl'
 import Image from 'next/image'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { signCardUrl } from '@/lib/cardImageUrl'
+import { fetchOrgId } from '@/lib/orgUploadPrefix'
 import { Upload, Loader2, AlertTriangle, X, Sparkles, Check } from 'lucide-react'
 
 interface Tag { id: string; name: string }
@@ -314,20 +315,24 @@ export default function NewContactPage() {
       const { data: profile } = await supabase.from('users').select('id').eq('email', user.email!).single()
       if (!profile) throw new Error(t('userNotFound'))
 
+      // org_id 明確帶入（業務表即將 DROP DEFAULT）；取不到組織即中止，不帶 null 硬送
+      const oid = await fetchOrgId()
+      if (!oid) { setError(tc('orgResolveFailed')); setSaving(false); return }
+
       const payload = Object.fromEntries(
         Object.entries(form).map(([k, v]) => [k, v.trim() || null])
       )
 
       const { data: inserted, error: insertErr } = await supabase
         .from('contacts')
-        .insert({ ...payload, created_by: profile.id })
+        .insert({ ...payload, created_by: profile.id, org_id: oid })
         .select('id')
         .single()
       if (insertErr || !inserted) throw insertErr
 
       if (selectedTags.length > 0) {
         await supabase.from('contact_tags').insert(
-          selectedTags.map((tag_id) => ({ contact_id: inserted.id, tag_id }))
+          selectedTags.map((tag_id) => ({ contact_id: inserted.id, tag_id, org_id: oid }))
         )
       }
 
@@ -376,6 +381,7 @@ export default function NewContactPage() {
         type: 'system',
         content: t('logManualAdd'),
         created_by: profile.id,
+        org_id: oid,
       })
 
       // Hunter auto-enrich when user left email blank (fire-and-forget, non-fatal)

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createServiceClient } from '@/lib/supabase'
+import { getOrgSetting } from '@/lib/orgSettings'
 
 // Sends a fake "open" event to our own webhook to verify it's working end-to-end.
 // Uses the SENDGRID_WEBHOOK_SECRET env var so the webhook auth passes.
@@ -10,7 +12,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'SENDGRID_WEBHOOK_SECRET not set' }, { status: 500 })
   }
 
-  const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.cancerfree.io'
+  const APP_URL = await getOrgSetting(createServiceClient(), 'app_url')
   const webhookUrl = `${APP_URL}/api/email/webhook?secret=${encodeURIComponent(secret)}`
 
   const fakeEvent = [{

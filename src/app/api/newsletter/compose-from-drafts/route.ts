@@ -249,7 +249,7 @@ export async function POST(req: NextRequest) {
   // Run stories in parallel for speed (each story = 3 sequential calls but stories parallel)
   // Org name feeds the AI prompts so the copy references the configured org,
   // not a hardcoded company (org-settings otherwise silently had no effect here).
-  const { org_name: orgName } = await getOrgSettings(service, ['org_name'])
+  const { org_name: orgName } = await getOrgSettings(service, ['org_name'], ctx.orgId)
 
   const trilingual: StoryTrilingual[] = await Promise.all(
     valid.map(async (d) => {
@@ -284,13 +284,14 @@ export async function POST(req: NextRequest) {
   // of the newsletter, not in the upcoming/recap columns.
   const highlightStory = trilingual.find((s) => s.section === 'highlight') ?? null
 
-  // Branding / social links come from org settings (env fallback baked in).
+  // Branding / social links + footer address come from org settings (env fallback baked in).
   const org = await getOrgSettings(service, [
     'newsletter_logo_url',
     'company_facebook',
     'company_linkedin',
     'company_website',
-  ])
+    'postal_address',
+  ], ctx.orgId)
 
   // Build per-lang inputs to composeNewsletter
   async function buildOneLang(lang: Lang): Promise<{ html: string; subject: string; promo: string }> {
@@ -337,6 +338,8 @@ export async function POST(req: NextRequest) {
       facebook_url: org.company_facebook,
       linkedin_url: org.company_linkedin,
       website_url: org.company_website,
+      org_name: orgName,
+      postal_address: org.postal_address,
     })
     return { html, subject, promo }
   }

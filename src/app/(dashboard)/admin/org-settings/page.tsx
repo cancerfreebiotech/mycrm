@@ -14,6 +14,13 @@ type SettingKey =
   | 'company_facebook'
   | 'company_linkedin'
   | 'feedback_recipient'
+  | 'sender_name'
+  | 'internal_email_domain'
+  | 'org_email_domain'
+  | 'bcc_inbox_domain'
+  | 'postal_address'
+  | 'owner_email'
+  | 'app_url'
   | 'hunter_enabled'
   | 'ai_assistant_enabled'
 
@@ -23,7 +30,7 @@ interface SettingEntry {
 }
 
 // Field render order + which i18n label / hint keys each uses.
-const FIELDS: { key: SettingKey; labelKey: string; hintKey?: string }[] = [
+const FIELDS: { key: SettingKey; labelKey: string; hintKey?: string; multiline?: boolean }[] = [
   { key: 'org_name', labelKey: 'labelOrgName' },
   { key: 'allowed_email_domains', labelKey: 'labelAllowedDomains', hintKey: 'hintAllowedDomains' },
   { key: 'newsletter_logo_url', labelKey: 'labelNewsletterLogoUrl' },
@@ -32,6 +39,13 @@ const FIELDS: { key: SettingKey; labelKey: string; hintKey?: string }[] = [
   { key: 'company_facebook', labelKey: 'labelCompanyFacebook' },
   { key: 'company_linkedin', labelKey: 'labelCompanyLinkedin' },
   { key: 'feedback_recipient', labelKey: 'labelFeedbackRecipient', hintKey: 'hintFeedbackRecipient' },
+  { key: 'sender_name', labelKey: 'labelSenderName', hintKey: 'hintSenderName' },
+  { key: 'internal_email_domain', labelKey: 'labelInternalEmailDomain', hintKey: 'hintInternalEmailDomain' },
+  { key: 'org_email_domain', labelKey: 'labelOrgEmailDomain', hintKey: 'hintOrgEmailDomain' },
+  { key: 'bcc_inbox_domain', labelKey: 'labelBccInboxDomain', hintKey: 'hintBccInboxDomain' },
+  { key: 'postal_address', labelKey: 'labelPostalAddress', hintKey: 'hintPostalAddress', multiline: true },
+  { key: 'owner_email', labelKey: 'labelOwnerEmail', hintKey: 'hintOwnerEmail' },
+  { key: 'app_url', labelKey: 'labelAppUrl', hintKey: 'hintAppUrl' },
 ]
 
 // Module kill-switches. Rendered as toggles; values stored as 'true' / 'false'.
@@ -138,18 +152,28 @@ export default function AdminOrgSettingsPage() {
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{t('description')}</p>
 
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-5 sm:p-6 space-y-5">
-        {FIELDS.map(({ key, labelKey, hintKey }) => (
+        {FIELDS.map(({ key, labelKey, hintKey, multiline }) => (
           <div key={key}>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               {t(labelKey)}
             </label>
-            <input
-              type="text"
-              value={form[key] ?? ''}
-              onChange={(e) => { setForm((p) => ({ ...p, [key]: e.target.value })); setSaved(false) }}
-              placeholder={fallbacks[key] ?? ''}
-              className={inputClass}
-            />
+            {multiline ? (
+              <textarea
+                rows={2}
+                value={form[key] ?? ''}
+                onChange={(e) => { setForm((p) => ({ ...p, [key]: e.target.value })); setSaved(false) }}
+                placeholder={fallbacks[key] ?? ''}
+                className={`${inputClass} resize-y`}
+              />
+            ) : (
+              <input
+                type="text"
+                value={form[key] ?? ''}
+                onChange={(e) => { setForm((p) => ({ ...p, [key]: e.target.value })); setSaved(false) }}
+                placeholder={fallbacks[key] ?? ''}
+                className={inputClass}
+              />
+            )}
             {hintKey && (
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t(hintKey)}</p>
             )}

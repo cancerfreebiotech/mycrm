@@ -97,6 +97,26 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
   }
 
+  // 雙寫（v8.0 Phase 3）：RLS 層 has_feature() 讀 organization_members.granted_features，
+  // TS/API 層暫仍讀 users——兩處同步寫、來源恆一致。無 membership 列時補建（同 statusChange）。
+  if ('granted_features' in updates) {
+    const { data: mirrored, error: gfErr } = await service
+      .from('organization_members')
+      .update({ granted_features: updates.granted_features })
+      .eq('user_id', targetId)
+      .select('user_id')
+    if (gfErr) return NextResponse.json({ error: gfErr.message }, { status: 500 })
+    if (!mirrored || mirrored.length === 0) {
+      const { error: gfInsErr } = await service
+        .from('organization_members')
+        .upsert(
+          { org_id: DEFAULT_ORG_ID, user_id: targetId, granted_features: updates.granted_features },
+          { onConflict: 'org_id,user_id' }
+        )
+      if (gfInsErr) return NextResponse.json({ error: gfInsErr.message }, { status: 500 })
+    }
+  }
+
   if (statusChange) {
     // Single org today → update all of this user's membership rows. .select()
     // reports how many rows actually matched (PostgREST treats a 0-row UPDATE as

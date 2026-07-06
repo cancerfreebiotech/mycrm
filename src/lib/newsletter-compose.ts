@@ -44,6 +44,8 @@ export interface NewsletterComposeInput {
   facebook_url: string
   linkedin_url: string
   website_url: string
+  org_name?: string          // 頁尾公司名 + logo alt（未給時沿用原寫死值）
+  postal_address?: string    // CAN-SPAM 頁尾實體地址（未給時沿用原寫死值）
 }
 
 export interface NewsletterComposeResult {
@@ -122,6 +124,8 @@ export async function composeNewsletter(input: NewsletterComposeInput): Promise<
     facebook_url: input.facebook_url,
     linkedin_url: input.linkedin_url,
     website_url: input.website_url,
+    org_name: input.org_name ?? 'CancerFree Biotech',
+    postal_address: input.postal_address ?? '3F-2, No. 56, Lane 258, Ruiguang Road, Neihu District, Taipei City, Taiwan',
   }
 
   for (const [key, value] of Object.entries(replacements)) {

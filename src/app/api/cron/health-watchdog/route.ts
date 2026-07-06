@@ -8,6 +8,7 @@ import {
   recordCronRun,
 } from '@/lib/cronHeartbeat'
 import { currentPeriod } from '@/lib/usage'
+import { getOrgSettings } from '@/lib/orgSettings'
 
 /**
  * Vercel Cron — every 10 minutes, run all service health checks and inspect the
@@ -20,7 +21,6 @@ import { currentPeriod } from '@/lib/usage'
 
 type ServiceClient = ReturnType<typeof createServiceClient>
 
-const SUPER_ADMIN_EMAIL = 'pohan.chen@cancerfree.io'
 const SELF_JOB = 'health-watchdog'
 
 // ── Usage budget alerts ─────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ function setsEqual(a: string[], b: string[]): boolean {
 // Email fallback (independent of Telegram) — the alert often warns that Telegram
 // itself is down, so a Telegram-only alert can never arrive. Sends directly via
 // SendGrid; never throws (best-effort second channel).
-async function sendEmailAlert(text: string): Promise<void> {
+async function sendEmailAlert(text: string, ownerEmail: string): Promise<void> {
   const sgKey = process.env.SENDGRID_API_KEY
   const fromEmail = process.env.SENDGRID_FROM_EMAIL
   if (!sgKey || !fromEmail) {
@@ -73,7 +73,7 @@ async function sendEmailAlert(text: string): Promise<void> {
         from: { email: fromEmail, name: 'myCRM 監控' },
         subject: '⚠️ myCRM 監控警報',
         content: [{ type: 'text/html', value: text.replace(/\n/g, '<br>') }],
-        personalizations: [{ to: [{ email: SUPER_ADMIN_EMAIL }] }],
+        personalizations: [{ to: [{ email: ownerEmail }] }],
       }),
     })
     if (!res.ok) console.error('[health-watchdog] email fallback failed:', res.status, (await res.text()).slice(0, 200))
@@ -82,11 +82,11 @@ async function sendEmailAlert(text: string): Promise<void> {
   }
 }
 
-async function notifySuperAdmin(service: ServiceClient, text: string): Promise<void> {
+async function notifyOwner(service: ServiceClient, text: string, ownerEmail: string): Promise<void> {
   const { data } = await service
     .from('users')
     .select('telegram_id')
-    .eq('email', SUPER_ADMIN_EMAIL)
+    .eq('email', ownerEmail)
     .single()
   const chatId = data?.telegram_id == null ? NaN : Number(data.telegram_id)
   let telegramDelivered = false
@@ -100,7 +100,7 @@ async function notifySuperAdmin(service: ServiceClient, text: string): Promise<v
   }
   // Fall back to email when Telegram is unconfigured or the send failed (e.g.
   // Telegram is the very service being reported as down).
-  if (!telegramDelivered) await sendEmailAlert(text)
+  if (!telegramDelivered) await sendEmailAlert(text, ownerEmail)
 }
 
 // Read configured usage budgets and compare against this period's counters.
@@ -177,6 +177,7 @@ export async function GET(req: NextRequest) {
 
   const startMs = Date.now()
   const service = createServiceClient()
+  const { owner_email: ownerEmail } = await getOrgSettings(service, ['owner_email'])
 
   // a. Run every service health check.
   const services = await runAllHealthChecks()
@@ -228,12 +229,12 @@ export async function GET(req: NextRequest) {
   if (problems.length > 0) {
     // Only send when the problem set changed since the last alert.
     if (!setsEqual(prevAlerted, problems)) {
-      await notifySuperAdmin(service, buildAlert(failedChecks, overdueJobs, failingJobs, usageAlerts))
+      await notifyOwner(service, buildAlert(failedChecks, overdueJobs, failingJobs, usageAlerts), ownerEmail)
       alertSent = true
     }
   } else if (prevAlerted.length > 0) {
     // Everything is healthy again and we previously alerted → recovery notice.
-    await notifySuperAdmin(service, '✅ <b>myCRM 監控</b>：所有服務與排程已恢復正常。')
+    await notifyOwner(service, '✅ <b>myCRM 監控</b>：所有服務與排程已恢復正常。', ownerEmail)
     alertSent = true
   }
 
