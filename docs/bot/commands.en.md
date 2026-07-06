@@ -97,7 +97,7 @@ Each search result shows a business card photo with quick buttons:
         📅 2026-06-25 15:00  📍 Taipei
 ```
 
-Put a sentence after the name and AI (Gemini) parses the **date / time / location** from it and decides whether it is a note or a meeting, then writes the interaction log directly — no step-by-step entry needed. Depending on the search results:
+Put a sentence after the name and AI (Gemini) parses the **date / time / location** from it and decides whether it is a note or a meeting, then writes the interaction log directly — no step-by-step entry needed. The name may be several words (e.g. an English full name like John Smith); the system works out where the name ends and the content begins, so the rest of the name is not mistaken for the content. Depending on the search results:
 - **1 match** → logged immediately with a confirmation.
 - **Multiple** same-name matches → shows buttons to pick the person; logged only after you choose (the content is held).
 - **No match** → tells you the contact was not found and falls back to the step-by-step flow above.

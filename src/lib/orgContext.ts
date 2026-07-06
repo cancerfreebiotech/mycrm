@@ -58,28 +58,41 @@ export interface OrgDb {
  * **絕不 throw**：無 session、無 user、無 membership 或任何解析失敗，一律回
  * `DEFAULT_ORG_ID` + null。存取控制不是本函式的職責——各 route 既有的
  * auth / checkPermission 檢查照舊負責 401/403。
+ *
+ * @param known route 已自行完成 auth 並解析過 public.users 時可傳入
+ *   `{ email, userId }`，跳過重複的 auth.getUser() 與 users 查詢（如
+ *   /api/me 這類 hot endpoint）。
  */
-export async function getOrgContext(): Promise<OrgContext> {
+export async function getOrgContext(known?: { email: string; userId: string }): Promise<OrgContext> {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    const email = user?.email ?? null
-    if (!email) {
-      return { orgId: DEFAULT_ORG_ID, userId: null, email: null }
-    }
-
     const service = createServiceClient()
+    let email: string
+    let userId: string
 
-    // auth.users.id ≠ public.users.id → 一律 email 解析
-    const { data: profile } = await service
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .single()
+    if (known) {
+      email = known.email
+      userId = known.userId
+    } else {
+      const supabase = await createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      const authEmail = user?.email ?? null
+      if (!authEmail) {
+        return { orgId: DEFAULT_ORG_ID, userId: null, email: null }
+      }
 
-    const userId: string | null = profile?.id ?? null
-    if (!userId) {
-      return { orgId: DEFAULT_ORG_ID, userId: null, email }
+      // auth.users.id ≠ public.users.id → 一律 email 解析
+      const { data: profile } = await service
+        .from('users')
+        .select('id')
+        .eq('email', authEmail)
+        .single()
+
+      const resolvedId: string | null = profile?.id ?? null
+      if (!resolvedId) {
+        return { orgId: DEFAULT_ORG_ID, userId: null, email: authEmail }
+      }
+      email = authEmail
+      userId = resolvedId
     }
 
     // active_org_id cookie（Phase 3 的 org switcher 寫入；未設定時為 null）

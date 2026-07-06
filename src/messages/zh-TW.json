@@ -316,6 +316,7 @@
     "saveFailed": "儲存失敗",
     "photoUploadFailed": "照片 {index} 上傳失敗：{error}",
     "logManualAdd": "透過網頁手動新增聯絡人",
+    "logBatchAdd": "透過批次上傳新增名片",
     "cardAlt": "名片",
     "maxSixPhotos": "最多 6 張",
     "ocrResultConfirm": "OCR 辨識結果確認",
@@ -918,7 +919,9 @@
     "resetSearch": "重置查詢紀錄",
     "resetConfirm": "確定要重置所有未找到 email 的查詢紀錄嗎？",
     "resetDone": "已重置 {count} 筆",
-    "refresh": "重新整理"
+    "refresh": "重新整理",
+    "disabledNotice": "Hunter 模組已於組織設定停用，本次批次補查已略過。",
+    "disabledGoToSettings": "前往組織設定"
   },
   "login": {
     "docs": "說明文件",
@@ -1911,7 +1914,11 @@
     "abTestPctLabel": "測試比例（%）",
     "abWaitLabel": "等待時間",
     "abWaitOption": "{hours} 小時",
-    "abHoldoutHint": "先寄給測試比例的收件人（A/B 各半），等待時間結束後系統自動以開信率較高的主旨寄給其餘所有人。"
+    "abHoldoutHint": "先寄給測試比例的收件人（A/B 各半），等待時間結束後系統自動以開信率較高的主旨寄給其餘所有人。",
+    "abModeLabel": "測試模式",
+    "abModeHoldout": "小樣本＋自動送贏家（預設）",
+    "abModeSplit": "全名單 50/50 對半",
+    "abSplitHint": "整份名單對半分成 A、B 兩組，各寄一個主旨，不挑選也不自動補送贏家。"
   },
   "mcpActivity": {
     "title": "MCP 活動紀錄",

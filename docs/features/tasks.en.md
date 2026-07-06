@@ -108,7 +108,7 @@ Every day at **09:00 (Asia/Taipei)**, a scheduled job (Vercel Cron `task-reminde
 - 🔴 **Overdue** tasks (`due_at` has passed and not yet done)
 - 🟡 Tasks **due today**
 
-The digest is only sent to members who have linked Telegram; anyone with no overdue or due-today tasks receives no message (an empty digest is silence, so no opt-out is needed).
+The digest is only sent to members who have linked Telegram. You receive it whenever you have overdue or due-today tasks **or** any of today's Outlook meetings (see "Today's Meetings" below) — so a day with only meetings and no tasks still sends a digest; only someone with neither on a given day receives no message (an empty digest is silence, so no opt-out is needed).
 
 Each member receives their **own** tasks, with recipients determined by:
 - Assignees always receive their tasks

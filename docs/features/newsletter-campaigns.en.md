@@ -72,14 +72,23 @@ The editor also offers export and sharing:
 
 ### A/B subject testing
 
-Filling in the "Subject B" field enables A/B testing and reveals two more settings:
+Filling in the "Subject B" field enables A/B testing and adds a "**Test mode**" option with two choices:
+
+| Test mode | Behavior |
+|-----------|----------|
+| Small test group + auto-send winner (default) | Emails only a small slice of the list first as a test group, works out which subject has the higher open rate, then automatically sends the winning subject to everyone else |
+| Whole list, 50/50 split | The entire list is split evenly into groups A and B, each getting one subject — no winner is chosen and nothing is auto-sent |
+
+Choosing **Small test group + auto-send winner** reveals two more settings:
 
 - **Test group size (%)**: only this share of the list is emailed first as a test group (10–50%, default 20%); within the test group the two subjects are split evenly (A/B).
 - **Wait time**: 1 / 2 / 4 hours (default 2 hours).
 
-After the wait time elapses, the system (which checks every 10 minutes) compares the open rate of the two subjects within the test group and automatically sends the **higher-open-rate** subject to everyone else on the list (ties go to subject A). Test sends always use subject A; leave "Subject B" empty to disable A/B testing. Each variant's open rate and the winning subject are shown on the analytics page.
+After the wait time elapses, the system (which checks every 10 minutes) compares the open rate of the two subjects within the test group and automatically sends the **higher-open-rate** subject to everyone else on the list (ties go to subject A). If that automatic remainder send is interrupted midway (e.g. a timeout), the system resumes it on the next check, and no one who already received it gets a duplicate.
 
-> Legacy newsletters created before v7.8.0 that have a Subject B but no test group size keep the original whole-list 50/50 split.
+Test sends always use subject A; leave "Subject B" empty to disable A/B testing. Each variant's open rate and the winning subject are shown on the analytics page.
+
+> Choosing **Whole list, 50/50 split** uses no test group and picks no winner — it finishes once everyone has been emailed. Legacy newsletters created before v7.8.0 that have a Subject B but no test group size automatically use this mode, with the same behavior as before.
 
 ---
 

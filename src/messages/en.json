@@ -316,6 +316,7 @@
     "saveFailed": "Save failed",
     "photoUploadFailed": "Photo {index} upload failed: {error}",
     "logManualAdd": "Added manually via web",
+    "logBatchAdd": "Added via batch upload",
     "cardAlt": "Business card",
     "maxSixPhotos": "Up to 6 photos",
     "ocrResultConfirm": "OCR Result Confirmation",
@@ -918,7 +919,9 @@
     "resetSearch": "Reset Search Records",
     "resetConfirm": "Reset all not-found search records?",
     "resetDone": "Reset {count} records",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "disabledNotice": "The Hunter module is disabled in organization settings, so this batch lookup was skipped.",
+    "disabledGoToSettings": "Go to organization settings"
   },
   "login": {
     "docs": "Documentation",
@@ -1911,7 +1914,11 @@
     "abTestPctLabel": "Test group size (%)",
     "abWaitLabel": "Wait time",
     "abWaitOption": "{hours, plural, one {# hour} other {# hours}}",
-    "abHoldoutHint": "Sends only the test group first (A/B split evenly). After the wait time, the remaining recipients automatically receive the higher-open-rate subject."
+    "abHoldoutHint": "Sends only the test group first (A/B split evenly). After the wait time, the remaining recipients automatically receive the higher-open-rate subject.",
+    "abModeLabel": "Test mode",
+    "abModeHoldout": "Small test group + auto-send winner (default)",
+    "abModeSplit": "Whole list, 50/50 split",
+    "abSplitHint": "The entire list is split evenly into groups A and B, each getting one subject. No winner is chosen or auto-sent."
   },
   "mcpActivity": {
     "title": "MCP Activity Log",

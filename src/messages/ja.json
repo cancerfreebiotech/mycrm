@@ -316,6 +316,7 @@
     "saveFailed": "保存に失敗しました",
     "photoUploadFailed": "写真 {index} のアップロードに失敗：{error}",
     "logManualAdd": "Webから手動で連絡先を追加",
+    "logBatchAdd": "一括アップロードで名刺を追加",
     "cardAlt": "名刺",
     "maxSixPhotos": "最大6枚",
     "ocrResultConfirm": "OCR認識結果の確認",
@@ -918,7 +919,9 @@
     "resetSearch": "検索記録をリセット",
     "resetConfirm": "Email未取得の検索記録をリセットしますか？",
     "resetDone": "{count}件をリセットしました",
-    "refresh": "更新"
+    "refresh": "更新",
+    "disabledNotice": "Hunter モジュールは組織設定で無効になっているため、今回の一括照会はスキップされました。",
+    "disabledGoToSettings": "組織設定へ移動"
   },
   "login": {
     "docs": "使用説明書",
@@ -1911,7 +1914,11 @@
     "abTestPctLabel": "テスト割合（%）",
     "abWaitLabel": "待機時間",
     "abWaitOption": "{hours}時間",
-    "abHoldoutHint": "まずテスト割合の宛先にのみ送信（A/B半々）。待機時間の経過後、開封率の高い件名で残り全員に自動送信されます。"
+    "abHoldoutHint": "まずテスト割合の宛先にのみ送信（A/B半々）。待機時間の経過後、開封率の高い件名で残り全員に自動送信されます。",
+    "abModeLabel": "テストモード",
+    "abModeHoldout": "小サンプル＋勝者を自動送信（既定）",
+    "abModeSplit": "全リストを 50/50 で均等分割",
+    "abSplitHint": "リスト全体を A・B の2グループに均等に分け、それぞれに件名を送信します。勝者の選定や自動送信は行いません。"
   },
   "mcpActivity": {
     "title": "MCP アクティビティログ",

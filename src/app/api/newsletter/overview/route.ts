@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
-import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
+import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 
 // Super-admin only (same guard pattern as /api/admin/hunter).
 // Returns { error } on denial, else { email } of the authenticated super_admin.
@@ -33,9 +33,6 @@ interface ListHealth {
   nonOpeners180d: number
 }
 
-const BATCH = 1000
-const norm = (email: string) => email.toLowerCase().trim()
-
 // GET — newsletter overview aggregates:
 //   campaigns — last 12 sent campaigns with open/click rates (newsletter_recipients
 //               grouped by campaign_id via the get_campaign_engagement RPC)
@@ -44,7 +41,7 @@ const norm = (email: string) => email.toLowerCase().trim()
 export async function GET() {
   const auth = await requireSuperAdmin(); if ('error' in auth) return auth.error
   const ctx = await getOrgContext()
-  const db: OrgDb = orgScopedClient(ctx)
+  const db = orgScopedClient(ctx)
 
   // ── (a) last 12 sent campaigns ──
   const { data: campaignRows, error: campaignErr } = await db
@@ -91,48 +88,21 @@ export async function GET() {
     .order('name')
   if (listErr) return NextResponse.json({ error: listErr.message }, { status: 500 })
 
-  // Emails that opened ANY campaign within the last 180 days.
+  // Per-list member count + 180-day non-opener count, aggregated in SQL.
+  // The SECURITY DEFINER RPC replicates the previous in-memory logic (openers =
+  // recipients with opened_at within 180 days, normalized lower(trim(email));
+  // non-opener = subscriber email null or not in that set); org isolation is
+  // enforced via the p_org_id argument. Called with the service client (db.rpc).
   const cutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString()
-  const openerEmails = new Set<string>()
-  for (let from = 0; ; from += BATCH) {
-    const { data, error } = await db
-      .from('newsletter_recipients')
-      .select('email')
-      .gte('opened_at', cutoff)
-      .order('id')
-      .range(from, from + BATCH - 1)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    if (!data || data.length === 0) break
-    for (const r of data as { email: string }[]) openerEmails.add(norm(r.email))
-    if (data.length < BATCH) break
-  }
-
-  // All list memberships with subscriber email (paginated — PostgREST caps at 1000).
-  type Membership = { list_id: string; newsletter_subscribers: { email: string } | null }
-  const memberships: Membership[] = []
-  for (let from = 0; ; from += BATCH) {
-    const { data, error } = await db
-      .from('newsletter_subscriber_lists')
-      .select('list_id, newsletter_subscribers(email)')
-      .order('list_id')
-      .order('subscriber_id')
-      .range(from, from + BATCH - 1)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    if (!data || data.length === 0) break
-    memberships.push(...(data as unknown as Membership[]))
-    if (data.length < BATCH) break
-  }
+  const { data: statRows, error: statErr } = await db.rpc('newsletter_overview_list_stats', {
+    p_org_id: ctx.orgId,
+    p_opened_since: cutoff,
+  })
+  if (statErr) return NextResponse.json({ error: statErr.message }, { status: 500 })
 
   const healthById = new Map<string, { members: number; nonOpeners: number }>()
-  for (const m of memberships) {
-    let h = healthById.get(m.list_id)
-    if (!h) {
-      h = { members: 0, nonOpeners: 0 }
-      healthById.set(m.list_id, h)
-    }
-    h.members++
-    const email = m.newsletter_subscribers?.email
-    if (!email || !openerEmails.has(norm(email))) h.nonOpeners++
+  for (const r of (statRows ?? []) as { list_id: string; member_count: number; non_opener_count: number }[]) {
+    healthById.set(r.list_id, { members: Number(r.member_count), nonOpeners: Number(r.non_opener_count) })
   }
 
   const lists: ListHealth[] = ((listRows ?? []) as Record<string, any>[]).map((l) => {

@@ -62,6 +62,9 @@ export default function QuickSendPage() {
   const [subjectB, setSubjectB] = useState('')
   const [abTestPct, setAbTestPct] = useState('20')
   const [abWaitMinutes, setAbWaitMinutes] = useState(120)
+  // 'holdout' = small test cohort + auto-send winner (default); 'split' = whole list 50/50 legacy.
+  // send-worker derives mode from the persisted fields: subject_b + null ab_test_pct → 'split'.
+  const [abMode, setAbMode] = useState<'holdout' | 'split'>('holdout')
   const [scheduleAt, setScheduleAt] = useState('')
   const [scheduling, setScheduling] = useState(false)
   const [previewText, setPreviewText] = useState('')
@@ -97,6 +100,8 @@ export default function QuickSendPage() {
       setSubjectB(c.subject_b ?? '')
       setAbTestPct(String(c.ab_test_pct ?? 20))
       setAbWaitMinutes(c.ab_wait_minutes ?? 120)
+      // subject B set + no test pct persisted → this campaign uses the legacy 50/50 split.
+      setAbMode(c.subject_b && c.ab_test_pct == null ? 'split' : 'holdout')
       setPreviewText(c.preview_text ?? '')
       setPromoText(c.promo_text ?? '')
       setListIds(c.list_ids ?? [])
@@ -290,8 +295,11 @@ export default function QuickSendPage() {
   async function save(contentHtmlOverride?: string) {
     const htmlToSave = typeof contentHtmlOverride === 'string' ? contentHtmlOverride : contentHtml
     // A/B holdout settings only make sense alongside subject B — clear both otherwise.
-    const abPct = subjectB.trim() ? Math.min(50, Math.max(10, Math.round(Number(abTestPct) || 20))) : null
-    const abWait = subjectB.trim() ? abWaitMinutes : null
+    // 50/50 split mode also persists null pct/wait (that null is exactly what the
+    // send-worker reads as legacy whole-list split).
+    const useHoldout = subjectB.trim() && abMode === 'holdout'
+    const abPct = useHoldout ? Math.min(50, Math.max(10, Math.round(Number(abTestPct) || 20))) : null
+    const abWait = useHoldout ? abWaitMinutes : null
     setSaving(true)
     setBanner(null)
     try {
@@ -619,31 +627,48 @@ export default function QuickSendPage() {
                 />
               </div>
               {subjectB.trim() && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">{t('abTestPctLabel')}</label>
-                    <input
-                      type="number"
-                      min={10}
-                      max={50}
-                      value={abTestPct}
-                      onChange={(e) => setAbTestPct(e.target.value)}
-                      className="w-full text-base px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">{t('abWaitLabel')}</label>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">{t('abModeLabel')}</label>
                     <select
-                      value={abWaitMinutes}
-                      onChange={(e) => setAbWaitMinutes(Number(e.target.value))}
+                      value={abMode}
+                      onChange={(e) => setAbMode(e.target.value as 'holdout' | 'split')}
                       className="w-full text-base px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value={60}>{t('abWaitOption', { hours: 1 })}</option>
-                      <option value={120}>{t('abWaitOption', { hours: 2 })}</option>
-                      <option value={240}>{t('abWaitOption', { hours: 4 })}</option>
+                      <option value="holdout">{t('abModeHoldout')}</option>
+                      <option value="split">{t('abModeSplit')}</option>
                     </select>
                   </div>
-                  <p className="col-span-2 text-xs text-gray-400 dark:text-gray-500">{t('abHoldoutHint')}</p>
+                  {abMode === 'holdout' ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">{t('abTestPctLabel')}</label>
+                        <input
+                          type="number"
+                          min={10}
+                          max={50}
+                          value={abTestPct}
+                          onChange={(e) => setAbTestPct(e.target.value)}
+                          className="w-full text-base px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">{t('abWaitLabel')}</label>
+                        <select
+                          value={abWaitMinutes}
+                          onChange={(e) => setAbWaitMinutes(Number(e.target.value))}
+                          className="w-full text-base px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value={60}>{t('abWaitOption', { hours: 1 })}</option>
+                          <option value={120}>{t('abWaitOption', { hours: 2 })}</option>
+                          <option value={240}>{t('abWaitOption', { hours: 4 })}</option>
+                        </select>
+                      </div>
+                      <p className="col-span-2 text-xs text-gray-400 dark:text-gray-500">{t('abHoldoutHint')}</p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 dark:text-gray-500">{t('abSplitHint')}</p>
+                  )}
                 </div>
               )}
               <div>

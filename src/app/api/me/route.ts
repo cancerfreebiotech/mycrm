@@ -21,7 +21,9 @@ export async function GET() {
 
   if (!data) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
 
-  const ctx = await getOrgContext()
+  // 已完成 auth 且解析過 users → 傳入已知身分，省去 getOrgContext 內重複的
+  // auth.getUser() + users 查詢（hot endpoint）
+  const ctx = await getOrgContext({ email: user.email, userId: data.id as string })
 
   return NextResponse.json({
     id: data.id as string,

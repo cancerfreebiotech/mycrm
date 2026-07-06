@@ -223,7 +223,7 @@ export default function BatchUploadPage() {
         if (row.storagePath && row.imgUrl) {
           await supabase.from('contact_cards').insert({ contact_id: inserted.id, card_img_url: row.imgUrl, storage_path: row.storagePath, label: tcnt('legacyCardFront'), org_id: oid })
         }
-        await supabase.from('interaction_logs').insert({ contact_id: inserted.id, type: 'system', content: '透過批次上傳新增名片', created_by: userId, org_id: oid })
+        await supabase.from('interaction_logs').insert({ contact_id: inserted.id, type: 'system', content: tcnt('logBatchAdd'), created_by: userId, org_id: oid })
         // Hunter auto-enrich when OCR yielded no email (non-fatal)
         if (!row.email) {
           fetch('/api/hunter/enrich', {

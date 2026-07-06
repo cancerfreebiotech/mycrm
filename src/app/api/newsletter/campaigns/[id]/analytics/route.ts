@@ -48,21 +48,41 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const ctx = await getOrgContext()
   const db = orgScopedClient(ctx)
 
-  // ── Summary from newsletter_recipients (head counts, no rows transferred) ──
+  // ── Summary from newsletter_recipients ──
+  // total/sent/failed use distinct-email semantics, matching the send-worker's
+  // abFinal recount (newsletter-send-worker.ts ~L506). A manual retry of an A/B
+  // 'final' send leaves rolled-back 'failed' rows next to the retry rows, so raw
+  // row counts drift past the real audience; deduping by lowercased email with
+  // 'sent' winning keeps these in step with campaign.total_recipients/sent_count.
+  const hasSentByEmail = new Map<string, boolean>()
+  const RECIPIENT_PAGE = 1000
+  for (let from = 0; ; from += RECIPIENT_PAGE) {
+    const { data: page } = await db
+      .from('newsletter_recipients')
+      .select('email, status')
+      .eq('campaign_id', id)
+      .range(from, from + RECIPIENT_PAGE - 1)
+    if (!page || page.length === 0) break
+    for (const row of page as { email: string; status: string }[]) {
+      const key = row.email.toLowerCase().trim()
+      hasSentByEmail.set(key, (hasSentByEmail.get(key) ?? false) || row.status === 'sent')
+    }
+    if (page.length < RECIPIENT_PAGE) break
+  }
+  const total = hasSentByEmail.size
+  const sent = [...hasSentByEmail.values()].filter(Boolean).length
+  const failed = total - sent
+
+  // opened/clicked stay head counts: the SendGrid webhook writes opened_at/
+  // clicked_at per recipient row by id, and only the single delivered 'sent' row
+  // per email (≤1 by dedup) is ever eligible, so row counts already equal the
+  // distinct openers/clickers.
   const recipientCount = () =>
     db.from('newsletter_recipients').select('*', { count: 'exact', head: true }).eq('campaign_id', id)
-
-  const [totalR, sentR, failedR, openedR, clickedR] = await Promise.all([
-    recipientCount(),
-    recipientCount().eq('status', 'sent'),
-    recipientCount().eq('status', 'failed'),
+  const [openedR, clickedR] = await Promise.all([
     recipientCount().not('opened_at', 'is', null),
     recipientCount().not('clicked_at', 'is', null),
   ])
-
-  const total = totalR.count ?? 0
-  const sent = sentR.count ?? 0
-  const failed = failedR.count ?? 0
   const opened = openedR.count ?? 0
   const clicked = clickedR.count ?? 0
   const rateDenom = sent || total

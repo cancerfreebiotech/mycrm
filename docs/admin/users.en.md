@@ -51,8 +51,7 @@ Next to each member's role badge, an account-status badge shows **Active** (gree
 
 Click a member's "Suspend" button to suspend their account (requires confirmation); a suspended member can be restored with "Reactivate".
 
-- Suspension **takes effect at the member's next login**: they are signed out and blocked from the system, unable to use any feature.
-- An already-active session is not cut off immediately; it lasts until it naturally expires (up to 7 days).
+- Suspension **takes effect immediately** (v7.9.5): on their next action (navigating to another page or any operation) the member is signed out and redirected to the login page — no need to wait for the next login or for the session to expire.
 - The **Super Admin (`pohan.chen@cancerfree.io`) cannot be suspended**.
 
 ---

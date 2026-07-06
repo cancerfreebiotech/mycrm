@@ -106,7 +106,7 @@ function HunterSection() {
   const [savedOk, setSavedOk] = useState(false)
   const [searching, setSearching] = useState(false)
   const [resetting, setResetting] = useState(false)
-  const [searchResult, setSearchResult] = useState<{ total: number; found: number; results: Array<{ name: string | null; company: string | null; email: string | null }> } | null>(null)
+  const [searchResult, setSearchResult] = useState<{ total: number; found: number; skipped?: boolean; skipReason?: string; results: Array<{ name: string | null; company: string | null; email: string | null }> } | null>(null)
 
   const loadStats = useCallback(async () => {
     const res = await fetch('/api/admin/hunter')
@@ -143,6 +143,10 @@ function HunterSection() {
       loadStats()
     }
   }
+
+  // runHunterBatch returns { skipped:true, skipReason:'disabled' } when the org-settings
+  // kill-switch is off — show a dedicated notice instead of a generic zero-result message.
+  const hunterDisabled = !!searchResult?.skipped && searchResult.skipReason === 'disabled'
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mt-6">
@@ -251,15 +255,31 @@ function HunterSection() {
         {!stats?.hasApiKey && (
           <p className="text-xs text-gray-400">{t('noApiKey')}</p>
         )}
-        {searchResult && (
+        {searchResult && !hunterDisabled && (
           <p className="text-sm text-green-600 dark:text-green-400">
             {t('searchResult', { total: searchResult.total, found: searchResult.found })}
           </p>
         )}
       </div>
 
+      {/* Module disabled via org-settings kill-switch */}
+      {hunterDisabled && (
+        <div className="mt-4 flex items-start gap-2 rounded-lg border border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950/20 px-4 py-3">
+          <AlertTriangle size={15} className="shrink-0 mt-0.5 text-yellow-600 dark:text-yellow-400" />
+          <div className="text-sm text-yellow-700 dark:text-yellow-300">
+            <p>{t('disabledNotice')}</p>
+            <Link
+              href="/admin/org-settings"
+              className="inline-flex items-center gap-1 mt-1 font-medium text-yellow-800 dark:text-yellow-200 hover:underline"
+            >
+              {t('disabledGoToSettings')} <ExternalLink size={12} />
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Per-contact results */}
-      {searchResult && (() => {
+      {searchResult && !hunterDisabled && (() => {
         const notFound = searchResult.results.filter(r => !r.email)
         const found = searchResult.results.filter(r => r.email)
         return (

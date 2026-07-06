@@ -35,6 +35,7 @@ For contacts with no email, Hunter.io is used to try to find their address.
 - **Stats**: total with no email, never searched, searched but not found, searched this month; remaining monthly credits are shown when available.
 - **Start search**: queries contacts not yet searched, then lists found / not-found results. Requires an API key first.
 - **Reset search state**: clears the searched flags so contacts can be searched again (requires confirmation).
+- **Module-disabled notice (v7.9.6)**: if "Hunter.io auto-enrichment" is turned off in [Org Settings](org-settings.md), running a search shows a "module disabled" notice with a link to org settings, and no query runs or credits are consumed.
 
 ---
 
@@ -59,9 +60,15 @@ Lists the number of failed items in each table (dead letters):
 
 ---
 
-## This month's usage (v7.4.0)
+## This month's usage & budget thresholds (v7.4.0; threshold editing v7.9.5)
 
 Cards show this month's usage against last month: AI call count, AI input/output tokens (when recorded), emails sent, newsletters sent.
+
+Since v7.9.5 you can enter a "Monthly cap" on each card and click "Save thresholds":
+
+- Blank = **no limit**; the card shows the comparison with last month.
+- Once a cap is set, the card shows a usage progress bar and percentage: **green < 80%**, **yellow 80–99%**, **red ≥ 100%**.
+- At 80% / 100%, the system automatically notifies the organization owner through the existing monitoring (the alert itself is an existing feature).
 
 ---
 
