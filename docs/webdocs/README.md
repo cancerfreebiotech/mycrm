@@ -8,6 +8,8 @@
 
 **修改流程**：改這裡的檔案 → 以 service client 對正式 DB 執行
 `UPDATE public.docs_content SET content = $$…$$ WHERE locale = '<locale>' AND section = '<section>'`
-（或請 Claude 同步）。docs/ 其餘目錄為完整版手冊（GitBook 結構遺產），供取材與對照。
+（或請 Claude 同步）。
 
-最後同步：2026-07-06（v7.9.6 全功能重寫）。
+**本目錄是使用手冊的唯一來源**——舊的 GitBook 結構手冊（getting-started/features/bot/admin/SUMMARY）已於 2026-07-06 移除，避免更新到錯的地方；行為疑義一律以 src/ 原始碼為準。docs/ 其餘保留檔案：CHANGELOG、PRD、newsletter-templates（compose runtime 使用）、deployment（部署指南）、mcp 文件。
+
+最後同步：2026-07-06（v7.9.7 全功能重寫 + 登入網址修正）。

@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v7.9.7 — docs: 系統內建使用手冊全功能重寫 + 手冊來源整併（2026-07-06）
+
+### 變更項目
+- **系統內建使用手冊（/docs）全面重寫**：三章（快速開始／一般使用者／Super Admin）× 三語全數重寫並擴充為**全功能版**——涵蓋全部 90+ 項功能（含 Telegram Bot 現行完整指令表、全部管理頁、自動化排程），取代過時的舊版摘要（部分指令名稱早已變更）。內容經 AI 對原始碼逐項驗證。
+- **登入網址更正**：快速開始章的系統網址修正為 `crm.cancerfree.io`。
+- **手冊來源整併**：手冊唯一來源移至 `docs/webdocs/`（版本控管 + 同步說明）；移除舊 GitBook 結構手冊（getting-started/features/bot/admin/SUMMARY，共 100+ 檔）避免日後更新到錯的地方。CHANGELOG、PRD、newsletter-templates、deployment 指南保留。
+- 新增全功能 UAT 驗收清單（`UAT.md`，18 章 265 測項），已寄送管理員。
+
 ## v7.9.6 — fix(newsletter/admin/docs): follow-up 清倉——A/B 模式入口、停用提示、計數對齊、總覽提速、手冊三語同步（2026-07-06）
 
 ### 變更項目

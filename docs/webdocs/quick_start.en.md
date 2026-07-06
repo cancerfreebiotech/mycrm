@@ -6,7 +6,7 @@ myCRM is the company-wide business-card and customer-relationship system for can
 
 myCRM uses **Microsoft Account (Azure AD) Single Sign-On (SSO)**, restricted to company accounts on the `@cancerfree.io` domain. There is no separate password to set.
 
-1. Open `mycrm-vert.vercel.app` in your browser
+1. Open `crm.cancerfree.io` in your browser
 2. Click **"Sign in with Microsoft Account"**
 3. Enter your company email and password, and approve the application authorization
 4. Your first login automatically creates your account (role defaults to `member`) and then prompts you to set up MFA
