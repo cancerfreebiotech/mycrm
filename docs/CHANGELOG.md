@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v7.9.9 — docs: 清除 GitBook 同步殘留（2026-07-07）
+
+### 變更項目
+- GitBook Git Sync 已於 GitHub 端解除授權（Po 操作）；清除整合先前自動推回的殘留檔：`docs/README.md`、`docs/SUMMARY.md`、`docs/deployment/README.md`（GitBook 產物），`docs/PRD.md` 還原為 v7.9.7 版本（GitBook 曾重排格式）。
+- 使用手冊唯一來源不變：`docs/webdocs/` → 系統內 `/docs`（DB `docs_content`）。
+
 ## v7.9.8 — 電子報編輯器字體統一 + 回饋回報者確認制（2026-07-07）
 
 ### 變更項目
