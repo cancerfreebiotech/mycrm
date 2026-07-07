@@ -229,7 +229,7 @@ Path: `/admin/newsletter/lists`. Lists are subscriber groups you choose from whe
 
 Opening any newsletter is the edit page (which includes the quick-send flow):
 
-- **Content**: subject, preview text, LINE/group promo blurb (can batch-import all three languages), body with preview / inline-edit / HTML / split views, and image insertion.
+- **Content**: subject, preview text, LINE/group promo blurb (can batch-import all three languages), body with preview / inline-edit / HTML / split views, and image insertion. The inline-edit toolbar offers bold/italic/underline, font family, font size, text color, alignment, and "Clear formatting"; text pasted from Word or web pages is automatically stripped of its original font and size so it matches the email body.
 - **Export & share**: export PDF, export a long image (JPG), copy body (paste into Substack), publish to RSS (Substack fetch; keeps the latest 20 issues).
 - **Choose lists**: tick one or more lists on the right, showing each list's "sendable / total" and the aggregated sendable count.
 - **Test send**: enter any email to send just that address one copy — not counted, no status change.
@@ -360,6 +360,8 @@ Pick start/end dates → "Generate report" → preview on the web (new cards + i
 ## Feedback
 
 Path: `/feedback`. Submit feature suggestions or bug reports: pick a type (Feature Request / Bug Report), fill in a title and description (both required), and optionally attach a screenshot (recommended for bug reports). After you submit, an admin tracks and handles it on the backend.
+
+The "My feedback" list below shows every report you have submitted with its current status (pending / in progress / resolved awaiting confirmation / done / won't fix). When an admin resolves your report, the system emails you; verify that the fix actually works, then press "Confirm done" to close it — every report is closed by its own reporter.
 
 ## Personal settings
 

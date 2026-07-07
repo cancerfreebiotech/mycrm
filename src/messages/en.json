@@ -991,7 +991,20 @@
     "updateStatus": "Update Status",
     "uploadScreenshot": "Upload screenshot",
     "removeScreenshot": "Remove screenshot",
-    "viewScreenshot": "View screenshot"
+    "viewScreenshot": "View screenshot",
+    "statusResolved": "Resolved, awaiting confirmation",
+    "myFeedback": "My feedback",
+    "noMyFeedback": "No feedback submitted yet",
+    "confirmDone": "Confirm done",
+    "confirmDoneHint": "This report has been resolved. Please verify the fix, then press \"Confirm done\".",
+    "doneByReporterNote": "\"Done\" requires the reporter to press \"Confirm done\""
+  },
+  "feedbackEmail": {
+    "subject": "[myCRM] Your report \"{title}\" has been resolved — please confirm",
+    "greeting": "Hi {name},",
+    "body": "Your report \"{title}\" submitted on {date} has been resolved. Please verify the fix, then press \"Confirm done\" on the Feedback page.",
+    "cta": "Confirm in myCRM",
+    "footer": "This email was sent automatically by myCRM. If the issue persists, just reply to this email."
   },
   "campaigns": {
     "title": "Email Campaign History",
@@ -1852,6 +1865,9 @@
     "fmtFontNormal": "Normal",
     "fmtFontLarge": "Large",
     "fmtTextColor": "Text color",
+    "fmtFontFamily": "Font",
+    "fmtFontDefault": "Default font",
+    "fmtClearFormat": "Clear formatting",
     "fmtAlignLeft": "Align left",
     "fmtAlignCenter": "Center",
     "fmtAlignRight": "Align right",

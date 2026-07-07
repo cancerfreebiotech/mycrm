@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { MessageSquare, ExternalLink } from 'lucide-react'
 
-type FeedbackStatus = 'open' | 'in_progress' | 'done' | 'wont_fix'
+type FeedbackStatus = 'open' | 'in_progress' | 'resolved' | 'done' | 'wont_fix'
 
 interface FeedbackItem {
   id: string
@@ -18,7 +18,9 @@ interface FeedbackItem {
   users: { display_name: string | null; email: string } | null
 }
 
-const STATUS_OPTIONS: FeedbackStatus[] = ['open', 'in_progress', 'done', 'wont_fix']
+// 「done」不可由管理端設定：規範上完成必須由回報者本人在 /feedback 按「確認完成」
+// （resolved → done，RLS feedback_confirm_own 落實）。
+const STATUS_OPTIONS: FeedbackStatus[] = ['open', 'in_progress', 'resolved', 'wont_fix']
 
 export default function AdminFeedbackPage() {
   const t = useTranslations('feedback')
@@ -65,13 +67,13 @@ export default function AdminFeedbackPage() {
   async function handleStatusChange(id: string, status: FeedbackStatus) {
     setUpdatingId(id)
     setError(null)
-    const { error: updateError } = await supabase
-      .from('feedback')
-      .update({ status })
-      .eq('id', id)
-      .select('id')
-      .single()
-    if (updateError) {
+    // 走 API route：設為 resolved 時後端會自動寄信通知回報者來按「確認完成」
+    const res = await fetch('/api/feedback-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status }),
+    }).catch(() => null)
+    if (!res?.ok) {
       setError(tc('error'))
       setUpdatingId(null)
       return
@@ -83,6 +85,7 @@ export default function AdminFeedbackPage() {
   const statusLabel: Record<FeedbackStatus, string> = {
     open: t('statusOpen'),
     in_progress: t('statusInProgress'),
+    resolved: t('statusResolved'),
     done: t('statusDone'),
     wont_fix: t('statusWontFix'),
   }
@@ -90,6 +93,7 @@ export default function AdminFeedbackPage() {
   const statusColor: Record<FeedbackStatus, string> = {
     open: 'bg-yellow-100 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-400',
     in_progress: 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-400',
+    resolved: 'bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-400',
     done: 'bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400',
     wont_fix: 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400',
   }
@@ -169,6 +173,7 @@ export default function AdminFeedbackPage() {
                   )}
 
                   {/* Status update */}
+                  <p className="text-xs text-gray-400 dark:text-gray-500">{t('doneByReporterNote')}</p>
                   <div className="flex items-center gap-3">
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{t('updateStatus')}：</span>
                     <div className="flex gap-2 flex-wrap">

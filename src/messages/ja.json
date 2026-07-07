@@ -991,7 +991,20 @@
     "updateStatus": "ステータスを更新",
     "uploadScreenshot": "スクリーンショットをアップロード",
     "removeScreenshot": "スクリーンショットを削除",
-    "viewScreenshot": "スクリーンショットを表示"
+    "viewScreenshot": "スクリーンショットを表示",
+    "statusResolved": "対応済み・確認待ち",
+    "myFeedback": "自分のフィードバック",
+    "noMyFeedback": "まだ送信したフィードバックはありません",
+    "confirmDone": "完了を確認",
+    "confirmDoneHint": "この報告は対応済みです。解決を確認のうえ「完了を確認」を押してください",
+    "doneByReporterNote": "「完了」は報告者本人が「完了を確認」を押す必要があります"
+  },
+  "feedbackEmail": {
+    "subject": "[myCRM] ご報告の「{title}」は対応済みです — ご確認ください",
+    "greeting": "{name} さん",
+    "body": "{date} にご報告いただいた「{title}」は対応が完了しました。解決をご確認のうえ、システムの「フィードバック」ページで「完了を確認」を押してください。",
+    "cta": "確認する",
+    "footer": "このメールは myCRM から自動送信されています。問題が解決していない場合は、このメールに返信してください。"
   },
   "campaigns": {
     "title": "メール送信履歴",
@@ -1852,6 +1865,9 @@
     "fmtFontNormal": "中",
     "fmtFontLarge": "大",
     "fmtTextColor": "文字色",
+    "fmtFontFamily": "フォント",
+    "fmtFontDefault": "標準フォント",
+    "fmtClearFormat": "書式をクリア",
     "fmtAlignLeft": "左揃え",
     "fmtAlignCenter": "中央揃え",
     "fmtAlignRight": "右揃え",

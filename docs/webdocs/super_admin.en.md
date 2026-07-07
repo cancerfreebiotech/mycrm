@@ -275,7 +275,9 @@ Path: `/admin/feedback` (Super Admin only).
 
 **What it is**: Review and triage user-submitted suggestions and bug reports, and update their status. A total count sits next to the title; items are ordered newest-first.
 
-**Contents & actions**: each card shows a type badge (Bug = red / Feature = purple), title, submitter, date, and a status badge (pending / in progress / done / won't fix). Expand a card for the full description and any screenshot (private bucket, signed link). Click a status button below the expanded card to switch status; it saves instantly and shows an error if the save fails.
+**Contents & actions**: each card shows a type badge (Bug = red / Feature = purple), title, submitter, date, and a status badge (pending / in progress / resolved awaiting confirmation / done / won't fix). Expand a card for the full description and any screenshot (private bucket, signed link). Click a status button below the expanded card to switch status; it saves instantly and shows an error if the save fails.
+
+**Reporter confirmation**: "Done" cannot be set from the admin side. Setting a report to "Resolved, awaiting confirmation" automatically emails the reporter in their interface language; the status becomes "Done" only after the reporter verifies the fix and presses "Confirm done" on `/feedback`.
 
 ## Automation & Alerts (schedules)
 

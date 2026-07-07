@@ -991,7 +991,20 @@
     "updateStatus": "更新狀態",
     "uploadScreenshot": "上傳截圖",
     "removeScreenshot": "移除截圖",
-    "viewScreenshot": "查看截圖"
+    "viewScreenshot": "查看截圖",
+    "statusResolved": "已處理，待確認",
+    "myFeedback": "我的回饋",
+    "noMyFeedback": "尚無回報紀錄",
+    "confirmDone": "確認完成",
+    "confirmDoneHint": "此回報已處理，請確認問題已解決後按「確認完成」",
+    "doneByReporterNote": "「已完成」需由回報者本人按「確認完成」"
+  },
+  "feedbackEmail": {
+    "subject": "[myCRM] 您回報的「{title}」已處理，請確認",
+    "greeting": "{name} 您好，",
+    "body": "您於 {date} 回報的「{title}」已處理完成。請確認問題確實解決後，到系統「意見回饋」頁按下「確認完成」。",
+    "cta": "前往確認",
+    "footer": "此郵件由 myCRM 自動寄出；如問題仍未解決，請直接回覆此信。"
   },
   "campaigns": {
     "title": "郵件寄送紀錄",
@@ -1852,6 +1865,9 @@
     "fmtFontNormal": "中",
     "fmtFontLarge": "大",
     "fmtTextColor": "文字顏色",
+    "fmtFontFamily": "字體",
+    "fmtFontDefault": "預設字體",
+    "fmtClearFormat": "清除格式",
     "fmtAlignLeft": "靠左對齊",
     "fmtAlignCenter": "置中",
     "fmtAlignRight": "靠右對齊",

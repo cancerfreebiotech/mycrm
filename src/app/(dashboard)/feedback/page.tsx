@@ -7,6 +7,24 @@ import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { fetchOrgId } from '@/lib/orgUploadPrefix'
 import { MessageSquarePlus, Upload, X, CheckCircle } from 'lucide-react'
 
+type MyFeedbackStatus = 'open' | 'in_progress' | 'resolved' | 'done' | 'wont_fix'
+
+interface MyFeedbackItem {
+  id: string
+  type: 'feature' | 'bug'
+  title: string
+  status: MyFeedbackStatus
+  created_at: string
+}
+
+const MY_STATUS_COLOR: Record<MyFeedbackStatus, string> = {
+  open: 'bg-yellow-100 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-400',
+  in_progress: 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-400',
+  resolved: 'bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-400',
+  done: 'bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400',
+  wont_fix: 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400',
+}
+
 export default function FeedbackPage() {
   const t = useTranslations('feedback')
   const tc = useTranslations('common')
@@ -21,6 +39,48 @@ export default function FeedbackPage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const [myItems, setMyItems] = useState<MyFeedbackItem[]>([])
+  const [myError, setMyError] = useState<string | null>(null)
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
+
+  // 我的回饋（RLS 僅回自己的列；仍以 created_by 過濾避免 super admin 看到全部）
+  useEffect(() => {
+    let cancelled = false
+    async function loadMine() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user?.email) return
+      const { data: profile } = await supabase.from('users').select('id').eq('email', user.email).single()
+      if (!profile) return
+      const { data } = await supabase
+        .from('feedback')
+        .select('id, type, title, status, created_at')
+        .eq('created_by', profile.id)
+        .order('created_at', { ascending: false })
+      if (!cancelled) setMyItems((data ?? []) as MyFeedbackItem[])
+    }
+    loadMine()
+    return () => { cancelled = true }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 回報者本人確認完成（RLS feedback_confirm_own：僅允許自己的 resolved → done）
+  async function confirmDone(id: string) {
+    setConfirmingId(id)
+    setMyError(null)
+    const { error: confirmError } = await supabase
+      .from('feedback')
+      .update({ status: 'done' })
+      .eq('id', id)
+      .select('id')
+      .single()
+    if (confirmError) {
+      setMyError(tc('error'))
+      setConfirmingId(null)
+      return
+    }
+    setMyItems(prev => prev.map(i => i.id === id ? { ...i, status: 'done' as const } : i))
+    setConfirmingId(null)
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null
@@ -103,6 +163,14 @@ export default function FeedbackPage() {
 
     setSubmitted(true)
     setSubmitting(false)
+  }
+
+  const statusLabel: Record<MyFeedbackStatus, string> = {
+    open: t('statusOpen'),
+    in_progress: t('statusInProgress'),
+    resolved: t('statusResolved'),
+    done: t('statusDone'),
+    wont_fix: t('statusWontFix'),
   }
 
   if (submitted) {
@@ -210,6 +278,52 @@ export default function FeedbackPage() {
         >
           {submitting ? tc('loading') : t('submit')}
         </button>
+      </div>
+
+      {/* 我的回饋：狀態追蹤 + 已處理項目由本人按「確認完成」 */}
+      <div className="mt-8">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">{t('myFeedback')}</h2>
+
+        {myError && <p className="mb-3 text-sm text-red-500">{myError}</p>}
+
+        {myItems.length === 0 ? (
+          <p className="text-sm text-gray-400">{t('noMyFeedback')}</p>
+        ) : (
+          <div className="space-y-2">
+            {myItems.map(item => (
+              <div key={item.id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3">
+                <div className="flex items-start gap-2">
+                  <span className={`mt-0.5 text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
+                    item.type === 'bug'
+                      ? 'bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-400'
+                      : 'bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-400'
+                  }`}>
+                    {item.type === 'bug' ? t('typeBug') : t('typeFeature')}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{item.title}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{new Date(item.created_at).toLocaleDateString()}</p>
+                  </div>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${MY_STATUS_COLOR[item.status]}`}>
+                    {statusLabel[item.status]}
+                  </span>
+                </div>
+                {item.status === 'resolved' && (
+                  <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between">
+                    <p className="text-xs text-orange-700 dark:text-orange-400">{t('confirmDoneHint')}</p>
+                    <button
+                      onClick={() => confirmDone(item.id)}
+                      disabled={confirmingId === item.id}
+                      className="min-h-[44px] px-4 text-sm font-medium bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors shrink-0"
+                    >
+                      {confirmingId === item.id ? tc('loading') : t('confirmDone')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
