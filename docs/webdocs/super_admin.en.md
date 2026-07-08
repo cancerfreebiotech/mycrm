@@ -94,7 +94,7 @@ Path: `/admin/models` (Super Admin only).
 - **Add Endpoint**: fill in provider name, **type**, Base URL, and API Key (optional, see below).
 - **Type** (v8.0.0): `Google (Gemini)` is the official Gemini API, which supports function calling for the AI Assistant and Google Search grounding for Social Briefing; `OpenAI-compatible` covers any service that exposes `/chat/completions` — Portkey, OpenRouter, or a **self-hosted** Ollama / vLLM / LM Studio instance. The type can be switched directly from the dropdown in the endpoint list.
 - **API Key is optional** (v8.0.0): leave it blank for self-hosted or keyless endpoints. **Self-hosting note**: the Base URL must be publicly reachable from the deployment environment (Vercel) — an internal IP won't work, so use something like Cloudflare Tunnel or Tailscale Funnel; the Test button verifies the whole tunnel end to end.
-- **Change API Key**: the key is masked by default and can be toggled to plaintext; provider name and Base URL are not editable.
+- **Change API Key / rename**: the key is masked by default and can be toggled to plaintext; the provider name can be edited inline via the pencil ✏️ icon (v8.0.1); the Base URL is fixed once created.
 - **Enable / disable / delete**: use the status toggle; a provider can be deleted directly, without first removing its models.
 
 **Managing models**: select a provider first to reveal its model list.

@@ -645,6 +645,7 @@
     "colName": "Provider Name",
     "noEndpoints": "No endpoints yet",
     "changeKey": "Change API Key",
+    "editName": "Edit name",
     "enabled": "Enabled",
     "disabled": "Disabled",
     "confirmDelete": "Are you sure you want to delete?",

@@ -94,7 +94,7 @@ myCRM 的管理權限分兩層：
 - **新增 Endpoint**：填服務商名稱、**型態**、Base URL、API Key（選填，見下）。
 - **型態**（v8.0.0）：`Google (Gemini)` 為官方 Gemini API，支援 AI 助理的 function calling 與 Social Briefing 的 Google 搜尋 grounding；`OpenAI 相容` 適用任何提供 `/chat/completions` 的服務——Portkey、OpenRouter，或**地端自架**的 Ollama／vLLM／LM Studio。型態可在端點列表直接下拉切換。
 - **API Key 選填**（v8.0.0）：地端或無需金鑰的端點可留空。**地端注意**：Base URL 必須是部署環境（Vercel）連得到的對外位址——內網 IP 不行，需用 Cloudflare Tunnel、Tailscale Funnel 之類的通道；用「測試」鈕即可驗證整條通道。
-- **更換 API Key**：金鑰預設遮蔽，可切換顯示明文；服務商名稱與 Base URL 不提供修改。
+- **更換 API Key／改名**：金鑰預設遮蔽，可切換顯示明文；服務商名稱可點鉛筆✏️行內修改（v8.0.1）；Base URL 建立後不提供修改。
 - **啟用／停用／刪除**：點狀態切換鈕；刪除可直接刪，不必先刪底下模型。
 
 **管理模型**：先點選一個服務商，下方才出現其模型清單。

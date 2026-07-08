@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations, useLocale } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { Plus, Trash2, Loader2, X, ToggleLeft, ToggleRight, Eye, EyeOff, ChevronRight, FlaskConical } from 'lucide-react'
+import { Plus, Trash2, Loader2, X, ToggleLeft, ToggleRight, Eye, EyeOff, ChevronRight, FlaskConical, Pencil } from 'lucide-react'
 import type { AiFeature } from '@/lib/aiRouting'
 
 type EndpointKind = 'openai' | 'google'
@@ -93,6 +93,8 @@ export default function AdminModelsPage() {
 
   // Edit API key
   const [editingKeyId, setEditingKeyId] = useState<string | null>(null)
+  const [editingNameId, setEditingNameId] = useState<string | null>(null)
+  const [newName, setNewName] = useState('')
   const [newApiKey, setNewApiKey] = useState('')
 
   // Testing (keyed: ep:<id> / md:<id> / feat:<feature>)
@@ -227,6 +229,18 @@ export default function AdminModelsPage() {
     setEndpoints((prev) => prev.filter((e) => e.id !== id))
     if (selectedEndpoint?.id === id) { setSelectedEndpoint(null); setModels([]) }
     setConfirmDeleteEpId(null)
+    fetchFeatureData()
+  }
+
+  async function saveEndpointName(id: string) {
+    const name = newName.trim()
+    if (!name) return
+    await supabase.from('ai_endpoints').update({ name }).eq('id', id)
+    setEndpoints((prev) => prev.map((e) => e.id === id ? { ...e, name } : e))
+    if (selectedEndpoint?.id === id) setSelectedEndpoint((p) => p ? { ...p, name } : p)
+    setEditingNameId(null)
+    setNewName('')
+    // 功能指派下拉的「端點 / 模型」標籤引用端點名稱，重撈保持一致
     fetchFeatureData()
   }
 
@@ -468,10 +482,26 @@ export default function AdminModelsPage() {
                     onClick={() => selectEndpoint(ep)}
                     className={`border-t border-gray-100 dark:border-gray-800 cursor-pointer transition-colors ${selectedEndpoint?.id === ep.id ? 'bg-blue-50 dark:bg-blue-950/30' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}>
                     <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap">
-                      <span className="flex items-center gap-1">
-                        {selectedEndpoint?.id === ep.id && <ChevronRight size={14} className="text-blue-500 shrink-0" />}
-                        {ep.name}
-                      </span>
+                      {editingNameId === ep.id ? (
+                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                          <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') saveEndpointName(ep.id) }}
+                            placeholder={t('colName')} autoFocus
+                            className="text-xs px-2 py-1 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 w-32 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                          <button onClick={() => saveEndpointName(ep.id)} className="text-xs text-blue-600 hover:underline">{tc('save')}</button>
+                          <button onClick={() => { setEditingNameId(null); setNewName('') }} className="text-xs text-gray-400">{tc('cancel')}</button>
+                        </div>
+                      ) : (
+                        <span className="flex items-center gap-1">
+                          {selectedEndpoint?.id === ep.id && <ChevronRight size={14} className="text-blue-500 shrink-0" />}
+                          {ep.name}
+                          <button onClick={(e) => { e.stopPropagation(); setEditingNameId(ep.id); setNewName(ep.name) }}
+                            title={t('editName')} aria-label={t('editName')}
+                            className="text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 ml-1">
+                            <Pencil size={12} />
+                          </button>
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <select value={ep.kind} onChange={(e) => changeEndpointKind(ep, e.target.value as EndpointKind)}

@@ -645,6 +645,7 @@
     "colName": "プロバイダー名",
     "noEndpoints": "エンドポイントがありません",
     "changeKey": "APIキーを変更",
+    "editName": "名前を編集",
     "enabled": "有効",
     "disabled": "無効",
     "confirmDelete": "削除してもよろしいですか？",

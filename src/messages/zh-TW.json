@@ -645,6 +645,7 @@
     "colName": "服務商名稱",
     "noEndpoints": "尚無 Endpoint",
     "changeKey": "更換 API Key",
+    "editName": "編輯名稱",
     "enabled": "啟用",
     "disabled": "停用",
     "confirmDelete": "確定要刪除？",
