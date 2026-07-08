@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { aiGenerate } from '@/lib/aiRouting'
+import { systemOrgContext } from '@/lib/orgContext'
 
 const PROMPT = `You are a strict text formatter. Your ONLY job is to reformat the given content into clean HTML.
 
@@ -36,12 +37,9 @@ export async function POST(req: NextRequest) {
     .trim()
 
   try {
-    const apiKey = process.env.GEMINI_API_KEY!
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-
-    const result = await model.generateContent(`${PROMPT}\n\nContent to format:\n${plain}`)
-    const text = result.response.text().trim()
+    const orgId = systemOrgContext().orgId
+    const raw = await aiGenerate(orgId, 'note_format', `${PROMPT}\n\nContent to format:\n${plain}`)
+    const text = raw
       .replace(/^```html\s*/i, '')
       .replace(/^```\s*/i, '')
       .replace(/\s*```$/, '')

@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## v8.0.0 — AI 功能 × 端點／金鑰／模型指派系統（2026-07-08）
+
+### 變更項目
+- **新增 AI 功能路由層 `src/lib/aiRouting.ts`**：8 個 AI 功能（AI 助理、Social Briefing、互動紀錄格式化、每日回饋研判、AI 審查、電子報潤稿、電子報翻譯、名片辨識預設）可由管理端各自指派到不同端點／金鑰／模型（新表 `ai_feature_models`，RLS：成員唯讀、super_admin 全權）。未指派時走系統預設，行為與 v7.9.9 完全等價。
+- **端點型態**：`ai_endpoints` 新增 `kind`（`google` = Gemini SDK 直連，支援 function calling／googleSearch grounding；`openai` = 任何 `/chat/completions` 相容服務——Portkey、OpenRouter、**地端 Ollama／vLLM／LM Studio**）。API Key 改為選填（地端可空）；地端 URL 須為 Vercel 可達的對外位址。
+- **測試按鈕**：`/admin/models` 端點列、模型列、功能指派列皆可一鍵測試（新 route `POST /api/ai-test`，super_admin 限定）；結果 inline 顯示在按鈕旁（成功含耗時／失敗含原因），並持久化「上次測試」時間與結果（`last_tested_at`／`last_test_ok`／`last_test_error`），重整仍顯示。
+- **功能指派 UI**：`/admin/models` 新增第三區塊；AI 助理與 Social Briefing 僅可指派 Google 端點模型（後端 `POST /api/ai-feature-assign` 同步防護）；指派變更即時生效（跨實例最多延遲 60 秒）。
+- **9 個寫死模型觸點遷移**至路由層：ai-chat、bot `/ai`、briefing、ai-format、check-feedback cron、newsletter ai-compose、AI 審查三件組（mergeSuggest／suggest-contact／ai-merge-review）、newsletter 潤稿／翻譯。個人模型解析鏈變為：個人選擇 → 組織「名片辨識預設」指派 → 系統預設。
+- **LinkedIn 網頁解析收斂**：`/api/linkedin/parse` 移除自帶的複製解析邏輯，改共用 `gemini.ts` 的 `parseLinkedInScreenshot`（與 Telegram bot 同路徑：Portkey ＋個人模型鏈；原為直連 gemini-2.5-flash）。
+- `/settings` 個人 AI 模型提示 i18n 化並更正描述（影響名片辨識／Bot 指令解析／AI 郵件生成）。
+- Migration ×2（repo ＋ prod 已套）：`20260708001000_ai_endpoint_kind_test_fields`、`20260708001100_ai_feature_models`。
+- 測試：新增 `aiRouting` 解析鏈單元測試 16 條（合計 80 條）。使用手冊 super_admin 三語 AI 章節重寫並同步 `docs_content`。
+- 版號依裁決（2026-07-07）自 7.9.9 直上 8.0.0。
+
 ## v7.9.9 — docs: 清除 GitBook 同步殘留（2026-07-07）
 
 ### 變更項目

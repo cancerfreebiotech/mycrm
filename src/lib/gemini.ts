@@ -1,8 +1,12 @@
-import Portkey from 'portkey-ai'
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
-import { createServiceClient } from '@/lib/supabase'
 import { getPrompt } from '@/lib/prompts'
-import { recordUsage } from '@/lib/usage'
+import { systemOrgContext } from '@/lib/orgContext'
+import {
+  resolvePersonalModel,
+  routedGenerate,
+  TOUCHPOINTS,
+  type MessageContent,
+} from '@/lib/aiRouting'
 
 export interface CardData {
   name: string
@@ -24,85 +28,6 @@ export interface CardData {
   rotation: 0 | 90 | 180 | 270
 }
 
-interface ModelConfig {
-  modelId: string
-  apiKey: string
-}
-
-// Portkey gateway: routing strategy (loadbalance across virtual keys) and retry
-// are defined in the Portkey Config referenced by PORTKEY_CONFIG_ID. This keeps
-// the strategy tunable from the dashboard without redeploying the app.
-//
-// timeout (180s) is the SDK-level fetch cap. It must be larger than the worst
-// case Portkey strategy chain (per-target timeouts × retries × fallback layers),
-// otherwise the SDK gives up before fallback finishes.
-function makePortkey(): Portkey {
-  return new Portkey({
-    apiKey: process.env.PORTKEY_API_KEY!,
-    config: process.env.PORTKEY_CONFIG_ID!,
-    timeout: 180_000,
-  })
-}
-
-type MessageContent =
-  | string
-  | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>
-
-// Direct-Gemini fallback model — a known-good model used elsewhere in the app on
-// GEMINI_API_KEY (ai-chat, briefing). Used only when Portkey is unavailable.
-const DIRECT_FALLBACK_MODEL = 'gemini-2.5-flash'
-
-// Convert the OpenAI-style content used with Portkey into Gemini SDK parts, so a
-// failed Portkey call can be retried directly against Google.
-function toGeminiParts(content: MessageContent): Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> {
-  if (typeof content === 'string') return [{ text: content }]
-  return content.map((p) => {
-    if ('text' in p) return { text: p.text }
-    const m = /^data:([^;]+);base64,(.*)$/s.exec(p.image_url.url)
-    return m ? { inlineData: { mimeType: m[1], data: m[2] } } : { text: '' }
-  })
-}
-
-async function geminiDirectGenerate(content: MessageContent): Promise<string> {
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-  const model = genAI.getGenerativeModel({ model: DIRECT_FALLBACK_MODEL })
-  const result = await model.generateContent(toGeminiParts(content))
-  return (result.response.text() ?? '').trim()
-}
-
-async function portkeyGenerate(
-  modelId: string,
-  content: MessageContent
-): Promise<string> {
-  try {
-    const portkey = makePortkey()
-    const result = await portkey.chat.completions.create({
-      model: modelId,
-      messages: [{ role: 'user', content }],
-    })
-    const raw = result.choices?.[0]?.message?.content
-    const text = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw.map((p) => ('text' in p ? p.text : '')).join('') : ''
-    // Usage metering (fire-and-forget). gemini.ts is imported from non-route
-    // contexts (bot webhook, cron worker) too, so build our own service client.
-    // Wrapped so metering can never affect the AI call itself.
-    try {
-      const usage = result.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined
-      void recordUsage(createServiceClient(), {
-        ai_call: 1,
-        ai_tokens_in: usage?.prompt_tokens ?? 0,
-        ai_tokens_out: usage?.completion_tokens ?? 0,
-      })
-    } catch { /* metering must never break the AI call */ }
-    return text.trim()
-  } catch (err) {
-    // Portkey unavailable (401 invalid key, network, misconfig). Fall back to a
-    // direct Gemini call so core flows (card OCR, parsing) survive a Portkey outage.
-    if (!process.env.GEMINI_API_KEY) throw err
-    console.error('[portkeyGenerate] Portkey failed, using direct Gemini fallback:', err instanceof Error ? err.message : String(err))
-    return geminiDirectGenerate(content)
-  }
-}
-
 function stripJsonFence(text: string): string {
   return text.replace(/^```json\s*/, '').replace(/\s*```$/, '')
 }
@@ -114,47 +39,21 @@ function imageParts(buffers: Buffer[]): Array<{ type: 'image_url'; image_url: { 
   }))
 }
 
-// Resolve ai_model_id (UUID) → { modelId, apiKey }
-// Falls back to env GEMINI_API_KEY + default model string if aiModelId is a plain model string or null
-async function resolveModelConfig(aiModelId: string | null): Promise<ModelConfig> {
-  // If it looks like a UUID, query the DB
-  if (aiModelId && /^[0-9a-f-]{36}$/i.test(aiModelId)) {
-    const supabase = createServiceClient()
-    const { data } = await supabase
-      .from('ai_models')
-      .select('model_id, ai_endpoints(api_key)')
-      .eq('id', aiModelId)
-      .single()
-
-    if (data) {
-      const ep = data.ai_endpoints as unknown as { api_key: string } | null
-      const apiKey = ep?.api_key && ep.api_key !== 'placeholder'
-        ? ep.api_key
-        : process.env.GEMINI_API_KEY!
-      return { modelId: data.model_id, apiKey }
-    }
-  }
-
-  // Fallback: treat as plain model string (legacy) or use default
-  return {
-    modelId: aiModelId ?? 'gemini-3.1-flash-lite-preview',
-    apiKey: process.env.GEMINI_API_KEY!,
-  }
-}
-
 export async function analyzeBusinessCard(
   imageBuffers: Buffer | Buffer[],
   aiModelId: string | null = null,
   userId?: string
 ): Promise<CardData> {
-  const { modelId } = await resolveModelConfig(aiModelId)
+  const orgId = systemOrgContext().orgId
+  const resolved = await resolvePersonalModel(orgId, aiModelId, TOUCHPOINTS.card_ocr.getDefault())
   const buffers = Array.isArray(imageBuffers) ? imageBuffers : [imageBuffers]
   const systemPrompt = await getPrompt('ocr_card', userId)
 
-  const text = await portkeyGenerate(modelId, [
+  const content: MessageContent = [
     { type: 'text', text: systemPrompt },
     ...imageParts(buffers),
-  ])
+  ]
+  const text = await routedGenerate(resolved, content, { directFallback: true })
   return JSON.parse(stripJsonFence(text)) as CardData
 }
 
@@ -184,11 +83,13 @@ export async function parseLinkedInScreenshot(
   imageBuffer: Buffer,
   aiModelId: string | null = null
 ): Promise<LinkedInParsed> {
-  const { modelId } = await resolveModelConfig(aiModelId)
-  const text = await portkeyGenerate(modelId, [
+  const orgId = systemOrgContext().orgId
+  const resolved = await resolvePersonalModel(orgId, aiModelId, TOUCHPOINTS.card_ocr.getDefault())
+  const content: MessageContent = [
     { type: 'text', text: LINKEDIN_PROMPT },
     ...imageParts([imageBuffer]),
-  ])
+  ]
+  const text = await routedGenerate(resolved, content, { directFallback: true })
   return JSON.parse(stripJsonFence(text)) as LinkedInParsed
 }
 
@@ -204,11 +105,12 @@ export async function parseTaskCommand(
   nowIso: string,
   aiModelId: string | null = null
 ): Promise<TaskParsed> {
-  const { modelId } = await resolveModelConfig(aiModelId)
+  const orgId = systemOrgContext().orgId
+  const resolved = await resolvePersonalModel(orgId, aiModelId, TOUCHPOINTS.card_ocr.getDefault())
   const basePrompt = await getPrompt('task_parse')
   const prompt = `現在時間（UTC）：${nowIso}\n${basePrompt}\n\n任務描述：${text}`
 
-  const raw = await portkeyGenerate(modelId, prompt)
+  const raw = await routedGenerate(resolved, prompt, { directFallback: true })
   return JSON.parse(stripJsonFence(raw)) as TaskParsed
 }
 
@@ -225,11 +127,12 @@ export async function parseMeetingCommand(
   nowIso: string,
   aiModelId: string | null = null
 ): Promise<MeetingParsed> {
-  const { modelId } = await resolveModelConfig(aiModelId)
+  const orgId = systemOrgContext().orgId
+  const resolved = await resolvePersonalModel(orgId, aiModelId, TOUCHPOINTS.card_ocr.getDefault())
   const basePrompt = await getPrompt('meeting_parse')
   const prompt = `現在時間（UTC）：${nowIso}\n${basePrompt}\n\n會議描述：${text}`
 
-  const raw = await portkeyGenerate(modelId, prompt)
+  const raw = await routedGenerate(resolved, prompt, { directFallback: true })
   return JSON.parse(stripJsonFence(raw)) as MeetingParsed
 }
 
@@ -244,7 +147,8 @@ export async function parseMetCommand(
   nowIso: string,
   aiModelId: string | null = null
 ): Promise<MetParsed> {
-  const { modelId } = await resolveModelConfig(aiModelId)
+  const orgId = systemOrgContext().orgId
+  const resolved = await resolvePersonalModel(orgId, aiModelId, TOUCHPOINTS.card_ocr.getDefault())
 
   const todayDate = nowIso.slice(0, 10)
   const prompt =
@@ -255,7 +159,7 @@ export async function parseMetCommand(
     `- referred_by：介紹人姓名，沒提到則 null\n\n` +
     `描述：${text}`
 
-  const raw = await portkeyGenerate(modelId, prompt)
+  const raw = await routedGenerate(resolved, prompt, { directFallback: true })
   return JSON.parse(stripJsonFence(raw)) as MetParsed
 }
 
@@ -272,7 +176,8 @@ export async function parseVisitNote(
   nowIso: string,
   aiModelId: string | null = null
 ): Promise<VisitNoteParsed> {
-  const { modelId } = await resolveModelConfig(aiModelId)
+  const orgId = systemOrgContext().orgId
+  const resolved = await resolvePersonalModel(orgId, aiModelId, TOUCHPOINTS.card_ocr.getDefault())
 
   const todayDate = nowIso.slice(0, 10)
   const prompt =
@@ -285,7 +190,7 @@ export async function parseVisitNote(
     `- meeting_location：地點，沒提到則 null\n\n` +
     `筆記：${text}`
 
-  const raw = await portkeyGenerate(modelId, prompt)
+  const raw = await routedGenerate(resolved, prompt, { directFallback: true })
   return JSON.parse(stripJsonFence(raw)) as VisitNoteParsed
 }
 
@@ -308,11 +213,22 @@ export async function generateEmailContent(
   generateSubject = false,
   returnHtml = false
 ): Promise<{ text: string; subject?: string }> {
-  const { modelId, apiKey } = await resolveModelConfig(aiModelId)
-  const genAI = new GoogleGenerativeAI(apiKey)
-  const geminiModel = genAI.getGenerativeModel({ model: modelId, safetySettings: EMAIL_SAFETY })
+  const orgId = systemOrgContext().orgId
+  const resolved = await resolvePersonalModel(orgId, aiModelId, TOUCHPOINTS.email_generate.getDefault())
 
   const systemPrompt = await getPrompt('email_generate', userId)
+
+  // 未指派 / 個人 UUID / card_ocr_default 指派到 google 端點 → resolved.via 為
+  // 'google'（今日預設亦是 google）→ 維持今日直連 @google/generative-ai + EMAIL_SAFETY，
+  // apiKey 缺則退回 env GEMINI_API_KEY，與指派系統上線前 100% 等價。
+  // 指派到 openai 端點 → 走統一路由（safetySettings 於該路無效，可接受）。
+  const runEmail = async (prompt: string): Promise<string> => {
+    if (resolved.via === 'openai') return routedGenerate(resolved, prompt)
+    const genAI = new GoogleGenerativeAI(resolved.apiKey ?? process.env.GEMINI_API_KEY!)
+    const geminiModel = genAI.getGenerativeModel({ model: resolved.modelId, safetySettings: EMAIL_SAFETY })
+    const result = await geminiModel.generateContent(prompt)
+    return result.response.text().trim()
+  }
 
   const langNote = '請依照使用者的撰寫指示（補充說明或描述）所使用的語言撰寫郵件，不要因範本內容或背景資訊的語言而改變輸出語言。若使用者指示有明確語言要求，則以指示為準。'
   const plainTextNote = '請只回傳純文字內文，不要有任何 HTML 標籤，使用換行（\\n）分段，不要有任何其他說明文字。'
@@ -327,8 +243,7 @@ export async function generateEmailContent(
       ? '請回傳純 JSON（不要有任何其他文字）：{"subject":"郵件主旨","text":"HTML 郵件內文"}'
       : '請回傳純 JSON（不要有任何其他文字）：{"subject":"郵件主旨","text":"純文字內文（使用 \\n 換行，不含 HTML）"}'
     const prompt = `${baseContent}\n\n${jsonFormat}`
-    const result = await geminiModel.generateContent(prompt)
-    const raw = result.response.text().trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
+    const raw = (await runEmail(prompt)).replace(/^```json\s*/, '').replace(/\s*```$/, '')
     const parsed = JSON.parse(raw) as { subject: string; text: string }
     return { text: parsed.text, subject: parsed.subject }
   }
@@ -337,6 +252,5 @@ export async function generateEmailContent(
     ? `${systemPrompt}\n\n${langNote}\n\n${formatNote}\n\n範本內容：\n${templateContent}\n\n補充說明：\n${description}\n\n請合併範本與補充說明，生成最終郵件內文。`
     : `${systemPrompt}\n\n${langNote}\n\n${formatNote}\n\n描述：\n${description}`
 
-  const result = await geminiModel.generateContent(prompt)
-  return { text: result.response.text().trim() }
+  return { text: await runEmail(prompt) }
 }

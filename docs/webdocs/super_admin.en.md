@@ -91,7 +91,9 @@ Path: `/admin/models` (Super Admin only).
 
 **Managing providers**:
 
-- **Add Endpoint**: fill in provider name, Base URL (e.g. `https://generativelanguage.googleapis.com/v1beta`), and API Key.
+- **Add Endpoint**: fill in provider name, **type**, Base URL, and API Key (optional, see below).
+- **Type** (v8.0.0): `Google (Gemini)` is the official Gemini API, which supports function calling for the AI Assistant and Google Search grounding for Social Briefing; `OpenAI-compatible` covers any service that exposes `/chat/completions` — Portkey, OpenRouter, or a **self-hosted** Ollama / vLLM / LM Studio instance. The type can be switched directly from the dropdown in the endpoint list.
+- **API Key is optional** (v8.0.0): leave it blank for self-hosted or keyless endpoints. **Self-hosting note**: the Base URL must be publicly reachable from the deployment environment (Vercel) — an internal IP won't work, so use something like Cloudflare Tunnel or Tailscale Funnel; the Test button verifies the whole tunnel end to end.
 - **Change API Key**: the key is masked by default and can be toggled to plaintext; provider name and Base URL are not editable.
 - **Enable / disable / delete**: use the status toggle; a provider can be deleted directly, without first removing its models.
 
@@ -100,6 +102,16 @@ Path: `/admin/models` (Super Admin only).
 - **Add Model**: fill in Model ID (the API name, e.g. `gemini-2.5-flash`) and a display name.
 - **Disable**: the model drops out of the personal-settings dropdown; users who had selected it fall back to the default model.
 - **Delete**: click 🗑 with confirmation.
+
+**Test button** (v8.0.0): both endpoint and model rows have a "Test" button. Pressing it fires one minimal AI call from the server; the result shows right next to the button (a green ✅ with the latency on success, a red ❌ with the reason on failure), and the "last tested" time and result are saved and still shown after a refresh. If an endpoint has no active models, the test falls back to a plain connectivity check (any HTTP response counts as a pass).
+
+### Feature assignment
+
+At the bottom of the page, each of 8 AI features can be assigned to a specific model; unassigned means "system default" (the environment's built-in model — the same behavior as before v8.0.0).
+
+**The 8 features**: AI Assistant (web + Telegram `/ai`; Google endpoints only), Social Briefing (Google endpoints only), interaction-log formatting, daily feedback triage, AI review (duplicate suggestions + merge review + note matching), newsletter polishing, newsletter translation, and the business-card-recognition default (the organization default for card recognition / bot command parsing / AI email generation — the fallback when a user hasn't picked a model in `/settings`; resolution order: personal choice → this org default → system default).
+
+Because the AI Assistant and Social Briefing need Google-specific capabilities, their dropdowns only list models from Google-type endpoints. Every row also has a Test button — if assigned, it tests that model and records the result; if unassigned, it tests the system-default path and only displays the result without recording it. Assignment changes take effect **immediately** (up to about a 1-minute delay).
 
 ## Email Templates
 

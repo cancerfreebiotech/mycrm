@@ -4,10 +4,10 @@ import { createClient, createServiceClient } from '@/lib/supabase'
 import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 import { TOOLS, TOOL_BY_NAME, executeTool } from '@/lib/agent-tools'
 import { getOrgSetting } from '@/lib/orgSettings'
+import { resolveTouchpoint } from '@/lib/aiRouting'
 
 export const maxDuration = 60
 
-const CHAT_MODEL = 'gemini-2.5-flash'
 const MAX_TOOL_ROUNDS = 6
 
 interface ChatMessage { role: 'user' | 'model'; content: string }
@@ -86,7 +86,16 @@ export async function POST(req: NextRequest) {
   const ctx = await getOrgContext()
   const db = orgScopedClient(ctx)
 
-  const apiKey = process.env.GEMINI_API_KEY
+  // assistant 觸點路由：未指派時回今日預設（via:'google'、gemini-2.5-flash、apiKey:null）→ 與今日全等。
+  const resolved = await resolveTouchpoint(ctx.orgId, 'assistant')
+  let chatModel = resolved.modelId
+  let apiKey = resolved.apiKey ?? process.env.GEMINI_API_KEY
+  // assistant 為 googleOnly，resolveTouchpoint 保證回 google 或 default；防禦：意外指到 openai 端點時沿用 env 預設。
+  if (resolved.via === 'openai') {
+    console.warn('[ai-chat] assistant resolved to openai endpoint; using env default gemini-2.5-flash')
+    chatModel = 'gemini-2.5-flash'
+    apiKey = process.env.GEMINI_API_KEY
+  }
   if (!apiKey) return NextResponse.json({ error: 'AI 未設定（缺 GEMINI_API_KEY）' }, { status: 500 })
 
   const body = await req.json().catch(() => null)
@@ -104,7 +113,7 @@ export async function POST(req: NextRequest) {
 
   const genAI = new GoogleGenerativeAI(apiKey)
   const model = genAI.getGenerativeModel({
-    model: CHAT_MODEL,
+    model: chatModel,
     systemInstruction,
     tools: [{ functionDeclarations: toGeminiDeclarations() }] as unknown as Parameters<typeof genAI.getGenerativeModel>[0]['tools'],
   })

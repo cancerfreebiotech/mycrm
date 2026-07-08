@@ -658,7 +658,33 @@
     "endpointPlaceholder": "例：Google Gemini",
     "newApiKey": "新しいAPIキー",
     "modelIdPlaceholder": "例：gemini-2.5-flash",
-    "modelNamePlaceholder": "例：Gemini 2.5 Flash"
+    "modelNamePlaceholder": "例：Gemini 2.5 Flash",
+    "colKind": "種別",
+    "kindOpenai": "OpenAI 互換",
+    "kindGoogle": "Google (Gemini)",
+    "apiKeyOptional": "sk-...（任意）",
+    "apiKeyOptionalHint": "セルフホスト／キー不要のエンドポイントは空欄で構いません",
+    "colTest": "テスト",
+    "testBtn": "テスト",
+    "testing": "テスト中...",
+    "testOk": "テスト成功",
+    "testFailed": "テスト失敗",
+    "lastTested": "前回テスト",
+    "neverTested": "未テスト",
+    "saveFailed": "保存に失敗しました。後でもう一度お試しください",
+    "featureAssignTitle": "機能の割り当て",
+    "systemDefault": "システム既定",
+    "selfHostedHint": "セルフホスト型エンドポイントの URL は Vercel から到達可能な公開アドレスである必要があります（例：Cloudflare Tunnel／Tailscale Funnel）。テストボタンはサーバー側からリクエストを送信し、経路全体を検証します。",
+    "features": {
+      "assistant": { "name": "AI アシスタント", "desc": "Web /ai-chat と Telegram /ai で共用（Google エンドポイント限定）" },
+      "briefing": { "name": "Social Briefing", "desc": "会議前の背景リサーチ（Google エンドポイント限定）" },
+      "note_format": { "name": "対応記録のフォーマット", "desc": "対応記録を AI で整形" },
+      "feedback_triage": { "name": "日次フィードバック判定", "desc": "日次フィードバックの AI 判定（cron）" },
+      "ai_review": { "name": "AI レビュー", "desc": "重複提案・統合レビュー・ノート照合で共用" },
+      "newsletter_refine": { "name": "ニュースレター推敲", "desc": "ニュースレターの推敲／下書き" },
+      "newsletter_translate": { "name": "ニュースレター翻訳", "desc": "ニュースレター本文の翻訳" },
+      "card_ocr_default": { "name": "名刺認識の既定", "desc": "名刺認識／コマンド解析／メール生成の組織既定（個人がモデル未選択時のフォールバック）" }
+    }
   },
   "settings": {
     "title": "個人設定",
@@ -702,7 +728,8 @@
     "remove": "削除",
     "resetToDefault": "組織のデフォルトに戻す",
     "emailPromptPlaceholder": "空欄の場合は組織/システムのデフォルトを使用",
-    "systemDefaultInEffect": "現在有効なシステムのデフォルト："
+    "systemDefaultInEffect": "現在有効なシステムのデフォルト：",
+    "aiModelHint": "この設定は、名刺OCR、Botコマンド解析、AIメール生成に使用するモデルに影響します。未選択の場合は、管理者が設定した組織のデフォルトが使用されます。"
   },
   "tasks": {
     "title": "タスク",

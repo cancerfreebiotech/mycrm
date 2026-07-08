@@ -454,7 +454,7 @@ export default function SettingsPage() {
             </div>
           </div>
           <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
-            此設定會影響 Bot 及網頁名片辨識所使用的 AI 模型。
+            {t('aiModelHint')}
           </p>
         </div>
 

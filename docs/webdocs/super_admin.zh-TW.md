@@ -91,7 +91,9 @@ myCRM 的管理權限分兩層：
 
 **管理服務商**：
 
-- **新增 Endpoint**：填服務商名稱、Base URL（如 `https://generativelanguage.googleapis.com/v1beta`）、API Key。
+- **新增 Endpoint**：填服務商名稱、**型態**、Base URL、API Key（選填，見下）。
+- **型態**（v8.0.0）：`Google (Gemini)` 為官方 Gemini API，支援 AI 助理的 function calling 與 Social Briefing 的 Google 搜尋 grounding；`OpenAI 相容` 適用任何提供 `/chat/completions` 的服務——Portkey、OpenRouter，或**地端自架**的 Ollama／vLLM／LM Studio。型態可在端點列表直接下拉切換。
+- **API Key 選填**（v8.0.0）：地端或無需金鑰的端點可留空。**地端注意**：Base URL 必須是部署環境（Vercel）連得到的對外位址——內網 IP 不行，需用 Cloudflare Tunnel、Tailscale Funnel 之類的通道；用「測試」鈕即可驗證整條通道。
 - **更換 API Key**：金鑰預設遮蔽，可切換顯示明文；服務商名稱與 Base URL 不提供修改。
 - **啟用／停用／刪除**：點狀態切換鈕；刪除可直接刪，不必先刪底下模型。
 
@@ -100,6 +102,16 @@ myCRM 的管理權限分兩層：
 - **新增 Model**：填 Model ID（API 用，如 `gemini-2.5-flash`）與顯示名稱。
 - **停用**：個人設定下拉不再顯示此模型；已選該模型的使用者改用預設模型。
 - **刪除**：點 🗑 確認。
+
+**測試按鈕**（v8.0.0）：端點列與模型列各有「測試」鈕，按下由伺服器端發出一次極小的 AI 呼叫，結果直接顯示在按鈕旁（綠色 ✅ 成功並附耗時／紅色 ❌ 附原因），並記錄「上次測試」時間與結果，重新整理後仍會顯示。端點若沒有啟用中的模型，測試退化為單純的連通性檢查（HTTP 有回應即算通過）。
+
+### 功能指派
+
+頁面下方可將 8 個 AI 功能各自指派到特定模型；未指派＝「系統預設」（環境內建模型，行為與 v8.0.0 之前相同）。
+
+**8 個功能**：AI 助理（Web ＋ Telegram `/ai`；僅限 Google 端點）、Social Briefing（僅限 Google 端點）、互動紀錄格式化、每日回饋研判、AI 審查（重複建議＋合併審查＋筆記配對）、電子報潤稿、電子報翻譯、名片辨識預設（名片辨識／Bot 指令解析／AI 郵件生成的組織預設，供使用者在 `/settings` 未選模型時 fallback；解析順序：個人選擇 → 此組織預設 → 系統預設）。
+
+AI 助理與 Social Briefing 因需要 Google 專屬能力，下拉只會列出 Google 型態端點的模型。每列也有「測試」鈕——已指派時測該模型並記錄，未指派時測系統預設路徑、僅顯示結果不記錄。指派變更**即時生效**（最多延遲約 1 分鐘）。
 
 ## Email 範本
 

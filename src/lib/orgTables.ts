@@ -60,6 +60,8 @@ export const ORG_TABLE_NAMES = [
   'email_campaigns',
   'email_events',
   'admin_actions',
+  // AI 功能 → 模型指派（v8.0.0，per-org）
+  'ai_feature_models',
 ] as const
 
 export const ORG_TABLES: ReadonlySet<string> = new Set(ORG_TABLE_NAMES)

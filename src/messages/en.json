@@ -658,7 +658,33 @@
     "endpointPlaceholder": "e.g. Google Gemini",
     "newApiKey": "New API key",
     "modelIdPlaceholder": "e.g. gemini-2.5-flash",
-    "modelNamePlaceholder": "e.g. Gemini 2.5 Flash"
+    "modelNamePlaceholder": "e.g. Gemini 2.5 Flash",
+    "colKind": "Type",
+    "kindOpenai": "OpenAI-compatible",
+    "kindGoogle": "Google (Gemini)",
+    "apiKeyOptional": "sk-... (optional)",
+    "apiKeyOptionalHint": "Leave blank for self-hosted / keyless endpoints",
+    "colTest": "Test",
+    "testBtn": "Test",
+    "testing": "Testing...",
+    "testOk": "Test passed",
+    "testFailed": "Test failed",
+    "lastTested": "Last tested",
+    "neverTested": "Never tested",
+    "saveFailed": "Save failed, please try again",
+    "featureAssignTitle": "Feature Assignment",
+    "systemDefault": "System default",
+    "selfHostedHint": "A self-hosted endpoint's URL must be publicly reachable from Vercel (e.g. Cloudflare Tunnel / Tailscale Funnel). The Test button verifies the full path by sending the request from the server.",
+    "features": {
+      "assistant": { "name": "AI Assistant", "desc": "Shared by Web /ai-chat and Telegram /ai (Google endpoints only)" },
+      "briefing": { "name": "Social Briefing", "desc": "Pre-meeting background research (Google endpoints only)" },
+      "note_format": { "name": "Interaction Note Formatting", "desc": "AI formatting of interaction notes" },
+      "feedback_triage": { "name": "Daily Feedback Triage", "desc": "Daily AI feedback triage (cron)" },
+      "ai_review": { "name": "AI Review", "desc": "Shared by duplicate suggestions, merge review, and note matching" },
+      "newsletter_refine": { "name": "Newsletter Refine", "desc": "Newsletter refine / draft" },
+      "newsletter_translate": { "name": "Newsletter Translate", "desc": "Newsletter content translation" },
+      "card_ocr_default": { "name": "Card OCR Default", "desc": "Org default for card OCR / command parsing / email generation (fallback when a user hasn't picked a model)" }
+    }
   },
   "settings": {
     "title": "Settings",
@@ -702,7 +728,8 @@
     "remove": "Remove",
     "resetToDefault": "Reset to org default",
     "emailPromptPlaceholder": "Leave blank to use org/system default",
-    "systemDefaultInEffect": "Currently active system default:"
+    "systemDefaultInEffect": "Currently active system default:",
+    "aiModelHint": "This setting affects the model used for business-card OCR, bot command parsing, and AI email generation. When unset, the organization default configured by the admin is used."
   },
   "tasks": {
     "title": "Tasks",

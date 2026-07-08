@@ -1,9 +1,5 @@
-import Portkey from 'portkey-ai'
-
-// AI 合併方向建議（duplicates 頁）。gemini.ts 沒有 export portkeyGenerate，
-// 故比照 src/app/api/contacts/ai-merge-review/route.ts 的做法，在本檔保留一個
-// 小型 Portkey 呼叫（同一組 Portkey config：loadbalance + fallback 由 dashboard 管理）。
-const AI_MODEL = process.env.AI_REVIEW_MODEL ?? 'gemini-3.1-flash-lite'
+import { aiGenerate } from '@/lib/aiRouting'
+import { systemOrgContext } from '@/lib/orgContext'
 
 export interface MergeFieldNote {
   field: string
@@ -25,23 +21,8 @@ function stripJsonFence(t: string): string {
   return t.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '')
 }
 
-async function generate(prompt: string): Promise<string> {
-  const portkey = new Portkey({
-    apiKey: process.env.PORTKEY_API_KEY!,
-    config: process.env.PORTKEY_CONFIG_ID!,
-    timeout: 60_000,
-  })
-  const r = await portkey.chat.completions.create({
-    model: AI_MODEL,
-    messages: [{ role: 'user', content: prompt }],
-  })
-  const raw = r.choices?.[0]?.message?.content
-  const text = typeof raw === 'string'
-    ? raw
-    : Array.isArray(raw)
-      ? raw.map((p) => ('text' in p ? p.text : '')).join('')
-      : ''
-  return text.trim()
+function generate(prompt: string): Promise<string> {
+  return aiGenerate(systemOrgContext().orgId, 'ai_review', prompt, { timeoutMs: 60_000 })
 }
 
 function toStringOrNull(v: unknown): string | null {

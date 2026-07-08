@@ -4,37 +4,12 @@
 // Tone corpus = past newsletters at skills/newsletter-composer/tone-samples/
 // most recent N samples in the target language are sent as few-shot reference.
 
-import Portkey from 'portkey-ai'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { aiGenerate } from '@/lib/aiRouting'
+import { systemOrgContext } from '@/lib/orgContext'
 
 export type Lang = 'zh-TW' | 'en' | 'ja'
-
-const MODEL_REFINE = process.env.NEWSLETTER_MODEL_REFINE ?? 'gemini-3.1-pro-preview'
-const MODEL_TRANSLATE = process.env.NEWSLETTER_MODEL_TRANSLATE ?? 'gemini-3.1-flash-lite'
-
-function makePortkey(): Portkey {
-  return new Portkey({
-    apiKey: process.env.PORTKEY_API_KEY!,
-    config: process.env.PORTKEY_CONFIG_ID!,
-    timeout: 180_000,
-  })
-}
-
-async function generate(model: string, prompt: string): Promise<string> {
-  const portkey = makePortkey()
-  const r = await portkey.chat.completions.create({
-    model,
-    messages: [{ role: 'user', content: prompt }],
-  })
-  const raw = r.choices?.[0]?.message?.content
-  const text = typeof raw === 'string'
-    ? raw
-    : Array.isArray(raw)
-      ? raw.map((p) => ('text' in p ? p.text : '')).join('')
-      : ''
-  return text.trim()
-}
 
 function stripJsonFence(t: string): string {
   return t.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '')
@@ -91,7 +66,8 @@ ${story.content}
 【輸出 JSON】
 {"title": "如有微調可改，否則保留原意", "paragraphs_html": "<p>...</p><p>...</p>"}`
 
-  const raw = await generate(MODEL_REFINE, prompt)
+  const orgId = systemOrgContext().orgId
+  const raw = await aiGenerate(orgId, 'newsletter_refine', prompt)
   const cleaned = stripJsonFence(raw)
   try {
     const json = JSON.parse(cleaned) as { title?: string; paragraphs_html?: string }
@@ -134,7 +110,8 @@ ${refined.paragraphs_html}
 [Output JSON]
 {"title": "translated title", "paragraphs_html": "<p>...</p>"}`
 
-  const raw = await generate(MODEL_TRANSLATE, prompt)
+  const orgId = systemOrgContext().orgId
+  const raw = await aiGenerate(orgId, 'newsletter_translate', prompt)
   const cleaned = stripJsonFence(raw)
   try {
     const json = JSON.parse(cleaned) as { title?: string; paragraphs_html?: string }
@@ -163,7 +140,8 @@ ${html}
 
 [Output]
 Translated HTML only, no JSON wrapper, no explanation, no quotes.`
-  const raw = await generate(MODEL_TRANSLATE, prompt)
+  const orgId = systemOrgContext().orgId
+  const raw = await aiGenerate(orgId, 'newsletter_translate', prompt)
   return stripJsonFence(raw).trim()
 }
 
@@ -197,11 +175,7 @@ ${examples[lang]}
 
 Output: PLAIN TEXT only. NO markdown, NO HTML, NO quotes around the output.`
 
-  const raw = await generate(MODEL_TRANSLATE, prompt)
+  const orgId = systemOrgContext().orgId
+  const raw = await aiGenerate(orgId, 'newsletter_translate', prompt)
   return raw.replace(/^["「『]/, '').replace(/["」』]$/, '').trim()
-}
-
-export const MODELS = {
-  refine: MODEL_REFINE,
-  translate: MODEL_TRANSLATE,
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Portkey from 'portkey-ai'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
+import { aiGenerate } from '@/lib/aiRouting'
 
 // POST /api/newsletter/ai-compose
 //
@@ -51,17 +51,8 @@ const UI_LABELS: Record<Lang, { upcoming: string; detailed: string; links: strin
   'ja': { upcoming: 'ハイライト', detailed: 'イベント', links: '関連リンク' },
 }
 
-async function generateWithGemini(prompt: string): Promise<string> {
-  const portkey = new Portkey({
-    apiKey: process.env.PORTKEY_API_KEY!,
-    config: process.env.PORTKEY_CONFIG_ID!,
-  })
-  const result = await portkey.chat.completions.create({
-    model: 'gemini-2.5-flash',
-    messages: [{ role: 'user', content: prompt }],
-  })
-  const raw = result.choices?.[0]?.message?.content
-  return (typeof raw === 'string' ? raw : '').trim()
+async function generateWithGemini(prompt: string, orgId: string): Promise<string> {
+  return aiGenerate(orgId, 'newsletter_compose', prompt)
 }
 
 function escapeHtml(s: string): string {
@@ -154,11 +145,11 @@ ${linksHtml}
 </div>`
 }
 
-async function translateTitle(title_zh: string, lang: Lang): Promise<string> {
+async function translateTitle(title_zh: string, lang: Lang, orgId: string): Promise<string> {
   if (lang === 'zh-TW') return title_zh
   const target = lang === 'en' ? 'natural English' : 'natural Japanese'
   const prompt = `Translate this newsletter section title from Traditional Chinese to ${target}. Output only the translated title, no quotes or extra text.\n\nTitle: ${title_zh}`
-  const out = await generateWithGemini(prompt)
+  const out = await generateWithGemini(prompt, orgId)
   return stripCodeFences(out).replace(/^["「『]|["」』]$/g, '').trim() || title_zh
 }
 
@@ -167,6 +158,7 @@ async function generateLangCampaign(
   req: ComposeRequest,
   userId: string | null,
   db: OrgDb,
+  orgId: string,
 ): Promise<string> {
   const toneSamples = await loadToneSamples(lang, db)
   const skeleton = await loadSkeleton(lang, db)
@@ -177,7 +169,7 @@ async function generateLangCampaign(
   // Generate intro (if provided)
   let introHtml = ''
   if (req.intro_zh?.trim()) {
-    const out = await generateWithGemini(buildIntroPrompt(lang, req.period, req.intro_zh, toneSamples))
+    const out = await generateWithGemini(buildIntroPrompt(lang, req.period, req.intro_zh, toneSamples), orgId)
     introHtml = stripCodeFences(out)
   }
 
@@ -185,8 +177,8 @@ async function generateLangCampaign(
   const storyBlocks: string[] = []
   for (let i = 0; i < req.stories.length; i++) {
     const s = req.stories[i]
-    const titleForLang = await translateTitle(s.title_zh, lang)
-    const storyHtml = stripCodeFences(await generateWithGemini(buildStoryPrompt(lang, s, toneSamples)))
+    const titleForLang = await translateTitle(s.title_zh, lang, orgId)
+    const storyHtml = stripCodeFences(await generateWithGemini(buildStoryPrompt(lang, s, toneSamples), orgId))
     storyBlocks.push(renderStoryBlock(s, i, storyHtml, lang, titleForLang))
   }
 
@@ -271,7 +263,7 @@ export async function POST(req: NextRequest) {
 
   for (const lang of langs) {
     try {
-      const id = await generateLangCampaign(lang, body, userId, db)
+      const id = await generateLangCampaign(lang, body, userId, db, ctx.orgId)
       results.push({ lang, id })
     } catch (e) {
       results.push({ lang, id: '', error: e instanceof Error ? e.message : String(e) })

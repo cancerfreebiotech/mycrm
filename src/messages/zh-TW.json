@@ -658,7 +658,33 @@
     "endpointPlaceholder": "例：Google Gemini",
     "newApiKey": "新 API Key",
     "modelIdPlaceholder": "例：gemini-2.5-flash",
-    "modelNamePlaceholder": "例：Gemini 2.5 Flash"
+    "modelNamePlaceholder": "例：Gemini 2.5 Flash",
+    "colKind": "型態",
+    "kindOpenai": "OpenAI 相容",
+    "kindGoogle": "Google (Gemini)",
+    "apiKeyOptional": "sk-...（選填）",
+    "apiKeyOptionalHint": "地端／無金鑰端點可留空",
+    "colTest": "測試",
+    "testBtn": "測試",
+    "testing": "測試中...",
+    "testOk": "測試成功",
+    "testFailed": "測試失敗",
+    "lastTested": "上次測試",
+    "neverTested": "尚未測試",
+    "saveFailed": "儲存失敗，請稍後再試",
+    "featureAssignTitle": "功能指派",
+    "systemDefault": "系統預設",
+    "selfHostedHint": "地端端點的 URL 必須是 Vercel 可連到的對外位址（例如 Cloudflare Tunnel／Tailscale Funnel）；測試按鈕即由伺服器端發出驗證整條通道。",
+    "features": {
+      "assistant": { "name": "AI 助理", "desc": "Web /ai-chat 與 Telegram /ai 共用（僅限 Google 端點）" },
+      "briefing": { "name": "Social Briefing", "desc": "會議前背景搜尋（僅限 Google 端點）" },
+      "note_format": { "name": "互動紀錄格式化", "desc": "AI 整理互動紀錄" },
+      "feedback_triage": { "name": "每日回饋研判", "desc": "每日回饋 AI 研判（排程）" },
+      "ai_review": { "name": "AI 審查", "desc": "重複建議、合併審查、筆記配對共用" },
+      "newsletter_refine": { "name": "電子報潤稿", "desc": "電子報潤稿／草擬" },
+      "newsletter_translate": { "name": "電子報翻譯", "desc": "電子報內容翻譯" },
+      "card_ocr_default": { "name": "名片辨識預設", "desc": "名片辨識／指令解析／郵件生成的組織預設（個人未選模型時的 fallback）" }
+    }
   },
   "settings": {
     "title": "個人設定",
@@ -702,7 +728,8 @@
     "remove": "移除",
     "resetToDefault": "還原為組織預設",
     "emailPromptPlaceholder": "留空則使用組織/系統預設",
-    "systemDefaultInEffect": "目前生效的系統預設："
+    "systemDefaultInEffect": "目前生效的系統預設：",
+    "aiModelHint": "此設定會影響名片辨識、Bot 指令解析與 AI 郵件生成所使用的模型。未選擇時使用管理員設定的組織預設。"
   },
   "tasks": {
     "title": "任務",

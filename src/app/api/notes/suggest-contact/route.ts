@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Portkey from 'portkey-ai'
 import { createClient } from '@/lib/supabase'
 import { executeTool } from '@/lib/agent-tools'
 import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
+import { aiGenerate } from '@/lib/aiRouting'
 
 export const maxDuration = 60
-
-// Routed through the Portkey config (loadbalance + fallback), same as newsletter-ai / gemini.ts.
-const AI_MODEL = process.env.AI_REVIEW_MODEL ?? 'gemini-3.1-flash-lite'
 
 interface Candidate {
   id: string
@@ -28,25 +25,6 @@ interface Suggestion {
 
 function stripJsonFence(t: string): string {
   return t.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '')
-}
-
-async function generate(prompt: string): Promise<string> {
-  const portkey = new Portkey({
-    apiKey: process.env.PORTKEY_API_KEY!,
-    config: process.env.PORTKEY_CONFIG_ID!,
-    timeout: 60_000,
-  })
-  const r = await portkey.chat.completions.create({
-    model: AI_MODEL,
-    messages: [{ role: 'user', content: prompt }],
-  })
-  const raw = r.choices?.[0]?.message?.content
-  const text = typeof raw === 'string'
-    ? raw
-    : Array.isArray(raw)
-      ? raw.map((p) => ('text' in p ? p.text : '')).join('')
-      : ''
-  return text.trim()
 }
 
 function cleanTerm(v: unknown): string {
@@ -84,10 +62,13 @@ export async function POST(req: NextRequest) {
   let person = ''
   let company = ''
   try {
-    const raw = await generate(
+    const raw = await aiGenerate(
+      ctx.orgId,
+      'ai_review',
       `從以下 CRM 筆記中抽取可用來搜尋聯絡人的關鍵字。\n` +
       `筆記：${content}\n\n` +
-      `只回傳 JSON（無 markdown）：{"person":"主要人名或 null","company":"公司名或 null"}`
+      `只回傳 JSON（無 markdown）：{"person":"主要人名或 null","company":"公司名或 null"}`,
+      { timeoutMs: 60_000 }
     )
     const parsed = JSON.parse(stripJsonFence(raw)) as { person?: unknown; company?: unknown }
     person = cleanTerm(parsed.person)
@@ -111,11 +92,14 @@ export async function POST(req: NextRequest) {
   // 3. Score each candidate against the note; keep top 3.
   let scored: Array<{ contactId: string; confidence: number }>
   try {
-    const raw = await generate(
+    const raw = await aiGenerate(
+      ctx.orgId,
+      'ai_review',
       `筆記內容：${content}\n\n` +
       `候選聯絡人（JSON 陣列）：\n${JSON.stringify(candidates.map((c) => ({ id: c.id, name: displayName(c), company: c.company, job_title: c.job_title, email: c.email })))}\n\n` +
       `針對每個候選，評估其與筆記提到之人物/公司的吻合程度，回傳最多 3 個最可能的（由高到低排序），附 0 到 1 的信心值。\n` +
-      `只回傳 JSON（無 markdown）：{"suggestions":[{"contactId":"<id>","confidence":0.0}]}`
+      `只回傳 JSON（無 markdown）：{"suggestions":[{"contactId":"<id>","confidence":0.0}]}`,
+      { timeoutMs: 60_000 }
     )
     const parsed = JSON.parse(stripJsonFence(raw)) as { suggestions?: Array<{ contactId?: string; confidence?: number }> }
     scored = (parsed.suggestions ?? [])

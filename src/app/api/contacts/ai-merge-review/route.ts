@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Portkey from 'portkey-ai'
 import { createClient } from '@/lib/supabase'
 import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
+import { aiGenerate } from '@/lib/aiRouting'
 
 export const maxDuration = 60
-
-// Routed through the Portkey config (loadbalance + fallback), same as newsletter-ai / gemini.ts.
-const AI_MODEL = process.env.AI_REVIEW_MODEL ?? 'gemini-3.1-flash-lite'
 
 const CONTACT_FIELDS =
   'id, name, name_en, name_local, company, company_en, company_local, job_title, department, ' +
@@ -22,25 +19,6 @@ interface Verdict {
 
 function stripJsonFence(t: string): string {
   return t.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '')
-}
-
-async function generate(prompt: string): Promise<string> {
-  const portkey = new Portkey({
-    apiKey: process.env.PORTKEY_API_KEY!,
-    config: process.env.PORTKEY_CONFIG_ID!,
-    timeout: 60_000,
-  })
-  const r = await portkey.chat.completions.create({
-    model: AI_MODEL,
-    messages: [{ role: 'user', content: prompt }],
-  })
-  const raw = r.choices?.[0]?.message?.content
-  const text = typeof raw === 'string'
-    ? raw
-    : Array.isArray(raw)
-      ? raw.map((p) => ('text' in p ? p.text : '')).join('')
-      : ''
-  return text.trim()
 }
 
 export async function POST(req: NextRequest) {
@@ -101,7 +79,7 @@ ${JSON.stringify(b, null, 2)}
 
   let parsed: Verdict
   try {
-    const raw = await generate(prompt)
+    const raw = await aiGenerate(ctx.orgId, 'ai_review', prompt, { timeoutMs: 60_000 })
     parsed = JSON.parse(stripJsonFence(raw)) as Verdict
   } catch (e) {
     return NextResponse.json({ error: `AI 判斷失敗：${e instanceof Error ? e.message : String(e)}` }, { status: 502 })

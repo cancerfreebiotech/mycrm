@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { aiGenerate } from '@/lib/aiRouting'
 import { recordCronRun } from '@/lib/cronHeartbeat'
 import { getOrgSetting } from '@/lib/orgSettings'
 
@@ -35,17 +35,12 @@ interface FeedbackRow {
 
 // Best-effort AI triage; never throws (returns '' on any failure).
 async function triage(rows: FeedbackRow[]): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) return ''
   try {
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
     const list = rows.map((r, i) =>
       `${i + 1}. [${r.type ?? '?'}] ${r.title ?? '(無標題)'} — ${r.description ?? ''}（回報者：${r.reporter ?? '?'}）`
     ).join('\n')
     const prompt = `你是 myCRM 的工程助理。以下是過去 24 小時的新使用者回報。請用繁體中文，為每一筆做簡短分類與判斷（嚴重度 高/中/低、是否該修、建議怎麼修），條列、精簡。\n\n${list}`
-    const result = await model.generateContent(prompt)
-    return result.response.text().trim()
+    return await aiGenerate(systemOrgContext().orgId, 'feedback_triage', prompt)
   } catch {
     return ''
   }

@@ -1,10 +1,10 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { resolveTouchpoint } from '@/lib/aiRouting'
+import { systemOrgContext } from '@/lib/orgContext'
 
 // Social Briefing：用 Gemini + Google Search grounding 整理「這個人 + 他公司的最新動態」。
 // 只用公開、可標來源的資訊（grounding）；不爬社群平台。
 // 注意：此呼叫需 GEMINI_API_KEY（僅在 Vercel 環境，本機無法測），驗證需走部署。
-
-const GROUNDING_MODEL = 'gemini-2.5-flash'
 
 export interface BriefingContactInput {
   name: string | null
@@ -71,12 +71,15 @@ function extractSources(candidate: unknown): BriefingSource[] {
 }
 
 export async function generateContactBriefing(contact: BriefingContactInput): Promise<BriefingResult> {
-  const apiKey = process.env.GEMINI_API_KEY
+  // briefing 由 cron worker 執行，無 user session。briefing 是 googleOnly feature，
+  // resolveTouchpoint 保證回 google/default。
+  const resolved = await resolveTouchpoint(systemOrgContext().orgId, 'briefing')
+  const apiKey = resolved.apiKey ?? process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error('GEMINI_API_KEY not set')
 
   const genAI = new GoogleGenerativeAI(apiKey)
   const model = genAI.getGenerativeModel({
-    model: GROUNDING_MODEL,
+    model: resolved.modelId,
     // Google Search grounding（Gemini 2.0+）。SDK 0.24 型別未含 googleSearch，故 cast。
     tools: [{ googleSearch: {} }] as unknown as Parameters<typeof genAI.getGenerativeModel>[0]['tools'],
   })
@@ -86,5 +89,5 @@ export async function generateContactBriefing(contact: BriefingContactInput): Pr
   const markdown = response.text().trim()
   const sources = extractSources(response.candidates?.[0])
 
-  return { markdown, sources, modelUsed: GROUNDING_MODEL }
+  return { markdown, sources, modelUsed: resolved.modelId }
 }

@@ -14,6 +14,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { TOOLS, TOOL_BY_NAME, executeTool } from '@/lib/agent-tools'
 import { getOrgSetting } from '@/lib/orgSettings'
 import { systemOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
+import { resolveTouchpoint } from '@/lib/aiRouting'
 
 // v8.0 Phase 3 (Task 185): app base URL for links in bot messages.
 // Env still wins (backward-compat); otherwise the org's configured app_url,
@@ -240,7 +241,6 @@ async function handleAI(chatId: number, aiModelId: string | null, m: BotMessages
 // 為了加上 chatbot 專屬的 request_social_briefing 工具，改在此本地跑同一套 loop
 // （鏡射 src/app/api/ai-chat/route.ts：共用 TOOLS/executeTool + 本地 briefing 工具）。
 
-const BOT_AGENT_MODEL = 'gemini-2.5-flash'
 const BOT_AGENT_MAX_TURNS = 6
 
 // 與 src/app/api/ai-chat/route.ts 的 REQUEST_BRIEFING_TOOL 對齊
@@ -312,7 +312,8 @@ async function handleAiAgent(
   }
   await sendMessage(chatId, m.aiThinking)
   try {
-    const apiKey = process.env.GEMINI_API_KEY
+    const resolved = await resolveTouchpoint(systemOrgContext().orgId, 'assistant')
+    const apiKey = resolved.apiKey ?? process.env.GEMINI_API_KEY
     if (!apiKey) throw new Error(m.aiNotConfigured)
 
     const today = new Date().toISOString().slice(0, 10)
@@ -330,7 +331,7 @@ async function handleAiAgent(
     ]
     const genAI = new GoogleGenerativeAI(apiKey)
     const model = genAI.getGenerativeModel({
-      model: BOT_AGENT_MODEL,
+      model: resolved.modelId,
       systemInstruction,
       tools: [{ functionDeclarations: declarations }] as unknown as Parameters<typeof genAI.getGenerativeModel>[0]['tools'],
     })
