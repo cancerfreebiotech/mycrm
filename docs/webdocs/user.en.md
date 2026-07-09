@@ -340,7 +340,7 @@ Give instructions in natural language and the assistant picks the actions: look 
 Location: the "Pre-meeting briefing" block on a contact detail page. AI uses Google search to compile the latest public news on the person and their company for reference before a visit or meeting.
 
 - **Content**: three sections — the person's recent activity, the company's recent activity, and suggested openers/topics (marked "no public data" where none is found) — with clickable **source** links below.
-- **How to generate**: click "Generate briefing"; the system processes **asynchronously** in the background (usually within a minute; you can leave the page), then shows the result in the same block and the button becomes "Regenerate". This summary is **not written to the interaction log**.
+- **How to generate**: click "Generate briefing"; the system processes **asynchronously** in the background (usually within a minute; you can leave the page), then shows the result in the same block and the button becomes "Regenerate". **Results are kept** (since v8.1.3): the next time you open this contact, the latest briefing shows automatically with its generation time — no need to regenerate. This summary is **not written to the interaction log**.
 - **Quality**: depends on data completeness — fill in company, title, company website and LinkedIn first. It only compiles public, verifiable information; verify anything important through the source links.
 
 ## Reports (needs super_admin)

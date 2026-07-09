@@ -888,7 +888,8 @@
     "intro": "Summarize the latest public news about this contact and their company before your meeting.",
     "generating": "Working… searching for the latest updates",
     "sources": "Sources",
-    "failed": "Generation failed"
+    "failed": "Generation failed",
+    "generatedAt": "Generated {date}"
   },
   "assistant": {
     "title": "AI Assistant",

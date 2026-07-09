@@ -888,7 +888,8 @@
     "intro": "会議前に、この連絡先と会社の最新の公開動向をまとめます。",
     "generating": "作成中…最新情報を検索しています",
     "sources": "情報源",
-    "failed": "生成に失敗しました"
+    "failed": "生成に失敗しました",
+    "generatedAt": "生成日時：{date}"
   },
   "assistant": {
     "title": "AI アシスタント",

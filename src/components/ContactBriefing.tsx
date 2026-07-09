@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useTranslations } from 'next-intl'
+import { useTranslations, useLocale } from 'next-intl'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { Sparkles, ExternalLink, Loader2, RefreshCw } from 'lucide-react'
@@ -22,7 +22,9 @@ interface Briefing {
 export default function ContactBriefing({ contactId }: { contactId: string }) {
   const t = useTranslations('briefing')
   const tc = useTranslations('common')
+  const locale = useLocale()
   const [briefing, setBriefing] = useState<Briefing | null>(null)
+  const [hydrating, setHydrating] = useState(true)
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -53,6 +55,26 @@ export default function ContactBriefing({ contactId }: { contactId: string }) {
       }
     }, 3000)
   }, [tc])
+
+  // 掛載時載回該聯絡人最新一份已存 briefing（生成中則接續輪詢）；失敗當作沒有歷史。
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/social-briefing/latest?contactId=${contactId}`)
+        if (res.ok) {
+          const data = await res.json().catch(() => null)
+          if (!cancelled && data?.briefing) {
+            setBriefing(data.briefing as Briefing)
+            const s = (data.briefing as Briefing).status
+            if (s === 'pending' || s === 'processing') poll((data.briefing as Briefing).id)
+          }
+        }
+      } catch { /* 載入失敗 → 維持空狀態，可手動產生 */ }
+      if (!cancelled) setHydrating(false)
+    })()
+    return () => { cancelled = true }
+  }, [contactId, poll])
 
   async function generate() {
     setStarting(true)
@@ -101,7 +123,11 @@ export default function ContactBriefing({ contactId }: { contactId: string }) {
         </button>
       </div>
 
-      {!briefing && !error && <p className="text-sm text-gray-500 dark:text-gray-400">{t('intro')}</p>}
+      {!briefing && !error && (
+        hydrating
+          ? <p className="text-sm text-gray-400 dark:text-gray-500 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> {tc('loading')}</p>
+          : <p className="text-sm text-gray-500 dark:text-gray-400">{t('intro')}</p>
+      )}
 
       {error && (
         <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
@@ -119,6 +145,10 @@ export default function ContactBriefing({ contactId }: { contactId: string }) {
 
       {briefing?.status === 'done' && (
         <div>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
+            {t('generatedAt', { date: new Date(briefing.created_at).toLocaleString(locale) })}
+            {briefing.model_used ? `（${briefing.model_used}）` : ''}
+          </p>
           <div
             className="prose prose-sm dark:prose-invert max-w-none text-gray-800 dark:text-gray-200"
             dangerouslySetInnerHTML={{ __html: html }}

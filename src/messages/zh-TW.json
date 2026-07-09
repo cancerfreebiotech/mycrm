@@ -888,7 +888,8 @@
     "intro": "整理這位聯絡人與其公司的最新公開動態（會議前必備）。",
     "generating": "整理中…正在搜尋最新動態",
     "sources": "資料來源",
-    "failed": "產生失敗"
+    "failed": "產生失敗",
+    "generatedAt": "產生於 {date}"
   },
   "assistant": {
     "title": "AI 助理",
