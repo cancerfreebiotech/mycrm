@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v8.1.4 — Serverless function 遷至東京區（2026-07-09）
+
+### 變更項目
+- `vercel.json` 加 `"regions": ["hnd1"]`：function 從預設美東（iad1）改跑東京（hnd1），與 Supabase 資料庫（ap-northeast-1）同區，消除每次請求的跨太平洋資料庫來回延遲。
+
 ## v8.1.3 — 會議前 Briefing 保留顯示（2026-07-09）
 
 ### 變更項目
