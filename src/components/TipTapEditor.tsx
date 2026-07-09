@@ -11,6 +11,7 @@ import HorizontalRule from '@tiptap/extension-horizontal-rule'
 import { useState, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
 import DOMPurify from 'dompurify'
+import { isImeComposing } from '@/lib/imeGuard'
 import {
   Bold, Italic, UnderlineIcon, Link2, Image as ImageIcon,
   List, ListOrdered, Minus, AlignLeft, AlignCenter, AlignRight,
@@ -273,7 +274,7 @@ export default function TipTapEditor({
             type="url"
             value={linkUrl}
             onChange={e => setLinkUrl(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && setLink()}
+            onKeyDown={e => e.key === 'Enter' && !isImeComposing(e) && setLink()}
             placeholder="https://..."
             className="flex-1 text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 outline-none"
             autoFocus

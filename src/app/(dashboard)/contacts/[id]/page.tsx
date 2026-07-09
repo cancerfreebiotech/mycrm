@@ -7,6 +7,7 @@ import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { signCardUrl, signCardUrls } from '@/lib/cardImageUrl'
 import { withOrgPrefix } from '@/lib/orgUploadPrefix'
 import { sendMail } from '@/lib/graph'
+import { isImeComposing } from '@/lib/imeGuard'
 import { ArrowLeft, ImageIcon, Mail, X, Pencil, Loader2, Plus, Upload, Trash2, Copy, Check, Sparkles, Paperclip, ZoomIn, ZoomOut, Maximize2, ChevronDown, Merge, Search, RotateCw } from 'lucide-react'
 import Image from 'next/image'
 import TipTapEditor from '@/components/TipTapEditor'
@@ -170,6 +171,7 @@ function RecipientChipInput({
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if ((e.key === 'Enter' || e.key === ',') && input.trim()) {
+      if (e.key === 'Enter' && isImeComposing(e)) { e.preventDefault(); return }
       e.preventDefault()
       const email = input.trim().replace(/,+$/, '')
       if (email.includes('@')) add(email, email, null)
@@ -1739,7 +1741,7 @@ export default function ContactDetailPage() {
                         value={editingNoteText}
                         onChange={(e) => setEditingNoteText(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') savePhotoNote(photo.id, editingNoteText)
+                          if (e.key === 'Enter' && !isImeComposing(e)) savePhotoNote(photo.id, editingNoteText)
                           if (e.key === 'Escape') setEditingNoteId(null)
                         }}
                         className="text-xs px-1.5 py-0.5 border border-blue-400 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 w-full"
@@ -1811,7 +1813,7 @@ export default function ContactDetailPage() {
             type="text"
             value={taskTitle}
             onChange={(e) => setTaskTitle(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleAddTask() }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !isImeComposing(e)) handleAddTask() }}
             placeholder={ttk('titleLabel')}
             className="flex-1 text-base sm:text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
@@ -1955,7 +1957,7 @@ export default function ContactDetailPage() {
             )}
           </div>
           <div className="flex gap-2">
-            <input type="text" value={logContent} onChange={(e) => setLogContent(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddLog()}
+            <input type="text" value={logContent} onChange={(e) => setLogContent(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !isImeComposing(e) && handleAddLog()}
               placeholder={t('logPlaceholder')} className="flex-1 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             <button onClick={handleAddLog} disabled={addingLog || !logContent.trim()}
               className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40">{tc('add')}</button>
@@ -2437,7 +2439,7 @@ export default function ContactDetailPage() {
                     type="text"
                     value={mailAiDesc}
                     onChange={(e) => setMailAiDesc(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAiGenerateMail()}
+                    onKeyDown={(e) => e.key === 'Enter' && !isImeComposing(e) && handleAiGenerateMail()}
                     placeholder={tm('aiPromptPlaceholder')}
                     className="flex-1 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { PermissionGate } from '@/components/PermissionGate'
+import { isImeComposing } from '@/lib/imeGuard'
 import { Loader2, Send, Rss, Mail, Plus, Copy, Wand2, Package, Pencil, Trash2, BarChart3, ListPlus } from 'lucide-react'
 
 type EngagementSegment = 'openers' | 'clickers' | 'non_openers'
@@ -212,7 +213,10 @@ export default function CampaignsIndexPage() {
                           onChange={(e) => setEditingTitle(e.target.value)}
                           onBlur={() => saveTitle(r.id)}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter') { e.preventDefault(); saveTitle(r.id) }
+                            if (e.key === 'Enter') {
+                              if (isImeComposing(e)) { e.preventDefault(); return }
+                              e.preventDefault(); saveTitle(r.id)
+                            }
                             if (e.key === 'Escape') setEditingId(null)
                           }}
                           className="w-full text-sm px-2 py-1 border border-blue-400 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"

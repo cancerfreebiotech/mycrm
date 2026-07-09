@@ -6,6 +6,7 @@ import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { fetchOrgId } from '@/lib/orgUploadPrefix'
 import { Plus, Pencil, Trash2, Check, X, ShieldOff, Shield } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
+import { isImeComposing } from '@/lib/imeGuard'
 
 interface Tag {
   id: string
@@ -119,7 +120,7 @@ export default function TagsPage() {
             type="text"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+            onKeyDown={(e) => e.key === 'Enter' && !isImeComposing(e) && handleAdd()}
             placeholder={t('namePlaceholder')}
             className="flex-1 text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
@@ -158,7 +159,7 @@ export default function TagsPage() {
                         autoFocus
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') handleEdit(tag.id); if (e.key === 'Escape') setEditingId(null) }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !isImeComposing(e)) handleEdit(tag.id); if (e.key === 'Escape') setEditingId(null) }}
                         className="text-sm px-2 py-1 border border-blue-400 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 w-40"
                       />
                     ) : (

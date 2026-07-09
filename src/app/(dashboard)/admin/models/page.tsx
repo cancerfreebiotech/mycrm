@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations, useLocale } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { isImeComposing } from '@/lib/imeGuard'
 import { Plus, Trash2, Loader2, X, ToggleLeft, ToggleRight, Eye, EyeOff, ChevronRight, FlaskConical, Pencil } from 'lucide-react'
 import type { AiFeature } from '@/lib/aiRouting'
 
@@ -527,7 +528,7 @@ export default function AdminModelsPage() {
                       {editingNameId === ep.id ? (
                         <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                           <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') saveEndpointName(ep.id) }}
+                            onKeyDown={(e) => { if (e.key === 'Enter' && !isImeComposing(e)) saveEndpointName(ep.id) }}
                             placeholder={t('colName')} autoFocus
                             className="text-xs px-2 py-1 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 w-32 focus:outline-none focus:ring-1 focus:ring-blue-500" />
                           <button onClick={() => saveEndpointName(ep.id)} className="text-xs text-blue-600 hover:underline">{tc('save')}</button>

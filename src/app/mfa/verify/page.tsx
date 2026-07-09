@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { isImeComposing } from '@/lib/imeGuard'
 import { ShieldCheck } from 'lucide-react'
 
 export default function MfaVerifyPage() {
@@ -78,7 +79,7 @@ export default function MfaVerifyPage() {
               maxLength={6}
               value={code}
               onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
-              onKeyDown={e => e.key === 'Enter' && handleVerify()}
+              onKeyDown={e => e.key === 'Enter' && !isImeComposing(e) && handleVerify()}
               placeholder={t('codePlaceholder')}
               autoFocus
               className="w-full px-4 py-2.5 text-center text-2xl tracking-[0.5em] font-mono border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-300 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"

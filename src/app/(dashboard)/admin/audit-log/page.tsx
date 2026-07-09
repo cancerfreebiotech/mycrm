@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { isImeComposing } from '@/lib/imeGuard'
 import { ClipboardList, Loader2, RefreshCw, ChevronLeft, ChevronRight, Download, X } from 'lucide-react'
 
 interface AdminAction {
@@ -154,7 +155,7 @@ export default function AuditLogPage() {
           type="text"
           value={actorInput}
           onChange={(e) => setActorInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') applyActor() }}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !isImeComposing(e)) applyActor() }}
           onBlur={applyActor}
           placeholder={t('filterActorPlaceholder')}
           className={`${inputClass} sm:w-56`}

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { PermissionGate } from '@/components/PermissionGate'
+import { isImeComposing } from '@/lib/imeGuard'
 import { Loader2, Users, ArrowLeft, Trash2, Pencil, Check, X, Download, Upload } from 'lucide-react'
 
 interface ImportStats {
@@ -245,7 +246,7 @@ export default function ListsIndexPage() {
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter') saveEdit(r.id)
+                            if (e.key === 'Enter' && !isImeComposing(e)) saveEdit(r.id)
                             if (e.key === 'Escape') cancelEdit()
                           }}
                           className="text-sm px-2 py-1 border border-blue-400 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full max-w-[260px]"
@@ -264,7 +265,7 @@ export default function ListsIndexPage() {
                           value={editDesc}
                           onChange={(e) => setEditDesc(e.target.value)}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter') saveEdit(r.id)
+                            if (e.key === 'Enter' && !isImeComposing(e)) saveEdit(r.id)
                             if (e.key === 'Escape') cancelEdit()
                           }}
                           placeholder={t('descriptionPlaceholder')}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
+import { isImeComposing } from '@/lib/imeGuard'
 import { Plus, Pencil, Trash2, Check, X, Loader2, ChevronsUpDown, ChevronUp, ChevronDown } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
 import { useTranslations } from 'next-intl'
@@ -366,7 +367,7 @@ export default function AdminCountriesPage() {
                   onChange={(e) => setForm((p) => ({ ...p, name_ja: e.target.value }))}
                   placeholder={t('nameJaPlaceholder')}
                   className={inputClass}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+                  onKeyDown={(e) => e.key === 'Enter' && !isImeComposing(e) && handleSave()}
                 />
               </div>
               {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}

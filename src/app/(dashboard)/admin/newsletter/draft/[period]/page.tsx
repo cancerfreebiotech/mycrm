@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { PermissionGate } from '@/components/PermissionGate'
+import { isImeComposing } from '@/lib/imeGuard'
 import { Loader2, Plus, Trash2, X, Calendar, ChevronLeft, ChevronRight, Pencil, Download, Wand2, Check, GripVertical } from 'lucide-react'
 import {
   DndContext, closestCorners, PointerSensor, TouchSensor, KeyboardSensor,
@@ -286,7 +287,10 @@ function Inner() {
                 value={periodInput}
                 onChange={(e) => setPeriodInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') { e.preventDefault(); commitPeriod() }
+                  if (e.key === 'Enter') {
+                    if (isImeComposing(e)) { e.preventDefault(); return }
+                    e.preventDefault(); commitPeriod()
+                  }
                   if (e.key === 'Escape') { setEditingPeriod(false); setPeriodInput(period) }
                 }}
                 placeholder="YYYY-MM"
@@ -523,7 +527,10 @@ function Column({ section, label, defaultLabel, labelValue, onRename, drafts, on
               value={draftInput}
               onChange={(e) => setDraftInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') { e.preventDefault(); commit() }
+                if (e.key === 'Enter') {
+                  if (isImeComposing(e)) { e.preventDefault(); return }
+                  e.preventDefault(); commit()
+                }
                 if (e.key === 'Escape') { setEditing(false); setDraftInput(labelValue) }
               }}
               placeholder={defaultLabel}

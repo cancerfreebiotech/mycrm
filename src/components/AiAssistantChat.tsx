@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { Send, Loader2, Sparkles } from 'lucide-react'
+import { isImeComposing } from '@/lib/imeGuard'
 
 interface ChatMessage { role: 'user' | 'model'; content: string; isError?: boolean }
 
@@ -53,7 +54,11 @@ export default function AiAssistantChat({ className = '' }: { className?: string
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      if (isImeComposing(e)) { e.preventDefault(); return }
+      e.preventDefault()
+      send()
+    }
   }
 
   return (
