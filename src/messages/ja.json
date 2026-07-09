@@ -900,7 +900,9 @@
     "empty": "（返信なし）",
     "inputPlaceholder": "連絡先について何でも聞いてください…",
     "placeholderTitle": "AI アシスタント",
-    "placeholderHint": "例：「台大の連絡先を検索」「来週ワンさんと会うので近況を教えて」「この人を重要にマーク」"
+    "placeholderHint": "例：「台大の連絡先を検索」「来週ワンさんと会うので近況を教えて」「この人を重要にマーク」",
+    "clearChat": "会話をクリア",
+    "confirmClear": "会話全体をクリアしますか？"
   },
   "linkedin": {
     "import": "LinkedInからインポート",

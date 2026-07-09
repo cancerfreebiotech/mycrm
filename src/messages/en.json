@@ -900,7 +900,9 @@
     "empty": "(no reply)",
     "inputPlaceholder": "Ask me anything about your contacts…",
     "placeholderTitle": "AI Assistant",
-    "placeholderHint": "e.g. \"Search contacts at NTU\", \"I'm meeting Mr. Wang next week — brief me\", \"Mark this person as important\""
+    "placeholderHint": "e.g. \"Search contacts at NTU\", \"I'm meeting Mr. Wang next week — brief me\", \"Mark this person as important\"",
+    "clearChat": "Clear chat",
+    "confirmClear": "Clear the entire conversation?"
   },
   "linkedin": {
     "import": "Import from LinkedIn",

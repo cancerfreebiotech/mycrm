@@ -333,7 +333,7 @@ Give instructions in natural language and the assistant picks the actions: look 
 - **Fully audited**: every query and change records the operator, time and action, always run as **you**.
 - **Safe fields only**: primary email, unsubscribe status, card images and system fields cannot be changed; it **cannot delete** contacts, lists or subscribers.
 - **It explains what it did**, and there's no auto-undo — review before continuing.
-- **Limits**: conversations aren't saved; up to 6 consecutive tool steps per request; ~60 seconds per reply; contact search returns up to 100 at once, list subscribers up to 500; up to 50 field changes at once. For tasks, reports, newsletter writing, etc., use their own pages.
+- **Limits**: web conversations keep the latest 40 messages automatically (since v8.1.2 — they survive refreshes and device switches; press "Clear chat" to start over. Telegram starts fresh each time); up to 6 consecutive tool steps per request; ~60 seconds per reply; contact search returns up to 100 at once, list subscribers up to 500; up to 50 field changes at once. For tasks, reports, newsletter writing, etc., use their own pages.
 
 ## Pre-meeting briefing
 

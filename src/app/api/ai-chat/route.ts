@@ -10,8 +10,23 @@ import { runOpenAiToolLoop } from '@/lib/openaiAgent'
 export const maxDuration = 60
 
 const MAX_TOOL_ROUNDS = 6
+const MAX_HISTORY = 40
 
 interface ChatMessage { role: 'user' | 'model'; content: string }
+
+// 對話持久化：把成功交換寫入 ai_chat_sessions（RLS 無 policy，僅 service role 可存取）。
+// 裁切保留最後 MAX_HISTORY 則。失敗只記 log，絕不影響回覆。
+async function persistChat(db: OrgDb, orgId: string, userId: string, messages: ChatMessage[], reply: string): Promise<void> {
+  try {
+    const full = [...messages, { role: 'model' as const, content: reply }].slice(-MAX_HISTORY)
+    await db.from('ai_chat_sessions').upsert(
+      { org_id: orgId, user_id: userId, messages: full, updated_at: new Date().toISOString() },
+      { onConflict: 'org_id,user_id' },
+    )
+  } catch (e) {
+    console.error('[ai-chat] persist failed', e instanceof Error ? e.message : String(e))
+  }
+}
 
 // chatbot 額外工具：排程 social briefing（不在 MCP scope 系統內，僅 chatbot 用）
 const REQUEST_BRIEFING_TOOL = {
@@ -119,6 +134,7 @@ export async function POST(req: NextRequest) {
         execute: (name, args) => executeChatTool(db, name, args, acting.id, user.id),
         audit: (n, a, ok, e) => auditChat(db, n, a, ok, e, acting.id),
       })
+      await persistChat(db, ctx.orgId, acting.id, messages, reply)
       return NextResponse.json({ reply, tools_used: toolsUsed })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -173,10 +189,9 @@ export async function POST(req: NextRequest) {
     // 直接 .text() 會丟錯或回空字串 → 回一個明確訊息而非讓使用者看到空白。
     const pending = result.response.functionCalls()
     if (pending && pending.length > 0) {
-      return NextResponse.json({
-        reply: '這個請求需要的操作步驟太多，已達上限。請把需求拆小一點或更明確一些再試一次。',
-        tools_used: toolsUsed,
-      })
+      const reply = '這個請求需要的操作步驟太多，已達上限。請把需求拆小一點或更明確一些再試一次。'
+      await persistChat(db, ctx.orgId, acting.id, messages, reply)
+      return NextResponse.json({ reply, tools_used: toolsUsed })
     }
 
     let reply: string
@@ -185,10 +200,41 @@ export async function POST(req: NextRequest) {
     } catch {
       reply = '抱歉，這次沒有產生有效回覆，請再試一次。'
     }
+    await persistChat(db, ctx.orgId, acting.id, messages, reply)
     return NextResponse.json({ reply, tools_used: toolsUsed })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.error('[ai-chat] error', msg)
     return NextResponse.json({ error: msg }, { status: 500 })
   }
+}
+
+// 讀回目前使用者的對話歷史（無列回空陣列）。
+export async function GET() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const acting = await resolveActingUser(user.email)
+  if (!acting) return NextResponse.json({ error: 'No mycrm profile for this user' }, { status: 403 })
+
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+  const { data } = await db.from('ai_chat_sessions').select('messages').eq('user_id', acting.id).maybeSingle()
+  return NextResponse.json({ messages: Array.isArray(data?.messages) ? data.messages : [] })
+}
+
+// 清除目前使用者的對話歷史。
+export async function DELETE() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const acting = await resolveActingUser(user.email)
+  if (!acting) return NextResponse.json({ error: 'No mycrm profile for this user' }, { status: 403 })
+
+  const ctx = await getOrgContext()
+  const db = orgScopedClient(ctx)
+  await db.from('ai_chat_sessions').delete().eq('user_id', acting.id)
+  return NextResponse.json({ ok: true })
 }

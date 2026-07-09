@@ -900,7 +900,9 @@
     "empty": "（沒有回覆）",
     "inputPlaceholder": "問我任何關於聯絡人的事…",
     "placeholderTitle": "AI 助理",
-    "placeholderHint": "例如：「搜尋台大的聯絡人」「我下週要跟王先生開會，幫我了解他的近況」「把這個人標記為重要」"
+    "placeholderHint": "例如：「搜尋台大的聯絡人」「我下週要跟王先生開會，幫我了解他的近況」「把這個人標記為重要」",
+    "clearChat": "清除對話",
+    "confirmClear": "確定要清除整段對話嗎？"
   },
   "linkedin": {
     "import": "LinkedIn 截圖匯入",

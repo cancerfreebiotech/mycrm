@@ -62,6 +62,8 @@ export const ORG_TABLE_NAMES = [
   'admin_actions',
   // AI 功能 → 模型指派（v8.0.0，per-org）
   'ai_feature_models',
+  // Web AI 助理對話持久化（per-org、per-user）
+  'ai_chat_sessions',
 ] as const
 
 export const ORG_TABLES: ReadonlySet<string> = new Set(ORG_TABLE_NAMES)
