@@ -10,14 +10,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { image, images, model } = await req.json()
+    const { image, images } = await req.json()
 
     let cardData
     if (images && Array.isArray(images) && images.length > 0) {
       const buffers = images.map((b: string) => Buffer.from(b, 'base64'))
-      cardData = await analyzeBusinessCard(buffers, model)
+      cardData = await analyzeBusinessCard(buffers)
     } else if (image) {
-      cardData = await analyzeBusinessCard(Buffer.from(image, 'base64'), model)
+      cardData = await analyzeBusinessCard(Buffer.from(image, 'base64'))
     } else {
       return NextResponse.json({ error: 'Missing image' }, { status: 400 })
     }

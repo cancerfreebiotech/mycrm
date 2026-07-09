@@ -676,15 +676,24 @@
     "featureAssignTitle": "功能指派",
     "systemDefault": "系統預設",
     "selfHostedHint": "地端端點的 URL 必須是 Vercel 可連到的對外位址（例如 Cloudflare Tunnel／Tailscale Funnel）；測試按鈕即由伺服器端發出驗證整條通道。",
+    "assignIntro": "未指派的功能走系統內建通道（環境變數金鑰），不在上方端點清單中；指派後才改用你設定的端點與模型。",
+    "googleSuggested": "建議使用 Google 端點（需要 function calling／Google 搜尋）",
+    "googleWarning": "⚠ 此功能需要 Google 專屬能力，指派到 OpenAI 相容端點可能無法運作或品質下降，請用測試鈕確認",
+    "viaGoogle": "Google 官方直連（環境金鑰）",
+    "viaPortkey": "Portkey 閘道（環境設定）",
+    "sourceAssigned": "已指派",
+    "sourceDefault": "系統預設",
+    "effectiveLine": "目前生效：{model} ＠ {via} — {source}",
+    "systemDefaultWith": "系統預設（{model}・{via}）",
     "features": {
-      "assistant": { "name": "AI 助理", "desc": "Web /ai-chat 與 Telegram /ai 共用（僅限 Google 端點）" },
-      "briefing": { "name": "Social Briefing", "desc": "會議前背景搜尋（僅限 Google 端點）" },
+      "assistant": { "name": "AI 助理", "desc": "Web /ai-chat 與 Telegram /ai 共用" },
+      "briefing": { "name": "Social Briefing", "desc": "會議前背景搜尋" },
       "note_format": { "name": "互動紀錄格式化", "desc": "AI 整理互動紀錄" },
       "feedback_triage": { "name": "每日回饋研判", "desc": "每日回饋 AI 研判（排程）" },
       "ai_review": { "name": "AI 審查", "desc": "重複建議、合併審查、筆記配對共用" },
       "newsletter_refine": { "name": "電子報潤稿", "desc": "電子報潤稿／草擬" },
       "newsletter_translate": { "name": "電子報翻譯", "desc": "電子報內容翻譯" },
-      "card_ocr_default": { "name": "名片辨識預設", "desc": "名片辨識／指令解析／郵件生成的組織預設（個人未選模型時的 fallback）" }
+      "card_ocr_default": { "name": "名片辨識預設", "desc": "名片辨識／Bot 指令解析／AI 郵件生成使用的模型" }
     }
   },
   "settings": {
@@ -704,11 +713,6 @@
     "teamsBound": "已綁定",
     "teamsUnbound": "未綁定",
     "teamsHint": "透過 Teams Bot 接收通知",
-    "selectEndpoint": "選擇 AI 服務商",
-    "selectModel": "選擇 AI 模型",
-    "endpointLabel": "服務商",
-    "modelLabel": "模型",
-    "aiModel": "AI 模型",
     "theme": "介面主題",
     "themeLight": "淺色",
     "themeDark": "深色",
@@ -729,8 +733,7 @@
     "remove": "移除",
     "resetToDefault": "還原為組織預設",
     "emailPromptPlaceholder": "留空則使用組織/系統預設",
-    "systemDefaultInEffect": "目前生效的系統預設：",
-    "aiModelHint": "此設定會影響名片辨識、Bot 指令解析與 AI 郵件生成所使用的模型。未選擇時使用管理員設定的組織預設。"
+    "systemDefaultInEffect": "目前生效的系統預設："
   },
   "tasks": {
     "title": "任務",

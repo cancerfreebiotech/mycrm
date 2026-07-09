@@ -676,15 +676,24 @@
     "featureAssignTitle": "Feature Assignment",
     "systemDefault": "System default",
     "selfHostedHint": "A self-hosted endpoint's URL must be publicly reachable from Vercel (e.g. Cloudflare Tunnel / Tailscale Funnel). The Test button verifies the full path by sending the request from the server.",
+    "assignIntro": "Unassigned features use the built-in system channel (environment-variable keys), which is not in the endpoint list above; they switch to your configured endpoint and model only once assigned.",
+    "googleSuggested": "Google endpoint recommended (needs function calling / Google Search)",
+    "googleWarning": "⚠ This feature needs Google-specific capabilities; assigning it to an OpenAI-compatible endpoint may not work or may reduce quality — verify with the Test button.",
+    "viaGoogle": "Google direct (environment key)",
+    "viaPortkey": "Portkey gateway (environment config)",
+    "sourceAssigned": "Assigned",
+    "sourceDefault": "System default",
+    "effectiveLine": "In effect: {model} @ {via} — {source}",
+    "systemDefaultWith": "System default ({model} · {via})",
     "features": {
-      "assistant": { "name": "AI Assistant", "desc": "Shared by Web /ai-chat and Telegram /ai (Google endpoints only)" },
-      "briefing": { "name": "Social Briefing", "desc": "Pre-meeting background research (Google endpoints only)" },
+      "assistant": { "name": "AI Assistant", "desc": "Shared by Web /ai-chat and Telegram /ai" },
+      "briefing": { "name": "Social Briefing", "desc": "Pre-meeting background research" },
       "note_format": { "name": "Interaction Note Formatting", "desc": "AI formatting of interaction notes" },
       "feedback_triage": { "name": "Daily Feedback Triage", "desc": "Daily AI feedback triage (cron)" },
       "ai_review": { "name": "AI Review", "desc": "Shared by duplicate suggestions, merge review, and note matching" },
       "newsletter_refine": { "name": "Newsletter Refine", "desc": "Newsletter refine / draft" },
       "newsletter_translate": { "name": "Newsletter Translate", "desc": "Newsletter content translation" },
-      "card_ocr_default": { "name": "Card OCR Default", "desc": "Org default for card OCR / command parsing / email generation (fallback when a user hasn't picked a model)" }
+      "card_ocr_default": { "name": "Card OCR Default", "desc": "Model used for business-card OCR / bot command parsing / AI email generation" }
     }
   },
   "settings": {
@@ -704,11 +713,6 @@
     "teamsBound": "Connected",
     "teamsUnbound": "Not connected",
     "teamsHint": "Receive notifications via Teams Bot",
-    "selectEndpoint": "AI Provider",
-    "selectModel": "AI Model",
-    "endpointLabel": "Provider",
-    "modelLabel": "Model",
-    "aiModel": "AI Model",
     "theme": "Theme",
     "themeLight": "Light",
     "themeDark": "Dark",
@@ -729,8 +733,7 @@
     "remove": "Remove",
     "resetToDefault": "Reset to org default",
     "emailPromptPlaceholder": "Leave blank to use org/system default",
-    "systemDefaultInEffect": "Currently active system default:",
-    "aiModelHint": "This setting affects the model used for business-card OCR, bot command parsing, and AI email generation. When unset, the organization default configured by the admin is used."
+    "systemDefaultInEffect": "Currently active system default:"
   },
   "tasks": {
     "title": "Tasks",

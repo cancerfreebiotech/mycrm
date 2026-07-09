@@ -69,7 +69,6 @@ export default function BatchUploadPage() {
   const [processing, setProcessing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
-  const [aiModelId, setAiModelId] = useState<string | null>(null)
   const [saveResult, setSaveResult] = useState<{ saved: number; skipped: number } | null>(null)
   const [signedUrls, setSignedUrls] = useState<Map<string, string>>(new Map())
 
@@ -86,8 +85,8 @@ export default function BatchUploadPage() {
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user?.email) return
-      const { data: profile } = await supabase.from('users').select('id, ai_model_id').eq('email', user.email).single()
-      if (profile) { setUserId(profile.id); setAiModelId(profile.ai_model_id ?? null) }
+      const { data: profile } = await supabase.from('users').select('id').eq('email', user.email).single()
+      if (profile) { setUserId(profile.id) }
     })
   }, [])
 
@@ -128,7 +127,7 @@ export default function BatchUploadPage() {
         const res = await fetch('/api/ocr', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: base64, model: aiModelId }),
+          body: JSON.stringify({ image: base64 }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error ?? tbu('ocrFailed'))

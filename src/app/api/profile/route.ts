@@ -33,10 +33,6 @@ export async function POST(req: Request) {
     }
   }
 
-  if ('aiModelId' in body) {
-    update.ai_model_id = body.aiModelId ? String(body.aiModelId) : null
-  }
-
   if ('theme' in body) {
     update.theme = body.theme === 'dark' ? 'dark' : 'light'
   }

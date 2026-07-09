@@ -2,9 +2,8 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/ge
 import { getPrompt } from '@/lib/prompts'
 import { systemOrgContext } from '@/lib/orgContext'
 import {
-  resolvePersonalModel,
+  resolveTouchpoint,
   routedGenerate,
-  TOUCHPOINTS,
   type MessageContent,
 } from '@/lib/aiRouting'
 
@@ -41,11 +40,9 @@ function imageParts(buffers: Buffer[]): Array<{ type: 'image_url'; image_url: { 
 
 export async function analyzeBusinessCard(
   imageBuffers: Buffer | Buffer[],
-  aiModelId: string | null = null,
   userId?: string
 ): Promise<CardData> {
-  const orgId = systemOrgContext().orgId
-  const resolved = await resolvePersonalModel(orgId, aiModelId, TOUCHPOINTS.card_ocr.getDefault())
+  const resolved = await resolveTouchpoint(systemOrgContext().orgId, 'card_ocr')
   const buffers = Array.isArray(imageBuffers) ? imageBuffers : [imageBuffers]
   const systemPrompt = await getPrompt('ocr_card', userId)
 
@@ -80,11 +77,9 @@ const LINKEDIN_PROMPT = `你是一個專業的 LinkedIn 截圖解析助手。請
 - 所有欄位不可見則輸出空字串`
 
 export async function parseLinkedInScreenshot(
-  imageBuffer: Buffer,
-  aiModelId: string | null = null
+  imageBuffer: Buffer
 ): Promise<LinkedInParsed> {
-  const orgId = systemOrgContext().orgId
-  const resolved = await resolvePersonalModel(orgId, aiModelId, TOUCHPOINTS.card_ocr.getDefault())
+  const resolved = await resolveTouchpoint(systemOrgContext().orgId, 'card_ocr')
   const content: MessageContent = [
     { type: 'text', text: LINKEDIN_PROMPT },
     ...imageParts([imageBuffer]),
@@ -102,11 +97,9 @@ export interface TaskParsed {
 
 export async function parseTaskCommand(
   text: string,
-  nowIso: string,
-  aiModelId: string | null = null
+  nowIso: string
 ): Promise<TaskParsed> {
-  const orgId = systemOrgContext().orgId
-  const resolved = await resolvePersonalModel(orgId, aiModelId, TOUCHPOINTS.card_ocr.getDefault())
+  const resolved = await resolveTouchpoint(systemOrgContext().orgId, 'card_ocr')
   const basePrompt = await getPrompt('task_parse')
   const prompt = `現在時間（UTC）：${nowIso}\n${basePrompt}\n\n任務描述：${text}`
 
@@ -124,11 +117,9 @@ export interface MeetingParsed {
 
 export async function parseMeetingCommand(
   text: string,
-  nowIso: string,
-  aiModelId: string | null = null
+  nowIso: string
 ): Promise<MeetingParsed> {
-  const orgId = systemOrgContext().orgId
-  const resolved = await resolvePersonalModel(orgId, aiModelId, TOUCHPOINTS.card_ocr.getDefault())
+  const resolved = await resolveTouchpoint(systemOrgContext().orgId, 'card_ocr')
   const basePrompt = await getPrompt('meeting_parse')
   const prompt = `現在時間（UTC）：${nowIso}\n${basePrompt}\n\n會議描述：${text}`
 
@@ -144,11 +135,9 @@ export interface MetParsed {
 
 export async function parseMetCommand(
   text: string,
-  nowIso: string,
-  aiModelId: string | null = null
+  nowIso: string
 ): Promise<MetParsed> {
-  const orgId = systemOrgContext().orgId
-  const resolved = await resolvePersonalModel(orgId, aiModelId, TOUCHPOINTS.card_ocr.getDefault())
+  const resolved = await resolveTouchpoint(systemOrgContext().orgId, 'card_ocr')
 
   const todayDate = nowIso.slice(0, 10)
   const prompt =
@@ -173,11 +162,9 @@ export interface VisitNoteParsed {
 
 export async function parseVisitNote(
   text: string,
-  nowIso: string,
-  aiModelId: string | null = null
+  nowIso: string
 ): Promise<VisitNoteParsed> {
-  const orgId = systemOrgContext().orgId
-  const resolved = await resolvePersonalModel(orgId, aiModelId, TOUCHPOINTS.card_ocr.getDefault())
+  const resolved = await resolveTouchpoint(systemOrgContext().orgId, 'card_ocr')
 
   const todayDate = nowIso.slice(0, 10)
   const prompt =
@@ -208,19 +195,17 @@ const EMAIL_SAFETY: { category: HarmCategory; threshold: HarmBlockThreshold }[] 
 export async function generateEmailContent(
   description: string,
   templateContent?: string,
-  aiModelId: string | null = null,
   userId?: string,
   generateSubject = false,
   returnHtml = false
 ): Promise<{ text: string; subject?: string }> {
-  const orgId = systemOrgContext().orgId
-  const resolved = await resolvePersonalModel(orgId, aiModelId, TOUCHPOINTS.email_generate.getDefault())
+  const resolved = await resolveTouchpoint(systemOrgContext().orgId, 'email_generate')
 
   const systemPrompt = await getPrompt('email_generate', userId)
 
-  // 未指派 / 個人 UUID / card_ocr_default 指派到 google 端點 → resolved.via 為
-  // 'google'（今日預設亦是 google）→ 維持今日直連 @google/generative-ai + EMAIL_SAFETY，
-  // apiKey 缺則退回 env GEMINI_API_KEY，與指派系統上線前 100% 等價。
+  // 未指派 / card_ocr_default 指派到 google 端點 → resolved.via 為 'google'（今日預設
+  // 亦是 google）→ 維持今日直連 @google/generative-ai + EMAIL_SAFETY，apiKey 缺則退回
+  // env GEMINI_API_KEY，與指派系統上線前 100% 等價。
   // 指派到 openai 端點 → 走統一路由（safetySettings 於該路無效，可接受）。
   const runEmail = async (prompt: string): Promise<string> => {
     if (resolved.via === 'openai') return routedGenerate(resolved, prompt)

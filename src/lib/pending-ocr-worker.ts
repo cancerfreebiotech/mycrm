@@ -31,7 +31,6 @@ function getPublicUrl(supabase: SupabaseClient, path: string): string {
 export async function processOnePending(
   supabase: SupabaseClient,
   row: PendingRow,
-  aiModelId: string | null,
 ): Promise<{ ok: boolean; error?: string }> {
   // Phase 2+: 逐 org 迭代／由 payload 解析 org。storage 仍走裸 supabase client。
   const db = orgScopedClient(systemOrgContext())
@@ -63,7 +62,7 @@ export async function processOnePending(
     if (dlErr || !file) throw new Error(dlErr?.message ?? 'storage download failed')
 
     const imgBuffer = Buffer.from(await file.arrayBuffer())
-    const cardData = await analyzeBusinessCard(imgBuffer, aiModelId)
+    const cardData = await analyzeBusinessCard(imgBuffer)
 
     if (!cardData.name && cardData.name_en) cardData.name = cardData.name_en
     if (!cardData.name && cardData.name_local) cardData.name = cardData.name_local
@@ -182,17 +181,10 @@ export async function processPendingForUser(
 
   if (!rows || rows.length === 0) return { done: 0, failed: 0, total: 0 }
 
-  const { data: user } = await supabase
-    .from('users')
-    .select('ai_model_id')
-    .eq('id', userId)
-    .single()
-  const aiModelId = (user?.ai_model_id as string | null) ?? null
-
   let done = 0
   let failed = 0
   for (const row of rows as PendingRow[]) {
-    const result = await processOnePending(supabase, row, aiModelId)
+    const result = await processOnePending(supabase, row)
     if (result.ok) done++
     else failed++
   }

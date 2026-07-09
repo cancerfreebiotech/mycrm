@@ -59,7 +59,7 @@ export interface BotMessages {
   tgSendFailed: string
   maintenanceUserBlocked: string
   defaultPrompt: string
-  aiModelDefault: string
+  aiModelDefault: (modelId: string) => string
   aiModelInfo: (displayName: string, modelId: string, endpoint: string) => string
   cbProcessing: string
   cbOpFailed: string
@@ -552,9 +552,10 @@ const zh: BotMessages = {
   tgSendFailed: '❌ 傳送失敗，請稍後再試。',
   maintenanceUserBlocked: '🔧 系統維護中，請稍後再試。',
   defaultPrompt: '請傳送名片照片（或 /cancel 取消），或輸入 /help（/h）查看可用指令。',
-  aiModelDefault: '🤖 目前使用預設模型：<b>gemini-2.5-flash</b>',
+  aiModelDefault: (modelId) =>
+    `🤖 名片辨識與指令解析目前使用系統預設模型：<b>${modelId}</b>\n\n此為全組織共用設定，由管理員在網頁後台調整。`,
   aiModelInfo: (displayName, modelId, endpoint) =>
-    `🤖 目前使用的 AI 模型：\n\n<b>${displayName}</b>\n模型 ID：<code>${modelId}</code>${endpoint ? `\n端點：${endpoint}` : ''}`,
+    `🤖 名片辨識與指令解析目前使用的 AI 模型：\n\n<b>${displayName}</b>\n模型 ID：<code>${modelId}</code>${endpoint ? `\n端點：${endpoint}` : ''}\n\n此為全組織共用設定，由管理員在網頁後台調整。`,
   cbProcessing: '處理中...',
   cbOpFailed: '❌ 操作失敗',
   cbCancelled: '已取消',
@@ -966,9 +967,10 @@ const en: BotMessages = {
   tgSendFailed: '❌ Send failed. Please try again later.',
   maintenanceUserBlocked: '🔧 System under maintenance. Please try again later.',
   defaultPrompt: 'Send a business card photo (or /cancel), or type /help (/h) for available commands.',
-  aiModelDefault: '🤖 Currently using default model: <b>gemini-2.5-flash</b>',
+  aiModelDefault: (modelId) =>
+    `🤖 Card recognition and command parsing currently use the system default model: <b>${modelId}</b>\n\nThis is an organization-wide setting, managed by admins in the web dashboard.`,
   aiModelInfo: (displayName, modelId, endpoint) =>
-    `🤖 Current AI model:\n\n<b>${displayName}</b>\nModel ID: <code>${modelId}</code>${endpoint ? `\nEndpoint: ${endpoint}` : ''}`,
+    `🤖 AI model currently used for card recognition and command parsing:\n\n<b>${displayName}</b>\nModel ID: <code>${modelId}</code>${endpoint ? `\nEndpoint: ${endpoint}` : ''}\n\nThis is an organization-wide setting, managed by admins in the web dashboard.`,
   cbProcessing: 'Processing...',
   cbOpFailed: '❌ Operation failed',
   cbCancelled: 'Cancelled',
@@ -1380,9 +1382,10 @@ const ja: BotMessages = {
   tgSendFailed: '❌ 送信に失敗しました。しばらくしてから再試行してください。',
   maintenanceUserBlocked: '🔧 システムメンテナンス中です。しばらくしてからお試しください。',
   defaultPrompt: '名刺の写真を送信してください（または /cancel）。/help（/h）で使えるコマンドを確認できます。',
-  aiModelDefault: '🤖 現在のモデル（デフォルト）：<b>gemini-2.5-flash</b>',
+  aiModelDefault: (modelId) =>
+    `🤖 名刺認識とコマンド解析は現在システム既定のモデルを使用：<b>${modelId}</b>\n\nこれは組織全体の共通設定で、管理者が Web 管理画面で変更します。`,
   aiModelInfo: (displayName, modelId, endpoint) =>
-    `🤖 現在の AI モデル：\n\n<b>${displayName}</b>\nモデル ID：<code>${modelId}</code>${endpoint ? `\nエンドポイント：${endpoint}` : ''}`,
+    `🤖 名刺認識とコマンド解析で現在使用中の AI モデル：\n\n<b>${displayName}</b>\nモデル ID：<code>${modelId}</code>${endpoint ? `\nエンドポイント：${endpoint}` : ''}\n\nこれは組織全体の共通設定で、管理者が Web 管理画面で変更します。`,
   cbProcessing: '処理中...',
   cbOpFailed: '❌ 操作に失敗しました',
   cbCancelled: 'キャンセルしました',

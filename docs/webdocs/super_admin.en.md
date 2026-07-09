@@ -87,7 +87,7 @@ Path: `/admin/prompts`. Access: Super Admin, or a member delegated **Prompts**.
 
 Path: `/admin/models` (Super Admin only).
 
-**What it is**: AI models use a two-tier structure — an **AI provider (Endpoint)** holds one or more **AI models**. In personal settings a user first picks a provider, then a model.
+**What it is**: AI models use a two-tier structure — an **AI provider (Endpoint)** holds one or more **AI models**; the "Feature assignment" section below decides which model each AI feature actually uses.
 
 **Managing providers**:
 
@@ -100,18 +100,18 @@ Path: `/admin/models` (Super Admin only).
 **Managing models**: select a provider first to reveal its model list.
 
 - **Add Model**: fill in Model ID (the API name, e.g. `gemini-2.5-flash`) and a display name.
-- **Disable**: the model drops out of the personal-settings dropdown; users who had selected it fall back to the default model.
+- **Disable**: the model drops out of the feature-assignment dropdown; any feature assigned to it falls back to the system default.
 - **Delete**: click 🗑 with confirmation.
 
 **Test button** (v8.0.0): both endpoint and model rows have a "Test" button. Pressing it fires one minimal AI call from the server; the result shows right next to the button (a green ✅ with the latency on success, a red ❌ with the reason on failure), and the "last tested" time and result are saved and still shown after a refresh. If an endpoint has no active models, the test falls back to a plain connectivity check (any HTTP response counts as a pass).
 
 ### Feature assignment
 
-At the bottom of the page, each of 8 AI features can be assigned to a specific model; unassigned means "system default" (the environment's built-in model — the same behavior as before v8.0.0).
+At the bottom of the page, each of 8 AI features can be assigned to a specific model; unassigned means "system default" (the environment's built-in channel, not listed among the endpoints). Each row shows "Currently in effect": the model and channel actually in use.
 
-**The 8 features**: AI Assistant (web + Telegram `/ai`; Google endpoints only), Social Briefing (Google endpoints only), interaction-log formatting, daily feedback triage, AI review (duplicate suggestions + merge review + note matching), newsletter polishing, newsletter translation, and the business-card-recognition default (the organization default for card recognition / bot command parsing / AI email generation — the fallback when a user hasn't picked a model in `/settings`; resolution order: personal choice → this org default → system default).
+**The 8 features**: AI Assistant (web + Telegram `/ai`), Social Briefing, interaction-log formatting, daily feedback triage, AI review (duplicate suggestions + merge review + note matching), newsletter polishing, newsletter translation, and the business-card-recognition default (the organization default always used for card recognition / bot command parsing / AI email generation; falls back to the system default when unassigned — there is no longer a personal-choice layer).
 
-Because the AI Assistant and Social Briefing need Google-specific capabilities, their dropdowns only list models from Google-type endpoints. Every row also has a Test button — if assigned, it tests that model and records the result; if unassigned, it tests the system-default path and only displays the result without recording it. Assignment changes take effect **immediately** (up to about a 1-minute delay).
+Any feature can be assigned to a model on any endpoint; because the AI Assistant and Social Briefing need Google-specific capabilities (function calling / Google Search grounding), assigning them to an OpenAI-compatible endpoint shows a yellow warning, "may not work or may perform worse" — the AI Assistant then runs tool calls in OpenAI's format instead (the endpoint must support tools), and Social Briefing has no live search sources. Every row also has a Test button — if assigned, it tests that model and records the result; if unassigned, it tests the system-default path and only displays the result without recording it. Assignment changes take effect **immediately** (up to about a 1-minute delay).
 
 ## Email Templates
 

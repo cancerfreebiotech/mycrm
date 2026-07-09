@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createPublicKey, createVerify, type JsonWebKeyInput } from 'crypto'
 import { createServiceClient } from '@/lib/supabase'
 import { systemOrgContext, orgScopedClient } from '@/lib/orgContext'
+import { resolveTouchpoint } from '@/lib/aiRouting'
 import { parseMeetingCommand } from '@/lib/gemini'
 import { createCalendarEvent } from '@/lib/graph'
 import { getValidProviderToken } from '@/lib/graph-server'
@@ -414,10 +415,10 @@ export async function POST(req: NextRequest) {
         await sendToTeams(serviceUrl, conversationId, '⚠️ 帳號未綁定，無法建立行程。', body.id as string)
       } else {
         await sendToTeams(serviceUrl, conversationId, '⏳ AI 解析中...', body.id as string)
-        const { data: userData } = await supabase.from('users').select('id, ai_model_id').eq('email', userRow.email).single()
+        const { data: userData } = await supabase.from('users').select('id').eq('email', userRow.email).single()
         let parsed
         try {
-          parsed = await parseMeetingCommand(meetText, new Date().toISOString(), userData?.ai_model_id ?? null)
+          parsed = await parseMeetingCommand(meetText, new Date().toISOString())
         } catch {
           await sendToTeams(serviceUrl, conversationId, '❌ AI 解析失敗，請確認格式後再試。')
           return NextResponse.json({ ok: true })
@@ -467,28 +468,23 @@ export async function POST(req: NextRequest) {
         : `📋 myCRM Bot\n\n⚠️ 無法自動綁定帳號，請聯絡管理員確認 Azure AD 應用程式已授予 User.ReadBasic.All 權限。`
       await sendToTeams(serviceUrl, conversationId, msg, body.id as string)
     } else if (text.toLowerCase() === '/ai') {
-      if (!userRow?.email) {
-        await sendToTeams(serviceUrl, conversationId, '⚠️ 帳號未綁定，無法查詢 AI 模型。', body.id as string)
-      } else {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('ai_model_id')
-          .eq('email', userRow.email)
-          .single()
-        if (!userData?.ai_model_id) {
-          await sendToTeams(serviceUrl, conversationId, '🤖 目前使用預設模型：gemini-2.5-flash', body.id as string)
-        } else {
-          const { data: model } = await supabase
-            .from('ai_models')
-            .select('display_name, model_id')
-            .eq('id', userData.ai_model_id)
-            .single()
-          const msg = model
-            ? `🤖 目前使用的 AI 模型：${model.display_name}（${model.model_id}）`
-            : '🤖 目前使用預設模型：gemini-2.5-flash'
-          await sendToTeams(serviceUrl, conversationId, msg, body.id as string)
+      // 名片辨識/指令解析用的模型是全組織設定（ai_feature_models 的 card_ocr_default），
+      // 不再有個人層。顯示目前生效的組織模型。
+      const orgCtx = systemOrgContext()
+      const resolved = await resolveTouchpoint(orgCtx.orgId, 'card_ocr')
+      let msg = `🤖 名片辨識與指令解析目前使用系統預設模型：${resolved.modelId}\n\n此為全組織共用設定，由管理員在網頁後台調整。`
+      if (resolved.source === 'assigned') {
+        const { data } = await orgScopedClient(orgCtx)
+          .from('ai_feature_models')
+          .select('ai_models(display_name, model_id)')
+          .eq('feature', 'card_ocr_default')
+          .maybeSingle()
+        const model = (data as unknown as { ai_models: { display_name: string; model_id: string } | null } | null)?.ai_models
+        if (model) {
+          msg = `🤖 名片辨識與指令解析目前使用的 AI 模型：${model.display_name}（${model.model_id}）\n\n此為全組織共用設定，由管理員在網頁後台調整。`
         }
       }
+      await sendToTeams(serviceUrl, conversationId, msg, body.id as string)
     }
   }
 

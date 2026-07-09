@@ -277,7 +277,7 @@ The Telegram bot is the main data-entry channel. Every command has a shorthand; 
 | `/tasks` | `/t` | List your pending tasks |
 | `/meet [meeting info]` | `/m` | AI parses and books a meeting into your calendar |
 | `/user` | `/u` | List organization members (with Telegram/Teams link status) |
-| `/ai [question]` | — | AI-agent Q&A; bare `/ai` shows your current AI model |
+| `/ai [question]` | — | AI-agent Q&A; bare `/ai` shows the AI model currently in effect (organization-wide) |
 | `/stop` | — | (Super Admin) enable maintenance mode; `/stop off` disables it |
 
 ### Scan a card by photo
@@ -305,7 +305,7 @@ Book a meeting in natural language; AI parses time, attendees and location and r
 
 ### AI assistant (`/ai`)
 
-`/ai <question>` queries or maintains the CRM in natural language — the same assistant as on the web (see "AI assistant"); bare `/ai` shows your current AI model.
+`/ai <question>` queries or maintains the CRM in natural language — the same assistant as on the web (see "AI assistant"); bare `/ai` shows the AI model currently in effect (organization-wide, tuned by admins in the web dashboard).
 
 ## Teams Bot
 
@@ -313,7 +313,7 @@ The myCRM Teams Bot provides task notifications and meeting booking. **Auto-link
 
 - **Task notifications**: new tasks arrive as an Adaptive Card; tap "Mark done" directly, with a "Go to task manager" link.
 - **Meeting booking**: `/meet`, `/m` book meetings in natural language; a confirmation card writes to the calendar in one tap.
-- **`/ai`**: shows your current AI model; type `help` in chat for guidance.
+- **`/ai`**: shows the AI model currently in effect (organization-wide, tuned by admins in the web dashboard); type `help` in chat for guidance.
 - Only personal-chat notifications are supported (no proactive channel pushes).
 
 ## AI assistant
@@ -374,10 +374,6 @@ Display name, email (the Microsoft login email, read-only), role (read-only), Te
 ### Appearance & language
 
 Theme (light/dark — also quick-toggled at the top-right of the header) and language (繁中 / English / 日本語).
-
-### AI model
-
-Choose your personal AI model (used for card recognition, email generation, etc.): pick an endpoint first, then a model (the list is maintained by super_admin).
 
 ### My assistants
 

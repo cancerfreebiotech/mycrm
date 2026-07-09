@@ -676,15 +676,24 @@
     "featureAssignTitle": "機能の割り当て",
     "systemDefault": "システム既定",
     "selfHostedHint": "セルフホスト型エンドポイントの URL は Vercel から到達可能な公開アドレスである必要があります（例：Cloudflare Tunnel／Tailscale Funnel）。テストボタンはサーバー側からリクエストを送信し、経路全体を検証します。",
+    "assignIntro": "未割り当ての機能はシステム内蔵チャネル（環境変数のキー）を使用し、上記のエンドポイント一覧には含まれません。割り当て後にのみ、設定したエンドポイントとモデルに切り替わります。",
+    "googleSuggested": "Google エンドポイントを推奨（function calling／Google 検索が必要）",
+    "googleWarning": "⚠ この機能は Google 固有の機能を必要とします。OpenAI 互換エンドポイントに割り当てると動作しない、または品質が低下する場合があります。テストボタンで確認してください。",
+    "viaGoogle": "Google 直接接続（環境キー）",
+    "viaPortkey": "Portkey ゲートウェイ（環境設定）",
+    "sourceAssigned": "割り当て済み",
+    "sourceDefault": "システム既定",
+    "effectiveLine": "現在有効：{model} ＠ {via} — {source}",
+    "systemDefaultWith": "システム既定（{model}・{via}）",
     "features": {
-      "assistant": { "name": "AI アシスタント", "desc": "Web /ai-chat と Telegram /ai で共用（Google エンドポイント限定）" },
-      "briefing": { "name": "Social Briefing", "desc": "会議前の背景リサーチ（Google エンドポイント限定）" },
+      "assistant": { "name": "AI アシスタント", "desc": "Web /ai-chat と Telegram /ai で共用" },
+      "briefing": { "name": "Social Briefing", "desc": "会議前の背景リサーチ" },
       "note_format": { "name": "対応記録のフォーマット", "desc": "対応記録を AI で整形" },
       "feedback_triage": { "name": "日次フィードバック判定", "desc": "日次フィードバックの AI 判定（cron）" },
       "ai_review": { "name": "AI レビュー", "desc": "重複提案・統合レビュー・ノート照合で共用" },
       "newsletter_refine": { "name": "ニュースレター推敲", "desc": "ニュースレターの推敲／下書き" },
       "newsletter_translate": { "name": "ニュースレター翻訳", "desc": "ニュースレター本文の翻訳" },
-      "card_ocr_default": { "name": "名刺認識の既定", "desc": "名刺認識／コマンド解析／メール生成の組織既定（個人がモデル未選択時のフォールバック）" }
+      "card_ocr_default": { "name": "名刺認識の既定", "desc": "名刺認識／Botコマンド解析／AIメール生成に使用するモデル" }
     }
   },
   "settings": {
@@ -704,11 +713,6 @@
     "teamsBound": "連携済み",
     "teamsUnbound": "未連携",
     "teamsHint": "Teams Bot で通知を受け取る",
-    "selectEndpoint": "AIプロバイダー",
-    "selectModel": "AIモデル",
-    "endpointLabel": "プロバイダー",
-    "modelLabel": "モデル",
-    "aiModel": "AIモデル",
     "theme": "テーマ",
     "themeLight": "ライト",
     "themeDark": "ダーク",
@@ -729,8 +733,7 @@
     "remove": "削除",
     "resetToDefault": "組織のデフォルトに戻す",
     "emailPromptPlaceholder": "空欄の場合は組織/システムのデフォルトを使用",
-    "systemDefaultInEffect": "現在有効なシステムのデフォルト：",
-    "aiModelHint": "この設定は、名刺OCR、Botコマンド解析、AIメール生成に使用するモデルに影響します。未選択の場合は、管理者が設定した組織のデフォルトが使用されます。"
+    "systemDefaultInEffect": "現在有効なシステムのデフォルト："
   },
   "tasks": {
     "title": "タスク",

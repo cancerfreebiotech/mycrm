@@ -5,6 +5,7 @@ import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 import { TOOLS, TOOL_BY_NAME, executeTool } from '@/lib/agent-tools'
 import { getOrgSetting } from '@/lib/orgSettings'
 import { resolveTouchpoint } from '@/lib/aiRouting'
+import { runOpenAiToolLoop } from '@/lib/openaiAgent'
 
 export const maxDuration = 60
 
@@ -88,15 +89,6 @@ export async function POST(req: NextRequest) {
 
   // assistant 觸點路由：未指派時回今日預設（via:'google'、gemini-2.5-flash、apiKey:null）→ 與今日全等。
   const resolved = await resolveTouchpoint(ctx.orgId, 'assistant')
-  let chatModel = resolved.modelId
-  let apiKey = resolved.apiKey ?? process.env.GEMINI_API_KEY
-  // assistant 為 googleOnly，resolveTouchpoint 保證回 google 或 default；防禦：意外指到 openai 端點時沿用 env 預設。
-  if (resolved.via === 'openai') {
-    console.warn('[ai-chat] assistant resolved to openai endpoint; using env default gemini-2.5-flash')
-    chatModel = 'gemini-2.5-flash'
-    apiKey = process.env.GEMINI_API_KEY
-  }
-  if (!apiKey) return NextResponse.json({ error: 'AI 未設定（缺 GEMINI_API_KEY）' }, { status: 500 })
 
   const body = await req.json().catch(() => null)
   const messages: ChatMessage[] = Array.isArray(body?.messages) ? body.messages : []
@@ -111,6 +103,35 @@ export async function POST(req: NextRequest) {
     '需要破壞性或寫入操作時，先在回覆中說明你做了什麼。',
   ].join('\n')
 
+  const latest = messages[messages.length - 1].content
+
+  // assistant 指派到 openai 端點 → 走 OpenAI 相容 function-calling 迴圈（同一份工具 JSON schema）。
+  // 歷史 role 'model' 的轉換由 helper 內部處理，這裡原樣傳。
+  if (resolved.via === 'openai') {
+    try {
+      const { reply, toolsUsed } = await runOpenAiToolLoop({
+        resolved,
+        systemInstruction,
+        history: messages.slice(0, -1),
+        latest,
+        declarations: toGeminiDeclarations(),
+        maxRounds: MAX_TOOL_ROUNDS,
+        execute: (name, args) => executeChatTool(db, name, args, acting.id, user.id),
+        audit: (n, a, ok, e) => auditChat(db, n, a, ok, e, acting.id),
+      })
+      return NextResponse.json({ reply, tools_used: toolsUsed })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('[ai-chat] error', msg)
+      return NextResponse.json({ error: msg }, { status: 500 })
+    }
+  }
+
+  // google / portkey：維持現有 GoogleGenerativeAI 迴圈完全不動。
+  const chatModel = resolved.modelId
+  const apiKey = resolved.apiKey ?? process.env.GEMINI_API_KEY
+  if (!apiKey) return NextResponse.json({ error: 'AI 未設定（缺 GEMINI_API_KEY）' }, { status: 500 })
+
   const genAI = new GoogleGenerativeAI(apiKey)
   const model = genAI.getGenerativeModel({
     model: chatModel,
@@ -119,7 +140,6 @@ export async function POST(req: NextRequest) {
   })
 
   const history = messages.slice(0, -1).map((m) => ({ role: m.role, parts: [{ text: m.content }] }))
-  const latest = messages[messages.length - 1].content
 
   try {
     const chat = model.startChat({ history })

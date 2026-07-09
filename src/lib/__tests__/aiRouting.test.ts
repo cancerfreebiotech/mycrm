@@ -158,23 +158,20 @@ describe('resolveTouchpoint — valid assignment', () => {
 })
 
 describe('resolveTouchpoint — invalid/ignored assignments fall back to default', () => {
-  it('ignores a google-only feature (assistant) assigned to an openai endpoint and warns once', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { service } = makeService({ featureModel: { assistant: model(openaiEndpoint()) } })
-    const { resolveTouchpoint, clearAiRoutingCache } = await loadWith(service)
+  it('honours a google-only feature (assistant) assigned to an openai endpoint (no longer blocked)', async () => {
+    const { service } = makeService({
+      featureModel: { assistant: model(openaiEndpoint('sk-o'), true, 'local-assistant') },
+    })
+    const { resolveTouchpoint } = await loadWith(service)
 
     const r = await resolveTouchpoint(ORG, 'assistant')
-    expect(r.via).toBe('google')
-    expect(r.source).toBe('default')
-    expect(warn).toHaveBeenCalledTimes(1)
-
-    // Cache-busting forces re-resolution but the warn is deduped (still once).
-    clearAiRoutingCache()
-    warn.mockClear()
-    // warnedKeys is also cleared by clearAiRoutingCache, so it warns again once.
-    await resolveTouchpoint(ORG, 'assistant')
-    expect(warn).toHaveBeenCalledTimes(1)
-    warn.mockRestore()
+    expect(r).toEqual({
+      via: 'openai',
+      modelId: 'local-assistant',
+      apiKey: 'sk-o',
+      baseUrl: 'https://local.example/v1/',
+      source: 'assigned',
+    })
   })
 
   it('falls back when the assigned model is inactive', async () => {
@@ -219,65 +216,6 @@ describe('resolveTouchpoint — caching', () => {
     clearAiRoutingCache()
     await resolveTouchpoint(ORG, 'note_format')
     expect(from.mock.calls.length).toBeGreaterThan(callsAfterFirst)
-  })
-})
-
-describe('resolvePersonalModel', () => {
-  const UUID_A = '11111111-1111-1111-1111-111111111111'
-  const UUID_B = '22222222-2222-2222-2222-222222222222'
-  const def = { via: 'portkey' as const, modelId: 'gemini-3.1-flash-lite-preview' }
-
-  it('resolves a UUID hit to source personal', async () => {
-    const { service } = makeService({
-      models: { [UUID_A]: model(googleEndpoint('sk-p'), true, 'personal-model') },
-    })
-    const { resolvePersonalModel } = await loadWith(service)
-    const r = await resolvePersonalModel(ORG, UUID_A, def)
-    expect(r).toEqual({
-      via: 'google',
-      modelId: 'personal-model',
-      apiKey: 'sk-p',
-      baseUrl: null,
-      source: 'personal',
-    })
-  })
-
-  it('falls to the card_ocr_default assignment when the UUID has no row', async () => {
-    const { service } = makeService({
-      models: {},
-      featureModel: { card_ocr_default: model(openaiEndpoint('sk-a'), true, 'assigned-ocr') },
-    })
-    const { resolvePersonalModel } = await loadWith(service)
-    const r = await resolvePersonalModel(ORG, UUID_B, def)
-    expect(r.source).toBe('assigned')
-    expect(r.via).toBe('openai')
-    expect(r.modelId).toBe('assigned-ocr')
-  })
-
-  it('uses a legacy plain string as the modelId', async () => {
-    const { service } = makeService({ featureModel: { card_ocr_default: null } })
-    const { resolvePersonalModel } = await loadWith(service)
-    const r = await resolvePersonalModel(ORG, 'gemini-legacy-string', def)
-    expect(r).toEqual({
-      via: def.via,
-      modelId: 'gemini-legacy-string',
-      apiKey: null,
-      baseUrl: null,
-      source: 'default',
-    })
-  })
-
-  it('returns def when everything is empty', async () => {
-    const { service } = makeService({ featureModel: { card_ocr_default: null } })
-    const { resolvePersonalModel } = await loadWith(service)
-    const r = await resolvePersonalModel(ORG, null, def)
-    expect(r).toEqual({
-      via: def.via,
-      modelId: def.modelId,
-      apiKey: null,
-      baseUrl: null,
-      source: 'default',
-    })
   })
 })
 

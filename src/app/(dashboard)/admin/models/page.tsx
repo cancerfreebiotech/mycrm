@@ -44,6 +44,17 @@ interface FeatureModel {
   endpoint_kind: EndpointKind
 }
 
+// GET /api/ai-feature-assign 回傳的「目前生效」列（合約：見 route）。
+interface EffectiveEntry {
+  feature: AiFeature
+  source: 'assigned' | 'default'
+  via: 'google' | 'openai' | 'portkey'
+  modelId: string
+  endpointName: string | null
+  aiModelId: string | null
+  googleOnly: boolean
+}
+
 // 來源：src/lib/aiRouting.ts 的 AI_FEATURES（client 端複製，避免把 server 依賴打包進 bundle）。
 // 順序即頁面顯示順序。
 const FEATURE_LIST: { key: AiFeature; googleOnly: boolean }[] = [
@@ -104,6 +115,7 @@ export default function AdminModelsPage() {
   // Feature assignment
   const [featureAssignments, setFeatureAssignments] = useState<{ [k in AiFeature]?: string | null }>({})
   const [featureModels, setFeatureModels] = useState<FeatureModel[]>([])
+  const [effective, setEffective] = useState<Record<string, EffectiveEntry>>({})
   const [featSaving, setFeatSaving] = useState<Record<string, boolean>>({})
   const [featError, setFeatError] = useState<Record<string, string>>({})
 
@@ -113,7 +125,7 @@ export default function AdminModelsPage() {
       if (!user) { router.push('/login'); return }
       const { data: profile } = await supabase.from('users').select('role').eq('email', user.email!).single()
       if (profile?.role !== 'super_admin') { router.push('/'); return }
-      await Promise.all([fetchEndpoints(), fetchFeatureData()])
+      await Promise.all([fetchEndpoints(), fetchFeatureData(), fetchEffective()])
     }
     init()
   }, [])
@@ -182,6 +194,28 @@ export default function AdminModelsPage() {
     setFeatureModels(list)
   }
 
+  // 目前生效解析（合約 GET /api/ai-feature-assign）。端點未部署時安靜略過。
+  async function fetchEffective() {
+    try {
+      const res = await fetch('/api/ai-feature-assign')
+      if (!res.ok) return
+      const json = await res.json().catch(() => null)
+      if (!Array.isArray(json?.features)) return
+      const map: Record<string, EffectiveEntry> = {}
+      for (const f of json.features as EffectiveEntry[]) map[f.feature] = f
+      setEffective(map)
+    } catch {
+      // 生效資訊為輔助顯示，取不到不影響指派操作。
+    }
+  }
+
+  // via 通道顯示名（google／portkey 走環境金鑰，無端點名時使用）。
+  function viaDisplay(via: 'google' | 'openai' | 'portkey'): string {
+    if (via === 'google') return t('viaGoogle')
+    if (via === 'portkey') return t('viaPortkey')
+    return t('kindOpenai')
+  }
+
   function selectEndpoint(ep: Endpoint) {
     setSelectedEndpoint(ep)
     setShowModelForm(false)
@@ -214,14 +248,17 @@ export default function AdminModelsPage() {
     await supabase.from('ai_endpoints').update({ is_active: !ep.is_active }).eq('id', ep.id)
     setEndpoints((prev) => prev.map((e) => e.id === ep.id ? { ...e, is_active: !e.is_active } : e))
     if (selectedEndpoint?.id === ep.id) setSelectedEndpoint((p) => p ? { ...p, is_active: !p.is_active } : p)
+    fetchFeatureData()
+    fetchEffective()
   }
 
   async function changeEndpointKind(ep: Endpoint, kind: EndpointKind) {
     await supabase.from('ai_endpoints').update({ kind }).eq('id', ep.id)
     setEndpoints((prev) => prev.map((e) => e.id === ep.id ? { ...e, kind } : e))
     if (selectedEndpoint?.id === ep.id) setSelectedEndpoint((p) => p ? { ...p, kind } : p)
-    // 端點型態改變會影響 googleOnly 功能的可選模型，重新載入指派資料。
+    // 端點型態改變會影響功能列的 Google 警告與目前生效通道，重新載入。
     fetchFeatureData()
+    fetchEffective()
   }
 
   async function deleteEndpoint(id: string) {
@@ -230,6 +267,7 @@ export default function AdminModelsPage() {
     if (selectedEndpoint?.id === id) { setSelectedEndpoint(null); setModels([]) }
     setConfirmDeleteEpId(null)
     fetchFeatureData()
+    fetchEffective()
   }
 
   async function saveEndpointName(id: string) {
@@ -242,6 +280,7 @@ export default function AdminModelsPage() {
     setNewName('')
     // 功能指派下拉的「端點 / 模型」標籤引用端點名稱，重撈保持一致
     fetchFeatureData()
+    fetchEffective()
   }
 
   async function saveApiKey(id: string) {
@@ -279,6 +318,7 @@ export default function AdminModelsPage() {
     await supabase.from('ai_models').update({ is_active: !m.is_active }).eq('id', m.id)
     setModels((prev) => prev.map((x) => x.id === m.id ? { ...x, is_active: !x.is_active } : x))
     fetchFeatureData()
+    fetchEffective()
   }
 
   async function deleteModel(id: string) {
@@ -287,6 +327,7 @@ export default function AdminModelsPage() {
     setConfirmDeleteMdId(null)
     if (selectedEndpoint) fetchEndpoints()
     fetchFeatureData()
+    fetchEffective()
   }
 
   // ── Test ─────────────────────────────────────────────────────────────────
@@ -346,6 +387,7 @@ export default function AdminModelsPage() {
         return
       }
       setFeatureAssignments((a) => ({ ...a, [feature]: aiModelId }))
+      fetchEffective()
     } catch {
       setFeatError((e) => ({ ...e, [feature]: t('saveFailed') }))
     } finally {
@@ -480,7 +522,7 @@ export default function AdminModelsPage() {
                 ) : endpoints.map((ep) => (
                   <tr key={ep.id}
                     onClick={() => selectEndpoint(ep)}
-                    className={`border-t border-gray-100 dark:border-gray-800 cursor-pointer transition-colors ${selectedEndpoint?.id === ep.id ? 'bg-blue-50 dark:bg-blue-950/30' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}>
+                    className={`border-t border-gray-100 dark:border-gray-800 cursor-pointer transition-colors ${!ep.is_active ? 'opacity-50' : ''} ${selectedEndpoint?.id === ep.id ? 'bg-blue-50 dark:bg-blue-950/30' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}>
                     <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap">
                       {editingNameId === ep.id ? (
                         <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
@@ -495,6 +537,11 @@ export default function AdminModelsPage() {
                         <span className="flex items-center gap-1">
                           {selectedEndpoint?.id === ep.id && <ChevronRight size={14} className="text-blue-500 shrink-0" />}
                           {ep.name}
+                          {!ep.is_active && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                              {t('disabled')}
+                            </span>
+                          )}
                           <button onClick={(e) => { e.stopPropagation(); setEditingNameId(ep.id); setNewName(ep.name) }}
                             title={t('editName')} aria-label={t('editName')}
                             className="text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 ml-1">
@@ -676,18 +723,36 @@ export default function AdminModelsPage() {
 
       {/* ── Feature assignment ── */}
       <div>
-        <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-3">{t('featureAssignTitle')}</h2>
+        <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-1">{t('featureAssignTitle')}</h2>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{t('assignIntro')}</p>
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
           {FEATURE_LIST.map(({ key, googleOnly }) => {
             const assignedId = featureAssignments[key] ?? null
             const assignedModel = assignedId ? featureModels.find((m) => m.id === assignedId) ?? null : null
-            const options = featureModels.filter((m) => !googleOnly || m.endpoint_kind === 'google')
+            const options = featureModels
+            const eff = effective[key]
+            const showGoogleWarning = googleOnly && assignedModel !== null && assignedModel.endpoint_kind !== 'google'
             const testKey = `feat:${key}`
             return (
               <div key={key} className="border-t first:border-t-0 border-gray-100 dark:border-gray-800 p-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 sm:flex-1">
                   <div className="text-sm font-medium text-gray-800 dark:text-gray-200">{t(`features.${key}.name`)}</div>
                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t(`features.${key}.desc`)}</div>
+                  {googleOnly && (
+                    <div className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">{t('googleSuggested')}</div>
+                  )}
+                  {eff && (
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {t('effectiveLine', {
+                        model: eff.modelId,
+                        via: eff.endpointName ?? viaDisplay(eff.via),
+                        source: eff.source === 'assigned' ? t('sourceAssigned') : t('sourceDefault'),
+                      })}
+                    </div>
+                  )}
+                  {showGoogleWarning && (
+                    <div className="text-xs text-amber-600 dark:text-amber-400 mt-1 break-words">{t('googleWarning')}</div>
+                  )}
                 </div>
                 <div className="flex flex-col gap-1.5 sm:items-end sm:shrink-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -697,7 +762,11 @@ export default function AdminModelsPage() {
                       onChange={(e) => assignFeature(key, e.target.value || null)}
                       className="w-full sm:w-64 text-base sm:text-sm px-3 py-2.5 sm:py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                     >
-                      <option value="">{t('systemDefault')}</option>
+                      <option value="">
+                        {eff && eff.source === 'default'
+                          ? t('systemDefaultWith', { model: eff.modelId, via: viaDisplay(eff.via) })
+                          : t('systemDefault')}
+                      </option>
                       {options.map((m) => (
                         <option key={m.id} value={m.id}>{m.endpoint_name} / {m.display_name}</option>
                       ))}

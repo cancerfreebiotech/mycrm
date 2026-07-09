@@ -15,6 +15,7 @@ import { TOOLS, TOOL_BY_NAME, executeTool } from '@/lib/agent-tools'
 import { getOrgSetting } from '@/lib/orgSettings'
 import { systemOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 import { resolveTouchpoint } from '@/lib/aiRouting'
+import { runOpenAiToolLoop } from '@/lib/openaiAgent'
 
 // v8.0 Phase 3 (Task 185): app base URL for links in bot messages.
 // Env still wins (backward-compat); otherwise the org's configured app_url,
@@ -190,10 +191,10 @@ async function getAuthorizedUser(telegramId: number) {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('users')
-    .select('id, email, display_name, ai_model_id, provider_token, role')
+    .select('id, email, display_name, provider_token, role')
     .eq('telegram_id', telegramId)
     .single()
-  return data as { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null } | null
+  return data as { id: string; email: string; display_name: string | null; provider_token: string | null; role: string | null } | null
 }
 
 // ── Download photo from Telegram ──────────────────────────────────────────────
@@ -217,22 +218,26 @@ function escapeHtml(s: string): string {
 
 // ── Handle /AI ────────────────────────────────────────────────────────────────
 
-async function handleAI(chatId: number, aiModelId: string | null, m: BotMessages) {
-  const supabase = createServiceClient()
-  if (!aiModelId) {
-    await sendMessage(chatId, m.aiModelDefault)
+async function handleAI(chatId: number, m: BotMessages) {
+  // 名片辨識/指令解析用的模型是全組織設定（ai_feature_models 的 card_ocr_default），
+  // 不再有個人層。顯示目前生效的組織模型：有指派則秀指派模型＋端點，否則秀系統預設。
+  const orgCtx = systemOrgContext()
+  const resolved = await resolveTouchpoint(orgCtx.orgId, 'card_ocr')
+  if (resolved.source !== 'assigned') {
+    await sendMessage(chatId, m.aiModelDefault(resolved.modelId))
     return
   }
-  const { data: model } = await supabase
-    .from('ai_models')
-    .select('display_name, model_id, ai_endpoints(name)')
-    .eq('id', aiModelId)
-    .single()
+  const { data } = await orgScopedClient(orgCtx)
+    .from('ai_feature_models')
+    .select('ai_models(display_name, model_id, ai_endpoints(name))')
+    .eq('feature', 'card_ocr_default')
+    .maybeSingle()
+  const model = (data as unknown as { ai_models: { display_name: string; model_id: string; ai_endpoints: { name: string } | null } | null } | null)?.ai_models
   if (!model) {
-    await sendMessage(chatId, m.aiModelDefault)
+    await sendMessage(chatId, m.aiModelDefault(resolved.modelId))
     return
   }
-  const endpointName = (model.ai_endpoints as unknown as { name: string } | null)?.name ?? ''
+  const endpointName = (model.ai_endpoints as { name: string } | null)?.name ?? ''
   await sendMessage(chatId, m.aiModelInfo(model.display_name, model.model_id, endpointName))
 }
 
@@ -300,7 +305,7 @@ async function executeBotTool(name: string, args: Record<string, unknown>, actin
 
 async function handleAiAgent(
   chatId: number,
-  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
+  user: { id: string; email: string; display_name: string | null; provider_token: string | null; role: string | null },
   question: string,
   m: BotMessages,
 ) {
@@ -313,8 +318,6 @@ async function handleAiAgent(
   await sendMessage(chatId, m.aiThinking)
   try {
     const resolved = await resolveTouchpoint(systemOrgContext().orgId, 'assistant')
-    const apiKey = resolved.apiKey ?? process.env.GEMINI_API_KEY
-    if (!apiKey) throw new Error(m.aiNotConfigured)
 
     const today = new Date().toISOString().slice(0, 10)
     const systemInstruction = [
@@ -329,6 +332,28 @@ async function handleAiAgent(
       ...TOOLS.map((t) => ({ name: t.name, description: t.description, parameters: t.inputSchema })),
       REQUEST_BRIEFING_TOOL,
     ]
+
+    // assistant 被指派到 kind='openai' 端點：走 OpenAI 相容 function-calling 迴圈，
+    // 產出與 google 路等價的 reply，再共用同一輸出（截斷 + 送出）路徑。
+    if (resolved.via === 'openai') {
+      const { reply: oaReply } = await runOpenAiToolLoop({
+        resolved,
+        systemInstruction,
+        history: [],
+        latest: question,
+        declarations,
+        maxRounds: BOT_AGENT_MAX_TURNS,
+        execute: (name, args) => executeBotTool(name, args, user.id),
+        audit: (n, a, ok, e) => auditBotTool(n, a, ok, e, user.id),
+      })
+      const reply = oaReply || m.aiEmptyReply
+      const truncated = reply.length > TELEGRAM_MAX_LEN ? reply.slice(0, TELEGRAM_MAX_LEN - 1) + '…' : reply
+      await sendMessage(chatId, escapeHtml(truncated))
+      return
+    }
+
+    const apiKey = resolved.apiKey ?? process.env.GEMINI_API_KEY
+    if (!apiKey) throw new Error(m.aiNotConfigured)
     const genAI = new GoogleGenerativeAI(apiKey)
     const model = genAI.getGenerativeModel({
       model: resolved.modelId,
@@ -421,7 +446,7 @@ function formatTaipeiRange(startIso: string, durationMinutes: number, m: BotMess
 
 async function handleMeet(
   chatId: number,
-  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
+  user: { id: string; email: string; display_name: string | null; provider_token: string | null; role: string | null },
   text: string,
   m: BotMessages,
   lang: BotLang,
@@ -437,7 +462,7 @@ async function handleMeet(
 
   let parsed
   try {
-    parsed = await parseMeetingCommand(text, new Date().toISOString(), user.ai_model_id)
+    parsed = await parseMeetingCommand(text, new Date().toISOString())
   } catch {
     await sendMessage(chatId, m.meetParseFailed)
     return
@@ -582,7 +607,7 @@ async function handleSearch(chatId: number, keyword: string, m: BotMessages, lan
 async function processAddCardPhoto(
   chatId: number,
   fromId: number,
-  user: { id: string; ai_model_id: string | null },
+  user: { id: string },
   contactId: string,
   fileId: string,
   contactNameHint?: string,
@@ -603,7 +628,7 @@ async function processAddCardPhoto(
       .single()
 
     await sendMessage(chatId, _m.cardOcring)
-    const cardData = await analyzeBusinessCard(compressed, user.ai_model_id)
+    const cardData = await analyzeBusinessCard(compressed)
 
     if (cardData.rotation) {
       const sharpLib = (await import('sharp')).default
@@ -822,7 +847,7 @@ async function processPersonalPhoto(
 async function handlePhoto(
   chatId: number,
   fromId: number,
-  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
+  user: { id: string; email: string; display_name: string | null; provider_token: string | null; role: string | null },
   photo: { file_id: string },
   session: { state: string; context: Record<string, unknown> } | null,
   m: BotMessages = BOT_MESSAGES.zh,
@@ -854,10 +879,7 @@ async function handlePhoto(
       const imgBuffer = await downloadTelegramPhoto(photo.file_id)
       const compressed = await processCardImage(imgBuffer)
 
-      const { data: profile } = await createServiceClient()
-        .from('users').select('ai_model_id').eq('id', user.id).single()
-
-      const parsed = await parseLinkedInScreenshot(compressed, profile?.ai_model_id ?? null)
+      const parsed = await parseLinkedInScreenshot(compressed)
 
       const displayName = parsed.name || parsed.name_en || m.liUnnamed
       if (!parsed.name && !parsed.name_en) {
@@ -934,7 +956,7 @@ async function handlePhoto(
       }
       after(async () => {
         const sb = createServiceClient()
-        await processOnePending(sb, rowForWorker, user.ai_model_id)
+        await processOnePending(sb, rowForWorker)
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -1026,7 +1048,7 @@ async function handlePhoto(
     cardImgUrl = publicUrlData.publicUrl
 
     // OCR
-    const cardData = await analyzeBusinessCard(compressed, user.ai_model_id)
+    const cardData = await analyzeBusinessCard(compressed)
 
     // Rotate and re-upload if Gemini detected non-zero rotation
     if (cardData.rotation) {
@@ -1206,7 +1228,7 @@ async function handlePhoto(
 
 async function handleWork(
   chatId: number,
-  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
+  user: { id: string; email: string; display_name: string | null; provider_token: string | null; role: string | null },
   naturalText: string,
   lastContactId: string | null | undefined,
   m: BotMessages,
@@ -1218,7 +1240,7 @@ async function handleWork(
 
   let parsed
   try {
-    parsed = await parseTaskCommand(naturalText, new Date().toISOString(), user.ai_model_id)
+    parsed = await parseTaskCommand(naturalText, new Date().toISOString())
   } catch {
     await sendMessage(chatId, m.taskParseFailed)
     return
@@ -1369,7 +1391,7 @@ async function handleWork(
 
 async function handleMet(
   chatId: number,
-  user: { id: string; email: string; ai_model_id: string | null },
+  user: { id: string; email: string },
   count: number,
   description: string,
   m: BotMessages = BOT_MESSAGES.zh
@@ -1380,7 +1402,7 @@ async function handleMet(
   await sendMessage(chatId, m.aiAnalyzing)
   let parsed
   try {
-    parsed = await parseMetCommand(description, nowIso, user.ai_model_id)
+    parsed = await parseMetCommand(description, nowIso)
   } catch (e) {
     console.error('[bot] parseMetCommand error:', e)
     await sendMessage(chatId, m.aiParseFailed)
@@ -1436,7 +1458,7 @@ async function handleMet(
 // AI 解析內容（日期/時間/地點/類型）後直接寫入 interaction_logs 並回覆確認。
 async function logVisitOneShot(
   chatId: number,
-  user: { id: string; ai_model_id: string | null },
+  user: { id: string },
   contactId: string,
   contactName: string | null,
   noteText: string,
@@ -1450,7 +1472,7 @@ async function logVisitOneShot(
   let meetingTime: string | null = null
   let meetingLocation: string | null = null
   try {
-    const parsed = await parseVisitNote(noteText, new Date().toISOString(), user.ai_model_id)
+    const parsed = await parseVisitNote(noteText, new Date().toISOString())
     logType = parsed.type
     meetingDate = parsed.meeting_date ?? null
     meetingTime = parsed.meeting_time ?? null
@@ -1478,7 +1500,7 @@ async function logVisitOneShot(
 
 async function handleTasks(
   chatId: number,
-  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
+  user: { id: string; email: string; display_name: string | null; provider_token: string | null; role: string | null },
   m: BotMessages,
   lang: BotLang,
 ) {
@@ -1533,7 +1555,7 @@ async function handleTasks(
 async function handleText(
   chatId: number,
   fromId: number,
-  user: { id: string; email: string; display_name: string | null; ai_model_id: string | null; provider_token: string | null; role: string | null },
+  user: { id: string; email: string; display_name: string | null; provider_token: string | null; role: string | null },
   text: string,
   session: { state: string; context: Record<string, unknown>; last_contact_id: string | null } | null,
   m: BotMessages,
@@ -1605,7 +1627,7 @@ async function handleText(
     if (question) {
       await handleAiAgent(chatId, user, question, m)
     } else {
-      await handleAI(chatId, user.ai_model_id, m)
+      await handleAI(chatId, m)
     }
     return
   }
@@ -1676,7 +1698,7 @@ async function handleText(
     if (cmd.startsWith('/')) { await clearSession(fromId) } else {
     await sendMessage(chatId, m.aiGenerating)
     try {
-      const body = await generateEmailContent(text.trim(), undefined, user.ai_model_id)
+      const body = await generateEmailContent(text.trim())
       const subject = `${m.emailSubjectPrefix}${text.trim().slice(0, 40)}${text.trim().length > 40 ? '...' : ''}`
       const preview = body.text.replace(/<[^>]+>/g, '').slice(0, 200)
 
@@ -1709,7 +1731,7 @@ async function handleText(
       const supplement = text.trim().toLowerCase() === 'skip' ? '' : text.trim()
       // Fallback prompt when user types "skip" — instruct AI to generate from template alone.
       // Use English here since it's an instruction for the AI, not the user.
-      const body = await generateEmailContent(supplement || 'Generate per the template', templateContent, user.ai_model_id)
+      const body = await generateEmailContent(supplement || 'Generate per the template', templateContent)
       const subject = session.context.template_subject as string || m.emailSubjectNone
       const preview = body.text.replace(/<[^>]+>/g, '').slice(0, 200)
 
@@ -1775,7 +1797,7 @@ async function handleText(
     let meetingLocation: string | null = null
 
     try {
-      const parsed = await parseVisitNote(text.trim(), new Date().toISOString(), user.ai_model_id)
+      const parsed = await parseVisitNote(text.trim(), new Date().toISOString())
       logType = parsed.type
       meetingDate = parsed.meeting_date ?? null
       meetingTime = parsed.meeting_time ?? null
@@ -2217,7 +2239,7 @@ async function handleText(
       await sendMessage(chatId, m.batchParsingMet)
       try {
         const nowIso = new Date().toISOString()
-        const parsed = await parseMetCommand(description, nowIso, user.ai_model_id)
+        const parsed = await parseMetCommand(description, nowIso)
         metContext = {
           met_at: parsed.met_at,
           met_date: parsed.met_date,

@@ -100,7 +100,6 @@ export default function NewContactPage() {
   const [saving, setSaving] = useState(false)
   const [dupExact, setDupExact] = useState<DupContact | null>(null)
   const [dupSimilar, setDupSimilar] = useState<DupContact[]>([])
-  const [aiModelId, setAiModelId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   // cards bucket is private — the preloaded card_img_url (from query) is public-form; sign it for preview.
   // The value written to DB (via /api/link-card) keeps the original public form.
@@ -118,14 +117,12 @@ export default function NewContactPage() {
     async function init() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const [{ data: tags }, { data: profile }, { data: countries }] = await Promise.all([
+      const [{ data: tags }, { data: countries }] = await Promise.all([
         supabase.from('tags').select('id, name').order('name'),
-        supabase.from('users').select('ai_model_id').eq('email', user.email!).single(),
         supabase.from('countries').select('code, name_zh, emoji').eq('is_active', true).order('name_zh'),
       ])
       setAllTags(tags ?? [])
       setAllCountries(countries ?? [])
-      if (profile?.ai_model_id) setAiModelId(profile.ai_model_id)
 
       // LinkedIn prefill
       if (searchParams.get('source') === 'linkedin') {
@@ -238,7 +235,7 @@ export default function NewContactPage() {
       const res = await fetch('/api/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ images: bases, model: aiModelId }),
+        body: JSON.stringify({ images: bases }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -267,7 +264,7 @@ export default function NewContactPage() {
       const res = await fetch('/api/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ images: [base64], model: aiModelId }),
+        body: JSON.stringify({ images: [base64] }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)

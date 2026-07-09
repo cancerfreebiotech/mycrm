@@ -266,7 +266,6 @@ export default function ContactDetailPage() {
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
-  const [aiModelId, setAiModelId] = useState<string | null>(null)
   const [orgId, setOrgId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -441,10 +440,9 @@ export default function ContactDetailPage() {
     // in this project — client-side .eq('id', ...) silently returns null
     const meRes = await fetch('/api/me').catch(() => null)
     if (meRes?.ok) {
-      const me = await meRes.json() as { id: string; role: string; ai_model_id: string | null; org_id: string | null }
+      const me = await meRes.json() as { id: string; role: string; org_id: string | null }
       setCurrentUserId(me.id)
       setCurrentUserRole(me.role || null)
-      setAiModelId(me.ai_model_id ?? null)
       setOrgId(me.org_id ?? null)
     } else {
       console.warn('[contact-detail] /api/me failed', meRes?.status)
@@ -645,7 +643,7 @@ export default function ContactDetailPage() {
     setEditOcring(true)
     try {
       const base64 = await compressImage(file)
-      const res = await fetch('/api/ocr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: base64, model: aiModelId }) })
+      const res = await fetch('/api/ocr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: base64 }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setEditForm((prev) => ({
@@ -765,7 +763,7 @@ export default function ContactDetailPage() {
       const res = await fetch('/api/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ images: bases, model: aiModelId }),
+        body: JSON.stringify({ images: bases }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -1109,7 +1107,7 @@ export default function ContactDetailPage() {
       const res = await fetch('/api/ai-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description, templateContent: existingBody, model: aiModelId, generateSubject: true, returnHtml: true, contact_id: id }),
+        body: JSON.stringify({ description, templateContent: existingBody, generateSubject: true, returnHtml: true, contact_id: id }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)

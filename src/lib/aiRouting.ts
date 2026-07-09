@@ -28,9 +28,11 @@ export type AiFeature =
 
 /**
  * 每個 feature 的能力約束。
- * googleOnly：只能跑在 google 端點（assistant 用 function calling、briefing 用
- * googleSearch grounding，經 OpenAI 相容端點無法等價轉送）。指派到 openai 端點時
- * 忽略指派、回預設（DB 直改不可弄壞功能）。
+ * googleOnly：建議跑在 google 端點（assistant 的 function calling、briefing 的
+ * googleSearch grounding 在 google 路最完整）。此旗標**不再阻擋**指派——任何 feature
+ * 都可指派到任何端點；旗標僅供 UI/API 顯示「此功能建議用 google」的警告。
+ * 指到 openai 端點時：assistant 走 OpenAI 相容 function calling，briefing 照打但無
+ * grounding。
  */
 export const AI_FEATURES: Record<AiFeature, { googleOnly: boolean }> = {
   assistant: { googleOnly: true },
@@ -99,6 +101,8 @@ export const TOUCHPOINTS: Record<AiTouchpoint, { feature: AiFeature; getDefault:
     feature: 'newsletter_translate',
     getDefault: () => ({ via: 'portkey', modelId: process.env.NEWSLETTER_MODEL_TRANSLATE ?? 'gemini-3.1-flash-lite' }),
   },
+  // card_ocr / email_generate 皆掛 card_ocr_default feature：名片辨識、指令解析、
+  // 郵件生成一律用組織層指派的模型（無個人層——users.ai_model_id 已停止讀寫）。
   card_ocr: {
     feature: 'card_ocr_default',
     getDefault: () => ({ via: 'portkey', modelId: 'gemini-3.1-flash-lite-preview' }),
@@ -117,7 +121,7 @@ export interface ResolvedAi {
   apiKey: string | null
   /** 僅 openai 端點。 */
   baseUrl: string | null
-  source: 'assigned' | 'personal' | 'default'
+  source: 'assigned' | 'default'
 }
 
 // ── 解析內部 ────────────────────────────────────────────────────────────────
@@ -139,8 +143,6 @@ interface FeatureModelRow {
   ai_model_id: string | null
   ai_models: ModelJoin | ModelJoin[] | null
 }
-
-const UUID_RE = /^[0-9a-f-]{36}$/i
 
 // supabase-js 的嵌入關聯依版本可能回單物件或陣列——一律取第一筆。
 function one<T>(x: T | T[] | null | undefined): T | null {
@@ -164,19 +166,10 @@ function mapModel(model: ModelJoin | null, source: ResolvedAi['source']): Resolv
   return { via: 'openai', modelId: model.model_id, apiKey, baseUrl: ep.base_url ?? null, source }
 }
 
-const warnedKeys = new Set<string>()
-function warnGoogleOnlyMismatch(orgId: string, feature: AiFeature): void {
-  const k = `${orgId}:${feature}`
-  if (warnedKeys.has(k)) return
-  warnedKeys.add(k)
-  console.warn(
-    `[aiRouting] feature "${feature}" is google-only but assigned to an openai endpoint; ignoring assignment and using default`,
-  )
-}
-
 /**
  * 查 ai_feature_models(org,feature) 的有效指派。回 ResolvedAi(source:'assigned')
- * 或 null（未指派 / 模型或端點 inactive / googleOnly 卻指到 openai）。不快取。
+ * 或 null（未指派 / 模型或端點 inactive）。googleOnly 不再阻擋——一律尊重有效指派。
+ * 不快取。
  */
 async function resolveAssignment(
   orgId: string,
@@ -191,13 +184,7 @@ async function resolveAssignment(
     .maybeSingle()
 
   const row = data as unknown as FeatureModelRow | null
-  const mapped = mapModel(one(row?.ai_models), 'assigned')
-  if (!mapped) return null
-  if (AI_FEATURES[feature].googleOnly && mapped.via === 'openai') {
-    warnGoogleOnlyMismatch(orgId, feature)
-    return null
-  }
-  return mapped
+  return mapModel(one(row?.ai_models), 'assigned')
 }
 
 // ── 系統型解析（觸點）＋ 60s 快取 ────────────────────────────────────────────
@@ -233,59 +220,9 @@ export async function resolveTouchpoint(orgId: string, tp: AiTouchpoint): Promis
   }
 }
 
-// ── 個人型解析（gemini.ts 用）──────────────────────────────────────────────
-
-/**
- * 個人型解析鏈：
- *   1. aiModelId 為 UUID 且命中 ai_models → source 'personal'
- *   2. org 的 card_ocr_default 指派 → source 'assigned'
- *   3. aiModelId 為 legacy 純字串 → { via: def.via, modelId: aiModelId, source:'default' }
- *   4. 都沒有 → def
- * 個人 UUID 查詢不快取（今天也是每次查）；def 由呼叫端傳（各函式今日預設）。
- */
-export async function resolvePersonalModel(
-  orgId: string,
-  aiModelId: string | null,
-  def: AiDefault,
-): Promise<ResolvedAi> {
-  const service = createServiceClient()
-
-  // 1. 明確指定的個人模型（UUID）
-  if (aiModelId && UUID_RE.test(aiModelId)) {
-    try {
-      const { data } = await service
-        .from('ai_models')
-        .select('model_id, is_active, ai_endpoints(kind, base_url, api_key, is_active)')
-        .eq('id', aiModelId)
-        .maybeSingle()
-      const mapped = mapModel(data as unknown as ModelJoin | null, 'personal')
-      if (mapped) return mapped
-    } catch {
-      // fall through
-    }
-  }
-
-  // 2. org 層 card_ocr_default 指派
-  try {
-    const assigned = await resolveAssignment(orgId, 'card_ocr_default')
-    if (assigned) return assigned
-  } catch {
-    // fall through
-  }
-
-  // 3. legacy 純字串
-  if (aiModelId && !UUID_RE.test(aiModelId)) {
-    return { via: def.via, modelId: aiModelId, apiKey: null, baseUrl: null, source: 'default' }
-  }
-
-  // 4. 預設
-  return { via: def.via, modelId: def.modelId, apiKey: null, baseUrl: null, source: 'default' }
-}
-
 /** 清快取（測試 + 管理端改指派後 cache-busting）。 */
 export function clearAiRoutingCache(): void {
   cache.clear()
-  warnedKeys.clear()
 }
 
 // ── 統一單發執行 ──────────────────────────────────────────────────────────

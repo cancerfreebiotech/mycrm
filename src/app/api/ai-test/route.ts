@@ -75,7 +75,9 @@ async function runGenerate(resolved: ResolvedAi): Promise<TestResult> {
     await withTimeout(routedGenerate(resolved, TEST_PROMPT, { timeoutMs: 25_000 }), 30_000, '測試逾時（30 秒）')
     ok = true
   } catch (e) {
-    error = (e instanceof Error ? e.message : String(e)).slice(0, 500)
+    // 前綴實際挑到的 model_id，讓「端點測試挑到退役/錯誤模型」一眼可辨。
+    const raw = e instanceof Error ? e.message : String(e)
+    error = `[${resolved.modelId}] ${raw}`.slice(0, 500)
   }
   return { ok, latencyMs: Date.now() - started, testedAt: new Date().toISOString(), error }
 }
@@ -195,6 +197,7 @@ export async function POST(req: Request) {
       .select('model_id')
       .eq('endpoint_id', endpointId)
       .eq('is_active', true)
+      .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
 

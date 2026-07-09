@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { description, templateContent, model, generateSubject, returnHtml, contact_id } = await req.json()
+    const { description, templateContent, generateSubject, returnHtml, contact_id } = await req.json()
     if (!description) {
       return NextResponse.json({ error: '缺少 description' }, { status: 400 })
     }
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       if (context) finalDescription = `${context}\n\n撰寫指示：\n${description}`
     }
 
-    const result = await generateEmailContent(finalDescription, templateContent, model, profile?.id ?? undefined, !!generateSubject, !!returnHtml)
+    const result = await generateEmailContent(finalDescription, templateContent, profile?.id ?? undefined, !!generateSubject, !!returnHtml)
     return NextResponse.json(result)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

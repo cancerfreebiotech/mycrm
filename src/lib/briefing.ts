@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import { resolveTouchpoint } from '@/lib/aiRouting'
+import { resolveTouchpoint, routedGenerate } from '@/lib/aiRouting'
 import { systemOrgContext } from '@/lib/orgContext'
 
 // Social Briefing：用 Gemini + Google Search grounding 整理「這個人 + 他公司的最新動態」。
@@ -71,9 +71,16 @@ function extractSources(candidate: unknown): BriefingSource[] {
 }
 
 export async function generateContactBriefing(contact: BriefingContactInput): Promise<BriefingResult> {
-  // briefing 由 cron worker 執行，無 user session。briefing 是 googleOnly feature，
-  // resolveTouchpoint 保證回 google/default。
+  // briefing 由 cron worker 執行，無 user session。briefing 建議走 google（googleSearch
+  // grounding），但管理端可指派到 openai 相容端點——resolveTouchpoint 不再保證 via==='google'。
   const resolved = await resolveTouchpoint(systemOrgContext().orgId, 'briefing')
+
+  if (resolved.via === 'openai') {
+    // openai 相容端點無 googleSearch grounding，結果不含即時搜尋來源（管理端已警告）。
+    const markdown = await routedGenerate(resolved, buildPrompt(contact))
+    return { markdown, sources: [], modelUsed: resolved.modelId }
+  }
+
   const apiKey = resolved.apiKey ?? process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error('GEMINI_API_KEY not set')
 

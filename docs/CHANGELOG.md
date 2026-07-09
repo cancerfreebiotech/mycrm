@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v8.1.0 — 功能指派全開放 + 移除個人模型選擇（2026-07-09）
+
+### 變更項目
+- **功能指派全開放**：任何 AI 功能可指派任何端點的模型（原 AI 助理／Social Briefing 僅限 Google 端點的硬限制移除）。指派到 OpenAI 相容端點時 UI 常駐黃色警告「可能無法運作或品質下降」——AI 助理改以 **OpenAI 格式 function calling**（新 lib `openaiAgent.ts`，Web 與 Telegram 共用）執行、Social Briefing 照打但無 Google 搜尋 grounding（無來源清單）。
+- **「系統預設」透明化**：新增 `GET /api/ai-feature-assign` 回傳 8 功能當下實際解析；功能指派每列常駐「目前生效：模型＠端點／通道 — 來源」；下拉「系統預設」項顯示具體模型與通道；區塊頂部註明系統預設走環境內建通道、不在端點清單中。
+- **移除個人 AI 模型選擇**（Po 2026-07-09 裁決）：`/settings` 個人模型選擇器移除；名片辨識／Bot 指令解析／AI 郵件生成一律使用管理端「名片辨識預設」指派（未指派則系統預設）。`gemini.ts` 全部函式移除 `aiModelId` 參數；`users.ai_model_id` 欄位保留但全面停止讀寫。Telegram／Teams bot 的 `/ai` 模型資訊改顯示全組織生效模型（唯讀）。
+- 停用端點列灰階顯示；端點級測試改挑最新建立的啟用模型、失敗訊息標明測試模型（避免挑到退役模型造成「端點壞掉」假象）。
+- 測試：openaiAgent 迴圈單元測試 5 條、briefing 分流測試 2 條（合計 83 條）；手冊三語（super_admin＋user）同步改寫並入庫。
+
 ## v8.0.1 — 端點名稱可編輯（2026-07-08）
 
 ### 變更項目

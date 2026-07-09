@@ -15,7 +15,7 @@ export async function GET() {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('users')
-    .select('id, display_name, role, ai_model_id')
+    .select('id, display_name, role')
     .ilike('email', user.email)
     .maybeSingle()
 
@@ -29,7 +29,6 @@ export async function GET() {
     id: data.id as string,
     display_name: (data.display_name ?? '') as string,
     role: (data.role ?? '') as string,
-    ai_model_id: (data.ai_model_id ?? null) as string | null,
     org_id: ctx.orgId,
   })
 }

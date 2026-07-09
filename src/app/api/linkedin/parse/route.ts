@@ -14,14 +14,9 @@ export async function POST(req: NextRequest) {
     if (!image) return NextResponse.json({ error: 'Missing image' }, { status: 400 })
 
     const service = createServiceClient()
-    const { data: profile } = await service
-      .from('users')
-      .select('ai_model_id')
-      .eq('id', user.id)
-      .single()
 
     const imgBuffer = Buffer.from(image, 'base64')
-    const parsed = await parseLinkedInScreenshot(imgBuffer, profile?.ai_model_id ?? null)
+    const parsed = await parseLinkedInScreenshot(imgBuffer)
 
     // Name fallback: use English name if no local language name
     if (!parsed.name && parsed.name_en) parsed.name = parsed.name_en
