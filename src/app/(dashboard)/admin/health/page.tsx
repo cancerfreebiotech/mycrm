@@ -67,19 +67,20 @@ interface UsageData {
 type SectionState = 'loading' | 'error' | 'ready'
 
 function StatusBadge({ status }: { status: ServiceStatus['status'] }) {
+  const t = useTranslations('health')
   if (status === 'ok') return (
     <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 px-2 py-0.5 rounded-full">
-      <CheckCircle2 size={11} /> 正常
+      <CheckCircle2 size={11} /> {t('serviceStatusOk')}
     </span>
   )
   if (status === 'error') return (
     <span className="inline-flex items-center gap-1 text-xs font-medium text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-2 py-0.5 rounded-full">
-      <XCircle size={11} /> 異常
+      <XCircle size={11} /> {t('serviceStatusError')}
     </span>
   )
   return (
     <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-2 py-0.5 rounded-full">
-      <MinusCircle size={11} /> 未設定
+      <MinusCircle size={11} /> {t('serviceStatusUnconfigured')}
     </span>
   )
 }
@@ -159,8 +160,8 @@ function HunterSection() {
           <p className="text-xs text-gray-400">{t('freeQuotaHint')}</p>
           {stats?.credits && (
             <p className="text-xs mt-0.5">
-              <span className="text-green-600 dark:text-green-400 font-medium">{stats.credits.available - stats.credits.used} / {stats.credits.available} credits 剩餘</span>
-              <span className="text-gray-400 ml-1">（本月已用 {stats.credits.used}）</span>
+              <span className="text-green-600 dark:text-green-400 font-medium">{t('creditsRemaining', { remaining: stats.credits.available - stats.credits.used, available: stats.credits.available })}</span>
+              <span className="text-gray-400 ml-1">{t('creditsUsedThisMonth', { used: stats.credits.used })}</span>
             </p>
           )}
         </div>
@@ -771,10 +772,10 @@ export default function HealthPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <Activity size={24} />
-            系統狀態
+            {t('pageTitle')}
           </h1>
           {lastChecked && (
-            <p className="text-sm text-gray-400 mt-1">上次檢查：{lastChecked}</p>
+            <p className="text-sm text-gray-400 mt-1">{t('lastCheckedLabel', { lastChecked })}</p>
           )}
         </div>
         <div className="flex items-center gap-3">
@@ -785,7 +786,7 @@ export default function HealthPage() {
               onChange={(e) => setAutoRefresh(e.target.checked)}
               className="rounded border-gray-300"
             />
-            每 30 秒自動重整
+            {t('autoRefreshLabel')}
           </label>
           <button
             onClick={runCheck}
@@ -817,7 +818,7 @@ export default function HealthPage() {
                 : t('allHealthy')}
             </p>
             <p className="text-xs text-gray-500 mt-0.5">
-              {okCount} 個正常 · {errorCount} 個異常 · {result.services.filter((s) => s.status === 'unconfigured').length} 個未設定
+              {t('summaryCounts', { ok: okCount, error: errorCount, unconfigured: result.services.filter((s) => s.status === 'unconfigured').length })}
             </p>
           </div>
         </div>
@@ -868,7 +869,7 @@ export default function HealthPage() {
         </div>
       ) : (
         <div className="text-center py-12 text-gray-400 text-sm">
-          無法取得狀態，請重試
+          {t('fetchFailed')}
         </div>
       )}
 

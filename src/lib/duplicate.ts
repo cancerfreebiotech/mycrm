@@ -1,5 +1,5 @@
 import { orgScopedClient, systemOrgContext, type OrgContext } from '@/lib/orgContext'
-import { escapeLikePattern } from '@/lib/likeEscape'
+import { escapeLikePattern, orQuote } from '@/lib/likeEscape'
 
 export interface Contact {
   id: string
@@ -64,7 +64,8 @@ export async function checkDuplicates(
   if (emails.length > 0) {
     const orParts: string[] = []
     for (const e of emails) {
-      const p = escapeLikePattern(e)
+      // orQuote guards the .or() delimiter; escapeLikePattern keeps it exact
+      const p = orQuote(escapeLikePattern(e))
       orParts.push(`email.ilike.${p}`, `second_email.ilike.${p}`)
     }
     const { data } = await supabase

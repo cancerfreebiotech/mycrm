@@ -1,5 +1,36 @@
 # CHANGELOG
 
+## v8.1.6 — 全 codebase code review 修正 + 文件全面更新（2026-07-11）
+
+### 安全／授權
+- **電子報寄送等破壞性操作補上功能授權閘門**：`/api/newsletter/campaigns/[id]` 的寄送、改寫、刪除、發佈、複製先前只驗登入，未檢查 `newsletter` 功能授權——未獲授權的員工可越權群發外部訂閱者。全部加上 `hasNewsletterAccess()` 閘門（新 `src/lib/newsletterAccess.ts`）。
+- **測試寄信不再信任 body.userId**：`/api/email/test-send` 改由 session 解析寄件者（與 `/api/email/send` 一致），杜絕以他人 Outlook 身分冒名寄信。
+- **Gmail OAuth 加 `state` 參數**：授權流程加上 httpOnly cookie 綁定的 state 校驗，防 OAuth CSRF（授權碼注入）。
+- **系統健康端點限 super_admin**：`/api/health-check` 過去對任何登入者外露基礎設施狀態，改為僅 super_admin。
+- **保留期清除 cron fail-closed**：`/api/cron/purge-retention` 在 `CRON_SECRET` 未設定時改為拒絕執行（原為略過驗證直接跑破壞性清除）。
+
+### 正確性／資料完整性
+- **聯絡人搜尋／去重的 `.or()` 逗號注入**：搜尋字串含逗號或括號會破壞 PostgREST `.or()` 過濾語法。新增共用 `orQuote()`（`src/lib/likeEscape.ts`）並套用於聯絡人搜尋、去重比對、Telegram bot 搜尋/與會者解析各處。
+- **來信自動建檔的 email 比對**：`findOrCreateContactByEmail` 改用跳脫後的比對，避免 email 中的底線被當萬用字元而掛錯聯絡人。
+- **聯絡人清單平行分頁**：`/api/contacts/all` 各分頁查詢加唯一次序鍵 `id`，消除頁界重複／遺漏。
+- **重複掃描不再讓「已忽略」復活**：`scan-duplicates` 重掃時排除已忽略配對，不再重新插回審查佇列。
+- **電子報重送計數倒退**：一般重送改以收件人列重算累計 `sent_count`（與 A/B final 同邏輯），不再被單次結果覆蓋。
+- **排程活動卡在 sending 的回收**：`process-scheduled-campaigns` 會回收逾時卡在 `sending` 的活動重新派送（resume-dedup 保證不重複寄送）。
+- **每日任務摘要不再截斷**：`task-reminders` 由全組織上限 500 筆改為分頁取回全部。
+- **suppression 匯入分批**：`import-suppressions` 的 email/contact_id `.in()` 查詢改為分批（200 筆），避免大清單超出查詢長度限制。
+- **Telegram 更新去重**：`telegram_dedup` insert 僅在唯一鍵衝突（23505）時視為重複，暫時性 DB 錯誤不再靜默丟棄使用者訊息。
+- **群發互動紀錄寫入失敗留痕**：`/api/email/send` 的 `interaction_logs` 批次寫入失敗改為記錄（不再靜默吞掉）。
+
+### i18n
+- 修正 `/admin/trash`、`/admin/health`、`/admin/reports` 三頁硬編中文，改走 i18n，並同步三語翻譯檔（新增 `common.clear`、`trash.*`、`health.*`、`hunter.credits*` 等 key）。
+
+### 文件
+- **README** 全面更新至 v8.x（AI 端點/金鑰/模型三層指派、Portkey、OpenAI 相容端點、org_id/`ai_feature_models`/`ai_chat_sessions`/`ai_endpoints.kind` schema、個人模型已移除、Node 20+）。
+- **CLAUDE.md** 技術棧修正（OCR 改為 `aiRouting` 動態指派）＋重要路徑補 `aiRouting.ts`/`openaiAgent.ts`/`src/proxy.ts`。
+- **HANDOVER.md** 重新生成對應 v8.1.5 現況；**PRD.md** 第二章歷史更正（Telegraf、`gemini_models`）＋文末指向 CHANGELOG；**`.env.local.example`** 補齊 SendGrid/Cron/Admin/NextAuth/組織等缺漏變數。
+- 新增 **`UAT-v8.md`**（v8.0.0→v8.1.5 delta 驗收清單，7 章 28 項）；`docs/deployment/setup.md`、`docs/webdocs/README.md`、`docs/newsletter-templates/README.md` 小幅更新。
+- 測試：新增 `orQuote` 單元測試（vitest 89 條全綠）。
+
 ## v8.1.5 — v8 全面 code review 修正（2026-07-11）
 
 ### 變更項目

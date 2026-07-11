@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
+import { hasNewsletterAccess } from '@/lib/newsletterAccess'
 
 // POST — duplicate a campaign into a fresh draft
 //
@@ -12,6 +13,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await hasNewsletterAccess(user.email))) {
+    return NextResponse.json({ error: 'Forbidden — newsletter permission required' }, { status: 403 })
+  }
 
   const service = createServiceClient()
   const { data: me } = await service.from('users').select('id').ilike('email', user.email).maybeSingle()

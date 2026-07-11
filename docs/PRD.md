@@ -65,6 +65,10 @@
 
 ## 二、技術棧規格
 
+> **歷史更正（2026-07-11）**：本章為 v0.1 規劃時點的原始規格，以下聲明與現況不符，僅保留追溯：
+> - 「不使用 Telegraf」→ 實際 bot 以 **Telegraf** 實作（見 `package.json`）。
+> - 「model 從 `gemini_models` 表動態讀取」→ `gemini_models` 已由 `ai_models` 取代，v8.0.0 起再演進為 **`ai_endpoints` / `ai_models` / `ai_feature_models` 三層指派**（`src/lib/aiRouting.ts`）；v8.1.0 起**個人模型選擇已移除**，一律組織指派。第四章資料庫結構中的 `gemini_models` 表與 `users.gemini_model` 欄位同屬歷史，現行 schema 以 `supabase/migrations/` 為準。
+
 ### Frontend / Backend
 - **Framework**：Next.js 16，使用 App Router、TypeScript、ESLint、Tailwind CSS、`src/` 目錄結構
 - **RWD**：所有頁面必須 mobile friendly，使用 Tailwind responsive prefix（sm / md / lg）
@@ -4213,6 +4217,8 @@ Claude Code 讀取後可：
 
 ## 四十五、v8.0 — SaaS 多租戶化（功能規格）
 
+> **命名注意（2026-07-11）**：本章的「v8.0」是**多租戶計畫的內部代號**，與實際發行的 **v8.0.0（AI 功能 × 端點/金鑰/模型指派系統，2026-07-08）無關**。多租戶計畫 Phase 0–2＋3A 已完成（v7.9.0–v7.9.4），Phase 3 Batch B（Task 183/184）與 Task 186 於 2026-07-06 起暫緩。
+
 > **目標**：在不中斷現有 cancerfree.io 單租戶服務的前提下，逐步把系統改為多租戶 SaaS。採 **Shared DB + `org_id` + RLS（單一 Supabase project）** 模型。
 
 ### 45.1 租戶模型選擇
@@ -4648,3 +4654,9 @@ create index on public.contact_briefings (meeting_at) where status = 'pending';
 **Phase 4 — 收尾**
 - [ ] **Task 225** `[新增]` — 觀測：briefing 失敗率、search API 用量/成本上限（仿 Hunter `remainingBuffer`）
 - [ ] **Task 226** `[修改]` — 文件：更新 `docs/mcp-v2-plan.md`（工具抽離）+ 新增 briefing/chatbot 設計文件
+
+---
+
+## 後續版本索引（2026-07-11 註）
+
+> 本 PRD 的逐版規格章節止於第五十章（v7.2）。**v7.3.0 之後的所有功能與變更**（含組織設定、稽核日誌、GDPR/DSAR、Hunter enrichment、MCP v2、電子報 A/B、v8.0.0 AI 端點/金鑰/模型指派系統、v8.1.x 系列）**不再增補 PRD 章節，一律以 [CHANGELOG.md](CHANGELOG.md) 為準**；使用者手冊來源在 `docs/webdocs/`（正式內容存 DB `docs_content`）。

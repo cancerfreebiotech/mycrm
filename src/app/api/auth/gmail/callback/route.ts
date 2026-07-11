@@ -18,6 +18,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL('/', req.url))
   }
 
+  // CSRF: the state echoed by Google must match the cookie set at initiation.
+  const returnedState = req.nextUrl.searchParams.get('state')
+  const cookieState = req.cookies.get('gmail_oauth_state')?.value
+  if (!returnedState || !cookieState || returnedState !== cookieState) {
+    return NextResponse.redirect(new URL('/admin/reports?error=state', req.url))
+  }
+
   const code = req.nextUrl.searchParams.get('code')
   if (!code) {
     return NextResponse.redirect(new URL('/admin/reports?error=no_code', req.url))
@@ -74,5 +81,7 @@ export async function GET(req: NextRequest) {
     await service.from('gmail_oauth').insert(row)
   }
 
-  return NextResponse.redirect(new URL('/admin/reports?gmail=connected', req.url))
+  const done = NextResponse.redirect(new URL('/admin/reports?gmail=connected', req.url))
+  done.cookies.delete('gmail_oauth_state')
+  return done
 }

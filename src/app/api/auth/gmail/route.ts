@@ -20,6 +20,10 @@ export async function GET() {
   const clientId = process.env.GOOGLE_CLIENT_ID!
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/gmail/callback`
 
+  // CSRF protection: bind the callback to this initiation via an unguessable
+  // state echoed back by Google and matched against an httpOnly cookie.
+  const state = crypto.randomUUID()
+
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
@@ -27,7 +31,16 @@ export async function GET() {
     scope: 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/userinfo.email',
     access_type: 'offline',
     prompt: 'consent',
+    state,
   })
 
-  return NextResponse.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`)
+  const res = NextResponse.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`)
+  res.cookies.set('gmail_oauth_state', state, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 600,
+  })
+  return res
 }

@@ -30,7 +30,9 @@ function daysAgo(days: number): string {
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  // Fail closed: this route irreversibly purges data, so a missing CRON_SECRET
+  // must block it (never run unauthenticated) rather than skip the check.
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

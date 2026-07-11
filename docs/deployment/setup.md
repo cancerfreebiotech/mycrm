@@ -35,7 +35,7 @@ nav_order: 1
 | `ADMIN_SECRET` | 保護管理用 API（如註冊 Webhook）的密鑰 |
 | `PORTKEY_API_KEY` | Portkey AI Gateway API Key；所有 AI 呼叫的主要路徑 |
 | `PORTKEY_CONFIG_ID` | Portkey Config ID，定義路由與重試策略 |
-| `GEMINI_API_KEY` | Google Gemini API Key；Portkey 不可用時的備援，並供 AI 對話/情報功能使用 |
+| `GEMINI_API_KEY` | Google Gemini API Key；Portkey 不可用時的備援，並供 AI 對話/情報功能使用。註：v8.0.0 起各 AI 功能的端點/金鑰/模型主要由 `/admin/models`（`ai_endpoints`/`ai_models`/`ai_feature_models`）管理，未指派時才回退到這些環境變數 |
 | `SENDGRID_API_KEY` | SendGrid API Key；所有郵件寄送 |
 | `SENDGRID_FROM_EMAIL` | 寄件人 email（須通過 SendGrid 驗證） |
 | `SENDGRID_WEBHOOK_SECRET` | 驗證 SendGrid 事件 Webhook 簽章的密鑰（開信／點擊／退信／退訂等事件回報） |
@@ -89,8 +89,10 @@ nav_order: 1
 | `user_assistants` | 主管與助理對應 |
 | `bot_sessions` | Telegram Bot 多步驟對話狀態 |
 | `pending_contacts` | 名片待確認暫存 |
-| `ai_endpoints` | AI 服務商管理 |
+| `ai_endpoints` | AI 端點/服務商管理（`kind` 分 google 直連與 openai 相容） |
 | `ai_models` | AI 模型管理 |
+| `ai_feature_models` | AI 功能→端點/模型指派（v8.0.0） |
+| `ai_chat_sessions` | AI 助理網頁版對話持久化（v8.1.2） |
 | `report_schedules` | 報表排程 |
 | `gmail_oauth` | Gmail OAuth Token 儲存 |
 | `email_templates` | 郵件範本 |

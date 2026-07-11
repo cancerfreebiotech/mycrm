@@ -39,6 +39,10 @@ export async function GET() {
       .select(SELECT_FIELDS)
       .is('deleted_at', null)
       .order('last_activity_at', { ascending: false })
+      // secondary unique key: last_activity_at is non-unique (many NULLs), so
+      // without a stable tiebreaker the range() boundaries between parallel
+      // page fetches can drift → rows duplicated or dropped across batches.
+      .order('id', { ascending: true })
       .range(from, from + BATCH_SIZE - 1)
       .then((r) => ({ data: r.data as unknown[] | null, error: r.error })) as Promise<{ data: unknown[] | null; error: { message: string } | null }>
     pagePromises.push(p)

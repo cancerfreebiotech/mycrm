@@ -41,7 +41,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `相似名稱掃描失敗：${nameErr.message}` }, { status: 500 })
   }
 
+  // Pre-seed `seen` with pairs the user already ignored (kept by the delete
+  // above) so re-detected ignored pairs aren't re-inserted as fresh
+  // (is_ignored=false) rows — which would resurrect them in the review queue.
+  const { data: ignoredPairs, error: ignoredErr } = await db
+    .from('duplicate_pairs')
+    .select('contact_id_a, contact_id_b')
+    .eq('is_ignored', true)
+  if (ignoredErr) {
+    return NextResponse.json({ error: `讀取已忽略配對失敗：${ignoredErr.message}` }, { status: 500 })
+  }
+
   const seen = new Set<string>()
+  for (const p of ignoredPairs ?? []) {
+    seen.add([p.contact_id_a, p.contact_id_b].sort().join('|'))
+  }
   const inserts: Array<{
     contact_id_a: string
     contact_id_b: string

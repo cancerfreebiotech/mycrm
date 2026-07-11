@@ -20,6 +20,7 @@
     "status": "Status",
     "enabled": "Enabled",
     "disabled": "Disabled",
+    "clear": "Clear",
     "yes": "Yes",
     "no": "No",
     "unknown": "Unknown",
@@ -956,7 +957,9 @@
     "resetDone": "Reset {count} records",
     "refresh": "Refresh",
     "disabledNotice": "The Hunter module is disabled in organization settings, so this batch lookup was skipped.",
-    "disabledGoToSettings": "Go to organization settings"
+    "disabledGoToSettings": "Go to organization settings",
+    "creditsRemaining": "{remaining} / {available} credits remaining",
+    "creditsUsedThisMonth": "(Used {used} this month)"
   },
   "login": {
     "docs": "Documentation",
@@ -1598,7 +1601,14 @@
     "confirmBulkDelete": "Permanently delete these {count} contacts? Related card images will be removed as well. This cannot be undone.",
     "confirmDeleteAll": "Permanently delete all {count} contacts in trash? Related card images will be removed as well. This cannot be undone.",
     "bulkDeleteSuccess": "{count} contacts permanently deleted",
-    "bulkDeleteFailed": "Bulk delete failed"
+    "bulkDeleteFailed": "Bulk delete failed",
+    "noPermission": "You do not have permission to access this page",
+    "pageDescription": "Contacts moved to trash can be restored, or permanently deleted by a Super Admin",
+    "restore": "Restore",
+    "permanentDelete": "Permanently delete",
+    "sectionCards": "Business Cards",
+    "sectionInteractionLogs": "Interaction Logs ({count})",
+    "remainingLogs": "{count} more logs not shown"
   },
   "tiptap": {
     "varName": "Name",
@@ -1674,7 +1684,15 @@
     "budgetSave": "Save thresholds",
     "budgetSaving": "Saving…",
     "budgetSaved": "Thresholds saved",
-    "budgetSaveError": "Save failed"
+    "budgetSaveError": "Save failed",
+    "serviceStatusOk": "OK",
+    "serviceStatusError": "Error",
+    "serviceStatusUnconfigured": "Not configured",
+    "pageTitle": "System Status",
+    "lastCheckedLabel": "Last checked: {lastChecked}",
+    "autoRefreshLabel": "Auto-refresh every 30 seconds",
+    "summaryCounts": "{ok} OK · {error} down · {unconfigured} unconfigured",
+    "fetchFailed": "Unable to fetch status, please retry"
   },
   "permission": {
     "noPermission": "No permission",

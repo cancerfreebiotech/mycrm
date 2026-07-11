@@ -277,7 +277,7 @@ export default function ReportsPage() {
                   onClick={() => setSelectedTagIds([])}
                   className="mt-1.5 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                 >
-                  清除
+                  {tc('clear')}
                 </button>
               )}
             </div>
@@ -346,7 +346,7 @@ export default function ReportsPage() {
                         onClick={() => setSelectedCreatorIds([])}
                         className="w-full text-left px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600 border-t border-gray-100 dark:border-gray-700 mt-1 pt-1"
                       >
-                        清除
+                        {tc('clear')}
                       </button>
                     )}
                   </div>
@@ -383,7 +383,7 @@ export default function ReportsPage() {
                   onClick={() => setSelectedCountries([])}
                   className="mt-1.5 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                 >
-                  清除
+                  {tc('clear')}
                 </button>
               )}
             </div>

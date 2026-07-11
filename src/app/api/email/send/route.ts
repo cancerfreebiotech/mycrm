@@ -426,7 +426,10 @@ export async function POST(req: NextRequest) {
     }))
 
     for (let i = 0; i < logRows.length; i += 500) {
-      await db.from('interaction_logs').insert(logRows.slice(i, i + 500))
+      const { error: logErr } = await db.from('interaction_logs').insert(logRows.slice(i, i + 500))
+      // Don't fail the send (mail already went out), but surface the loss —
+      // silently dropping these skews interaction history and analytics.
+      if (logErr) console.error('[email/send] interaction_logs insert failed:', logErr.message)
     }
   }
 

@@ -1,80 +1,63 @@
 # myCRM — 交接文件（Handover）
 
-> 產生時間：2026-07-05 · 對應版本：**v7.8.0**（已 commit `9292846`）
-> 給下一個 Claude Code session 快速接手用。先讀本檔，再讀 `CLAUDE.md` 與 `AUDIT-2026-07-04.md`。
+> 產生時間：2026-07-11 · 對應版本：**v8.1.5**（已 commit `fdada11`、已 push）
+> 給下一個 Claude Code session 快速接手用。先讀本檔，再讀 `CLAUDE.md`。
 
 ---
 
 ## 1. 現況（Where we are）
 
-- **版本**：`package.json` = `7.8.0`，已 commit（`9292846 feat(...): 稽核 backlog 22 項功能全數實裝 v7.8.0`），已 push、已寄發版通知給全體 17 人。
-- **v7.8.0 內容**：`AUDIT-2026-07-04.md` 的 28 項功能建議中 → **25 項實裝、1 項確認已存在、2 項誤報不做**。細節見 `docs/CHANGELOG.md` 最上方。
-- **工作區狀態**：有 **21 個未 commit 的 docs 檔案**（v7.8.0 的使用手冊更新，zh-TW/en/ja 三語），內容已完成、已核對過原始碼，只差 commit。清單見下方第 2 節。
+- **版本**：`package.json` = `8.1.5`，`main` 分支乾淨、已 push。發版通知（notify-release）已全數寄出。
+- **主線狀態**：v8.0 AI 功能指派系統已出貨並演進至 v8.1.x 系列（見下方第 3 節）；v8.0 SaaS 多租戶化 Phase 0–2 + 3A 已完成、Phase 3 Batch B 起擱置中。
+- **測試**：`npm run test`（vitest），核心 util 測試在 `src/lib/__tests__/`，目前 **84 條**。新增 util 記得補測。
 
 ### ⚠️ 環境關鍵事實（動手前必讀）
 
 | 事項 | 內容 |
 |---|---|
 | **正式 DB** | Supabase ref = **`gaxjgcztzfxokesiraai`**。舊的 `zaqzqcvsckripotuujep` 已棄用但 MCP 仍看得到——**改 DB 前先確認 ref**。 |
-| **v7.8.0 schema 是 prod-only** | 以下改動只用 `execute_sql` 打在正式 DB，**沒進 repo 的 migrations**：`bot_errors` 表；`contact_briefings` += `notify_user_id`、`outcome_prompted_at`；`newsletter_campaigns` += `ab_test_pct`、`ab_wait_minutes`、`ab_winner`、`ab_decided_at`；`newsletter_recipients` += `error`。另 v7.7.2 的 `protect_super_admin()` trigger 也是 prod-only。 |
 | **middleware 檔名** | 是 `src/proxy.ts`，**不是** `middleware.ts`（Next.js 16 專案慣例）。 |
 | **user 身分解析** | `auth.users.id ≠ public.users.id`，全系統靠 **email** 比對，勿改用 id。 |
 | **users 欄位授權** | prod 對 `users` 做欄位級 SELECT GRANT（v7.2.8）——新增欄位要手動補 GRANT，前端禁 `select('*')`。 |
+| **AI 模型解析** | 一律**組織指派**（`ai_feature_models` + `aiRouting.ts`）；個人模型選擇已於 v8.1.0 移除（`users.ai_model_id` 保留欄位但停止讀寫）。 |
+| **使用者手冊在 DB** | 使用者看的手冊是 DB `docs_content`（`/docs` 頁，3 章 × 3 語 = 9 列）；repo `docs/webdocs/` 只是**來源**，改完要同步入庫並 **md5 逐列對帳**。詳下方第 4 節。 |
 | **溝通語言** | 只用中文與英文，不用日文。 |
-| **群發郵件** | 全體寄信需使用者明確授權；SendGrid 憑證只在 `~/.claude/notify-release.env`。 |
-| **notify-release** | docs-only 的 commit 要 **skip** 發版通知。 |
+| **群發郵件** | 全體寄信需使用者明確授權；SendGrid 憑證只在 `~/.claude/notify-release.env`。docs-only commit 要 skip notify-release。 |
 
 ---
 
-## 2. 還沒做的（Not done）
+## 2. 已完成（v7.8.1 → v8.1.5，按主題歸納）
 
-### A. 待 commit — v7.8.0 文件更新（唯一的立即工作）
-21 個檔案在工作區未 commit，全部是 v7.8.0 功能的使用手冊，三語同步、已核對原始碼：
-
-- `docs/bot/commands.{md,en,ja}` — `/v` 一句話拜訪
-- `docs/features/tasks.{md,en,ja}` — 摘要按鈕（完成/+1天）+ 今日會議
-- `docs/features/social-briefing.{md,en,ja}` — Telegram 推播 + 會後提示
-- `docs/features/newsletter-campaigns.{md,en,ja}` — A/B holdout 改寫 + UTM + 失敗明細 + 逐名單退訂 + 總覽儀表板
-- `docs/admin/users.{md,en,ja}` — 停用/離職
-- `docs/admin/index.{md,en,ja}` — 新增的 super_admin 頁面
-- `docs/getting-started/first-login.{md,en,ja}` — 導覽列新增項
-
-> `docs/admin/duplicates.md` 的「AI 建議合併」已在文件內（line 46），此缺口已補。
-> 建議：以 **docs commit** 送出（版本可不動或 v7.8.1 docs），**skip notify-release**。
-
-### B. Bug 檢查沒有有效完成 ⚠️
-針對 v7.8.0 的 code-review workflow **8 個 finder agent 有 7 個因「monthly spend limit」失敗**，結果雖顯示「無 findings」但**無效**（finder 根本沒跑）。下一個 session 需要：spend limit 恢復後重跑 `Workflow({ name: "code-review", args: "xhigh HEAD~1..HEAD --effort high" })`，或做一次 inline 人工 review。**目前 v7.8.0 尚未經過可信的 bug 審查。**
-
-### C. v7.8.0 小 follow-up（低優先）
-- **CAN-SPAM 地址寫死**在 `docs/newsletter-templates/skeleton-*.html`，接不到 org-settings。
-- **usage_limit UI**：預算門檻目前只能寫 `system_settings`，沒有設定畫面（告警邏輯已在 `health-watchdog`）。
-- **A/B legacy 50/50 toggle**：舊的整份 50/50 模式沒有明確切換入口（新的是小樣本+自動送贏家）。
-- **停用帳號的 session 撤銷**：`suspend` 會擋下次登入，但不會即時踢掉現有 session。
-
-### D. v7.8.0 待 live 驗證（memory 既有）
-- `/v` 一句話拜訪、任務摘要按鈕（`trdone_`/`trsnooze_`）需 live bot 驗證。
-- A/B holdout 在第一次真實活動時觀察 winner 是否自動送出。
+- **品質批次 / 測試基建**（v7.8.1、v7.9.5）：vitest + `npm run test` 落地；v7.8.0 的多代理 code-review 修復 15 項缺陷；停權即時踢 session（`is_suspended()` RPC + proxy gate）；用量預算門檻 UI（`/admin/health`）；稽核日誌動作標籤補齊；v7.7.2/v7.8.0 prod-only schema 全數回填 repo migrations。
+- **電子報 follow-up 清倉**（v7.9.6）：A/B 模式 UI 入口（小樣本自動送贏家 / 全名單 50/50）、Hunter 停用提示、分析去重計數、總覽 DB 端聚合 RPC、`/api/me` 提速、批次上傳 i18n。
+- **手冊全功能重寫 + 入庫**（v7.9.7、v7.9.8、v7.9.9）：`/docs` 三章 × 三語重寫並對照原始碼驗證；手冊唯一來源整併至 `docs/webdocs/`；GitBook Git Sync 已斷並清除殘留；電子報行內編輯器字體統一 + 回饋回報者確認制（回報者本人結案）。
+- **v8.0.0 — AI 功能 × 端點/金鑰/模型指派系統**：新增路由層 `src/lib/aiRouting.ts`，8 個 AI 功能可各自指派端點/模型（新表 `ai_feature_models`）；`ai_endpoints.kind` 支援 `google`（Gemini SDK 直連）與 `openai`（任何 `/chat/completions` 相容服務，含地端）；`/admin/models` 測試按鈕（`POST /api/ai-test`）；9 個寫死模型觸點遷移至路由層。
+- **v8.1.x 系列**：
+  - v8.1.0 — 功能指派全開放（移除 Google-only 硬限制，OpenAI 相容端點走 `openaiAgent.ts` 工具迴圈）+ 「目前生效」透明化（`GET /api/ai-feature-assign`）+ **移除個人模型選擇**。
+  - v8.1.1 — 中文/日文輸入法組字 Enter 選字誤送出修復（共用 `src/lib/imeGuard.ts`，全站 21 處輸入框）。
+  - v8.1.2 — AI 助理網頁版對話持久化（新表 `ai_chat_sessions`，保留最近 40 則 + 清除對話）。
+  - v8.1.3 — 聯絡人頁自動載回已存的會議前 Briefing（`GET /api/social-briefing/latest`）。
+  - v8.1.4 — Vercel function 固定東京區 `hnd1`（與 Supabase ap-northeast-1 同區，消除跨太平洋延遲）。
+  - v8.1.5 — v8 全面 code review 修正：水合競態（聊天/Briefing）、OpenAI 端點空回覆兜底、停用模型的管理頁誠實提示、手冊 `docs_content` 9 列自來源完整重同步（修復 07-11 凌晨被外部改寫）。
 
 ---
 
-## 3. 接下來的 Roadmap
+## 3. 未完成 / 擱置（Not done）
 
-### 🎯 主線：v8.0 — SaaS 多租戶化
-把 myCRM 從「cancerfree.io 單租戶」改為「可賣的多租戶 SaaS」。模型：**Shared DB + `org_id` + RLS（單一 Supabase project）**。完整規格在 `docs/PRD.md`「四十四～四十六章」。分階段（每階段結束系統仍可正常運作）：
-
-- ✅ **Phase 0 — 基礎設施** Task 171-175：**已完成（2026-07-05，v7.9.0）**。43 張業務表已有 `org_id`（nullable + FK + DEFAULT=default org）、`organization_invites` 已建、`granted_features` 已複製到 members、11 個複合唯一索引與既有 UNIQUE 並存。migration 檔在 `supabase/migrations/`（自此 schema 改動進 repo）。細節與實作差異見 PRD 四十六章 Phase 0 註記。
-- **Phase 1 — API 層 org 注入（隔離主防線）** Task 176-179：Auth Hook 注入 org_id claim + `active_org_id` cookie；**81 個 route** 逐批導入 `getOrgContext()` + `.eq('org_id')`；CI lint 禁裸 `createServiceClient()`；bot 加 org 綁定。
-- **Phase 2 — 收緊 + RLS/Storage** Task 180-182：`org_id` SET NOT NULL；重寫 `rls_security.sql`（`current_org_id()`/`is_org_member()`）；Storage 加 `{org_id}/` 前綴、轉 private + signed URL。
-- **Phase 3 — Onboarding/Auth 開放** Task 183-186：移除 `auth/callback` 網域強制、登入分流；`/onboarding` + 邀請流程 + org switcher；26 處 hardcode 搬到 `organizations.settings`；Azure AD 改 multi-tenant 或加開放 OAuth。
-- ~~**Phase 4 — 計費/Quota** Task 187-190~~：**已自 roadmap 移除（2026-07-05 決策，目前不做）**，規格保留於 PRD 45.6。
-
-> 注意：v7.7.0 已鋪了一部分多租戶鷹架與組織設定頁，動 v8.0 前先確認現況與 PRD 對齊。
-
-### 其他 roadmap
-- **v7.1 P2 相簿人臉辨識**：資料層已備妥，但推論**不能跑 Supabase Edge**（face-api 撞 160s 上限）——未來改用 worker 容器。見 memory `project_face_recognition_edge_infeasible.md`。
+- **v8.0 SaaS 多租戶化 — Phase 3 Batch B 起擱置**（Po 2026-07-06 決策）：Phase 0–2 + 3A 已完成（v7.9.0–v7.9.4，行為等價基礎設施、單租戶零影響）。**擱置中的**：Task 183/184（`/onboarding` + 邀請流程 + org switcher、移除 `auth/callback` 網域強制/登入分流）與 Task 186（Azure AD 改 multi-tenant 或加開放 OAuth）。重啟時從 **`docs/PRD.md` 第四十六章**（v8.0 開發任務清單）接續。
+- **相簿人臉辨識 worker 未做**：資料層已備妥，但推論**不能跑 Supabase Edge**（face-api 撞 160s 上限）——需 worker 容器基礎設施決策。見 memory `project_face_recognition_edge_infeasible.md`。
+- **Live 實測待補**：v7.8.0/v7.9 系列部分功能需真人實測（清單在 repo 根 `UAT-v7.9.md`）。
 
 ---
 
-## 4. 給下一個 session 的一段話（可直接貼）
+## 4. 重要事實補充（給下一個 session）
 
-> 接手 myCRM（Next.js 16 / Supabase / Telegram Bot CRM）。目前在 `main` 的 **v7.8.0**（commit `9292846`，已 push）：`AUDIT-2026-07-04.md` 的功能 backlog 已全數處理（25 實裝 / 1 已存在 / 2 誤報）。**先做這兩件事**：(1) 工作區有 21 個未 commit 的 v7.8.0 文件更新（三語，已核對原始碼），請以一個 docs commit 送出並 **skip notify-release**；(2) v7.8.0 的 bug review 之前因額度上限失敗、**尚未有效完成**，請重跑 `Workflow({ name: "code-review", args: "xhigh HEAD~1..HEAD --effort high" })` 或做一次 inline review。**動手前務必記住**：正式 DB ref 是 `gaxjgcztzfxokesiraai`（別碰 `zaqzqcvsckripotuujep`）；v7.8.0 的 schema 改動是 **prod-only、沒進 repo migrations**（`bot_errors` 表、`contact_briefings`/`newsletter_campaigns`/`newsletter_recipients` 的新欄位、`protect_super_admin` trigger）；middleware 是 `src/proxy.ts`；使用者一律用 **email** 解析（`auth.users.id ≠ public.users.id`）；改 `users` 欄位要手動補 SELECT GRANT；只用中文溝通；全體寄信需明確授權。**接下來的主線是 v8.0 SaaS 多租戶化**（`org_id` + RLS，Phase 0-4，規格在 `docs/PRD.md` 四十四～四十六章）。完整交接細節見 `HANDOVER.md`。
+- **手冊同步流程**：改 `docs/webdocs/` 後必須同步入 DB `docs_content`（9 列 = 3 章 × 3 語），並**逐列 md5 對帳**確認一致。⚠️ 2026-07-11 凌晨 `docs_content` 曾被外部自動化（疑 Po 其他帳號的 02:00 JST routine）改寫成精簡版、已於 v8.1.5 還原；再發生先查 Po 其他帳號排程。見 memory `project_docs_content_overwrite_incident.md`、`project_docs_live_in_db.md`。
+- **AI 模型一律組織指派**：任何新增 AI 觸點都應走 `aiRouting.ts` 解析（功能指派 → 系統預設 env 通道），不要引入個人模型參數。
+- **schema 進 repo**：自 v7.9.0 起 schema 改動一律進 `supabase/migrations/`（早期 v7.7.2/v7.8.0 的 prod-only schema 已於 v7.9.5 回填，migrations 可完整重放）。
+
+---
+
+## 5. 給下一個 session 的一段話（可直接貼）
+
+> 接手 myCRM（Next.js 16 / Supabase / Telegram Bot CRM）。目前在 `main` 的 **v8.1.5**（commit `fdada11`，已 push，發版通知已寄）。近期主線是 **AI 功能指派系統**（v8.0.0 起，路由層 `src/lib/aiRouting.ts` + 表 `ai_feature_models`，v8.1.0 全開放並移除個人模型選擇——AI 模型一律**組織指派**）與其後的 v8.1.x 修補（IME Enter、chat 持久化、Briefing 載回、東京區、v8 全面 review）。**動手前務必記住**：正式 DB ref 是 `gaxjgcztzfxokesiraai`（別碰 `zaqzqcvsckripotuujep`）；middleware 是 `src/proxy.ts`；使用者一律用 **email** 解析（`auth.users.id ≠ public.users.id`）；改 `users` 欄位要手動補 SELECT GRANT、前端禁 `select('*')`；使用者手冊在 DB `docs_content`（`/docs`，3 章 × 3 語），改 `docs/webdocs/` 後要同步入庫並 **md5 逐列對帳**；跑測試 `npm run test`（vitest，`src/lib/__tests__`，84 條）；只用中文溝通；全體寄信需明確授權。**擱置中的主線**：v8.0 多租戶 Phase 3 Batch B（Task 183/184）與 Task 186（Po 2026-07-06 決策），重啟從 `docs/PRD.md` 第四十六章接續；相簿人臉辨識 worker 仍待容器基礎設施。完整交接細節見本檔。

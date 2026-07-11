@@ -22,6 +22,31 @@ function dedupeByEmail<T extends { email: string }>(rows: T[]): T[] {
   return [...m.values()]
 }
 
+// A SendGrid suppression list can be thousands of rows; a single .in() with
+// that many values overflows the PostgREST query string. Chunk all email/id
+// lists before filtering.
+const IN_CHUNK = 200
+function chunk<T>(arr: T[]): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += IN_CHUNK) out.push(arr.slice(i, i + IN_CHUNK))
+  return out
+}
+async function updateContactStatusByEmail(db: OrgDb, emails: string[], status: string): Promise<void> {
+  for (const batch of chunk(emails)) {
+    await db.from('contacts').update({ email_status: status }).in('email', batch).is('deleted_at', null)
+  }
+}
+async function selectExistingContactEmails(db: OrgDb, emails: string[]): Promise<Set<string>> {
+  const found = new Set<string>()
+  for (const batch of chunk(emails)) {
+    const { data } = await db.from('contacts').select('email').in('email', batch).is('deleted_at', null)
+    for (const c of (data ?? []) as { email: string | null }[]) {
+      if (c.email) found.add(c.email.toLowerCase().trim())
+    }
+  }
+  return found
+}
+
 /** Paginate through a SendGrid suppression endpoint and return all records */
 async function sgFetchAll<T>(path: string, apiKey: string, extraParams = ''): Promise<T[]> {
   const all: T[] = []
@@ -55,25 +80,31 @@ async function createSendGridLogs(
 
   const emails = Array.from(emailToInfo.keys())
 
-  // Find matching CRM contacts
-  const { data: contacts } = await supabase
-    .from('contacts')
-    .select('id, email')
-    .in('email', emails)
-    .is('deleted_at', null) as { data: { id: string; email: string | null }[] | null }
-  if (!contacts || contacts.length === 0) return 0
+  // Find matching CRM contacts (chunked — a suppression list can be thousands)
+  const contacts: { id: string; email: string | null }[] = []
+  for (const batch of chunk(emails)) {
+    const { data } = await supabase
+      .from('contacts')
+      .select('id, email')
+      .in('email', batch)
+      .is('deleted_at', null) as { data: { id: string; email: string | null }[] | null }
+    if (data) contacts.push(...data)
+  }
+  if (contacts.length === 0) return 0
 
   const contactIds = contacts.map((c) => c.id)
 
-  // Check which contacts already have a SendGrid log of this type
-  const { data: existingLogs } = await supabase
-    .from('interaction_logs')
-    .select('contact_id')
-    .in('contact_id', contactIds)
-    .eq('type', 'system')
-    .ilike('content', `${contentPrefix}%`) as { data: { contact_id: string }[] | null }
-
-  const alreadyLogged = new Set((existingLogs ?? []).map((l) => l.contact_id))
+  // Check which contacts already have a SendGrid log of this type (chunked)
+  const alreadyLogged = new Set<string>()
+  for (const batch of chunk(contactIds)) {
+    const { data: existingLogs } = await supabase
+      .from('interaction_logs')
+      .select('contact_id')
+      .in('contact_id', batch)
+      .eq('type', 'system')
+      .ilike('content', `${contentPrefix}%`) as { data: { contact_id: string }[] | null }
+    for (const l of existingLogs ?? []) alreadyLogged.add(l.contact_id)
+  }
 
   // Build log rows only for contacts that don't have one yet
   const logRows = contacts
@@ -116,12 +147,10 @@ async function runImport() {
       const emails = rows.map((r) => r.email)
 
       // Update contacts.email_status for CRM contacts (canonical source for contacts)
-      await db.from('contacts').update({ email_status: 'bounced' }).in('email', emails).is('deleted_at', null)
+      await updateContactStatusByEmail(db, emails, 'bounced')
 
       // Find which emails have matching CRM contacts — those skip blacklist (status is enough)
-      const { data: matchingContacts } = await db
-        .from('contacts').select('email').in('email', emails).is('deleted_at', null)
-      const contactEmails = new Set(((matchingContacts ?? []) as { email: string }[]).map((c) => c.email.toLowerCase().trim()))
+      const contactEmails = await selectExistingContactEmails(db, emails)
       const blacklistRows = rows.filter((r) => !contactEmails.has(r.email))
 
       if (blacklistRows.length > 0) {
@@ -156,11 +185,9 @@ async function runImport() {
       }))
       const emails = rows.map((r) => r.email)
 
-      await db.from('contacts').update({ email_status: 'invalid' }).in('email', emails).is('deleted_at', null)
+      await updateContactStatusByEmail(db, emails, 'invalid')
 
-      const { data: matchingContacts } = await db
-        .from('contacts').select('email').in('email', emails).is('deleted_at', null)
-      const contactEmails = new Set(((matchingContacts ?? []) as { email: string }[]).map((c) => c.email.toLowerCase().trim()))
+      const contactEmails = await selectExistingContactEmails(db, emails)
       const blacklistRows = rows.filter((r) => !contactEmails.has(r.email))
 
       if (blacklistRows.length > 0) {
@@ -200,7 +227,7 @@ async function runImport() {
       if (error) throw new Error(error.message)
 
       const emails = rows.map((r) => r.email)
-      await db.from('contacts').update({ email_status: 'unsubscribed' }).in('email', emails).is('deleted_at', null)
+      await updateContactStatusByEmail(db, emails, 'unsubscribed')
 
       const emailToInfo = new Map(unsubs.map((u) => [
         u.email.toLowerCase().trim(),
@@ -228,11 +255,9 @@ async function runImport() {
       }))
       const emails = rows.map((r) => r.email)
 
-      await db.from('contacts').update({ email_status: 'recipient_blocked' }).in('email', emails).is('deleted_at', null)
+      await updateContactStatusByEmail(db, emails, 'recipient_blocked')
 
-      const { data: matchingContacts } = await db
-        .from('contacts').select('email').in('email', emails).is('deleted_at', null)
-      const contactEmails = new Set(((matchingContacts ?? []) as { email: string }[]).map((c) => c.email.toLowerCase().trim()))
+      const contactEmails = await selectExistingContactEmails(db, emails)
       const blacklistRows = rows.filter((r) => !contactEmails.has(r.email))
       if (blacklistRows.length > 0) {
         const { error } = await db.from('newsletter_blacklist').upsert(dedupeByEmail(blacklistRows), { onConflict: 'org_id,email' })
@@ -258,7 +283,7 @@ async function runImport() {
     if (spam.length > 0) {
       const emails = spam.map((s) => s.email.toLowerCase().trim())
 
-      await db.from('contacts').update({ email_status: 'spam_report' }).in('email', emails).is('deleted_at', null)
+      await updateContactStatusByEmail(db, emails, 'spam_report')
 
       const unsubRows = spam.map((s) => ({
         email: s.email.toLowerCase().trim(),

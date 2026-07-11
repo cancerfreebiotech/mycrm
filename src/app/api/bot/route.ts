@@ -16,6 +16,7 @@ import { getOrgSetting } from '@/lib/orgSettings'
 import { systemOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 import { resolveTouchpoint } from '@/lib/aiRouting'
 import { runOpenAiToolLoop } from '@/lib/openaiAgent'
+import { orQuote } from '@/lib/likeEscape'
 
 // v8.0 Phase 3 (Task 185): app base URL for links in bot messages.
 // Env still wins (backward-compat); otherwise the org's configured app_url,
@@ -426,7 +427,7 @@ async function searchContacts(query: string): Promise<ContactHit[]> {
     .from('contacts')
     .select('id, name, company, job_title, email, phone, card_img_url, card_img_back_url')
     .is('deleted_at', null)
-    .or(`name.ilike.%${query}%,company.ilike.%${query}%,email.ilike.%${query}%`)
+    .or(`name.ilike.${orQuote(`%${query}%`)},company.ilike.${orQuote(`%${query}%`)},email.ilike.${orQuote(`%${query}%`)}`)
     .limit(5)
   return (data ?? []) as ContactHit[]
 }
@@ -476,7 +477,7 @@ async function handleMeet(
     const { data: members } = await supabase
       .from('users')
       .select('id, email, display_name')
-      .or(parsed.attendees.map((a: string) => `display_name.ilike.%${a}%,email.ilike.%${a}%`).join(','))
+      .or(parsed.attendees.map((a: string) => `display_name.ilike.${orQuote(`%${a}%`)},email.ilike.${orQuote(`%${a}%`)}`).join(','))
     for (const m of members ?? []) {
       if (m.email !== user.email) {
         attendeeEmails.push(m.email)
@@ -1284,7 +1285,7 @@ async function handleWork(
     const { data: found } = await supabase
       .from('users')
       .select('email, display_name, telegram_id')
-      .or(`display_name.ilike.%${name}%,email.ilike.%${name}%`)
+      .or(`display_name.ilike.${orQuote(`%${name}%`)},email.ilike.${orQuote(`%${name}%`)}`)
       .limit(1)
       .single()
     if (found) {
@@ -2489,8 +2490,14 @@ export async function POST(req: NextRequest) {
         .from('telegram_dedup')
         .insert({ update_id: updateId })
       if (dedupError) {
-        // Unique constraint violation = duplicate, return immediately
-        return NextResponse.json({ ok: true })
+        // Only a unique-constraint violation (23505) means "already processed" —
+        // skip it. A transient DB error must NOT be swallowed as a duplicate, or
+        // Telegram gets ok:true and never resends → the update is lost. Fall
+        // through so this update is still handled.
+        if (dedupError.code === '23505') {
+          return NextResponse.json({ ok: true })
+        }
+        console.error('[bot] telegram_dedup insert failed (non-duplicate), processing anyway:', dedupError.message)
       }
     }
 

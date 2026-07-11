@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from '@/lib/supabase'
 import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { sendCampaign, SendCampaignError } from '@/lib/newsletter-send-worker'
 import { logAdminAction } from '@/lib/adminAudit'
+import { hasNewsletterAccess } from '@/lib/newsletterAccess'
 
 // POST — send this campaign via SendGrid to everyone in its list_ids.
 // The send logic lives in @/lib/newsletter-send-worker (shared with the
@@ -12,6 +13,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await hasNewsletterAccess(authUser.email))) {
+    return NextResponse.json({ error: 'Forbidden — newsletter permission required' }, { status: 403 })
+  }
 
   const service = createServiceClient()
   const { data: me } = await service.from('users').select('id').ilike('email', authUser.email).maybeSingle()

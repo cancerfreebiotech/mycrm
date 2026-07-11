@@ -20,6 +20,7 @@
     "status": "ステータス",
     "enabled": "有効",
     "disabled": "無効",
+    "clear": "クリア",
     "yes": "はい",
     "no": "いいえ",
     "unknown": "不明",
@@ -956,7 +957,9 @@
     "resetDone": "{count}件をリセットしました",
     "refresh": "更新",
     "disabledNotice": "Hunter モジュールは組織設定で無効になっているため、今回の一括照会はスキップされました。",
-    "disabledGoToSettings": "組織設定へ移動"
+    "disabledGoToSettings": "組織設定へ移動",
+    "creditsRemaining": "残り {remaining} / {available} クレジット",
+    "creditsUsedThisMonth": "（今月の使用：{used}）"
   },
   "login": {
     "docs": "使用説明書",
@@ -1598,7 +1601,14 @@
     "confirmBulkDelete": "選択した {count} 件の連絡先を完全に削除しますか？関連する名刺画像も削除され、元に戻せません。",
     "confirmDeleteAll": "ゴミ箱内の全 {count} 件の連絡先を完全に削除しますか？関連する名刺画像も削除され、元に戻せません。",
     "bulkDeleteSuccess": "{count} 件を完全削除しました",
-    "bulkDeleteFailed": "一括削除に失敗しました"
+    "bulkDeleteFailed": "一括削除に失敗しました",
+    "noPermission": "このページへのアクセス権限がありません",
+    "pageDescription": "ゴミ箱に移動した連絡先は復元できます。完全削除はスーパー管理者のみ可能です。",
+    "restore": "復元",
+    "permanentDelete": "完全削除",
+    "sectionCards": "名刺",
+    "sectionInteractionLogs": "やり取り記録（{count}件）",
+    "remainingLogs": "他に{count}件のログが表示されていません"
   },
   "tiptap": {
     "varName": "名前",
@@ -1674,7 +1684,15 @@
     "budgetSave": "しきい値を保存",
     "budgetSaving": "保存中…",
     "budgetSaved": "しきい値を保存しました",
-    "budgetSaveError": "保存に失敗しました"
+    "budgetSaveError": "保存に失敗しました",
+    "serviceStatusOk": "正常",
+    "serviceStatusError": "異常",
+    "serviceStatusUnconfigured": "未設定",
+    "pageTitle": "システム状態",
+    "lastCheckedLabel": "前回チェック：{lastChecked}",
+    "autoRefreshLabel": "30秒ごとに自動更新",
+    "summaryCounts": "{ok} 件正常 · {error} 件異常 · {unconfigured} 件未設定",
+    "fetchFailed": "状態を取得できません。再試行してください"
   },
   "permission": {
     "noPermission": "権限がありません",

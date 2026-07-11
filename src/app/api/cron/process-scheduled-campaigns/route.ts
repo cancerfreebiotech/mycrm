@@ -43,6 +43,23 @@ export async function GET(req: NextRequest) {
   const db = orgScopedClient(ctx)
 
   const nowIso = new Date().toISOString()
+
+  // Reclaim campaigns stuck in 'sending': a serverless timeout mid-send leaves
+  // status='sending' with no completion, and Phase 1 below only picks
+  // 'scheduled', so without this they'd never retry and the remaining
+  // recipients would silently never receive the mail. Flip them back to
+  // 'scheduled' (guarded on the old status so a concurrent run no-ops) and the
+  // due query re-dispatches them this run — resume-dedup guarantees no
+  // recipient is emailed twice. Gate on scheduled_at well past maxDuration (300s)
+  // + one cron interval (10m) so an actively-sending run is never disturbed.
+  const STUCK_SENDING_MS = 20 * 60 * 1000
+  const staleIso = new Date(startMs - STUCK_SENDING_MS).toISOString()
+  await db
+    .from('newsletter_campaigns')
+    .update({ status: 'scheduled' })
+    .eq('status', 'sending')
+    .lte('scheduled_at', staleIso)
+
   const { data: due, error } = await db
     .from('newsletter_campaigns')
     .select('id')

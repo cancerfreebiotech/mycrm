@@ -112,17 +112,27 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: uErr.message }, { status: 500 })
   }
 
-  const { data: tasks, error: tErr } = await db
-    .from('tasks')
-    .select('id, title, due_at, status, created_by, contacts(name), task_assignees(assignee_email)')
-    .neq('status', 'done')
-    .not('due_at', 'is', null)
-    .lte('due_at', endOfDayUtc.toISOString())
-    .order('due_at', { ascending: true })
-    .limit(500)
-  if (tErr) {
-    await recordCronRun(service, 'task-reminders', 'error', { error: tErr.message }, Date.now() - startMs)
-    return NextResponse.json({ error: tErr.message }, { status: 500 })
+  // Paginate the full set of due tasks — a flat .limit(500) org-wide silently
+  // dropped everyone's tasks past the 500th, so some users got no reminder.
+  const PAGE = 1000
+  const tasks: unknown[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data: page, error: tErr } = await db
+      .from('tasks')
+      .select('id, title, due_at, status, created_by, contacts(name), task_assignees(assignee_email)')
+      .neq('status', 'done')
+      .not('due_at', 'is', null)
+      .lte('due_at', endOfDayUtc.toISOString())
+      .order('due_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + PAGE - 1)
+    if (tErr) {
+      await recordCronRun(service, 'task-reminders', 'error', { error: tErr.message }, Date.now() - startMs)
+      return NextResponse.json({ error: tErr.message }, { status: 500 })
+    }
+    if (!page || page.length === 0) break
+    tasks.push(...page)
+    if (page.length < PAGE) break
   }
 
   let notified = 0

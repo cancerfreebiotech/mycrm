@@ -507,7 +507,12 @@ export async function sendCampaign(
     let totalRecipients = recipients.length
     let failedCount = failed > 0 ? failed : 0
     let countersKnown = true
-    if (abMode === 'final') {
+    // A plain resend has the same double-count problem as A/B 'final': the dedup
+    // above shrinks `recipients` to only the not-yet-sent people, so writing this
+    // run's `sent`/`recipients.length` would clobber the cumulative counters
+    // (e.g. a retry of 10 failures overwrites sent_count 90 → 10). Recount from
+    // the recipient rows in both cases so repeated runs stay idempotent.
+    if (abMode === 'final' || opts.resend) {
       const hasSentByEmail = new Map<string, boolean>()
       const PAGE = 1000
       for (let from = 0; ; from += PAGE) {

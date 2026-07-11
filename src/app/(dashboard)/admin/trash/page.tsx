@@ -206,7 +206,7 @@ export default function TrashPage() {
   if (!isSuperAdmin && !loading) {
     return (
       <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-        無權限存取此頁面
+        {t('noPermission')}
       </div>
     )
   }
@@ -220,7 +220,7 @@ export default function TrashPage() {
         <div>
           <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t('pageTitle')}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            已移至回收區的聯絡人可以還原，或由 Super Admin 永久刪除
+            {t('pageDescription')}
           </p>
         </div>
       </div>
@@ -333,7 +333,7 @@ export default function TrashPage() {
                             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 disabled:opacity-50"
                           >
                             {isActing ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
-                            還原
+                            {t('restore')}
                           </button>
                           <button
                             onClick={() => handlePermanentDelete(contact.id, contact.name || contact.name_en)}
@@ -341,7 +341,7 @@ export default function TrashPage() {
                             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50"
                           >
                             {isActing ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                            永久刪除
+                            {t('permanentDelete')}
                           </button>
                         </div>
                       </td>
@@ -417,7 +417,7 @@ export default function TrashPage() {
                 {detailContact.contact_cards.length > 0 && (
                   <div>
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-2 flex items-center gap-1.5">
-                      <CreditCard size={12} /> 名片
+                      <CreditCard size={12} /> {t('sectionCards')}
                     </h3>
                     <div className="flex flex-wrap gap-2">
                       {detailContact.contact_cards.map((card) =>
@@ -438,7 +438,7 @@ export default function TrashPage() {
                 {detailContact.interaction_logs.length > 0 && (
                   <div>
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-2 flex items-center gap-1.5">
-                      <MessageSquare size={12} /> 互動紀錄（{detailContact.interaction_logs.length}）
+                      <MessageSquare size={12} /> {t('sectionInteractionLogs', { count: detailContact.interaction_logs.length })}
                     </h3>
                     <div className="space-y-2">
                       {detailContact.interaction_logs.slice(0, 10).map((log) => (
@@ -451,7 +451,7 @@ export default function TrashPage() {
                       ))}
                       {detailContact.interaction_logs.length > 10 && (
                         <div className="text-xs text-gray-400 text-center">
-                          還有 {detailContact.interaction_logs.length - 10} 筆紀錄未顯示
+                          {t('remainingLogs', { count: detailContact.interaction_logs.length - 10 })}
                         </div>
                       )}
                     </div>
@@ -469,7 +469,7 @@ export default function TrashPage() {
                   className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 disabled:opacity-50"
                 >
                   {actionId === detailContact.id ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
-                  還原
+                  {t('restore')}
                 </button>
                 <button
                   onClick={() => handlePermanentDelete(detailContact.id, detailContact.name || detailContact.name_en)}
@@ -477,7 +477,7 @@ export default function TrashPage() {
                   className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50"
                 >
                   {actionId === detailContact.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                  永久刪除
+                  {t('permanentDelete')}
                 </button>
               </div>
             )}

@@ -20,6 +20,7 @@
     "status": "狀態",
     "enabled": "啟用",
     "disabled": "停用",
+    "clear": "清除",
     "yes": "是",
     "no": "否",
     "unknown": "未知",
@@ -956,7 +957,9 @@
     "resetDone": "已重置 {count} 筆",
     "refresh": "重新整理",
     "disabledNotice": "Hunter 模組已於組織設定停用，本次批次補查已略過。",
-    "disabledGoToSettings": "前往組織設定"
+    "disabledGoToSettings": "前往組織設定",
+    "creditsRemaining": "{remaining} / {available} credits 剩餘",
+    "creditsUsedThisMonth": "（本月已用 {used}）"
   },
   "login": {
     "docs": "說明文件",
@@ -1598,7 +1601,14 @@
     "confirmBulkDelete": "確定要永久刪除這 {count} 筆聯絡人？相關名片圖片也會一併刪除，無法復原。",
     "confirmDeleteAll": "確定要永久刪除整個回收區共 {count} 筆聯絡人？相關名片圖片也會一併刪除，無法復原。",
     "bulkDeleteSuccess": "已永久刪除 {count} 筆",
-    "bulkDeleteFailed": "批次刪除失敗"
+    "bulkDeleteFailed": "批次刪除失敗",
+    "noPermission": "無權限存取此頁面",
+    "pageDescription": "已移至回收區的聯絡人可以還原，或由 Super Admin 永久刪除",
+    "restore": "還原",
+    "permanentDelete": "永久刪除",
+    "sectionCards": "名片",
+    "sectionInteractionLogs": "互動紀錄（{count}）",
+    "remainingLogs": "還有 {count} 筆紀錄未顯示"
   },
   "tiptap": {
     "varName": "姓名",
@@ -1674,7 +1684,15 @@
     "budgetSave": "儲存門檻",
     "budgetSaving": "儲存中…",
     "budgetSaved": "門檻已儲存",
-    "budgetSaveError": "儲存失敗"
+    "budgetSaveError": "儲存失敗",
+    "serviceStatusOk": "正常",
+    "serviceStatusError": "異常",
+    "serviceStatusUnconfigured": "未設定",
+    "pageTitle": "系統狀態",
+    "lastCheckedLabel": "上次檢查：{lastChecked}",
+    "autoRefreshLabel": "每 30 秒自動重整",
+    "summaryCounts": "{ok} 個正常 · {error} 個異常 · {unconfigured} 個未設定",
+    "fetchFailed": "無法取得狀態，請重試"
   },
   "permission": {
     "noPermission": "沒有權限",

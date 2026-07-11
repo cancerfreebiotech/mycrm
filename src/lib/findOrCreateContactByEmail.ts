@@ -1,6 +1,7 @@
 import type { OrgDb } from './orgContext'
 import { tldToCountryCode, countryCodeToLanguage } from './emailDomainToCountry'
 import { isEmailErased } from './erasureTombstone'
+import { escapeLikePattern } from './likeEscape'
 
 export interface FindOrCreateContactInput {
   email: string
@@ -28,7 +29,9 @@ export async function findOrCreateContactByEmail(
   const { data: existing, error: selErr } = await supabase
     .from('contacts')
     .select('id')
-    .ilike('email', norm)
+    // escape LIKE wildcards so a local-part '_' / '%' matches literally
+    // (still case-insensitive), not as a pattern that hits the wrong contact
+    .ilike('email', escapeLikePattern(norm))
     .is('deleted_at', null)
     .limit(1)
     .maybeSingle()

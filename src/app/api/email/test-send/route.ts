@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { createClient, createServiceClient } from '@/lib/supabase'
 import { getValidProviderToken } from '@/lib/graph-server'
 import { sendMail } from '@/lib/graph'
 import { generateOptOutToken } from '@/lib/email-optout'
@@ -47,8 +47,19 @@ export async function POST(req: NextRequest) {
     body = (await req.json()) as TestSendBody
   }
 
-  const { subject, bodyHtml, method, userId, toEmail } = body
-  if (!subject?.trim() || !bodyHtml?.trim() || !userId || !toEmail) {
+  const { subject, bodyHtml, method, toEmail } = body
+
+  // Sender is the authenticated user — never trust body.userId, or any logged-in
+  // user could test-send from a teammate's Outlook mailbox (see send/route.ts).
+  const authClient = await createClient()
+  const { data: { user: authUser } } = await authClient.auth.getUser()
+  if (!authUser?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const svc = createServiceClient()
+  const { data: senderProfile } = await svc.from('users').select('id').ilike('email', authUser.email).maybeSingle()
+  const userId = senderProfile?.id
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  if (!subject?.trim() || !bodyHtml?.trim() || !toEmail) {
     return NextResponse.json({ error: '缺少必要欄位' }, { status: 400 })
   }
 
