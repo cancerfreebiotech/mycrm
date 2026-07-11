@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v8.1.7 — 兩項擱置安全項修正（2026-07-11）
+
+### 變更項目
+- **Microsoft Graph OAuth token 改為加密儲存**：`users.provider_token` / `provider_refresh_token` 過去以明文存放，現與 Gmail token 相同以 AES-256-GCM 加密（`tokenCrypto.ts`）；寫入時加密（登入 callback、token 刷新）、`getValidProviderToken` 讀取時解密。相容既有明文列（`decryptToken` 直接放行舊列，下次刷新即自動加密），**不需資料遷移**。
+- **修正 Telegram 相簿多圖並發競態**：`/p` 一次傳多張相簿照片時，各張以獨立 webhook 幾乎同時到達，原本「讀 session → JS 端 append → 整包寫回」會後寫覆蓋前寫、遺失照片。改用樂觀鎖（以 `bot_sessions.updated_at` compare-and-swap 重試）原子累加 `pending_file_ids`，確保每張都被收錄；最後一次重試改為無條件寫入作為安全網（絕不比原行為差），**不需 schema 變更**。
+
 ## v8.1.6 — 全 codebase code review 修正 + 文件全面更新（2026-07-11）
 
 ### 安全／授權

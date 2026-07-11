@@ -1,5 +1,6 @@
 // Server-only: uses next/headers via supabase.ts — do NOT import from client components
 import { createServiceClient } from '@/lib/supabase'
+import { encryptToken, decryptToken } from '@/lib/tokenCrypto'
 
 function isTokenExpiredOrSoon(token: string): boolean {
   try {
@@ -43,13 +44,16 @@ export async function getValidProviderToken(userId: string): Promise<string> {
     .single()
 
   if (!user?.provider_token) throw new Error('找不到 Microsoft 存取憑證，請重新登入')
-  if (!isTokenExpiredOrSoon(user.provider_token)) return user.provider_token
+  // Tokens are stored encrypted at rest (tokenCrypto.ts); decryptToken passes
+  // through any legacy plaintext rows written before encryption shipped.
+  const accessToken0 = decryptToken(user.provider_token)
+  if (!isTokenExpiredOrSoon(accessToken0)) return accessToken0
   if (!user.provider_refresh_token) throw new Error('存取憑證已過期，請重新登入以更新授權')
 
-  const { accessToken, refreshToken } = await refreshMicrosoftToken(user.provider_refresh_token)
+  const { accessToken, refreshToken } = await refreshMicrosoftToken(decryptToken(user.provider_refresh_token))
   await supabase.from('users').update({
-    provider_token: accessToken,
-    provider_refresh_token: refreshToken,
+    provider_token: encryptToken(accessToken),
+    provider_refresh_token: encryptToken(refreshToken),
   }).eq('id', userId)
 
   return accessToken

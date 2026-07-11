@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { createServiceClient } from '@/lib/supabase'
 import { getOrgSettings } from '@/lib/orgSettings'
+import { encryptToken } from '@/lib/tokenCrypto'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -45,14 +46,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login?error=unauthorized_domain`)
   }
 
-  // Upsert user record (also persist provider_token for Graph API calls)
+  // Upsert user record (also persist provider_token for Graph API calls).
+  // Microsoft Graph tokens are encrypted at rest (AES-256-GCM, see tokenCrypto.ts);
+  // getValidProviderToken() decrypts on read.
   const { data: upserted } = await serviceClient.from('users').upsert(
     {
       email,
       display_name: data.user.user_metadata?.full_name ?? data.user.user_metadata?.name ?? null,
       last_login_at: new Date().toISOString(),
-      ...(data.session?.provider_token ? { provider_token: data.session.provider_token } : {}),
-      ...(data.session?.provider_refresh_token ? { provider_refresh_token: data.session.provider_refresh_token } : {}),
+      ...(data.session?.provider_token ? { provider_token: encryptToken(data.session.provider_token) } : {}),
+      ...(data.session?.provider_refresh_token ? { provider_refresh_token: encryptToken(data.session.provider_refresh_token) } : {}),
     },
     { onConflict: 'email' }
   ).select('id').single()

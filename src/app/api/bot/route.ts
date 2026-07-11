@@ -178,6 +178,48 @@ async function clearSession(telegramId: number) {
   )
 }
 
+// Atomically read-modify-write bot_sessions.context. A Telegram media group
+// (album) arrives as several near-simultaneous webhooks; a plain read →
+// JS-merge → setSession loses all but the last write. This uses optimistic
+// concurrency (compare-and-swap on updated_at) and retries on contention, so
+// concurrent appends to context (e.g. pending_file_ids) never clobber each
+// other — no schema change needed. Returns the new context, or null if the
+// session no longer matches requiredState (cleared / advanced) or contention
+// couldn't be resolved.
+async function mutateSessionContext(
+  telegramId: number,
+  requiredState: string,
+  mutate: (ctx: Record<string, unknown>) => Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+  const supabase: OrgDb = orgScopedClient(systemOrgContext())
+  const MAX_ATTEMPTS = 15
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const { data: cur } = await supabase
+      .from('bot_sessions')
+      .select('state, context, updated_at')
+      .eq('telegram_id', telegramId)
+      .maybeSingle()
+    if (!cur || cur.state !== requiredState) return null
+    const newContext = mutate((cur.context as Record<string, unknown>) ?? {})
+    // Last attempt drops the CAS guard as a safety net: if the updated_at
+    // compare-and-swap somehow never matches, we still write (last-write-wins,
+    // i.e. no worse than the original non-atomic path) rather than silently
+    // dropping the update.
+    const lastResort = attempt === MAX_ATTEMPTS - 1
+    let q = supabase
+      .from('bot_sessions')
+      .update({ context: newContext, updated_at: new Date().toISOString() })
+      .eq('telegram_id', telegramId)
+      .eq('state', requiredState)
+    if (!lastResort) q = q.eq('updated_at', cur.updated_at as string)
+    const { data: updated } = await q.select('telegram_id').maybeSingle()
+    if (updated) return newContext
+    // Lost the CAS to a concurrent write — brief backoff, then re-read and retry.
+    await new Promise((r) => setTimeout(r, 15 * (attempt + 1)))
+  }
+  return null
+}
+
 async function updateLastContact(telegramId: number, contactId: string) {
   const supabase: OrgDb = orgScopedClient(systemOrgContext())
   await supabase.from('bot_sessions').upsert(
@@ -995,10 +1037,19 @@ async function handlePhoto(
   if (session?.state === 'waiting_for_photo') {
     const contactId = session.context.contact_id as string
     const contactName = session.context.contact_name as string | undefined
-    const existingIds = (session.context.pending_file_ids as string[] | undefined) ?? []
-    const newIds = [...existingIds, photo.file_id]
-    const countMsgId = session.context.count_message_id as number | undefined
     const displayName = contactName ?? m.cardThisContact
+
+    // Atomically append this file_id — album photos arrive as concurrent
+    // webhooks, so a read-modify-write on the session would lose all but the
+    // last. mutateSessionContext CAS-retries so every photo is captured.
+    const ctxAfter = await mutateSessionContext(fromId, 'waiting_for_photo', (ctx) => {
+      const ids = (ctx.pending_file_ids as string[] | undefined) ?? []
+      return { ...ctx, pending_file_ids: [...ids, photo.file_id] }
+    })
+    if (!ctxAfter) return // session cleared / advanced mid-flight
+
+    const newIds = (ctxAfter.pending_file_ids as string[] | undefined) ?? []
+    const countMsgId = ctxAfter.count_message_id as number | undefined
     const doneText = m.photoDoneLabel(newIds.length)
     const keyboard = [[
       { text: doneText, callback_data: `done_photo_${contactId}` },
@@ -1009,13 +1060,17 @@ async function handlePhoto(
         m.photoCountReceived(newIds.length, displayName),
         keyboard
       )
-      await setSession(fromId, 'waiting_for_photo', { ...session.context, pending_file_ids: newIds })
-    } else {
+    } else if (newIds.length === 1) {
+      // First photo of the batch creates the counter message; concurrent album
+      // siblings (length > 1) skip sending to avoid duplicate messages — the
+      // counter is edited to the true total as soon as count_message_id exists.
       const sent = await sendMessage(chatId,
-        m.photoCountReceived(1, displayName),
+        m.photoCountReceived(newIds.length, displayName),
         { reply_markup: { inline_keyboard: keyboard } }
       )
-      await setSession(fromId, 'waiting_for_photo', { ...session.context, pending_file_ids: newIds, count_message_id: sent?.message_id })
+      if (sent?.message_id) {
+        await mutateSessionContext(fromId, 'waiting_for_photo', (ctx) => ({ ...ctx, count_message_id: sent.message_id }))
+      }
     }
     return
   }
