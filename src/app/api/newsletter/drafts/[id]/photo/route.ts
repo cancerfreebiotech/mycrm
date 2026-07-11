@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { hasFeature } from '@/lib/features'
 import { getOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
+import { appendDraftPhotoUrl } from '@/lib/draftPhotos'
 import { randomBytes } from 'node:crypto'
 
 async function authorize() {
@@ -55,8 +56,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
 
   const url = service.storage.from(BUCKET).getPublicUrl(key).data.publicUrl
-  const updated = [...(draft.photo_urls ?? []), url]
-  await db.from('newsletter_drafts').update({ photo_urls: updated }).eq('id', id)
+  // Atomic append (CAS) so concurrent uploads to the same draft don't clobber
+  // each other's photo_urls.
+  const updated = (await appendDraftPhotoUrl(db, id, url)) ?? [...(draft.photo_urls ?? []), url]
 
   return NextResponse.json({ url, photo_urls: updated })
 }

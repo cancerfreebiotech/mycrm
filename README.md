@@ -2,7 +2,7 @@
 
 A lightweight CRM built for `@cancerfree.io`. Snap a business card in Telegram → AI reads it → one tap to save → manage everything on the web.
 
-> Current version: **v8.1.7**
+> Current version: **v8.1.8**
 
 ---
 

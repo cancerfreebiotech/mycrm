@@ -17,6 +17,7 @@ import { systemOrgContext, orgScopedClient, type OrgDb } from '@/lib/orgContext'
 import { resolveTouchpoint } from '@/lib/aiRouting'
 import { runOpenAiToolLoop } from '@/lib/openaiAgent'
 import { orQuote } from '@/lib/likeEscape'
+import { appendDraftPhotoUrl } from '@/lib/draftPhotos'
 
 // v8.0 Phase 3 (Task 185): app base URL for links in bot messages.
 // Env still wins (backward-compat); otherwise the org's configured app_url,
@@ -1023,10 +1024,11 @@ async function handlePhoto(
       })
       if (upErr) throw new Error(upErr.message)
       const url = sb.storage.from('newsletter-assets').getPublicUrl(key).data.publicUrl
-      const { data: cur } = await db.from('newsletter_drafts').select('photo_urls').eq('id', draftId).single()
-      const updated = [...(cur?.photo_urls ?? []), url]
-      await db.from('newsletter_drafts').update({ photo_urls: updated }).eq('id', draftId)
-      await sendMessage(chatId, m.newsPhotoAdded(updated.length))
+      // Atomic append — album photos arrive as concurrent webhooks, so a plain
+      // read-modify-write on photo_urls would lose all but the last.
+      const list = await appendDraftPhotoUrl(db, draftId, url)
+      if (!list) throw new Error('draft not found')
+      await sendMessage(chatId, m.newsPhotoAdded(list.length))
     } catch (e) {
       await sendMessage(chatId, m.newsPhotoFailed(e instanceof Error ? e.message : m.unknownError))
     }

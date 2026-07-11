@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v8.1.8 — 電子報草稿相片並發競態修正（2026-07-11）
+
+### 變更項目
+- **修正電子報草稿相片並發遺失**：`/news` bot 收相簿多圖、以及網頁版草稿連續上傳相片時，多個請求對 `newsletter_drafts.photo_urls` 的「讀→append→寫回」會互相覆蓋、遺失相片（與 v8.1.7 的 `/p` 相簿修正同類）。新增 `appendDraftPhotoUrl()`（`src/lib/draftPhotos.ts`），以陣列值 compare-and-swap 樂觀鎖原子累加、失敗重試，最後一次無條件寫入作安全網；bot `/news` 與 `POST /api/newsletter/drafts/[id]/photo` 皆改用。**不需 schema 變更**。
+
 ## v8.1.7 — 兩項擱置安全項修正（2026-07-11）
 
 ### 變更項目
