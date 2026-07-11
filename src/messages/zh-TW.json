@@ -679,6 +679,7 @@
     "assignIntro": "未指派的功能走系統內建通道（環境變數金鑰），不在上方端點清單中；指派後才改用你設定的端點與模型。",
     "googleSuggested": "建議使用 Google 端點（需要 function calling／Google 搜尋）",
     "googleWarning": "⚠ 此功能需要 Google 專屬能力，指派到 OpenAI 相容端點可能無法運作或品質下降，請用測試鈕確認",
+    "assignedInactive": "⚠ 已指派的模型或其端點目前停用，實際改走系統預設；重新啟用或改選其他模型",
     "viaGoogle": "Google 官方直連（環境金鑰）",
     "viaPortkey": "Portkey 閘道（環境設定）",
     "sourceAssigned": "已指派",

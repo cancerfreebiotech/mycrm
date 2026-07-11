@@ -30,6 +30,8 @@ export default function ContactBriefing({ contactId }: { contactId: string }) {
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // 輪詢連續失敗次數，達上限即停止輪詢並顯示錯誤
   const pollFailRef = useRef(0)
+  // 使用者已手動觸發生成 → 掛載時的歷史載回不得覆蓋
+  const interactedRef = useRef(false)
 
   const clearPoll = () => { if (pollRef.current) clearTimeout(pollRef.current) }
   useEffect(() => () => clearPoll(), [])
@@ -64,7 +66,7 @@ export default function ContactBriefing({ contactId }: { contactId: string }) {
         const res = await fetch(`/api/social-briefing/latest?contactId=${contactId}`)
         if (res.ok) {
           const data = await res.json().catch(() => null)
-          if (!cancelled && data?.briefing) {
+          if (!cancelled && !interactedRef.current && data?.briefing) {
             setBriefing(data.briefing as Briefing)
             const s = (data.briefing as Briefing).status
             if (s === 'pending' || s === 'processing') poll((data.briefing as Briefing).id)
@@ -77,6 +79,7 @@ export default function ContactBriefing({ contactId }: { contactId: string }) {
   }, [contactId, poll])
 
   async function generate() {
+    interactedRef.current = true
     setStarting(true)
     setError(null)
     pollFailRef.current = 0

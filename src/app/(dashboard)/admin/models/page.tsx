@@ -754,6 +754,9 @@ export default function AdminModelsPage() {
                   {showGoogleWarning && (
                     <div className="text-xs text-amber-600 dark:text-amber-400 mt-1 break-words">{t('googleWarning')}</div>
                   )}
+                  {assignedId && !assignedModel && (
+                    <div className="text-xs text-amber-600 dark:text-amber-400 mt-1 break-words">{t('assignedInactive')}</div>
+                  )}
                 </div>
                 <div className="flex flex-col gap-1.5 sm:items-end sm:shrink-0">
                   <div className="flex items-center gap-2 flex-wrap">

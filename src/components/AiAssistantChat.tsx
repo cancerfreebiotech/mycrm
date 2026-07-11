@@ -39,7 +39,9 @@ export default function AiAssistantChat({ className = '' }: { className?: string
         if (!res.ok) return
         const data = await res.json()
         if (active && Array.isArray(data.messages)) {
-          setMessages(data.messages.map((m: ChatMessage) => ({ role: m.role, content: m.content })))
+          // 使用者可能在歷史載回前就已開始對話——已有訊息就不覆蓋（避免吃掉進行中的輸入）
+          const fetched = data.messages.map((m: ChatMessage) => ({ role: m.role, content: m.content }))
+          setMessages((prev) => (prev.length > 0 ? prev : fetched))
         }
       } catch {
         // 載入失敗視為空對話

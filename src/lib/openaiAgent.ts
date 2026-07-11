@@ -76,6 +76,8 @@ export async function runOpenAiToolLoop(opts: {
   maxRounds: number
   execute: (name: string, args: Record<string, unknown>) => Promise<unknown>
   audit: (name: string, args: unknown, ok: boolean, errMsg: string | null) => Promise<void>
+  /** 達 maxRounds 仍要求工具時的回覆（呼叫端可傳當地語言版本，預設繁中）。 */
+  limitMessage?: string
 }): Promise<OpenAiAgentResult> {
   const { resolved, systemInstruction, history, latest, declarations, maxRounds, execute, audit } = opts
 
@@ -159,5 +161,5 @@ export async function runOpenAiToolLoop(opts: {
     }
   }
 
-  return { reply: MAX_ROUNDS_MESSAGE, toolsUsed }
+  return { reply: opts.limitMessage ?? MAX_ROUNDS_MESSAGE, toolsUsed }
 }

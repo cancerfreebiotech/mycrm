@@ -103,7 +103,7 @@ Path: `/admin/models` (Super Admin only).
 - **Disable**: the model drops out of the feature-assignment dropdown; any feature assigned to it falls back to the system default.
 - **Delete**: click 🗑 with confirmation.
 
-**Test button** (v8.0.0): both endpoint and model rows have a "Test" button. Pressing it fires one minimal AI call from the server; the result shows right next to the button (a green ✅ with the latency on success, a red ❌ with the reason on failure), and the "last tested" time and result are saved and still shown after a refresh. If an endpoint has no active models, the test falls back to a plain connectivity check (any HTTP response counts as a pass).
+**Test button** (v8.0.0): both endpoint and model rows have a "Test" button. Pressing it fires one minimal AI call from the server; the result shows right next to the button (a green ✅ with the latency on success, a red ❌ with the reason on failure), and the "last tested" time and result are saved and still shown after a refresh. The endpoint test uses the endpoint's **most recently added active model** — a failure message that starts with a model ID points at that specific model (e.g. a retired one), not necessarily the endpoint or key; test other model rows to confirm. If an endpoint has no active models, the test falls back to a plain connectivity check (any HTTP response counts as a pass).
 
 ### Feature assignment
 

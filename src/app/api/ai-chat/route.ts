@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
   // 歷史 role 'model' 的轉換由 helper 內部處理，這裡原樣傳。
   if (resolved.via === 'openai') {
     try {
-      const { reply, toolsUsed } = await runOpenAiToolLoop({
+      const { reply: oaReply, toolsUsed } = await runOpenAiToolLoop({
         resolved,
         systemInstruction,
         history: messages.slice(0, -1),
@@ -134,6 +134,8 @@ export async function POST(req: NextRequest) {
         execute: (name, args) => executeChatTool(db, name, args, acting.id, user.id),
         audit: (n, a, ok, e) => auditChat(db, n, a, ok, e, acting.id),
       })
+      // 空回覆兜底，與 google 路徑的 fallback 訊息一致
+      const reply = oaReply || '抱歉，這次沒有產生有效回覆，請再試一次。'
       await persistChat(db, ctx.orgId, acting.id, messages, reply)
       return NextResponse.json({ reply, tools_used: toolsUsed })
     } catch (e) {

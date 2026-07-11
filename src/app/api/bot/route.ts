@@ -345,6 +345,7 @@ async function handleAiAgent(
         maxRounds: BOT_AGENT_MAX_TURNS,
         execute: (name, args) => executeBotTool(name, args, user.id),
         audit: (n, a, ok, e) => auditBotTool(n, a, ok, e, user.id),
+        limitMessage: m.aiTooManySteps,
       })
       const reply = oaReply || m.aiEmptyReply
       const truncated = reply.length > TELEGRAM_MAX_LEN ? reply.slice(0, TELEGRAM_MAX_LEN - 1) + '…' : reply

@@ -679,6 +679,7 @@
     "assignIntro": "Unassigned features use the built-in system channel (environment-variable keys), which is not in the endpoint list above; they switch to your configured endpoint and model only once assigned.",
     "googleSuggested": "Google endpoint recommended (needs function calling / Google Search)",
     "googleWarning": "⚠ This feature needs Google-specific capabilities; assigning it to an OpenAI-compatible endpoint may not work or may reduce quality — verify with the Test button.",
+    "assignedInactive": "⚠ The assigned model (or its endpoint) is currently disabled, so the system default is in effect — re-enable it or pick another model.",
     "viaGoogle": "Google direct (environment key)",
     "viaPortkey": "Portkey gateway (environment config)",
     "sourceAssigned": "Assigned",
