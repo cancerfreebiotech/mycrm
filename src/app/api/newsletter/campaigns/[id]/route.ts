@@ -9,6 +9,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await hasNewsletterAccess(user.email))) {
+    return NextResponse.json({ error: 'Forbidden — newsletter permission required' }, { status: 403 })
+  }
 
   const ctx = await getOrgContext()
   const db = orgScopedClient(ctx)

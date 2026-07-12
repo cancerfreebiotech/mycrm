@@ -872,7 +872,7 @@ export default function ContactsPage() {
           {importanceDropdownOpen && (
             <div className="absolute top-full mt-1 left-0 z-10 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-36">
               {[
-                { value: '', label: 'ALL' },
+                { value: '', label: tc('all') },
                 { value: 'high', label: 'H' },
                 { value: 'medium', label: 'M' },
                 { value: 'low', label: 'L' },
@@ -945,9 +945,9 @@ export default function ContactsPage() {
           {languageDropdownOpen && (
             <div className="absolute top-full mt-1 left-0 z-10 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-36">
               {[
-                { value: '', label: 'ALL' },
+                { value: '', label: tc('all') },
                 { value: 'chinese', label: t('languageChinese') },
-                { value: 'english', label: 'EN' },
+                { value: 'english', label: t('languageEnglish') },
                 { value: 'japanese', label: t('languageJapanese') },
               ].map(({ value, label }) => (
                 <button
@@ -984,7 +984,7 @@ export default function ContactsPage() {
           {emailStatusDropdownOpen && (
             <div className="absolute top-full mt-1 left-0 z-10 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-40">
               {[
-                { value: '', label: 'ALL', dot: null },
+                { value: '', label: tc('all'), dot: null },
                 { value: 'ok', label: t('emailStatusOk'), dot: 'bg-green-500' },
                 { value: 'bounced', label: t('emailStatusBounced'), dot: 'bg-red-500' },
                 { value: 'invalid', label: t('emailStatusInvalid'), dot: 'bg-yellow-500' },
@@ -1565,7 +1565,7 @@ export default function ContactsPage() {
                     className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="">{t('batchKeepUnchanged')}</option>
                     <option value="chinese">{t('languageChinese')}</option>
-                    <option value="english">English</option>
+                    <option value="english">{t('languageEnglish')}</option>
                     <option value="japanese">{t('languageJapanese')}</option>
                   </select>
                 </div>

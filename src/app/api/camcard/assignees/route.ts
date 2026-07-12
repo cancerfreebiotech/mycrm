@@ -1,9 +1,17 @@
 import { NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { createClient, createServiceClient } from '@/lib/supabase'
 import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
+import { hasFeatureAccess } from '@/lib/featureAccess'
 
 // GET — distinct assignee_label values in status='pending' rows (for filter dropdown)
 export async function GET() {
+  const auth = await createClient()
+  const { data: { user } } = await auth.auth.getUser()
+  if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await hasFeatureAccess(user.email, 'camcard'))) {
+    return NextResponse.json({ error: 'Forbidden — camcard permission required' }, { status: 403 })
+  }
+
   const supabase = createServiceClient()
   const ctx = await getOrgContext()
   const db = orgScopedClient(ctx)
@@ -26,6 +34,13 @@ export async function GET() {
 // PATCH — bulk update assignee_label
 // Body: { ids: string[], assignee_label: string | null }
 export async function PATCH(request: Request) {
+  const auth = await createClient()
+  const { data: { user } } = await auth.auth.getUser()
+  if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await hasFeatureAccess(user.email, 'camcard'))) {
+    return NextResponse.json({ error: 'Forbidden — camcard permission required' }, { status: 403 })
+  }
+
   const body = await request.json() as { ids?: string[]; assignee_label?: string | null }
   if (!Array.isArray(body.ids) || body.ids.length === 0) {
     return NextResponse.json({ error: 'ids required' }, { status: 400 })

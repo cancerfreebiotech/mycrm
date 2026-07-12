@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { signCardUrl, signCardUrls } from '@/lib/cardImageUrl'
+import { orQuote } from '@/lib/likeEscape'
 import { withOrgPrefix } from '@/lib/orgUploadPrefix'
 import { sendMail } from '@/lib/graph'
 import { isImeComposing } from '@/lib/imeGuard'
@@ -276,6 +277,7 @@ export default function ContactDetailPage() {
   const [mergeQuery, setMergeQuery] = useState('')
   const [mergeResults, setMergeResults] = useState<Array<{ id: string; name: string | null; name_en: string | null; company: string | null; email: string | null }>>([])
   const [mergeSearching, setMergeSearching] = useState(false)
+  const mergeSeqRef = useRef(0)
   const [mergeTarget, setMergeTarget] = useState<{ id: string; name: string | null; name_en: string | null; company: string | null; company_en: string | null; email: string | null } | null>(null)
   const [mergeSaving, setMergeSaving] = useState(false)
   const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set())
@@ -425,17 +427,18 @@ export default function ContactDetailPage() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  // cards bucket is private — batch-sign all card image URLs (legacy + contact_cards) for rendering
+  // cards bucket is private — batch-sign all card + photo image URLs (legacy + contact_cards + contact_photos) for rendering
   useEffect(() => {
     const urls: (string | null | undefined)[] = [contact?.card_img_url, contact?.card_img_back_url]
     for (const c of contactCards) urls.push(c.card_img_url, c.card_img_back_url)
+    for (const p of contactPhotos) urls.push(p.photo_url)
     const present = urls.filter((u): u is string => !!u)
     if (present.length === 0) { setCardSignedUrls(new Map()); return }
     let active = true
     signCardUrls(supabase, present).then((m) => { if (active) setCardSignedUrls(m) })
     return () => { active = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contact?.card_img_url, contact?.card_img_back_url, contactCards])
+  }, [contact?.card_img_url, contact?.card_img_back_url, contactCards, contactPhotos])
 
   async function load() {
     // Use /api/me (service role, email lookup) because auth.users.id !== public.users.id
@@ -1246,11 +1249,10 @@ export default function ContactDetailPage() {
         }))
         const { data: logRows } = await supabase.from('interaction_logs')
           .insert(inserts)
-          .select('id, content, type, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, campaign_id, users(display_name)')
-        // Update UI only for the current contact's log
-        const currentLog = (logRows ?? []).find((r: Record<string, unknown>) => r.contact_id === id || uniqueContactIds[0] === id)
+          .select('id, contact_id, content, type, meeting_date, meeting_time, meeting_location, created_at, email_subject, email_body, email_attachments, campaign_id, users(display_name)')
+        // Update UI only for the current contact's log (never another recipient's)
+        const currentLog = (logRows ?? []).find((r: Record<string, unknown>) => r.contact_id === id)
         if (currentLog) setLogs((prev) => [currentLog as unknown as Log, ...prev])
-        else if (logRows && logRows.length > 0) setLogs((prev) => [logRows[0] as unknown as Log, ...prev])
       }
 
       setMailOpen(false)
@@ -1263,15 +1265,19 @@ export default function ContactDetailPage() {
 
   async function searchMergeContacts(q: string) {
     setMergeQuery(q)
+    const seq = ++mergeSeqRef.current
     if (q.trim().length < 1) { setMergeResults([]); return }
     setMergeSearching(true)
+    const like = orQuote(`%${q}%`)
     const { data } = await supabase
       .from('contacts')
       .select('id, name, name_en, company, email')
       .is('deleted_at', null)
       .neq('id', id)
-      .or(`name.ilike.%${q}%,name_en.ilike.%${q}%,company.ilike.%${q}%,email.ilike.%${q}%`)
+      .or(`name.ilike.${like},name_en.ilike.${like},company.ilike.${like},email.ilike.${like}`)
       .limit(8)
+    // Ignore stale responses: only the latest query may write results
+    if (seq !== mergeSeqRef.current) return
     setMergeResults(data ?? [])
     setMergeSearching(false)
   }
@@ -1544,14 +1550,16 @@ export default function ContactDetailPage() {
                         <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
                       </div>
                     </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); rotateCard(card.id, 90, 'front') }}
-                      disabled={rotatingCard === `${card.id}-front`}
-                      title={t('rotate90cw')}
-                      className="absolute bottom-1 left-1 bg-black/60 text-white rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 disabled:opacity-50"
-                    >
-                      {rotatingCard === `${card.id}-front` ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
-                    </button>
+                    {!card.id.startsWith('legacy') && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); rotateCard(card.id, 90, 'front') }}
+                        disabled={rotatingCard === `${card.id}-front`}
+                        title={t('rotate90cw')}
+                        className="absolute bottom-1 left-1 bg-black/60 text-white rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 disabled:opacity-50"
+                      >
+                        {rotatingCard === `${card.id}-front` ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
+                      </button>
+                    )}
                   </div>
                   {/* Back (if exists) */}
                   {card.card_img_back_url && (
@@ -1562,14 +1570,16 @@ export default function ContactDetailPage() {
                           <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
                         </div>
                       </div>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); rotateCard(card.id, 90, 'back') }}
-                        disabled={rotatingCard === `${card.id}-back`}
-                        title={t('rotate90cw')}
-                        className="absolute bottom-1 left-1 bg-black/60 text-white rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 disabled:opacity-50"
-                      >
-                        {rotatingCard === `${card.id}-back` ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
-                      </button>
+                      {!card.id.startsWith('legacy') && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); rotateCard(card.id, 90, 'back') }}
+                          disabled={rotatingCard === `${card.id}-back`}
+                          title={t('rotate90cw')}
+                          className="absolute bottom-1 left-1 bg-black/60 text-white rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 disabled:opacity-50"
+                        >
+                          {rotatingCard === `${card.id}-back` ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1715,9 +1725,9 @@ export default function ContactDetailPage() {
               <div key={photo.id} className="relative group">
                 <div
                   className="w-36 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer relative"
-                  onClick={() => openLightbox(photo.photo_url)}
+                  onClick={() => openLightbox(signedCard(photo.photo_url))}
                 >
-                  <Image src={photo.photo_url} alt={t('groupPhoto')} width={144} height={96} className="object-cover w-full h-full" />
+                  <Image src={signedCard(photo.photo_url)} alt={t('groupPhoto')} width={144} height={96} className="object-cover w-full h-full" />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
                     <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
                   </div>
@@ -2492,7 +2502,7 @@ export default function ContactDetailPage() {
                           } disabled:opacity-50`}
                           title={attached ? tm('photoAttached') : tm('attachPhoto')}
                         >
-                          <Image src={photo.photo_url} alt="" width={80} height={80} className="w-full h-full object-cover" unoptimized />
+                          <Image src={signedCard(photo.photo_url)} alt="" width={80} height={80} className="w-full h-full object-cover" unoptimized />
                           {loading && (
                             <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                               <Loader2 size={16} className="animate-spin text-white" />

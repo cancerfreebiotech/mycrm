@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
+import { hasFeatureAccess } from '@/lib/featureAccess'
 import { generateCardFilename } from '@/lib/cardFilename'
 
 const OCR_TO_CONTACT: Record<string, string> = {
@@ -66,6 +67,10 @@ export async function POST(
   let confirmedByUserId: string | null = null
   const authClient = await createClient()
   const { data: { user: authUser } } = await authClient.auth.getUser()
+  if (!authUser?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await hasFeatureAccess(authUser.email, 'camcard'))) {
+    return NextResponse.json({ error: 'Forbidden — camcard permission required' }, { status: 403 })
+  }
   if (authUser?.email) {
     const { data: profile } = await supabase.from('users').select('id, display_name').eq('email', authUser.email).single()
     if (profile) {
@@ -77,6 +82,22 @@ export async function POST(
   const ctx = await getOrgContext()
   const db = orgScopedClient(ctx)
 
+  // Idempotency: atomically claim this row so a duplicate submit (double-click /
+  // retry) cannot create a second contact. Transition pending → confirmed guarded
+  // on the current status; a null result means it was already processed. Any
+  // downstream failure reverts to 'pending' so the card stays retryable.
+  const { data: claimed } = await db
+    .from('camcard_pending')
+    .update({ status: 'confirmed' })
+    .eq('id', id)
+    .eq('status', 'pending')
+    .select('id')
+    .maybeSingle()
+
+  if (!claimed) {
+    return NextResponse.json({ ok: true, alreadyProcessed: true })
+  }
+
   const { data: pending, error: fetchErr } = await db
     .from('camcard_pending')
     .select('*')
@@ -84,6 +105,7 @@ export async function POST(
     .single()
 
   if (fetchErr || !pending) {
+    await db.from('camcard_pending').update({ status: 'pending' }).eq('id', id)
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
@@ -129,6 +151,7 @@ export async function POST(
     .single()
 
   if (insertErr || !contact) {
+    await db.from('camcard_pending').update({ status: 'pending' }).eq('id', id)
     return NextResponse.json({ error: insertErr?.message ?? 'Insert failed' }, { status: 500 })
   }
 
@@ -170,11 +193,7 @@ export async function POST(
     content: `從名片王匯入（${pending.image_filename ?? ''}）${confirmedNote}`,
   })
 
-  // Mark pending as confirmed
-  await db
-    .from('camcard_pending')
-    .update({ status: 'confirmed' })
-    .eq('id', id)
+  // Row was already marked 'confirmed' atomically at claim time (above).
 
   return NextResponse.json({ ok: true, contactId: contact.id })
 }

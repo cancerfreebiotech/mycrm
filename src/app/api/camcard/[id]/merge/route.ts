@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase'
 import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
+import { hasFeatureAccess } from '@/lib/featureAccess'
 import { generateCardFilename } from '@/lib/cardFilename'
 import { mergeIntoContact, type MergeMode } from '@/lib/merge-into-contact'
 
@@ -53,6 +54,10 @@ export async function POST(
   let resolvedUserId: string | null = null
   const authClient = await createClient()
   const { data: { user: authUser } } = await authClient.auth.getUser()
+  if (!authUser?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await hasFeatureAccess(authUser.email, 'camcard'))) {
+    return NextResponse.json({ error: 'Forbidden — camcard permission required' }, { status: 403 })
+  }
   if (authUser?.email) {
     const { data: profile } = await supabase.from('users').select('id, display_name').eq('email', authUser.email).single()
     if (profile) {
@@ -64,13 +69,35 @@ export async function POST(
   const ctx = await getOrgContext()
   const db = orgScopedClient(ctx)
 
+  // Idempotency: atomically claim this row so a duplicate submit (double-click /
+  // retry) cannot merge twice. Transition pending → confirmed guarded on the
+  // current status; a null result means it was already processed. Any downstream
+  // failure reverts to 'pending' so the card stays retryable.
+  const { data: claimed } = await db
+    .from('camcard_pending')
+    .update({ status: 'confirmed' })
+    .eq('id', id)
+    .eq('status', 'pending')
+    .select('id')
+    .maybeSingle()
+
+  if (!claimed) {
+    return NextResponse.json({ ok: true, alreadyProcessed: true })
+  }
+
   const [{ data: pending }, { data: contact }] = await Promise.all([
     db.from('camcard_pending').select('*').eq('id', id).single(),
     db.from('contacts').select('id, name, name_en, extra_data, card_img_back_url').eq('id', contactId).single(),
   ])
 
-  if (!pending) return NextResponse.json({ error: 'Pending not found' }, { status: 404 })
-  if (!contact) return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
+  if (!pending) {
+    await db.from('camcard_pending').update({ status: 'pending' }).eq('id', id)
+    return NextResponse.json({ error: 'Pending not found' }, { status: 404 })
+  }
+  if (!contact) {
+    await db.from('camcard_pending').update({ status: 'pending' }).eq('id', id)
+    return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
+  }
 
   const ocr = (pending.ocr_data ?? {}) as Record<string, string | null>
 
@@ -136,9 +163,12 @@ export async function POST(
     logPrefix,
   })
 
-  if (!result.ok) return NextResponse.json({ error: result.error ?? 'Merge failed' }, { status: 500 })
+  if (!result.ok) {
+    await db.from('camcard_pending').update({ status: 'pending' }).eq('id', id)
+    return NextResponse.json({ error: result.error ?? 'Merge failed' }, { status: 500 })
+  }
 
-  await db.from('camcard_pending').update({ status: 'confirmed' }).eq('id', id)
+  // Row was already marked 'confirmed' atomically at claim time (above).
 
   return NextResponse.json({
     ok: true,

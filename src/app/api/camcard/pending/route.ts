@@ -1,7 +1,17 @@
 import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase'
 import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
+import { hasFeatureAccess } from '@/lib/featureAccess'
+import { orQuote } from '@/lib/likeEscape'
 
 export async function GET(request: Request) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await hasFeatureAccess(user.email, 'camcard'))) {
+    return NextResponse.json({ error: 'Forbidden — camcard permission required' }, { status: 403 })
+  }
+
   const ctx = await getOrgContext()
   const db = orgScopedClient(ctx)
   const url = new URL(request.url)
@@ -45,7 +55,7 @@ export async function GET(request: Request) {
     dataQ = dataQ.not('ocr_data->>email', 'is', null).filter('ocr_data->>email', 'neq', '')
   }
   if (search) {
-    const s = `%${search}%`
+    const s = orQuote(`%${search}%`)
     const orFilter = `image_filename.ilike.${s},ocr_data->>name.ilike.${s},ocr_data->>name_en.ilike.${s},ocr_data->>company.ilike.${s},ocr_data->>company_en.ilike.${s}`
     countQ = countQ.or(orFilter)
     dataQ = dataQ.or(orFilter)

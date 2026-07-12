@@ -338,7 +338,31 @@ export async function sendCampaign(
   htmlWithPreheader = addUtmTags(htmlWithPreheader, (campaign.slug as string | null)?.trim() || campaignId)
 
   for (let i = 0; i < recipients.length; i += CHUNK) {
-    const slice = recipients.slice(i, i + CHUNK)
+    let slice = recipients.slice(i, i + CHUNK)
+
+    // Concurrency guard: two overlapping/retried sends can each clear the one-
+    // time resume dedup above, then race on the same recipients. Re-query THIS
+    // chunk's emails for existing 'sent' rows immediately before inserting +
+    // sending, and drop anyone already emailed. Chunk the .in() at 200 to stay
+    // under the PostgREST URL cap (same reason as BATCH above). testOnly has no
+    // recipient rows, so it is skipped and its path is unaffected.
+    if (!opts.testOnly) {
+      const sliceEmails = [...new Set(slice.map((r) => r.email.toLowerCase().trim()))]
+      const alreadySentNow = new Set<string>()
+      for (let k = 0; k < sliceEmails.length; k += 200) {
+        const { data: rows } = await db
+          .from('newsletter_recipients')
+          .select('email')
+          .eq('campaign_id', campaignId)
+          .eq('status', 'sent')
+          .in('email', sliceEmails.slice(k, k + 200))
+        for (const row of rows ?? []) alreadySentNow.add((row.email as string).toLowerCase().trim())
+      }
+      if (alreadySentNow.size > 0) {
+        slice = slice.filter((r) => !alreadySentNow.has(r.email.toLowerCase().trim()))
+      }
+      if (slice.length === 0) continue
+    }
 
     // Create a newsletter_recipients row per recipient BEFORE sending so we can
     // pass its id as X-Recipient-Id (SendGrid echoes custom_args back on open/

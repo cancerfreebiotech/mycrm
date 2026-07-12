@@ -1073,6 +1073,29 @@ async function handlePhoto(
       if (sent?.message_id) {
         await mutateSessionContext(fromId, 'waiting_for_photo', (ctx) => ({ ...ctx, count_message_id: sent.message_id }))
       }
+    } else {
+      // length > 1 but count_message_id not yet visible: the first photo's CAS
+      // write is still in flight. Without this, siblings neither send nor edit
+      // and the counter freezes at "1" while photos keep accumulating. Briefly
+      // re-read the session (the first photo writes count_message_id within a
+      // few ms), then edit the counter to the true total. Re-read the latest
+      // pending_file_ids so the displayed count matches what's actually stored.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await new Promise((r) => setTimeout(r, 150))
+        const latest = await getSession(fromId)
+        if (latest?.state !== 'waiting_for_photo') break
+        const laterMsgId = latest.context.count_message_id as number | undefined
+        if (!laterMsgId) continue
+        const laterIds = (latest.context.pending_file_ids as string[] | undefined) ?? []
+        await editMessageText(chatId, laterMsgId,
+          m.photoCountReceived(laterIds.length, displayName),
+          [[
+            { text: m.photoDoneLabel(laterIds.length), callback_data: `done_photo_${contactId}` },
+            { text: m.btnCancel, callback_data: 'cancel_photo' },
+          ]]
+        )
+        break
+      }
     }
     return
   }
