@@ -11,15 +11,36 @@
 - **主線狀態**：v8.0 AI 功能指派系統（v8.0.0 起）已出貨並演進至 v8.1.x 系列；緊接著做了**兩輪完整 codebase code review**（v8.1.5→v8.1.9，見第 2 節），把過去累積的安全/資料完整性問題大量清掉。v8.0 SaaS 多租戶化 Phase 0–2 + 3A 已完成、Phase 3 Batch B 起仍擱置。
 - **測試**：`npm run test`（vitest），`src/lib/__tests__/`，目前 **89 條全綠**。`npx tsc --noEmit` 0 錯、`npm run build` 通過。
 
-### ⚠️ 這台機器的特殊狀態（給「換機器」的下一個 session）
+### ⚠️ 新機器接手：存取權限設置清單
 
-這台機器 **`.env.local` 只有 `RELEASE_NOTIFY_TOKEN` 一個變數**（沒有 Supabase / Gemini / SendGrid 等實際金鑰），也**沒有 `vercel link`**。過去所有工作都是「純改碼 + git + `npm run build`/`test`/`tsc`」完成的，這些指令不需要真正連線 prod。
+**`.vercel/` 與 `.env*` 都在 `.gitignore`（確認過：34-35、52-53、59、63 行）**——Vercel 連結狀態與所有環境變數**完全是機器本地的，git 不會帶過去**，新機器一定要照下面步驟重新設置一次。這台機器過去所有工作都是「純改碼 + git + `npm run build`/`test`/`tsc`」，沒真正連過 prod（`.env.local` 只有 `RELEASE_NOTIFY_TOKEN` 一個變數），所以下面每一步在這台機器上也沒實際跑過、是根據帳號權限推導出來的，新機器執行時請對照實際結果修正本清單。
 
-若新機器要做以下事情，需先向 Po 要對應存取：
-- **跑本地 dev server / 連 prod 資料**：需要完整 `.env.local`（對照 `.env.local.example` 補齊，或 `vercel env pull` ——但要先 `vercel link` 且帳號要有這個 Vercel 專案權限）。
-- **用 Supabase MCP 查/改 prod DB**：MCP 預設 org 可能連不到正式專案（見下方 ref 說明）；曾發生「MCP 只看得到別的 Supabase 帳號下的 project」的狀況。
-- **補寄 notify-release**：若 MCP 連不到 prod，有個已驗證可行的**備援路徑**——用 `.env.local` 裡的 `RELEASE_NOTIFY_TOKEN` 直接打 prod 部署好的端點 `POST https://crm.cancerfree.io/api/admin/notify-release`（`.claude/notify-release.config.json` 裡標記為 `legacyApiUrl`），body 帶 `{version, subject, bodyHtml, dryRun?}`，prod server 端自己查 MFA 收件人清單並用 SendGrid 寄出。**送真的之前務必先 `dryRun:true` 確認收件人清單筆數**（目前應為 17 人）。
-- **雲端排程 code review（cloud routine / `/schedule`）**：目前建不起來——claude.ai 帳號尚未連接 GitHub、且 `cancerfreebiotech/mycrm` 沒裝 Claude GitHub App。要用的話先連 https://claude.ai/code/onboarding?magic=github-app-setup 。在此之前，全 codebase review 都是**本機跑一次**（用 `Workflow` 工具 fan-out，見第 2 節）。
+**Step 1 — GitHub CLI**（push / 開 PR 用）
+```
+gh auth login   # 選有 push 權限的帳號（這台機器是 cancerfreebiotech，scope 含 repo/workflow）
+gh auth status  # 驗證
+```
+
+**Step 2 — Vercel CLI（優先做，一次解決環境變數問題）**
+```
+vercel login
+cd /path/to/mycrm && vercel link   # 選 cancerfreebiotech org 下的 mycrm 專案（prod: crm.cancerfree.io）
+vercel env pull .env.local          # 拉正式環境變數；有多環境時視需要加 --environment=production
+```
+拉完對照 `.env.local.example` 檢查是否齊全；若有變數 Vercel 上從沒設過（只存在 Po 手上），才需要另外問 Po。這台機器 `vercel whoami`/`vercel project ls` 已確認 `cancerfreebiotech` 帳號對 `mycrm` 專案有存取權，理論上這步能一次拿到完整可用的 `.env.local`，不需要逐一問 Po 要 secret。
+
+**Step 3 — Supabase MCP（需 Po 本人在 claude.ai 操作，新機器的 Claude Code 端做不到）**
+在 claude.ai 的 Connector 設定確認 Supabase connector 連的帳號/org 底下看得到 project ref **`gaxjgcztzfxokesiraai`**。曾發生連到別的帳號、只看得到無關 project 的狀況——如果 MCP 查 prod 回權限錯誤，先來這裡查，不要假設是程式碼問題。
+
+**Step 4 — notify-release 憑證（機器全域、不進 repo，換機器必斷）**
+兩條路，**建議優先用 (b)**（已在本 session 實測成功兩次，不需任何本機 SendGrid 金鑰）：
+- (a) 正規路徑：跑 `/notify-release setup-env` skill 流程，用真的 SendGrid API Key 建 `~/.claude/notify-release.env`。
+- (b) **備援／預設路徑**：只要 Step 2 的 `vercel env pull` 有拉到 `RELEASE_NOTIFY_TOKEN`，直接打 prod 已部署好的端點：`POST https://crm.cancerfree.io/api/admin/notify-release`（`.claude/notify-release.config.json` 標記為 `legacyApiUrl`），body `{version, subject, bodyHtml, dryRun?}`，prod server 端自己查 MFA 收件人清單、自己用 SendGrid 寄出，完全不需要本機任何憑證。**送真的之前務必先 `dryRun:true` 確認收件人筆數**（目前應為 17 人）。
+
+**Step 5 — Claude GitHub App（選用，只有要用 `/schedule` 雲端 routine 才需要）**
+目前**尚未安裝**在 `cancerfreebiotech/mycrm`（曾實測 `/schedule` 建 routine 回 401 "Connect your GitHub account"）。要用雲端排程 review 才需要先連 https://claude.ai/code/onboarding?magic=github-app-setup 。在此之前，全 codebase review 都是**本機跑一次**（用 `Workflow` 工具 fan-out，見第 2 節），這條路徑已驗證可行、不依賴這一步。
+
+**驗證**：Step 1-2 做完後跑 `npm run build`／`npx tsc --noEmit`／`npm run test`（89 條應全綠）確認專案在新機器上能正常編譯；要驗證 prod 存取，對 notify-release 端點打一次 `dryRun:true` 看能不能查到 17 位收件人。
 
 | 事項 | 內容 |
 |---|---|
