@@ -81,6 +81,7 @@ vercel env pull .env.local          # 拉正式環境變數；有多環境時視
 - **電子報寄送 worker 的殘留 race window**：v8.1.9 的「每 chunk 送前即時重查」大幅縮小了併發重複寄信的機率，但重查與 insert 之間仍有極小視窗——要完全消除需要 `newsletter_recipients (campaign_id, lower(email))` 的 DB unique 約束（migration，未做）。
 - **雲端排程 code review routine 建不起來**：見第 1 節「這台機器的特殊狀態」。
 - **Live 實測待補**：`UAT.md`（v7.9.6 全功能版）、`UAT-v7.9.md`（v7.8.1→v7.9.6 delta）、`UAT-v8.md`（v8.0.0→v8.1.5 delta，7 章 28 項）——v8.1.6～v8.1.9 這輪修的都是後端邏輯/安全修正，尚無對應的人工 UAT 清單。
+- **⚠️ 8 個受管功能仍缺後端授權檢查（2026-07-20 盤點發現，未修）**：`src/lib/features.ts` 定義 13 個 `FeatureKey`，但目前只有 `newsletter`、`camcard`、`export_contacts`、`user_management` 這 4 個在對應 API route 有真正的 `hasFeature()`/`hasFeatureAccess()` 檢查（這是 v8.1.6/v8.1.9 兩輪 review 修的）。以下 **8 個功能鍵在 `src/app/api/` 完全查不到後端授權檢查**，只靠 `src/proxy.ts` 的登入層級 + 前端 `pathToFeature` 導頁擋著——跟修之前的 `newsletter`/`camcard` 是同一類漏洞：`tags`、`unassigned_notes`、`email_templates`、`prompts`、`countries`、`failed_scans`、`duplicates`、`trash`。其中**`bulk_email`**（對應 `src/app/api/email/send/route.ts`，`FEATURE_ROUTES` 裡映射到 `/email/compose`）較敏感——任何已登入員工即使沒被授予群發權限，理論上仍可直接呼叫該 API 群發郵件。修法比照 `src/lib/featureAccess.ts` 的 `hasFeatureAccess(email, feature)` 通用 helper，逐一補進對應 route（找到 route 的方式：讀 `features.ts` 的 `FEATURE_ROUTES` 對照表 → 找該路徑底下的 API route → 檢查是否已呼叫 `hasFeature`/`hasFeatureAccess`）。**下一輪 review 的候選任務。**
 
 ---
 
