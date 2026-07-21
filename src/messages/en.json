@@ -74,6 +74,8 @@
     "themeDark": "Switch to dark",
     "pendingReview": "Pending Cards",
     "myFailedScans": "My Failed Scans",
+    "mcpTokens": "MCP Tokens",
+    "mcpActivity": "MCP Activity",
     "auditLog": "Audit Log",
     "orgSettings": "Org Settings",
     "suppressions": "Suppressions",

@@ -6,6 +6,7 @@ import { generateOptOutToken } from '@/lib/email-optout'
 import { recordUsage } from '@/lib/usage'
 import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { getOrgSettings } from '@/lib/orgSettings'
+import { hasFeatureAccess } from '@/lib/featureAccess'
 
 function injectOptOutFooter(html: string, optOutUrl: string): string {
   const footer = `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;color:#9ca3af;">若您希望停止接收相關郵件，<a href="${optOutUrl}" style="color:#9ca3af;text-decoration:underline;">請點此告知我們</a>。<br>If you wish to unsubscribe, <a href="${optOutUrl}" style="color:#9ca3af;text-decoration:underline;">click here to let us know</a>.</div>`
@@ -107,6 +108,9 @@ export async function POST(req: NextRequest) {
   const authClient = await createClient()
   const { data: { user: authUser } } = await authClient.auth.getUser()
   if (!authUser?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await hasFeatureAccess(authUser.email, 'bulk_email'))) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
   const ctx = await getOrgContext()
   const db = orgScopedClient(ctx)
   const { data: senderProfile } = await supabase.from('users').select('id').ilike('email', authUser.email).maybeSingle()

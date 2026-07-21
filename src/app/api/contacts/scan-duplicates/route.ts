@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase'
 import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
+import { hasFeatureAccess } from '@/lib/featureAccess'
 
 export async function POST(req: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await hasFeatureAccess(user.email, 'duplicates'))) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const ctx = await getOrgContext()
   const db = orgScopedClient(ctx)
 

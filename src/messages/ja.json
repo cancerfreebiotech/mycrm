@@ -74,6 +74,8 @@
     "themeDark": "ダークモードに切り替え",
     "pendingReview": "確認待ち名刺",
     "myFailedScans": "認識失敗",
+    "mcpTokens": "MCP Tokens",
+    "mcpActivity": "MCP アクティビティ",
     "auditLog": "監査ログ",
     "orgSettings": "組織設定",
     "suppressions": "配信停止管理",

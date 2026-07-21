@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase'
 import { getOrgContext, orgScopedClient } from '@/lib/orgContext'
 import { suggestMergePlan, type ContactRow } from '@/lib/mergeSuggest'
+import { hasFeatureAccess } from '@/lib/featureAccess'
 
 export const maxDuration = 60
 
@@ -15,6 +16,9 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await hasFeatureAccess(user.email, 'duplicates'))) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const body = await req.json().catch(() => null)
   const contactIdA: string | undefined = body?.contact_id_a

@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## v8.2.0 — bulk_email／duplicates 功能授權補漏 + 小型落差修正（2026-07-21）
+
+### 安全／授權
+- **群發郵件（bulk_email）補上伺服器端功能授權**：`POST /api/email/send` 過去只驗登入、未檢查 `bulk_email` 授權，任何登入員工皆可群發外部郵件。新增 `hasFeatureAccess()` 閘門。
+- **重複聯絡人（duplicates）API 全面補上伺服器端功能授權**：`scan-duplicates`（原本完全無驗證）、`merge-suggest`、`ai-merge-review` 三條 route 補上登入 + `duplicates` 授權檢查。`contacts/[id]/merge` 依既有 PRD 決策維持開放（聯絡人詳情頁共用之合併功能，不受此次調整影響）。
+
+### 其他
+- 主題預設改為跟隨系統（`defaultTheme="system"`、`enableSystem={true}`），符合規範。
+- Sidebar「MCP Tokens」「MCP 活動」硬編字串改走 i18n，三語同步新增 `nav.mcpTokens`／`nav.mcpActivity`。
+- 移除未使用的 `telegraf` 依賴（bot 實際為手刻 fetch，從未使用該套件）。
+
 ## v8.1.9 — 第二輪全 codebase code review 修正（2026-07-12）
 
 ### 安全／授權
